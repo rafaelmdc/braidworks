@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
+from braidworks.core.braid import Braid, CapabilityInvocation, FallbackCondition
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
-from braidworks.core.result import WeaveResult, WeaveStatus
+from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
+from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
 
 CORE_OUTPUTS = frozenset(
@@ -96,3 +100,145 @@ def make_weaver(
     *capabilities: Capability, weaver_id: str = "ncbi", version: str = "1.0.0"
 ) -> FakeWeaver:
     return FakeWeaver(manifest(*capabilities, weaver_id=weaver_id, version=version))
+
+
+# --- Executor test scaffolding -------------------------------------------------
+
+CAP_ID = "ncbi.resolve_name"
+CAP_VERSION = "1.0.0"
+
+# A resolver decides one entity's outcome given (strand_set, backend, requested).
+Resolver = Callable[[StrandSet, str, frozenset], WeaveResult]
+
+
+class ScriptedWeaver(BaseWeaver):
+    """A weaver driven by a resolver callable, with call/size instrumentation.
+
+    A resolver may *return* a WeaveResult (including NO_MATCH/AMBIGUOUS/ERROR) or
+    *raise* a backend-level exception (BackendUnavailable / BackendConfigurationError)
+    to simulate a whole-batch backend failure.
+    """
+
+    def __init__(
+        self,
+        resolver: Resolver,
+        *,
+        capability: Capability | None = None,
+        weaver_id: str = "ncbi",
+        version: str = CAP_VERSION,
+        dataset: str = "ds-1",
+    ) -> None:
+        cap = capability if capability is not None else resolve_name_capability()
+        self._manifest = manifest(cap, weaver_id=weaver_id, version=version)
+        self._resolver = resolver
+        self._dataset = dataset
+        self.batch_calls = 0
+        self.batch_sizes: list[int] = []
+
+    @property
+    def MANIFEST(self) -> WeaverManifest:  # type: ignore[override]
+        return self._manifest
+
+    def dataset_version(self) -> str:
+        return self._dataset
+
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+        return self._resolver(strand_set, backend, requested_outputs)
+
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+        self.batch_calls += 1
+        self.batch_sizes.append(len(strand_sets))
+        return [self._resolver(ss, backend, requested_outputs) for ss in strand_sets]
+
+
+def _groups_for(requested: frozenset[str]) -> frozenset[str]:
+    """Mirror TaxonWeaver: requesting lineage computes core internally too."""
+    if LINEAGE_OUTPUTS & requested:
+        return frozenset({"core", "lineage"})
+    return frozenset({"core"})
+
+
+def ok_result(
+    requested: frozenset[str],
+    *strands: Strand,
+    backend: str = "local",
+    requires_review: bool = False,
+    version: str = CAP_VERSION,
+) -> WeaveResult:
+    return WeaveResult(
+        capability_id=CAP_ID,
+        capability_version=version,
+        backend_used=backend,
+        computed_groups=_groups_for(requested),
+        status=WeaveStatus.OK,
+        strands=tuple(strands),
+        requires_review=requires_review,
+    )
+
+
+def no_match_result(requested: frozenset[str], *, backend: str = "local") -> WeaveResult:
+    return WeaveResult(
+        capability_id=CAP_ID,
+        capability_version=CAP_VERSION,
+        backend_used=backend,
+        computed_groups=_groups_for(requested),
+        status=WeaveStatus.NO_MATCH,
+    )
+
+
+def ambiguous_result(
+    requested: frozenset[str], *candidates: CandidateResult, backend: str = "local"
+) -> WeaveResult:
+    return WeaveResult(
+        capability_id=CAP_ID,
+        capability_version=CAP_VERSION,
+        backend_used=backend,
+        computed_groups=_groups_for(requested),
+        status=WeaveStatus.AMBIGUOUS,
+        candidates=tuple(candidates),
+        requires_review=True,
+    )
+
+
+def error_result(requested: frozenset[str], message: str, *, backend: str = "local") -> WeaveResult:
+    return WeaveResult(
+        capability_id=CAP_ID,
+        capability_version=CAP_VERSION,
+        backend_used=backend,
+        computed_groups=_groups_for(requested),
+        status=WeaveStatus.ERROR,
+        errors=(message,),
+    )
+
+
+def name_strand_sets(*names: str) -> list[StrandSet]:
+    return [
+        StrandSet.from_strands(f"e{i}", [Strand("organism.name", n)])
+        for i, n in enumerate(names)
+    ]
+
+
+def single_step_braid(
+    output_types: set[str],
+    *,
+    weaver_id: str = "ncbi",
+    capability_id: str = CAP_ID,
+    input_type: str = "organism.name",
+    primary: str = "local",
+    fallback_backends: tuple[str, ...] = (),
+    fallback_on: frozenset[FallbackCondition] = frozenset(),
+) -> Braid:
+    inv = CapabilityInvocation(
+        weaver_id=weaver_id,
+        capability_id=capability_id,
+        input_types=frozenset({input_type}),
+        output_types=frozenset(output_types),
+        primary_backend=primary,
+        fallback_backends=fallback_backends,
+        fallback_on=fallback_on,
+    )
+    return Braid(
+        steps=(inv,),
+        from_types=frozenset({input_type}),
+        to_types=frozenset(output_types),
+    )

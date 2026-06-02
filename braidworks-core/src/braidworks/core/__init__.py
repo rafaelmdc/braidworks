@@ -28,6 +28,7 @@ from braidworks.core.executor import (
     ErrorPolicy,
     ExecutionError,
     ExecutionResult,
+    LocalExecutor,
     ReviewPolicy,
     ReviewQueueItem,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "ErrorPolicy",
     "ExecutionError",
     "ExecutionResult",
+    "LocalExecutor",
     "ReviewPolicy",
     "ReviewQueueItem",
     "CandidateResult",
