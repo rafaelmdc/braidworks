@@ -1,0 +1,112 @@
+"""OutputGroup, Capability, WeaverManifest — the declarative capability model."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass(frozen=True)
+class OutputGroup:
+    """A set of outputs computed together from one underlying operation.
+
+    Requesting any output in a group triggers the whole group; requesting
+    nothing from a group skips it entirely. Internal execution ordering and
+    dependencies are the weaver's concern — there is deliberately no
+    ``depends_on`` or ``marginal_cost`` here.
+    """
+
+    id: str
+    outputs: frozenset[str]
+
+    def to_json(self) -> dict[str, Any]:
+        return {"id": self.id, "outputs": sorted(self.outputs)}
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> OutputGroup:
+        return cls(id=data["id"], outputs=frozenset(data["outputs"]))
+
+
+@dataclass(frozen=True)
+class Capability:
+    """One declared operation: consumes input types, produces output types."""
+
+    id: str
+    consumes: frozenset[str]
+    produces: frozenset[str]
+    output_groups: tuple[OutputGroup, ...]
+    backends: tuple[str, ...]
+    max_batch_size: int | None = None
+    cost: float = 1.0
+
+    def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
+        """Group ids containing at least one of the requested outputs."""
+        return frozenset(
+            g.id for g in self.output_groups if g.outputs & requested
+        )
+
+    def outputs_to_compute(self, requested: frozenset[str]) -> frozenset[str]:
+        """Union of every triggered group's outputs, intersected with ``produces``.
+
+        A weaver must produce exactly these externally; it may compute more
+        internally and report them via ``WeaveResult.computed_groups``.
+        """
+        triggered = self.triggered_groups(requested)
+        out: set[str] = set()
+        for g in self.output_groups:
+            if g.id in triggered:
+                out |= g.outputs
+        return frozenset(out & self.produces)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "consumes": sorted(self.consumes),
+            "produces": sorted(self.produces),
+            "output_groups": [g.to_json() for g in self.output_groups],
+            "backends": list(self.backends),
+            "max_batch_size": self.max_batch_size,
+            "cost": self.cost,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Capability:
+        return cls(
+            id=data["id"],
+            consumes=frozenset(data["consumes"]),
+            produces=frozenset(data["produces"]),
+            output_groups=tuple(OutputGroup.from_json(g) for g in data["output_groups"]),
+            backends=tuple(data["backends"]),
+            max_batch_size=data.get("max_batch_size"),
+            cost=data.get("cost", 1.0),
+        )
+
+
+@dataclass(frozen=True)
+class WeaverManifest:
+    """Static declaration of a weaver's capabilities. Read before instantiation."""
+
+    weaver_id: str
+    version: str
+    capabilities: tuple[Capability, ...] = field(default_factory=tuple)
+
+    def capability(self, capability_id: str) -> Capability | None:
+        for c in self.capabilities:
+            if c.id == capability_id:
+                return c
+        return None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "weaver_id": self.weaver_id,
+            "version": self.version,
+            "capabilities": [c.to_json() for c in self.capabilities],
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> WeaverManifest:
+        return cls(
+            weaver_id=data["weaver_id"],
+            version=data["version"],
+            capabilities=tuple(Capability.from_json(c) for c in data["capabilities"]),
+        )
