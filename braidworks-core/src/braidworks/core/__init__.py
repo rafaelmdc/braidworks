@@ -31,6 +31,8 @@ from braidworks.core.executor import (
     ReviewPolicy,
     ReviewQueueItem,
 )
+from braidworks.core.planner import Braider
+from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.strand import MergePolicy, Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
@@ -68,4 +70,7 @@ __all__ = [
     "Strand",
     "StrandSet",
     "BaseWeaver",
+    "BraidRegistry",
+    "validate_manifest",
+    "Braider",
 ]
