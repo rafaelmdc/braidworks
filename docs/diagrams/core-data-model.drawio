@@ -1,0 +1,105 @@
+<mxfile host="app.diagrams.net" agent="threadworks-docs" version="24.0.0">
+  <diagram name="Core Data Model" id="core-data-model">
+    <mxGraphModel dx="1500" dy="950" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1240" pageHeight="730" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Figure 2. Core data model and contracts." style="text;html=1;fontSize=14;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="14" width="600" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Every datum is a typed Token; a TokenSet groups them for one entity. A Weaver declares Capabilities (what it consumes / produces) in a Manifest and returns a WeaveResult. The Planner emits a ResolutionPlan of CapabilityInvocations; the Cache keys results by CacheKey." style="text;html=1;fontSize=12;align=left;verticalAlign=top;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="40" y="36" width="1000" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="&#9670; owns (composition)&#160;&#160;&#160;&#9655; is-a (inheritance)&#160;&#160;&#160;– – &#9655; produces / uses" style="text;html=1;fontSize=11;align=right;verticalAlign=middle;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="700" y="14" width="500" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- cluster containers -->
+        <mxCell id="c-data" value="Data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#bbbbbb;dashed=1;verticalAlign=top;align=left;fontColor=#999999;fontSize=11;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="86" width="190" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="c-contracts" value="Contracts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#bbbbbb;dashed=1;verticalAlign=top;align=left;fontColor=#999999;fontSize=11;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="300" y="86" width="220" height="610" as="geometry" />
+        </mxCell>
+        <mxCell id="c-results" value="Results" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#bbbbbb;dashed=1;verticalAlign=top;align=left;fontColor=#999999;fontSize=11;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="600" y="86" width="210" height="370" as="geometry" />
+        </mxCell>
+        <mxCell id="c-plan" value="Plan &amp; Cache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#bbbbbb;dashed=1;verticalAlign=top;align=left;fontColor=#999999;fontSize=11;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="880" y="86" width="200" height="570" as="geometry" />
+        </mxCell>
+
+        <!-- DATA -->
+        <mxCell id="token" value="&lt;b&gt;Token&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;type_id&lt;br&gt;value&lt;br&gt;confidence&lt;br&gt;provenance&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="118" width="150" height="108" as="geometry" />
+        </mxCell>
+        <mxCell id="tokenset" value="&lt;b&gt;TokenSet&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;entity_id&lt;br&gt;tokens&lt;br&gt;requires_review&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="276" width="150" height="96" as="geometry" />
+        </mxCell>
+
+        <!-- CONTRACTS -->
+        <mxCell id="manifest" value="&lt;b&gt;WeaverManifest&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;weaver_id&lt;br&gt;version&lt;br&gt;capabilities&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="330" y="118" width="160" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="capability" value="&lt;b&gt;Capability&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;id&lt;br&gt;consumes&lt;br&gt;produces&lt;br&gt;backends&lt;br&gt;cost&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="330" y="262" width="160" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="outputgroup" value="&lt;b&gt;OutputGroup&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;id&lt;br&gt;outputs&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="330" y="434" width="160" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="baseweaver" value="&lt;b&gt;«abstract» BaseWeaver&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;dataset_version()&lt;br&gt;execute()&lt;br&gt;execute_batch()&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="320" y="568" width="180" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="ncbi" value="&lt;b&gt;NCBITaxonWeaver&lt;/b&gt;&#10;&lt;font color=&quot;#5a7a4a&quot; style=&quot;font-size:9px&quot;&gt;a concrete weaver&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eafaf1;strokeColor=#82b366;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="592" width="160" height="48" as="geometry" />
+        </mxCell>
+
+        <!-- RESULTS -->
+        <mxCell id="weaveresult" value="&lt;b&gt;WeaveResult&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;status&lt;br&gt;tokens&lt;br&gt;candidates&lt;br&gt;computed_groups&lt;br&gt;requires_review&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="118" width="170" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="candidate" value="&lt;b&gt;CandidateResult&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;tokens&lt;br&gt;confidence&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="276" width="170" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="weavestatus" value="&lt;b&gt;«enum» WeaveStatus&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;OK · NO_MATCH&lt;br&gt;AMBIGUOUS · ERROR&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="376" width="170" height="68" as="geometry" />
+        </mxCell>
+
+        <!-- PLAN + CACHE -->
+        <mxCell id="plan" value="&lt;b&gt;ResolutionPlan&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;steps&lt;br&gt;from_types&lt;br&gt;to_types&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="118" width="160" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="invocation" value="&lt;b&gt;CapabilityInvocation&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;capability_id&lt;br&gt;primary_backend&lt;br&gt;fallback_backends&lt;br&gt;fallback_on&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="262" width="160" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="cachekey" value="&lt;b&gt;CacheKey&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;capability_version&lt;br&gt;dataset_version&lt;br&gt;input_fingerprint&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="420" width="160" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="cache" value="&lt;b&gt;«protocol» WeaveCache&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;&lt;div style=&quot;text-align:left;&quot;&gt;get()&lt;br&gt;put()&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;align=center;spacingTop=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="560" width="160" height="76" as="geometry" />
+        </mxCell>
+
+        <!-- relationships -->
+        <mxCell id="r1" style="endArrow=none;html=1;strokeColor=#6c8ebf;startArrow=diamondThin;startFill=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="tokenset" target="token"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="r2" style="endArrow=none;html=1;strokeColor=#82b366;startArrow=diamondThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="manifest" target="capability"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="r3" style="endArrow=none;html=1;strokeColor=#82b366;startArrow=diamondThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="capability" target="outputgroup"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="r4" value="MANIFEST" style="endArrow=open;html=1;strokeColor=#82b366;fontSize=10;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="baseweaver" target="manifest"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="296" y="616" /><mxPoint x="296" y="166" /></Array></mxGeometry></mxCell>
+
+        <mxCell id="r5" value="is-a" style="endArrow=block;endFill=0;html=1;strokeColor=#82b366;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ncbi" target="baseweaver"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="r6" value="produces" style="endArrow=open;html=1;strokeColor=#999999;dashed=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="baseweaver" target="weaveresult"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="560" y="588" /><mxPoint x="560" y="167" /></Array></mxGeometry></mxCell>
+
+        <mxCell id="r7" style="endArrow=none;html=1;strokeColor=#d79b00;startArrow=diamondThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="weaveresult" target="candidate"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="r8" value="status" style="endArrow=open;html=1;strokeColor=#9673a6;fontSize=10;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="weaveresult" target="weavestatus"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="600" y="180" /><mxPoint x="600" y="410" /></Array></mxGeometry></mxCell>
+
+        <mxCell id="r9" style="endArrow=none;html=1;strokeColor=#d6b656;startArrow=diamondThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="plan" target="invocation"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="r10" value="keyed by" style="endArrow=open;html=1;strokeColor=#666666;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="cache" target="cachekey"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,105 @@
+<mxfile host="app.diagrams.net" agent="threadworks-docs" version="24.0.0">
+  <diagram name="System Overview" id="system-overview">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1160" pageHeight="660" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Figure 1. Threadworks system overview." style="text;html=1;fontSize=14;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="18" width="700" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="A caller declares what it has and what it wants. The Registry turns weavers into a capability graph; the Planner finds a route through it (the Resolution Plan); the Executor runs that plan in batch over a Cache and the Weavers, sorting every input into one of four result buckets." style="text;html=1;fontSize=12;align=left;verticalAlign=top;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="40" y="42" width="1080" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- pipeline -->
+        <mxCell id="caller" value="Caller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="118" width="140" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="caller-d" value="what I have + my goal" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="20" y="178" width="180" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="registry" value="Registry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="250" y="118" width="140" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="registry-d" value="weavers &#8594; graph" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="240" y="178" width="160" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner" value="Planner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="460" y="118" width="140" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="planner-d" value="find a route" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="450" y="178" width="160" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="plan" value="Resolution&#10;Plan" style="shape=document;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;boundedLbl=1;verticalAlign=top;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="670" y="114" width="120" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="plan-d" value="the route (serializable)" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="650" y="182" width="160" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="executor" value="Executor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="860" y="118" width="160" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="executor-d" value="run the plan in batch" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="850" y="178" width="180" height="16" as="geometry" />
+        </mxCell>
+
+        <!-- backends -->
+        <mxCell id="cache" value="Cache" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#eeeeee;strokeColor=#666666;fontSize=12;verticalAlign=top;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="780" y="296" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="cache-d" value="skip repeat lookups" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="770" y="370" width="140" height="16" as="geometry" />
+        </mxCell>
+
+        <mxCell id="weaver" value="Weaver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="960" y="300" width="140" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="weaver-d" value="resolves the data (e.g. NCBI)" style="text;html=1;fontSize=10;fontStyle=2;align=center;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="945" y="360" width="170" height="16" as="geometry" />
+        </mxCell>
+
+        <!-- ExecutionResult cluster -->
+        <mxCell id="result-box" value="ExecutionResult &#8212; every input ends in exactly one bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#999999;dashed=1;verticalAlign=top;align=left;fontColor=#777777;fontSize=11;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="30" y="448" width="1010" height="108" as="geometry" />
+        </mxCell>
+        <mxCell id="res-resolved" value="resolved&#10;&lt;font color=&quot;#5a7a4a&quot; style=&quot;font-size:9px&quot;&gt;goal met&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="482" width="200" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="res-unresolved" value="unresolved&#10;&lt;font color=&quot;#8a7a3a&quot; style=&quot;font-size:9px&quot;&gt;no match found&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="482" width="200" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="res-review" value="review_queue&#10;&lt;font color=&quot;#4a6a8a&quot; style=&quot;font-size:9px&quot;&gt;needs a human&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="540" y="482" width="200" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="res-errors" value="errors&#10;&lt;font color=&quot;#8a4a4a&quot; style=&quot;font-size:9px&quot;&gt;failed / missing input&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="482" width="200" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- legend -->
+        <mxCell id="legend" value="&#8212;&#8594; flow&#160;&#160;&#160;&#160;&#160;&#160;– – &#8594; caller input" style="text;html=1;fontSize=11;align=left;verticalAlign=middle;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="400" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="e1" value="register" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="caller" target="registry"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="graph" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="registry" target="planner"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="planner" target="plan"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="plan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="plan" target="executor"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e5" value="have / want" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;endArrow=block;endFill=1;dashed=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="caller" target="planner"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="96" /><mxPoint x="530" y="96" /></Array></mxGeometry></mxCell>
+        <mxCell id="e6" value="token_sets (batch)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;endArrow=block;endFill=1;dashed=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="caller" target="executor"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="250" /><mxPoint x="845" y="250" /><mxPoint x="845" y="146" /></Array></mxGeometry></mxCell>
+
+        <mxCell id="e7" value="get / put" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;endArrow=block;endFill=1;startArrow=block;startFill=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="executor" target="cache"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" value="execute_batch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="executor" target="weaver"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="e9" value="sort by status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="executor" target="result-box"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="940" y="420" /><mxPoint x="535" y="420" /></Array></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

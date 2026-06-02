@@ -1,0 +1,93 @@
+<mxfile host="app.diagrams.net" agent="threadworks-docs" version="24.0.0">
+  <diagram name="Planner Flow" id="planner-flow">
+    <mxGraphModel dx="1200" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="820" pageHeight="920" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Figure 3. Planner: from available + target types to a ResolutionPlan." style="text;html=1;fontSize=14;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="740" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Treat weaver capabilities as a graph. Find a shortest route to each wanted type, merge the chosen edges into ordered steps, and bind a backend to each step &#8212; or fail fast with a typed error." style="text;html=1;fontSize=12;align=left;verticalAlign=top;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="40" y="38" width="740" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="start" value="available, target types" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="96" width="200" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="graph" value="Build capability graph" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="172" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="graph-n" value="weaver capabilities as edges" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="430" y="183" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dijkstra" value="Dijkstra per target" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="248" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="dijkstra-n" value="shortest route to each wanted type" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="430" y="259" width="260" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reachable" value="reachable?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="328" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nopath" value="NoPathError" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="346" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="nopath-n" value="no weaver produces it" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="500" y="392" width="180" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coalesce" value="Coalesce edges" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="448" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="coalesce-n" value="group edges into plan steps" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="430" y="459" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="topo" value="Topological sort" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="528" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="topo-n" value="order by data dependency" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="430" y="539" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="backend" value="Assign backend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="608" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="backend-n" value="pick local / api + fallbacks" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="430" y="619" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="valid" value="backend&#10;available?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="688" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="noplan" value="NoPlanError" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="706" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="noplan-n" value="policy excludes all backends" style="text;html=1;fontSize=10;align=left;fontColor=#777777;" vertex="1" parent="1">
+          <mxGeometry x="500" y="752" width="200" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="plan" value="ResolutionPlan" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="828" width="200" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="f1" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="start" target="graph"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f2" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="graph" target="dijkstra"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f3" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="dijkstra" target="reachable"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f4" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#b85450;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="reachable" target="nopath"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f5" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="reachable" target="coalesce"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f6" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="coalesce" target="topo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f7" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="topo" target="backend"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f8" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;" edge="1" parent="1" source="backend" target="valid"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f9" value="no" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#b85450;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="valid" target="noplan"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f10" value="yes" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#333333;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="valid" target="plan"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
