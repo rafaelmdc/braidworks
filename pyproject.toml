@@ -1,0 +1,12 @@
+[tool.uv.workspace]
+members = ["braidworks-core"]
+
+# taxonweaver joins the workspace once its source is migrated from ../taxon_weaver.
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["braidworks-core/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
