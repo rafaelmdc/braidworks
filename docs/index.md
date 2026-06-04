@@ -4,27 +4,28 @@ Braidworks is the framework that turns TaxonWeaver into one node in a composable
 
 ## Documents
 
+- [Usage](usage.md) — Install, choose a backend, plan, and run.
+- [Database](database.md) — Build / acquire the NCBI taxonomy DB for the local backend.
 - [Architecture](architecture.md) — Core abstractions, contracts, data flow, and design decisions.
+- [Repository Structure](repo-structure.md) — Full repository layout.
 - [Implementation Plan](implementation-plan.md) — Concrete build order, deliverables, and definition of done for the MVP.
+- [Contributing](../CONTRIBUTING.md) — Dev setup, testing, and how to add a new weaver.
 
 ## Concept in One Paragraph
 
 Every piece of data is a typed `Strand`. A collection of strands for one entity is a `StrandSet`. Weavers declare `Capabilities`: what strand types they consume and what they produce. A `BraidRegistry` builds a graph from those declarations. A `Braider` finds the shortest route from your available strand types to your target types. An `Executor` runs the braid in batch, using a `StrandCache` so the same lookup is never repeated. When a weaver is ambiguous or uncertain, the result is flagged for human review rather than silently propagated.
 
-## Quick Example (MVP API)
+## Quick Example
 
 ```python
-from pathlib import Path
-from braidworks.core.registry import BraidRegistry
-from braidworks.core.planner import Braider
-from braidworks.core.executor import LocalExecutor
-from braidworks.core.strand import Strand, StrandSet
-from braidworks.core.braid import BackendPolicy
-from taxonweaver import NCBITaxonWeaver
+from braidworks.core import (
+    BraidRegistry, Braider, LocalExecutor, BackendPolicy, Strand, StrandSet,
+)
+from taxonweaver import build_ncbi_weaver
 
-# Manual registration — primary MVP path
 registry = BraidRegistry()
-registry.register(NCBITaxonWeaver(db_path=Path("/data/taxonomy.db")))
+# API backend needs no local data; pass db_path=... to add the local backend.
+registry.register(build_ncbi_weaver(enable_api=True))
 
 braider = Braider(registry)
 executor = LocalExecutor(registry)
@@ -49,6 +50,8 @@ for ss in result.resolved:
 for ss, weave_result in result.unresolved:
     print(f"{ss.entity_id}: no match found")
 ```
+
+See [usage.md](usage.md) for the full runnable example and backend options.
 
 ## Result Buckets
 

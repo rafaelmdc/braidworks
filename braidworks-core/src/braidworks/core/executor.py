@@ -13,7 +13,6 @@ from braidworks.core.exceptions import (
     BackendConfigurationError,
     BackendUnavailable,
     BraidworksError,
-    MissingInputError,
     ReviewRequired,
 )
 from braidworks.core.registry import BraidRegistry
