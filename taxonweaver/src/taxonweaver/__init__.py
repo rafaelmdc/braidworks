@@ -7,10 +7,12 @@ from .dispatch import BackendDispatchWeaver
 from .factory import build_ncbi_weaver
 from .intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .mapper import map_taxon_match
+from .provider import NCBIWeaverProvider
 from .weaver import NCBITaxonWeaver
 
 __all__ = [
     "NCBITaxonWeaver",
+    "NCBIWeaverProvider",
     "build_ncbi_weaver",
     "BackendDispatchWeaver",
     "ResolutionBackend",

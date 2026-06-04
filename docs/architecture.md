@@ -645,6 +645,25 @@ braidworks-celery/        CeleryExecutor — same Braid + ExecutionResult interf
 
 ---
 
+## Weaver assembly: the two-layer factory
+
+Weavers are assembled through two layers so the generic machinery never learns
+anything domain-specific:
+
+- **Layer 1 (core, generic):** `WeaverProvider` (Protocol: `weaver_id`,
+  `build(config) -> BaseWeaver`) and `WeaverFactory` (`register(provider)`,
+  `build(weaver_id, config)`). Pure dispatch — knows nothing about taxonomy or
+  backends.
+- **Layer 2 (per-weaver):** each weaver package ships its own builder, because
+  only it knows how to construct its specific backends from config. For NCBI that
+  is `build_ncbi_weaver(...)`, exposed to Layer 1 via `NCBIWeaverProvider`.
+
+A per-weaver builder is therefore expected, not duplication. Entry-point
+`discover()` to auto-populate the factory is still deferred (see below); the
+`WeaverProvider` contract is the seam that lets it land without reworking weavers.
+
+---
+
 ## What is Explicitly Deferred
 
 | Item | What keeps the door open |
@@ -654,7 +673,7 @@ braidworks-celery/        CeleryExecutor — same Braid + ExecutionResult interf
 | Celery executor | `Braid` and `ExecutionResult` are fully serializable |
 | HPC executor | `StrandSet.to_json/from_json` exists; braid serialization exists; SQLite-on-NFS documented constraint |
 | Redis cache | `StrandCache` is a Protocol; `get(key, requested_groups)` interface works for Redis with key-set indexing |
-| Entry-point discovery | `register()` is already the interface; `discover()` can populate it once plugin configuration is resolved |
+| Entry-point discovery | `WeaverProvider`/`WeaverFactory` are the Layer-1 seam; `discover()` can auto-register providers via entry points once a second weaver proves the abstraction |
 | TTL enforcement | Not in MVP interface; add `put(key, result, ttl)` when Redis is implemented |
 | Calibrated confidence | `strand.metadata["calibrated_probability"]` when a weaver has real calibration data |
 | Parallel step execution | Topological sort identifies independent steps; parallelism is an executor feature |

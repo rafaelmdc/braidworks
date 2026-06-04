@@ -13,6 +13,7 @@ from braidworks.core.cache import (
     compute_cache_key,
 )
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
+from braidworks.core.factory import WeaverFactory, WeaverProvider
 from braidworks.core.exceptions import (
     BackendConfigurationError,
     BackendUnavailable,
@@ -73,6 +74,8 @@ __all__ = [
     "StrandSet",
     "BaseWeaver",
     "BackendStrategy",
+    "WeaverFactory",
+    "WeaverProvider",
     "BraidRegistry",
     "validate_manifest",
     "Braider",
