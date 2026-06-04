@@ -51,7 +51,7 @@ class WeaveResult:
     """
 
     capability_id: str
-    capability_version: str
+    weaver_version: str  # from WeaverManifest.version; feeds StrandCacheKey.weaver_version
     backend_used: str  # actual backend: "local" or "api", never "any"
     computed_groups: frozenset[str]
     status: WeaveStatus
@@ -64,7 +64,7 @@ class WeaveResult:
     def to_json(self) -> dict[str, Any]:
         return {
             "capability_id": self.capability_id,
-            "capability_version": self.capability_version,
+            "weaver_version": self.weaver_version,
             "backend_used": self.backend_used,
             "computed_groups": sorted(self.computed_groups),
             "status": self.status.value,
@@ -79,7 +79,7 @@ class WeaveResult:
     def from_json(cls, data: dict[str, Any]) -> WeaveResult:
         return cls(
             capability_id=data["capability_id"],
-            capability_version=data["capability_version"],
+            weaver_version=data["weaver_version"],
             backend_used=data["backend_used"],
             computed_groups=frozenset(data.get("computed_groups", [])),
             status=WeaveStatus(data["status"]),

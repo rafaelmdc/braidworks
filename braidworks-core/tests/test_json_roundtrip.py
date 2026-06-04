@@ -60,7 +60,7 @@ def test_weaveresult_and_candidate_roundtrip():
     cand = CandidateResult(strands=(Strand("ncbi.taxon.id", 9606),), confidence=0.9, metadata={"x": "y"})
     wr = WeaveResult(
         capability_id="ncbi.resolve_name",
-        capability_version="1.0.0",
+        weaver_version="1.0.0",
         backend_used="local",
         computed_groups=frozenset({"core", "lineage"}),
         status=WeaveStatus.AMBIGUOUS,
@@ -101,7 +101,7 @@ def test_review_queue_item_roundtrip():
     )
     wr = WeaveResult(
         capability_id="ncbi.resolve_name",
-        capability_version="1.0.0",
+        weaver_version="1.0.0",
         backend_used="local",
         computed_groups=frozenset({"core"}),
         status=WeaveStatus.AMBIGUOUS,
@@ -140,7 +140,7 @@ def test_execution_result_roundtrip():
                 StrandSet.from_strands("nm", [Strand("organism.name", "nope")]),
                 WeaveResult(
                     capability_id="ncbi.resolve_name",
-                    capability_version="1.0.0",
+                    weaver_version="1.0.0",
                     backend_used="local",
                     computed_groups=frozenset({"core"}),
                     status=WeaveStatus.NO_MATCH,

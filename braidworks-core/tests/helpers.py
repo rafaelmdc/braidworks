@@ -83,13 +83,13 @@ class FakeWeaver(BaseWeaver):
     def MANIFEST(self) -> WeaverManifest:  # type: ignore[override]
         return self._manifest
 
-    def dataset_version(self) -> str:
+    def backend_fingerprint(self, backend: str) -> str:
         return self._dataset
 
     async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
         return WeaveResult(
             capability_id=capability_id,
-            capability_version=self._manifest.version,
+            weaver_version=self._manifest.version,
             backend_used=backend,
             computed_groups=frozenset(),
             status=WeaveStatus.NO_MATCH,
@@ -139,7 +139,7 @@ class ScriptedWeaver(BaseWeaver):
     def MANIFEST(self) -> WeaverManifest:  # type: ignore[override]
         return self._manifest
 
-    def dataset_version(self) -> str:
+    def backend_fingerprint(self, backend: str) -> str:
         return self._dataset
 
     async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
@@ -167,7 +167,7 @@ def ok_result(
 ) -> WeaveResult:
     return WeaveResult(
         capability_id=CAP_ID,
-        capability_version=version,
+        weaver_version=version,
         backend_used=backend,
         computed_groups=_groups_for(requested),
         status=WeaveStatus.OK,
@@ -179,7 +179,7 @@ def ok_result(
 def no_match_result(requested: frozenset[str], *, backend: str = "local") -> WeaveResult:
     return WeaveResult(
         capability_id=CAP_ID,
-        capability_version=CAP_VERSION,
+        weaver_version=CAP_VERSION,
         backend_used=backend,
         computed_groups=_groups_for(requested),
         status=WeaveStatus.NO_MATCH,
@@ -191,7 +191,7 @@ def ambiguous_result(
 ) -> WeaveResult:
     return WeaveResult(
         capability_id=CAP_ID,
-        capability_version=CAP_VERSION,
+        weaver_version=CAP_VERSION,
         backend_used=backend,
         computed_groups=_groups_for(requested),
         status=WeaveStatus.AMBIGUOUS,
@@ -203,7 +203,7 @@ def ambiguous_result(
 def error_result(requested: frozenset[str], message: str, *, backend: str = "local") -> WeaveResult:
     return WeaveResult(
         capability_id=CAP_ID,
-        capability_version=CAP_VERSION,
+        weaver_version=CAP_VERSION,
         backend_used=backend,
         computed_groups=_groups_for(requested),
         status=WeaveStatus.ERROR,

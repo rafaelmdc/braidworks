@@ -11,20 +11,21 @@ from helpers import resolve_name_capability
 CAP = resolve_name_capability()
 
 
-def _key(strand_set, *, capability_version="1.0.0", backend="local", dataset_version="ds-1"):
+def _key(strand_set, *, weaver_id="ncbi", weaver_version="1.0.0", backend="local", backend_fingerprint="ds-1"):
     return compute_cache_key(
         CAP,
         strand_set,
-        capability_version=capability_version,
+        weaver_id=weaver_id,
+        weaver_version=weaver_version,
         backend=backend,
-        dataset_version=dataset_version,
+        backend_fingerprint=backend_fingerprint,
     )
 
 
 def _result(computed_groups, status=WeaveStatus.OK):
     return WeaveResult(
         capability_id=CAP.id,
-        capability_version="1.0.0",
+        weaver_version="1.0.0",
         backend_used="local",
         computed_groups=frozenset(computed_groups),
         status=status,
@@ -63,14 +64,24 @@ def test_requested_groups_do_not_affect_key():
     assert _key(ss) == _key(ss)
 
 
-def test_dataset_version_changes_key():
+def test_backend_fingerprint_changes_key():
     ss = StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])
-    assert _key(ss, dataset_version="ds-1") != _key(ss, dataset_version="ds-2")
+    assert _key(ss, backend_fingerprint="ds-1") != _key(ss, backend_fingerprint="ds-2")
 
 
-def test_capability_version_changes_key():
+def test_weaver_version_changes_key():
     ss = StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])
-    assert _key(ss, capability_version="1") != _key(ss, capability_version="2")
+    assert _key(ss, weaver_version="1") != _key(ss, weaver_version="2")
+
+
+def test_weaver_id_changes_key():
+    ss = StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])
+    assert _key(ss, weaver_id="w1") != _key(ss, weaver_id="w2")
+
+
+def test_backend_changes_key():
+    ss = StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])
+    assert _key(ss, backend="local") != _key(ss, backend="api")
 
 
 def test_cache_hit_on_superset():

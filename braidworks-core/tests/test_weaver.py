@@ -1,4 +1,4 @@
-"""BaseWeaver: _reorder_by_key, abstract dataset_version, default execute_batch."""
+"""BaseWeaver: _reorder_by_key, abstract backend_fingerprint, default execute_batch."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from helpers import manifest, resolve_name_capability
 def _ok(name: str) -> WeaveResult:
     return WeaveResult(
         capability_id="ncbi.resolve_name",
-        capability_version="1.0.0",
+        weaver_version="1.0.0",
         backend_used="local",
         computed_groups=frozenset({"core"}),
         status=WeaveStatus.OK,
@@ -25,7 +25,7 @@ def _ok(name: str) -> WeaveResult:
 def _no_match(key: str) -> WeaveResult:
     return WeaveResult(
         capability_id="ncbi.resolve_name",
-        capability_version="1.0.0",
+        weaver_version="1.0.0",
         backend_used="local",
         computed_groups=frozenset({"core"}),
         status=WeaveStatus.NO_MATCH,
@@ -52,7 +52,7 @@ class _SerialWeaver(BaseWeaver):
 
     MANIFEST = manifest(resolve_name_capability())
 
-    def dataset_version(self) -> str:
+    def backend_fingerprint(self, backend: str) -> str:
         return "ds-test"
 
     async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
@@ -72,7 +72,7 @@ async def test_default_execute_batch_one_per_input_in_order():
     assert [r.strands[0].value for r in out] == ["a", "b", "c"]
 
 
-def test_missing_dataset_version_is_abstract():
+def test_missing_backend_fingerprint_is_abstract():
     class NoVersionWeaver(BaseWeaver):
         MANIFEST = manifest(resolve_name_capability())
 

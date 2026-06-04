@@ -9,7 +9,7 @@ from braidworks.core.strand import MergePolicy, Strand, StrandSet
 def _result(*strands: Strand, requires_review: bool = False) -> WeaveResult:
     return WeaveResult(
         capability_id="cap",
-        capability_version="1",
+        weaver_version="1",
         backend_used="local",
         computed_groups=frozenset({"core"}),
         status=WeaveStatus.OK,
@@ -44,7 +44,7 @@ def test_merge_result_propagates_review_and_messages():
     r = _result(Strand("t", "v"), requires_review=True)
     r = WeaveResult(
         capability_id=r.capability_id,
-        capability_version=r.capability_version,
+        weaver_version=r.weaver_version,
         backend_used=r.backend_used,
         computed_groups=r.computed_groups,
         status=r.status,

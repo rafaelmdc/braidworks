@@ -36,7 +36,7 @@ from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.strand import MergePolicy, Strand, StrandSet
-from braidworks.core.weaver import BaseWeaver
+from braidworks.core.weaver import BackendStrategy, BaseWeaver
 
 __all__ = [
     "Braid",
@@ -72,6 +72,7 @@ __all__ = [
     "Strand",
     "StrandSet",
     "BaseWeaver",
+    "BackendStrategy",
     "BraidRegistry",
     "validate_manifest",
     "Braider",

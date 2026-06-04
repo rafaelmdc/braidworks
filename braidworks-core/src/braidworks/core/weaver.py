@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, ClassVar, Hashable, TypeVar
+from typing import Callable, ClassVar, Hashable, Protocol, TypeVar, runtime_checkable
 
 from braidworks.core.capability import WeaverManifest
 from braidworks.core.result import WeaveResult
@@ -12,25 +12,45 @@ from braidworks.core.strand import StrandSet
 K = TypeVar("K", bound=Hashable)
 
 
+@runtime_checkable
+class BackendStrategy(Protocol):
+    """Generic identity of one backend a weaver can run a capability against.
+
+    Deliberately domain-neutral: it declares only identity and fingerprint, never
+    how an operation executes. Core never calls a backend directly (it calls
+    ``weaver.execute_batch``), so there is no ``resolve``/``fetch`` here and no
+    assumption that the work is a lookup, transform, join, or anything else.
+    Per-domain backend interfaces (e.g. a taxon resolver) extend this in their
+    own package.
+    """
+
+    name: str
+
+    def is_configured(self) -> bool: ...
+
+    def fingerprint(self) -> str: ...
+
+
 class BaseWeaver(ABC):
     """Async boundary around a concrete data source.
 
     Subclasses declare a class-level ``MANIFEST`` and implement
-    ``dataset_version`` and ``execute``. ``execute_batch`` defaults to a serial
-    loop; override it for true batch backends. Weaver state (connections) is
-    lazily initialized on first ``execute``, never in ``__init__``.
+    ``backend_fingerprint`` and ``execute``. ``execute_batch`` defaults to a
+    serial loop; override it for true batch backends. Weaver state (connections)
+    is lazily initialized on first ``execute``, never in ``__init__``.
     """
 
     MANIFEST: ClassVar[WeaverManifest]
 
     @abstractmethod
-    def dataset_version(self) -> str:
-        """Dataset/release version backing this instance. Used in the cache key.
+    def backend_fingerprint(self, backend: str) -> str:
+        """Fingerprint of the named backend's data state. Used in the cache key.
 
-        Return a stable, version-specific string for versioned datasets
-        (``"ncbi-taxonomy-2024-03-16"``) or an explicit ``"live"`` /
-        ``"unversioned"`` for live sources. Never ``"unknown"`` — that silently
-        disables cache invalidation.
+        Per-backend by design: a multi-backend weaver's ``"local"`` and ``"api"``
+        backends have independent versions. Return a stable, version-specific
+        string for versioned datasets (``"ncbi-taxonomy-2024-03-16"``) or an
+        explicit ``"live"`` / ``"datasets-v2"`` for live sources. Never
+        ``"unknown"`` — that silently disables cache invalidation.
         """
 
     @abstractmethod

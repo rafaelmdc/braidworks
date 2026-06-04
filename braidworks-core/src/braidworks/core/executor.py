@@ -216,8 +216,8 @@ class LocalExecutor:
             cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
             requested = invocation.output_types
             triggered = cap.triggered_groups(requested)
-            dataset_version = weaver.dataset_version()
             manifest_version = weaver.MANIFEST.version
+            primary_fingerprint = weaver.backend_fingerprint(invocation.primary_backend)
             remaining_steps = braid.steps[step_index + 1 :]
 
             next_active: list[StrandSet] = []
@@ -232,9 +232,10 @@ class LocalExecutor:
                 key = compute_cache_key(
                     cap,
                     ss,
-                    capability_version=manifest_version,
+                    weaver_id=invocation.weaver_id,
+                    weaver_version=manifest_version,
                     backend=invocation.primary_backend,
-                    dataset_version=dataset_version,
+                    backend_fingerprint=primary_fingerprint,
                 )
                 cached = self._cache.get(key, triggered)
                 if cached is not None:
@@ -253,9 +254,10 @@ class LocalExecutor:
                             compute_cache_key(
                                 cap,
                                 ss,
-                                capability_version=r.capability_version,
+                                weaver_id=invocation.weaver_id,
+                                weaver_version=r.weaver_version,
                                 backend=r.backend_used,
-                                dataset_version=dataset_version,
+                                backend_fingerprint=weaver.backend_fingerprint(r.backend_used),
                             ),
                             r,
                         )
@@ -441,7 +443,7 @@ class LocalExecutor:
     ) -> WeaveResult:
         return WeaveResult(
             capability_id=invocation.capability_id,
-            capability_version="",
+            weaver_version="",
             backend_used=backend,
             computed_groups=frozenset(),
             status=WeaveStatus.ERROR,

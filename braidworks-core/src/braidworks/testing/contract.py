@@ -126,19 +126,28 @@ class CacheFingerprintTests:
             strands.append(Strand("zzz.unrelated.note", "ignore me"))
         return StrandSet.from_strands("e", strands)
 
-    def _key(self, strand_set: StrandSet, *, capability_version: str = "1", backend: str = "local", dataset_version: str = "ds-1"):
+    def _key(
+        self,
+        strand_set: StrandSet,
+        *,
+        weaver_id: str = "w",
+        weaver_version: str = "1",
+        backend: str = "local",
+        backend_fingerprint: str = "ds-1",
+    ):
         return compute_cache_key(
             self.capability,
             strand_set,
-            capability_version=capability_version,
+            weaver_id=weaver_id,
+            weaver_version=weaver_version,
             backend=backend,
-            dataset_version=dataset_version,
+            backend_fingerprint=backend_fingerprint,
         )
 
     def _result(self, computed_groups: set[str]) -> WeaveResult:
         return WeaveResult(
             capability_id=self.capability.id,
-            capability_version="1",
+            weaver_version="1",
             backend_used="local",
             computed_groups=frozenset(computed_groups),
             status=WeaveStatus.OK,
@@ -164,13 +173,21 @@ class CacheFingerprintTests:
         # The key has no group input at all, so repeated computation is identical.
         assert self._key(ss) == self._key(ss)
 
-    def test_dataset_version_changes_key(self):
+    def test_backend_fingerprint_changes_key(self):
         ss = self._ss(self.consumed_values_a)
-        assert self._key(ss, dataset_version="ds-1") != self._key(ss, dataset_version="ds-2")
+        assert self._key(ss, backend_fingerprint="ds-1") != self._key(ss, backend_fingerprint="ds-2")
 
-    def test_capability_version_changes_key(self):
+    def test_weaver_version_changes_key(self):
         ss = self._ss(self.consumed_values_a)
-        assert self._key(ss, capability_version="1") != self._key(ss, capability_version="2")
+        assert self._key(ss, weaver_version="1") != self._key(ss, weaver_version="2")
+
+    def test_weaver_id_changes_key(self):
+        ss = self._ss(self.consumed_values_a)
+        assert self._key(ss, weaver_id="w1") != self._key(ss, weaver_id="w2")
+
+    def test_backend_changes_key(self):
+        ss = self._ss(self.consumed_values_a)
+        assert self._key(ss, backend="local") != self._key(ss, backend="api")
 
     def test_superset_groups_satisfy_lookup(self):
         cache = InMemoryStrandCache()

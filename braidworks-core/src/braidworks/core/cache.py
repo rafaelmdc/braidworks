@@ -22,12 +22,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class StrandCacheKey:
-    """Everything that determines cache validity *except* the requested groups."""
+    """Everything that determines cache validity *except* the requested groups.
 
+    Requested outputs and computed groups are deliberately absent — they are
+    handled by the separate superset check in ``get`` (``computed_groups`` on the
+    stored entry), not the key. ``backend`` and ``backend_fingerprint`` together
+    keep a ``local`` result and an ``api`` result for the same input distinct.
+    """
+
+    weaver_id: str
+    weaver_version: str
     capability_id: str
-    capability_version: str
     backend: str
-    dataset_version: str
+    backend_fingerprint: str
     input_fingerprint: str
 
 
@@ -35,9 +42,10 @@ def compute_cache_key(
     capability: Capability,
     strand_set: StrandSet,
     *,
-    capability_version: str,
+    weaver_id: str,
+    weaver_version: str,
     backend: str,
-    dataset_version: str,
+    backend_fingerprint: str,
 ) -> StrandCacheKey:
     """Build a cache key. The fingerprint hashes only ``capability.consumes`` values.
 
@@ -51,10 +59,11 @@ def compute_cache_key(
     payload = json.dumps(fingerprint_inputs, sort_keys=True, default=str)
     input_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return StrandCacheKey(
+        weaver_id=weaver_id,
+        weaver_version=weaver_version,
         capability_id=capability.id,
-        capability_version=capability_version,
         backend=backend,
-        dataset_version=dataset_version,
+        backend_fingerprint=backend_fingerprint,
         input_fingerprint=input_fingerprint,
     )
 
