@@ -6,7 +6,6 @@ import json
 from urllib.parse import unquote
 
 import httpx
-import pytest
 
 from braidworks.core import Strand, StrandSet, WeaveStatus
 

@@ -29,6 +29,7 @@ def build_ncbi_weaver(
     api_client: httpx.AsyncClient | None = None,
     allow_fuzzy: bool = True,
 ) -> NCBITaxonWeaver:
+    """Build an NCBITaxonWeaver, wiring the local and/or API backends from config."""
     backends = {}
     if db_path is not None:
         backends["local"] = LocalTaxonomyBackend(db_path, cache_db_path=cache_db_path)

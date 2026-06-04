@@ -8,6 +8,11 @@ compared against the corresponding single-item result.
 
 from __future__ import annotations
 
+# These are pytest test methods and private helpers with self-describing names;
+# per-method docstrings would only restate the name. The mixins also deliberately
+# inspect StrandSet internals (_strands) to fingerprint raw inputs.
+# pylint: disable=missing-function-docstring,protected-access
+
 from typing import Any
 
 from braidworks.core.cache import InMemoryStrandCache, compute_cache_key
@@ -120,7 +125,9 @@ class CacheFingerprintTests:
     group_subset: str = "core"
     group_superset: str = "lineage"
 
-    def _ss(self, values: dict[str, Any], *, provenance: tuple[str, ...] = (), extra: bool = False) -> StrandSet:
+    def _ss(
+        self, values: dict[str, Any], *, provenance: tuple[str, ...] = (), extra: bool = False
+    ) -> StrandSet:
         strands = [Strand(t, v, provenance=provenance) for t, v in values.items()]
         if extra:
             strands.append(Strand("zzz.unrelated.note", "ignore me"))
@@ -175,7 +182,9 @@ class CacheFingerprintTests:
 
     def test_backend_fingerprint_changes_key(self):
         ss = self._ss(self.consumed_values_a)
-        assert self._key(ss, backend_fingerprint="ds-1") != self._key(ss, backend_fingerprint="ds-2")
+        assert self._key(ss, backend_fingerprint="ds-1") != self._key(
+            ss, backend_fingerprint="ds-2"
+        )
 
     def test_weaver_version_changes_key(self):
         ss = self._ss(self.consumed_values_a)

@@ -14,6 +14,8 @@ from ..intermediate import TaxonMatch
 
 
 class ResolutionBackend(ABC):
+    """Taxon-domain backend: a `BackendStrategy` plus a batch `resolve` operation."""
+
     name: str
 
     @abstractmethod

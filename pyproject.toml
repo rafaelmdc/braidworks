@@ -8,3 +8,22 @@ testpaths = ["braidworks-core/tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.basic]
+# MANIFEST is an intentional ClassVar constant on weavers (matches BaseWeaver).
+good-names = ["MANIFEST"]
+
+[tool.pylint."messages control"]
+# Disable opinionated refactor heuristics that fight legitimate shapes:
+# data carriers with many fields, config-rich factory functions, single-method
+# strategy/provider classes.
+disable = [
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-instance-attributes",
+]

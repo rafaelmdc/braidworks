@@ -20,6 +20,8 @@ from .mapper import map_taxon_match
 
 
 class BackendDispatchWeaver(BaseWeaver):
+    """Routes each capability call to a named backend, then runs the shared mapper."""
+
     def __init__(self, backends: dict[str, ResolutionBackend]) -> None:
         self._backends = dict(backends)
 

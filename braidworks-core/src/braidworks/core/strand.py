@@ -83,7 +83,9 @@ class StrandSet:
     def available_types(self) -> frozenset[str]:
         return frozenset(self._strands)
 
-    def add_strand(self, strand: Strand, policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE) -> None:
+    def add_strand(
+        self, strand: Strand, policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE
+    ) -> None:
         """Insert a single strand, resolving any collision per ``policy``."""
         existing = self._strands.get(strand.type_id)
         if existing is None:

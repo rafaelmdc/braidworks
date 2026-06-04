@@ -13,14 +13,14 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from braidworks.core import BackendConfigurationError
-
 from taxonomy_resolver.policy import ResolutionStatus
 from taxonomy_resolver.schemas import BatchResolveRequest, ResolveRequest, ResolveResult
 from taxonomy_resolver.service import TaxonomyResolverService
 
-from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
+from braidworks.core import BackendConfigurationError
+
 from .. import vocab
+from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 
 _NEUTRAL_STATUS = {
     ResolutionStatus.RESOLVED_EXACT_SCIENTIFIC: TaxonMatchStatus.RESOLVED,
@@ -38,6 +38,8 @@ _NEUTRAL_STATUS = {
 
 
 class LocalTaxonomyBackend:
+    """Resolution backend backed by the local SQLite taxonomy database."""
+
     name = "local"
 
     def __init__(self, db_path: str | Path, *, cache_db_path: str | Path | None = None) -> None:
@@ -60,9 +62,11 @@ class LocalTaxonomyBackend:
             raise BackendConfigurationError(f"invalid taxonomy db {self._db_path}: {exc}") from exc
 
     def is_configured(self) -> bool:
-        return True  # validated at construction
+        """Always true once constructed — the DB path was validated in ``__init__``."""
+        return True
 
     def _service(self) -> TaxonomyResolverService:
+        """Return this thread's resolver service, creating it lazily on first use."""
         svc = getattr(self._tl, "svc", None)
         if svc is None:
             svc = TaxonomyResolverService(self._db_path, self._cache_db_path)
@@ -70,6 +74,7 @@ class LocalTaxonomyBackend:
         return svc
 
     def fingerprint(self) -> str:
+        """The taxonomy build version backing this DB (the cache fingerprint)."""
         if self._fingerprint is None:
             info = self._service().get_taxonomy_build_info()
             self._fingerprint = info.get("taxonomy_build_version") or "unversioned"
@@ -78,11 +83,16 @@ class LocalTaxonomyBackend:
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
     ) -> list[TaxonMatch]:
-        return await asyncio.to_thread(self._resolve_sync, capability_id, list(queries), need_lineage)
+        """Resolve a batch off the event loop (one resolver call per batch)."""
+        return await asyncio.to_thread(
+            self._resolve_sync, capability_id, list(queries), need_lineage
+        )
 
     # --- sync worker (runs in a thread) ------------------------------------
 
-    def _resolve_sync(self, capability_id: str, queries: list, need_lineage: bool) -> list[TaxonMatch]:
+    def _resolve_sync(
+        self, capability_id: str, queries: list, need_lineage: bool
+    ) -> list[TaxonMatch]:
         svc = self._service()
         if capability_id == vocab.RESOLVE_NAME:
             req = BatchResolveRequest(items=[ResolveRequest(original_name=str(q)) for q in queries])
@@ -109,7 +119,8 @@ class LocalTaxonomyBackend:
             )
         else:
             taxid, name, rank, score, mtype, inline = (
-                r.matched_taxid, r.matched_name, r.matched_rank, r.score, str(r.match_type), r.lineage,
+                r.matched_taxid, r.matched_name, r.matched_rank,
+                r.score, str(r.match_type), r.lineage,
             )
         parent = inline[-2].taxid if len(inline) >= 2 else None
         candidates = [
@@ -148,7 +159,11 @@ class LocalTaxonomyBackend:
             return TaxonMatch(query=taxid, status=TaxonMatchStatus.NO_MATCH)
         node = lineage[-1]
         parent = lineage[-2]["taxid"] if len(lineage) >= 2 else None
-        entries = [LineageEntry(d["taxid"], d["rank"], d["name"]) for d in lineage] if need_lineage else []
+        entries = (
+            [LineageEntry(d["taxid"], d["rank"], d["name"]) for d in lineage]
+            if need_lineage
+            else []
+        )
         return TaxonMatch(
             query=taxid,
             status=TaxonMatchStatus.RESOLVED,

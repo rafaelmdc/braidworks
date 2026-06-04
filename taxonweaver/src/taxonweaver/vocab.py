@@ -42,6 +42,7 @@ MAX_BATCH_SIZE = 1000
 
 
 def resolve_name_capability(*, backends: tuple[str, ...]) -> Capability:
+    """The ``ncbi.resolve_name`` capability (organism name -> core + lineage)."""
     return Capability(
         id=RESOLVE_NAME,
         consumes=frozenset({ORGANISM_NAME}),
@@ -56,6 +57,7 @@ def resolve_name_capability(*, backends: tuple[str, ...]) -> Capability:
 
 
 def resolve_taxid_capability(*, backends: tuple[str, ...]) -> Capability:
+    """The ``ncbi.resolve_taxid`` capability (tax id -> core + lineage)."""
     return Capability(
         id=RESOLVE_TAXID,
         consumes=frozenset({TAXON_ID}),
@@ -70,6 +72,7 @@ def resolve_taxid_capability(*, backends: tuple[str, ...]) -> Capability:
 
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
+    """The NCBI weaver manifest declaring both capabilities for the given backends."""
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,

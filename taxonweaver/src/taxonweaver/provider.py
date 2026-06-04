@@ -17,7 +17,10 @@ from .factory import build_ncbi_weaver
 
 
 class NCBIWeaverProvider:
+    """WeaverProvider (Layer 1) for the ``ncbi`` weaver; delegates to build_ncbi_weaver."""
+
     weaver_id = vocab.WEAVER_ID
 
     def build(self, config: Mapping[str, Any]) -> BaseWeaver:
+        """Build a configured NCBITaxonWeaver from a config mapping."""
         return build_ncbi_weaver(**dict(config))

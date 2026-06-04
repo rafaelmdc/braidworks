@@ -39,6 +39,8 @@ def _rescore(query: str, name: str | None) -> float:
 
 
 class DatasetsV2Backend:
+    """Resolution backend backed by the NCBI Datasets v2 REST API."""
+
     name = "api"
 
     def __init__(
@@ -56,12 +58,15 @@ class DatasetsV2Backend:
         self._allow_fuzzy = allow_fuzzy
 
     def is_configured(self) -> bool:
+        """The API backend is always usable; it needs no local data."""
         return True
 
     def fingerprint(self) -> str:
+        """Datasets v2 is a live service, so the fingerprint is a fixed identifier."""
         return "datasets-v2"
 
     def _http(self) -> httpx.AsyncClient:
+        """Return the HTTP client, lazily creating one if none was injected."""
         if self._client is None:
             headers = {"api-key": self._api_key} if self._api_key else {}
             self._client = httpx.AsyncClient(base_url=self._base_url, headers=headers, timeout=30.0)
@@ -70,6 +75,7 @@ class DatasetsV2Backend:
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
     ) -> list[TaxonMatch]:
+        """Resolve a batch: exact via dataset_report, fuzzy via taxon_suggest."""
         if capability_id not in (vocab.RESOLVE_NAME, vocab.RESOLVE_TAXID):
             raise ValueError(f"unsupported capability {capability_id!r}")
         queries = [str(q) for q in queries]
@@ -180,7 +186,9 @@ class DatasetsV2Backend:
                 )
                 for tid in m.lineage_taxids
             ]
-            entries.append(LineageEntry(taxid=m.taxid, rank=m.rank or "", name=m.scientific_name or ""))
+            entries.append(
+                LineageEntry(taxid=m.taxid, rank=m.rank or "", name=m.scientific_name or "")
+            )
             m.lineage = entries
 
     def _node_match(self, query: str, node: dict[str, Any], *, match_type: str) -> TaxonMatch:

@@ -59,6 +59,7 @@ def map_taxon_match(
     backend: str,
     weaver_version: str,
 ) -> WeaveResult:
+    """Map a neutral ``TaxonMatch`` to a ``WeaveResult`` for the requested outputs."""
     triggered = capability.triggered_groups(requested_outputs)
     computed_groups = frozenset(triggered | {"core"})  # core is always computed internally
     allowed = capability.outputs_to_compute(requested_outputs)
