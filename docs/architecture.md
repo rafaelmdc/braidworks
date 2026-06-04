@@ -247,7 +247,9 @@ class BaseWeaver(ABC):
 - `BackendUnavailable` — a declared backend is not available in this specific instance (e.g. a multi-backend weaver class instantiated without a particular backend's configuration). The executor may fall back to the next backend if `FallbackCondition.BACKEND_UNAVAILABLE` is in `fallback_on`. This is distinct from `InvalidManifestError`: the manifest correctly declares a backend the class implements; it is just not configured in this instance.
 - `WeaveStatus.ERROR` — a per-entity failure (API timeout, malformed response, lookup failure for a specific input). Controlled by `ErrorPolicy` after fallbacks are exhausted.
 
-**On `NCBITaxonWeaver` for MVP:** `db_path` is required at construction. Omitting it raises `TypeError` immediately — there is no deferred `BackendUnavailable` path because the weaver is local-only and there is no other backend to fall back to. `BackendConfigurationError` is raised if `db_path` is provided but the file does not exist or is not a valid SQLite database.
+**On `NCBITaxonWeaver` for MVP:** the weaver declares two backends, `("local", "api")`. `db_path` is required at construction for the `local` backend. Omitting it raises `TypeError` immediately. `BackendConfigurationError` is raised if `db_path` is provided but the file does not exist or is not a valid SQLite database. The `api` backend (NCBI Datasets v2) is configured separately; if a backend is selected but not configured in this instance it raises `BackendUnavailable`, which can trigger fallback when `FallbackCondition.BACKEND_UNAVAILABLE` is in `fallback_on`.
+
+**Backends are not guaranteed to agree.** The `local` backend resolves names with the bundled SQLite DB and the in-house rapidfuzz fuzzy matcher; the `api` backend resolves against NCBI Datasets v2, whose name matching and candidate generation are NCBI's own. For the same input name the two backends **can return slightly different results** — a different chosen taxid, different candidates, or different `dataset_version`. This is expected and acceptable: backends are fallback-interchangeable, not bit-identical. To keep `confidence` comparable across backends, the api backend re-scores NCBI's returned suggestions with the same rapidfuzz scoring the local backend uses. This divergence is exactly why `backend` is part of the `StrandCacheKey` — a local result and an api result for the same input are cached as distinct entries.
 
 **`_reorder_by_key(results_map, original_keys, ...)`** is a static helper for weavers whose underlying API returns results keyed by some identifier rather than in input order. The weaver builds `{key: WeaveResult}` from the API response and passes it along with the original key order. Missing keys get a `NO_MATCH` result at the correct position. Does not handle duplicate keys — the weaver must de-duplicate first.
 
@@ -588,7 +590,7 @@ For `ncbi.resolve_name` with `backend="local"`, calls `resolve_batch()` once wit
 
 ### Construction and registration
 
-`db_path` is required at construction — omitting it is a `TypeError`. There is no deferred `BackendUnavailable` path because the weaver is local-only; there is no fallback backend for a missing path to fall back to.
+`db_path` is required at construction for the `local` backend — omitting it is a `TypeError`. The `api` backend (NCBI Datasets v2) is configured separately; when a backend is selected at runtime but not configured in this instance, the weaver raises `BackendUnavailable`, which can trigger fallback to the other backend if `FallbackCondition.BACKEND_UNAVAILABLE` is in `fallback_on`.
 
 ```python
 registry = BraidRegistry()
@@ -647,7 +649,6 @@ braidworks-celery/        CeleryExecutor — same Braid + ExecutionResult interf
 | HPC executor | `StrandSet.to_json/from_json` exists; braid serialization exists; SQLite-on-NFS documented constraint |
 | Redis cache | `StrandCache` is a Protocol; `get(key, requested_groups)` interface works for Redis with key-set indexing |
 | Entry-point discovery | `register()` is already the interface; `discover()` can populate it once plugin configuration is resolved |
-| API backend for TaxonWeaver | Not declared in manifest; add `"api"` to `backends` and implement when an Entrez client exists |
 | TTL enforcement | Not in MVP interface; add `put(key, result, ttl)` when Redis is implemented |
 | Calibrated confidence | `strand.metadata["calibrated_probability"]` when a weaver has real calibration data |
 | Parallel step execution | Topological sort identifies independent steps; parallelism is an executor feature |

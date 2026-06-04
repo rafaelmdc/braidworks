@@ -129,7 +129,7 @@ After Dijkstra, group all selected edges by `(weaver_id, capability_id, input_ty
 - Braider test: `organism.name → {ncbi.taxon.id, ncbi.taxon.lineage, ncbi.taxon.rank}` produces a single `CapabilityInvocation` (coalesced), not three.
 - Braider test: a two-hop path produces two steps in correct dependency order.
 - Braider test: requesting a type that no weaver can produce raises `NoPathError`.
-- Braider test: `LOCAL_FIRST` + capability with `backends=("local","api")` → `primary="local"`, `fallback=("api",)`. (Use a fake weaver for this; TaxonWeaver is local-only.)
+- Braider test: `LOCAL_FIRST` + capability with `backends=("local","api")` → `primary="local"`, `fallback=("api",)`.
 - Braider test: `LOCAL_FIRST` + capability with `backends=("api",)` → `primary="api"`, `fallback=()`. No error — degrades gracefully.
 - Braider test: `LOCAL_ONLY` + capability with `backends=("api",)` → raises `NoPlanError`.
 - Braider test: a fake two-input capability is not reachable even if both consumed types are available.
@@ -222,7 +222,9 @@ After last step:
 - `taxonweaver/weaver.py` — `NCBITaxonWeaver(BaseWeaver)`
   - `MANIFEST` with two capabilities: `ncbi.resolve_name` and `ncbi.resolve_taxid`
   - Output groups per capability as defined in `architecture.md` (`id`, `outputs` only — no `marginal_cost`, no `depends_on`)
-  - `backends=("local",)` for both capabilities — API backend not yet implemented; do not declare it
+  - `backends=("local", "api")` for both capabilities. The `local` backend wraps the SQLite `TaxonomyResolverService`; the `api` backend calls NCBI Datasets v2 (`https://api.ncbi.nlm.nih.gov/datasets/v2`). See `architecture.md` for endpoint mapping.
+  - **The two backends can return slightly different results for the same name** — `local` uses the bundled DB + in-house rapidfuzz matching, `api` uses NCBI's own name matching (`taxon_suggest` exact + fuzzy). They are fallback-interchangeable, not identical. The `api` backend re-scores NCBI suggestions with the local rapidfuzz scoring so `confidence` is comparable. `backend` is part of the cache key, so local and api results are cached separately.
+  - `api` backend specifics: `ncbi.resolve_name` → `taxon_suggest` (exact + fuzzy) for core, plus a second batched lineage lookup over the deduped union of ancestor taxids (Datasets `lineage` is taxids-only). Batches up to 1000 taxons/request. `BackendUnavailable` if the api backend is selected but not configured.
   - `dataset_version()` returns `taxonomy_build_version` from `get_taxonomy_build_info()`
   - Connection management via `threading.local()` — one `TaxonomyResolverService` per thread, lazily created
   - `execute()` dispatches by `capability_id`, wraps sync calls with `asyncio.to_thread()`
@@ -276,6 +278,12 @@ Confidence: `result.score / 100.0` when score is not None; `1.0` for exact match
 - `BackendConfigurationError` raised at construction when `db_path` points to a nonexistent file or invalid database.
 - Each thread in a thread pool gets its own SQLite connection (test with concurrent `asyncio.to_thread` calls).
 - Existing `TaxonomyResolverService` tests pass without modification.
+- `backends == ("local", "api")` declared on both capabilities.
+- `api` backend: `execute_batch` for `ncbi.resolve_name` issues a bounded number of HTTP calls (one `taxon_suggest` batch per ≤1000 names, plus one batched lineage lookup when the lineage group is requested) — mock the HTTP client; no live network in tests.
+- `api` backend: a name with one exact `taxon_suggest` hit → `OK`; multiple/fuzzy hits → `AMBIGUOUS` with candidates; zero hits → `NO_MATCH`.
+- `api` backend: confidence on api-produced strands is computed with the same rapidfuzz scoring as the local backend.
+- `BackendUnavailable` raised when the `api` backend is selected but not configured.
+- Divergence is tolerated: `local` and `api` may return different taxids for the same name; the contract asserts each backend's result is internally valid, not that they match each other.
 
 ---
 
@@ -359,7 +367,6 @@ The following are architectural decisions already reflected in the interfaces bu
 - `BackendPolicy.ANY` — deferred until per-backend cost model exists
 - Celery or HPC executor
 - Redis cache
-- API backend for `NCBITaxonWeaver`
 - Parallel step execution (independent steps run serially for now)
 - Type schema versioning
 - Calibrated confidence
