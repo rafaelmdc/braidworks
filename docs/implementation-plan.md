@@ -6,6 +6,20 @@ The goal is a working MVP: organism name → multiple NCBI strand types, resolve
 
 ---
 
+## Revision (2026-06-04) — multi-backend core changes
+
+Bringing the API backend into scope (TaxonWeaver ships `local` + `api`) surfaced two core contract changes that supersede the original Phase 1 spec below. They are generic — every future multi-backend weaver depends on them — and must be kept domain-neutral (no taxonomy/resolution assumptions in core):
+
+1. **`BaseWeaver.dataset_version(self)` → `backend_fingerprint(self, backend: str) -> str`.** Per-backend, renamed for generality (a live API has no "dataset"). The executor evaluates it with `invocation.primary_backend` for the pre-check key and `result.backend_used` for the post-cache key, so a result is cached under the fingerprint of the backend that produced it.
+
+2. **`StrandCacheKey` gains `weaver_id` + `weaver_version`; `dataset_version` → `backend_fingerprint`.** New shape: `(weaver_id, weaver_version, capability_id, backend, backend_fingerprint, input_fingerprint)`. **`requested_outputs` and `computed_groups` stay OUT of the key** — they are handled by the existing superset validity check (`computed_groups` on the stored entry; `get(key, requested_groups)` does the `⊇` match). Putting them in the key would shard buckets and break superset reuse.
+
+3. **New generic concept `BackendStrategy`** in core: identity only — `name`, `is_configured() -> bool`, `fingerprint() -> str`. No `resolve()` / no batch shape; core never calls a backend directly. The dispatch+mapper mixin and any per-domain intermediate (`TaxonMatch`) live in the weaver package, promoted to a shared `weaverkit` only when a second weaver (UniProt) proves the abstraction.
+
+Phase 1 references to `dataset_version` / the old key shape below should be read through this revision.
+
+---
+
 ## Phase 1 — `braidworks-core`: Types Only
 
 **What:** Create the `braidworks-core` package containing all core dataclasses, enums, protocols, and exceptions. No graph, no planning, no execution, no weavers.
@@ -15,7 +29,7 @@ The goal is a working MVP: organism name → multiple NCBI strand types, resolve
 - `strand.py` — `Strand`, `StrandSet`, `MergePolicy`
 - `capability.py` — `OutputGroup`, `Capability`, `WeaverManifest`
 - `result.py` — `WeaveResult`, `WeaveStatus`, `CandidateResult`
-- `weaver.py` — `BaseWeaver` ABC with `execute`, `execute_batch`, `dataset_version`, `_reorder_by_key`
+- `weaver.py` — `BaseWeaver` ABC with `execute`, `execute_batch`, `backend_fingerprint(backend)`, `_reorder_by_key` (see revision above; originally `dataset_version()`)
 - `braid.py` — `CapabilityInvocation`, `Braid`, `BackendPolicy`, `FallbackCondition`
 - `cache.py` — `StrandCacheKey`, `compute_cache_key`, `StrandCache` Protocol, `InMemoryStrandCache`
 - `exceptions.py` — `BackendConfigurationError`, `BackendUnavailable`, `NoPathError`, `NoPlanError`, `UnsupportedCapability`, `ReviewRequired`, `MissingInputError`, `InvalidManifestError`
@@ -24,13 +38,13 @@ The goal is a working MVP: organism name → multiple NCBI strand types, resolve
 
 **`OutputGroup`** has two fields: `id` and `outputs`. No `marginal_cost` (the MVP braider uses a single `Capability.cost` for Dijkstra; per-group costs have nowhere to feed in), no `depends_on` (internal weaver execution ordering is the weaver's responsibility). The weaver reports everything it computed in `WeaveResult.computed_groups`; that is the only mechanism the executor and cache use.
 
-**`StrandCacheKey`** has no group information and no schema version:
+**`StrandCacheKey`** has no group information and no schema version (revised — see the multi-backend revision above):
 ```
 StrandCacheKey
-  capability_id, capability_version, backend, dataset_version,
-  input_fingerprint
+  weaver_id, weaver_version, capability_id, backend,
+  backend_fingerprint, input_fingerprint
 ```
-`requested_groups` is not in the key — including it would make each distinct group set its own isolated cache bucket, breaking the superset validity check. `schema_version` is not in the key — type ID changes affect the `input_fingerprint` directly, and algorithm changes are covered by `capability_version`. The key is the same regardless of which groups are requested.
+`requested_groups` is not in the key — including it would make each distinct group set its own isolated cache bucket, breaking the superset validity check. `schema_version` is not in the key — type ID changes affect the `input_fingerprint` directly, and algorithm changes are covered by `weaver_version`. The key is the same regardless of which groups are requested.
 
 **`StrandCache` Protocol** signature:
 ```
@@ -73,7 +87,7 @@ ExecutionError
 - `BaseWeaver._reorder_by_key` test: missing keys get `NO_MATCH` at the correct positions; existing keys appear in correct positions regardless of map iteration order.
 - `ReviewQueueItem` round-trips through `to_json()` / `from_json()`.
 - `ExecutionError` round-trips through `to_json()` / `from_json()`.
-- `dataset_version()` is abstract — attempting to instantiate a concrete `BaseWeaver` subclass without implementing it raises `TypeError`.
+- `backend_fingerprint(backend)` is abstract — attempting to instantiate a concrete `BaseWeaver` subclass without implementing it raises `TypeError`.
 
 **Does not include:** graph projection, pathfinding, execution, any real weaver.
 
@@ -225,20 +239,24 @@ After last step:
   - `backends=("local", "api")` for both capabilities. The `local` backend wraps the SQLite `TaxonomyResolverService`; the `api` backend calls NCBI Datasets v2 (`https://api.ncbi.nlm.nih.gov/datasets/v2`). See `architecture.md` for endpoint mapping.
   - **The two backends can return slightly different results for the same name** — `local` uses the bundled DB + in-house rapidfuzz matching, `api` uses NCBI's own name matching (`taxon_suggest` exact + fuzzy). They are fallback-interchangeable, not identical. The `api` backend re-scores NCBI suggestions with the local rapidfuzz scoring so `confidence` is comparable. `backend` is part of the cache key, so local and api results are cached separately.
   - `api` backend specifics: `ncbi.resolve_name` → `taxon_suggest` (exact + fuzzy) for core, plus a second batched lineage lookup over the deduped union of ancestor taxids (Datasets `lineage` is taxids-only). Batches up to 1000 taxons/request. `BackendUnavailable` if the api backend is selected but not configured.
-  - `dataset_version()` returns `taxonomy_build_version` from `get_taxonomy_build_info()`
-  - Connection management via `threading.local()` — one `TaxonomyResolverService` per thread, lazily created
-  - `execute()` dispatches by `capability_id`, wraps sync calls with `asyncio.to_thread()`
-  - `execute_batch()` for `ncbi.resolve_name`: calls `resolve_batch()` once for all names; maps results in input order; sets `computed_groups` accurately
-  - `execute_batch()` for `ncbi.resolve_taxid`: default serial loop
-  - `db_path` is required at construction; omitting it raises `TypeError` immediately
-  - `BackendConfigurationError` raised at construction if `db_path` does not exist or cannot be opened as a valid SQLite database
+  - `backend_fingerprint(backend)` delegates to the selected strategy: `"local"` → `taxonomy_build_version` from `get_taxonomy_build_info()`; `"api"` → Datasets v2 service id (`"datasets-v2"`/`"live"`)
+
+**Package layout (strategy + shared mapper + factory):**
+
+- `taxonweaver/backends/base.py` — `ResolutionBackend` (taxon-package interface; implements core's generic `BackendStrategy`): `name`, `is_configured()`, `fingerprint()`, and an `async resolve(queries, *, need_lineage) -> list[TaxonMatch]` returning input-order results.
+- `taxonweaver/backends/local.py` — `LocalTaxonomyBackend`: wraps `TaxonomyResolverService`; `threading.local()` service per thread, lazily created; `asyncio.to_thread()`; `resolve_batch()` once per batch → `TaxonMatch`. `BackendConfigurationError` if `db_path` does not exist or is not valid SQLite.
+- `taxonweaver/backends/datasets_v2.py` — `DatasetsV2Backend`: async HTTP to Datasets v2; `taxon_suggest` (exact + fuzzy) + a second batched lineage lookup over the deduped union of ancestor taxids (Datasets `lineage` is taxids-only); ≤1000 taxons/request; re-scores suggestions with the local rapidfuzz scoring for comparable `confidence`; uses `_reorder_by_key` to realign keyed responses.
+- `taxonweaver/intermediate.py` — `TaxonMatch`, `LineageEntry`, `CandidateMatch` (taxon-specific; never leak into core).
+- `taxonweaver/mapper.py` — the single `TaxonMatch -> WeaveResult` mapper: identical strand shapes across backends, status mapping, `computed_groups`.
+- `taxonweaver/weaver.py` — `NCBITaxonWeaver(BackendDispatchWeaver)`: holds `dict[str, ResolutionBackend]`; `execute_batch` selects by `backend`, raises `BackendUnavailable` if absent/unconfigured, runs the mapper.
+- `taxonweaver/factory.py` — `build_ncbi_weaver(config)`: configures `local` and `api` independently; a missing backend is simply not registered (does **not** poison the weaver when fallback covers it); surfaces as `BackendUnavailable` only if selected with no fallback.
 
 - Manual registration is the MVP path; no `pyproject.toml` entry point required yet:
   ```python
-  registry.register(NCBITaxonWeaver(db_path=Path(os.environ["TAXONOMY_DB_PATH"])))
+  registry.register(build_ncbi_weaver(config))
   ```
 
-**Strand mapping from `ResolveResult`:**
+**Strand mapping from `TaxonMatch` (both backends normalize to this; field names follow `ResolveResult`):**
 
 | ResolveResult field | Strand type_id | Group |
 |---|---|---|
@@ -271,7 +289,7 @@ Confidence: `result.score / 100.0` when score is not None; `1.0` for exact match
 
 - `WeaverOrderContractTests` mixin passes for `NCBITaxonWeaver` on a real test DB.
 - `execute_batch` for `ncbi.resolve_name` with 100 names issues exactly one `resolve_batch` call.
-- `dataset_version()` returns a non-`"unknown"` string when backed by a real DB.
+- `backend_fingerprint("local")` returns a non-`"unknown"` string when backed by a real DB; `backend_fingerprint("api")` returns the Datasets v2 service id.
 - Requesting only `ncbi.taxon.id` (core group): lineage cache not read; `computed_groups={"core"}`.
 - Requesting `ncbi.taxon.lineage` (lineage group): both groups computed; `computed_groups={"core","lineage"}`.
 - `TypeError` raised when `db_path` is omitted at construction.
@@ -329,8 +347,9 @@ Verifies:
 - Same `type_id`, different `value` → different `input_fingerprint`
 - StrandSet with extra unrelated strands → same `input_fingerprint` as minimal StrandSet
 - Different `requested_groups`, same everything else → same `StrandCacheKey`
-- Same inputs, different `dataset_version` → different `StrandCacheKey`
-- Same inputs, different `capability_version` → different `StrandCacheKey`
+- Same inputs, different `backend_fingerprint` → different `StrandCacheKey`
+- Same inputs, different `weaver_version` → different `StrandCacheKey`
+- Same inputs, different `weaver_id` → different `StrandCacheKey`
 - `computed_groups={"core","lineage"}` satisfies a lookup with `requested_groups={"core"}`
 - `computed_groups={"core"}` does not satisfy a lookup with `requested_groups={"core","lineage"}`
 - Two `put()` calls with same base key but different `computed_groups` store two entries; both retrievable by appropriate `requested_groups`

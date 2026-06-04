@@ -201,13 +201,14 @@ class BaseWeaver(ABC):
     MANIFEST: ClassVar[WeaverManifest]
 
     @abstractmethod
-    def dataset_version(self) -> str:
-        """Dataset or release version backing this instance.
+    def backend_fingerprint(self, backend: str) -> str:
+        """Fingerprint of the named backend's data state. Per-backend by design.
         Used in cache key construction. Must be overridden — there is no default.
+        Generalizes the old `dataset_version()`: not every backend is a dataset.
         Return a stable, version-specific string for versioned datasets:
-          "ncbi-taxonomy-2024-03-16"
+          backend_fingerprint("local") -> "ncbi-taxonomy-2024-03-16"
         Return an explicit string for unversioned or live sources:
-          "live" or "unversioned"
+          backend_fingerprint("api")   -> "datasets-v2" or "live"
         Never return "unknown" — that silently disables cache invalidation.
         """
 
@@ -249,7 +250,7 @@ class BaseWeaver(ABC):
 
 **On `NCBITaxonWeaver` for MVP:** the weaver declares two backends, `("local", "api")`. `db_path` is required at construction for the `local` backend. Omitting it raises `TypeError` immediately. `BackendConfigurationError` is raised if `db_path` is provided but the file does not exist or is not a valid SQLite database. The `api` backend (NCBI Datasets v2) is configured separately; if a backend is selected but not configured in this instance it raises `BackendUnavailable`, which can trigger fallback when `FallbackCondition.BACKEND_UNAVAILABLE` is in `fallback_on`.
 
-**Backends are not guaranteed to agree.** The `local` backend resolves names with the bundled SQLite DB and the in-house rapidfuzz fuzzy matcher; the `api` backend resolves against NCBI Datasets v2, whose name matching and candidate generation are NCBI's own. For the same input name the two backends **can return slightly different results** — a different chosen taxid, different candidates, or different `dataset_version`. This is expected and acceptable: backends are fallback-interchangeable, not bit-identical. To keep `confidence` comparable across backends, the api backend re-scores NCBI's returned suggestions with the same rapidfuzz scoring the local backend uses. This divergence is exactly why `backend` is part of the `StrandCacheKey` — a local result and an api result for the same input are cached as distinct entries.
+**Backends are not guaranteed to agree.** The `local` backend resolves names with the bundled SQLite DB and the in-house rapidfuzz fuzzy matcher; the `api` backend resolves against NCBI Datasets v2, whose name matching and candidate generation are NCBI's own. For the same input name the two backends **can return slightly different results** — a different chosen taxid, different candidates, or a different `backend_fingerprint`. This is expected and acceptable: backends are fallback-interchangeable, not bit-identical. To keep `confidence` comparable across backends, the api backend re-scores NCBI's returned suggestions with the same rapidfuzz scoring the local backend uses. This divergence is exactly why both `backend` and `backend_fingerprint` are part of the `StrandCacheKey` — a local result and an api result for the same input are cached as distinct entries.
 
 **`_reorder_by_key(results_map, original_keys, ...)`** is a static helper for weavers whose underlying API returns results keyed by some identifier rather than in input order. The weaver builds `{key: WeaveResult}` from the API response and passes it along with the original key order. Missing keys get a `NO_MATCH` result at the correct position. Does not handle duplicate keys — the weaver must de-duplicate first.
 
@@ -271,14 +272,15 @@ The cache key captures everything that determines whether a cached result is sti
 
 ```
 StrandCacheKey  (base key — no group information)
+  weaver_id: str                     which weaver produced it (two weavers may share a capability_id)
+  weaver_version: str                from WeaverManifest.version; algorithm changes invalidate old entries
   capability_id: str
-  capability_version: str            algorithm changes invalidate old entries
   backend: str                       local and API can return different data
-  dataset_version: str               from weaver.dataset_version()
+  backend_fingerprint: str           per-backend, from weaver.backend_fingerprint(backend)
   input_fingerprint: str             sha256 of {consumed_type_id: value} — see below
 ```
 
-Requested groups are deliberately absent from the key. Including them would make each distinct group set its own isolated cache bucket, breaking the superset validity check entirely (see below). Type ID changes affect the input fingerprint directly; capability algorithm changes are covered by `capability_version`. No additional schema versioning field is needed.
+**Requested outputs and computed groups are deliberately absent from the key.** They are not ignored — they are handled by the *separate* superset validity check (see below), where `computed_groups` lives on the stored entry and `get(key, requested_groups)` performs the `⊇` match. Putting either in the key would make each distinct group set its own isolated cache bucket, breaking superset reuse entirely (request `lineage`, cache `{"core","lineage"}`, later request `core` → must still hit). Type ID changes affect the input fingerprint directly; algorithm changes are covered by `weaver_version`. No additional schema versioning field is needed.
 
 **Input fingerprint hashes only the strand types listed in `capability.consumes`, not the full StrandSet.** Extra strands accumulated from prior steps must not cause a cache miss.
 
@@ -291,7 +293,7 @@ fingerprint_inputs = {
 
 Provenance is excluded. The same value arriving via different upstream paths must share a cache entry.
 
-**`dataset_version` is mandatory for correctness.** A TaxonWeaver backed by a 2024 NCBI dump and one backed by a 2026 dump must not share entries. All weavers must override `dataset_version()`.
+**`backend_fingerprint` is mandatory for correctness and is per-backend.** A TaxonWeaver `local` backend on a 2024 NCBI dump and one on a 2026 dump must not share entries; likewise a `local` result and an `api` result for the same input are distinct (different `backend` *and* different `backend_fingerprint`). All weavers must implement `backend_fingerprint(backend)` — it replaces the old backend-blind `dataset_version()`. The executor evaluates it per-backend: with `invocation.primary_backend` for the pre-check key and with `result.backend_used` for the post-execution key, so a result is always cached under the fingerprint of the backend that actually produced it.
 
 ### Cache Validity and Output Groups
 
@@ -576,13 +578,17 @@ Capability: ncbi.resolve_taxid
   backends: (local,)
 ```
 
-### dataset_version
+### backend_fingerprint
 
-Returns the `taxonomy_build_version` from `get_taxonomy_build_info()`. This already exists in the database metadata table.
+`backend_fingerprint("local")` returns the `taxonomy_build_version` from `get_taxonomy_build_info()` (already in the database metadata table). `backend_fingerprint("api")` returns the Datasets v2 service identifier (e.g. `"datasets-v2"` / `"live"`). Each backend strategy supplies its own fingerprint; the weaver delegates to the selected backend.
+
+### Backend strategies and dispatch
+
+`NCBITaxonWeaver` holds a `dict[str, ResolutionBackend]` (`"local"` → `LocalTaxonomyBackend`, `"api"` → `DatasetsV2Backend`). `execute_batch` selects the strategy by the `backend` argument, raises `BackendUnavailable` if that strategy is absent or `is_configured()` is false, calls the strategy to produce a list of neutral `TaxonMatch` objects (in input order; the API path uses `_reorder_by_key`), then runs the single `TaxonMatch -> WeaveResult` mapper so both backends emit identical strand shapes. `ResolutionBackend` is the taxon-package interface; it implements core's generic `BackendStrategy` (which declares only `name`, `is_configured()`, and `fingerprint()` — no resolution-specific methods, so core stays domain-neutral).
 
 ### Connection handling
 
-Uses `threading.local()` for one `TaxonomyResolverService` instance per thread. `asyncio.to_thread()` distributes calls across a thread pool; each thread gets its own SQLite connection, opened lazily on first use.
+Uses `threading.local()` for one `TaxonomyResolverService` instance per thread. `asyncio.to_thread()` distributes calls across a thread pool; each thread gets its own SQLite connection, opened lazily on first use. The async `DatasetsV2Backend` needs no thread pool — it awaits an async HTTP client directly.
 
 ### execute_batch
 
@@ -665,7 +671,7 @@ These must hold throughout the implementation and must be covered by tests:
 2. **Cache fingerprint uses only consumed types, no provenance.** Same value, different upstream path = same cache entry. Extra strands in the StrandSet do not affect the fingerprint.
 3. **Cache key contains no group information.** `requested_groups` is passed to `get()` separately; it is never part of the key.
 4. **Cache validity requires group superset.** A cached entry is only a hit when `cached_result.computed_groups ⊇ triggered_groups(requested_outputs)`.
-5. **`dataset_version` in cache key.** Upgrading a local database invalidates old entries without any manual flush.
+5. **`backend_fingerprint` in cache key, evaluated per-backend.** Upgrading a local database invalidates old entries without any manual flush; a result is cached under the fingerprint of the backend that produced it (`result.backend_used`), never a backend-blind value.
 6. **`BackendConfigurationError` aborts the run.** Never per-entity, never triggers fallback.
 7. **Braider intersects BackendPolicy with capability.backends.** A backend not in `capability.backends` is never assigned. Impossible combinations raise `NoPlanError` at plan time.
 8. **`Capability.backends` only declares backends implemented by the weaver class.** Declaring a backend with no implementation is a manifest lie and will be rejected by validation. `BackendUnavailable` is valid only when an implemented backend is unavailable in this configured instance (e.g. a multi-backend weaver class instantiated without a specific backend's credentials).
@@ -678,7 +684,7 @@ These must hold throughout the implementation and must be covered by tests:
 15. **`NO_MATCH` goes to `unresolved`, not `errors` or `resolved`.** It is a valid data outcome, not a failure.
 16. **`ErrorPolicy.RAISE` aborts execution; no `ExecutionResult` is returned.** The entity is not added to `errors`.
 17. **`ExecutionError` is JSON-serializable.** No raw `Exception` objects in `ExecutionResult`.
-18. **`dataset_version()` is abstract.** No weaver may accidentally inherit `"unknown"`.
+18. **`backend_fingerprint(backend)` is abstract.** No weaver may accidentally inherit `"unknown"`; it is evaluated per-backend.
 19. **Manifest validation runs at `register()` time.** Invalid manifests raise `InvalidManifestError` before any graph is built.
 20. **Weaver computes only triggered output groups externally.** It may compute more internally (reported via `computed_groups`); it must not skip externally triggered groups.
 21. **`requires_review=True` halts by default.** Executor does not silently continue through a review gate.
