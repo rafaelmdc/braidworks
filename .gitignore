@@ -55,6 +55,14 @@ cover/
 *.mo
 *.pot
 
+# Braidworks: never commit taxonomy data artifacts (the NCBI DB is multi-GB)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+taxdump.tar.gz
+/data/
+**/data/*.sqlite
+
 # Django stuff:
 *.log
 local_settings.py
