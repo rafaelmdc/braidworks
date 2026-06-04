@@ -19,11 +19,14 @@ test-core:  ## Run the braidworks-core suite
 test-weaver:  ## Run the taxonweaver suite
 	cd taxonweaver && uv run --extra test python -m pytest -q
 
-lint:  ## Lint the source with ruff
-	uvx ruff check braidworks-core/src taxonweaver/src/taxonweaver
+# Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
+LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests
+
+lint:  ## Lint all packages and tests with ruff
+	uvx ruff check $(LINT_PATHS)
 
 fmt:  ## Auto-format with ruff
-	uvx ruff format braidworks-core/src taxonweaver/src/taxonweaver
+	uvx ruff format $(LINT_PATHS)
 
 clean:  ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
