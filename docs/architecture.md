@@ -159,7 +159,7 @@ What one capability invocation returns. Always exactly one per input StrandSet. 
 ```
 WeaveResult
   capability_id: str
-  capability_version: str                    from WeaverManifest.version at call time
+  weaver_version: str                        from WeaverManifest.version at call time; feeds StrandCacheKey.weaver_version
   backend_used: str                          actual backend: "local" or "api", never "any"
   computed_groups: frozenset[str]            group ids actually computed, including internal deps
   status: WeaveStatus
