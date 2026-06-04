@@ -13,7 +13,7 @@ import sqlite3
 from pathlib import Path
 
 from .db import fetch_name_matches
-from .lineage import get_lineage_for_taxid, lineage_entries_from_json
+from .lineage import get_lineage_for_taxid
 from .normalize import normalize_level, normalize_name
 from .policy import (
     MatchType,
@@ -32,14 +32,13 @@ def _build_candidate(row: object, match_type: MatchType, db_path: DatabaseHandle
     """Convert one SQL row into a review-ready exact candidate."""
 
     taxid = int(row["taxid"])
-    lineage = lineage_entries_from_json(row["lineage_json"])
     return CandidateMatch(
         taxid=taxid,
         name=str(row["scientific_name"] or row["matched_name"]),
         rank=str(row["rank"]),
         match_type=match_type,
         score=1.0,
-        lineage=lineage if lineage else get_lineage_for_taxid(db_path, taxid),
+        lineage=get_lineage_for_taxid(db_path, taxid),
     )
 
 
@@ -71,7 +70,6 @@ def _finalize_unique_result(
     )
 
     taxid = int(row["taxid"])
-    lineage = lineage_entries_from_json(row["lineage_json"])
     return ResolveResult(
         original_name=request.original_name,
         normalized_name=normalize_name(request.original_name),
@@ -85,7 +83,7 @@ def _finalize_unique_result(
         matched_name=str(row["scientific_name"] or row["matched_name"]),
         matched_rank=str(row["rank"]),
         score=1.0,
-        lineage=lineage if lineage else get_lineage_for_taxid(db_path, taxid),
+        lineage=get_lineage_for_taxid(db_path, taxid),
         metadata={"matched_input_name": str(row["matched_name"])},
     )
 

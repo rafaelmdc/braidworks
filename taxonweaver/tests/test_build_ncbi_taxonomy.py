@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import tarfile
 import tempfile
@@ -10,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from taxonomy_resolver.build import build_taxonomy_database
+from taxonomy_resolver.lineage import get_lineage_for_taxid
 
 
 NODES_DMP = """1\t|\t1\t|\tno rank\t|\t\t|\t8\t|\t0\t|\t1\t|\t0\t|\t1\t|\t0\t|\t0\t|\t0\t|\troot\t|
@@ -53,20 +53,12 @@ class BuildNcbiTaxonomyTests(unittest.TestCase):
             self.assertEqual(summary.name_count, 9)
             self.assertEqual(summary.scientific_name_count, 8)
             self.assertEqual(summary.synonym_count, 1)
-            self.assertEqual(summary.lineage_cache_count, 8)
             self.assertTrue(all(summary.validation_checks.values()))
             self.assertTrue(summary.rankedlineage_present)
 
             with sqlite3.connect(db_path) as connection:
                 taxa_count = connection.execute("SELECT COUNT(*) FROM taxa").fetchone()[0]
                 names_count = connection.execute("SELECT COUNT(*) FROM taxon_names").fetchone()[0]
-                lineage_row = connection.execute(
-                    """
-                    SELECT lineage_json
-                    FROM lineage_cache
-                    WHERE taxid = 853
-                    """
-                ).fetchone()
                 metadata_value = connection.execute(
                     "SELECT value FROM metadata WHERE key = 'taxonomy_build_version'"
                 ).fetchone()[0]
@@ -76,15 +68,22 @@ class BuildNcbiTaxonomyTests(unittest.TestCase):
 
             self.assertEqual(taxa_count, 8)
             self.assertEqual(names_count, 9)
-            lineage_json = json.loads(lineage_row[0])
-            self.assertEqual(lineage_json[1][2], "Bacteria")
-            self.assertEqual(lineage_json[2][2], "Bacillota")
-            self.assertEqual(lineage_json[3][2], "Clostridia")
-            self.assertEqual(lineage_json[4][2], "Clostridiales")
-            self.assertEqual(lineage_json[5][2], "Oscillospiraceae")
-            self.assertEqual(lineage_json[6][2], "Faecalibacterium")
-            self.assertEqual(lineage_json[7][2], "Faecalibacterium prausnitzii")
-            self.assertEqual(lineage_json[-1][0], 853)
+            # Lineage is reconstructed by walking parent pointers (no lineage_cache).
+            lineage = get_lineage_for_taxid(db_path, 853)
+            names = [entry.name for entry in lineage]
+            self.assertEqual(
+                names[1:8],
+                [
+                    "Bacteria",
+                    "Bacillota",
+                    "Clostridia",
+                    "Clostridiales",
+                    "Oscillospiraceae",
+                    "Faecalibacterium",
+                    "Faecalibacterium prausnitzii",
+                ],
+            )
+            self.assertEqual(lineage[-1].taxid, 853)
             self.assertEqual(metadata_value, summary.taxonomy_build_version)
             self.assertEqual(sqlite_optimized, "true")
 
@@ -106,7 +105,6 @@ class BuildNcbiTaxonomyTests(unittest.TestCase):
 
             self.assertTrue(any(stage == "nodes" for stage, *_ in events))
             self.assertTrue(any(stage == "names" for stage, *_ in events))
-            self.assertTrue(any(stage == "lineage" for stage, *_ in events))
             self.assertTrue(any(stage == "optimize" for stage, *_ in events))
             self.assertTrue(any(event[0] == "done" and event[4] for event in events))
 

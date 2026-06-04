@@ -6,7 +6,6 @@ readable and testable.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 
@@ -44,13 +43,6 @@ SCHEMA_STATEMENTS = [
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS lineage_cache (
-        taxid INTEGER PRIMARY KEY,
-        lineage_json TEXT NOT NULL,
-        FOREIGN KEY (taxid) REFERENCES taxa(taxid)
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -79,10 +71,10 @@ SCHEMA_STATEMENTS = [
 
 INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_taxa_parent_taxid ON taxa(parent_taxid)",
-    "CREATE INDEX IF NOT EXISTS idx_taxon_names_taxid ON taxon_names(taxid)",
-    "CREATE INDEX IF NOT EXISTS idx_taxon_names_name_txt ON taxon_names(name_txt)",
     "CREATE INDEX IF NOT EXISTS idx_taxon_names_normalized_name ON taxon_names(normalized_name)",
-    "CREATE INDEX IF NOT EXISTS idx_taxon_names_name_class ON taxon_names(name_class)",
+    # Composite indexes cover single-column name_txt/taxid lookups by leftmost prefix,
+    # so dedicated idx_taxon_names_{name_txt,taxid,name_class} indexes are intentionally
+    # omitted (they added ~320MB of redundant index for no query benefit).
     "CREATE INDEX IF NOT EXISTS idx_taxon_names_name_txt_class_taxid ON taxon_names(name_txt, name_class, taxid)",
     "CREATE INDEX IF NOT EXISTS idx_taxon_names_taxid_class_name_txt ON taxon_names(taxid, name_class, name_txt)",
     "CREATE INDEX IF NOT EXISTS idx_reviewed_mappings_norm_level ON reviewed_mappings(normalized_name, provided_level)",
@@ -126,7 +118,6 @@ def clear_reference_tables(db_path: DatabaseHandle, *, commit: bool = True) -> N
     """Remove reference-build data while preserving reviewed mapping history."""
 
     with connect(db_path) as connection:
-        connection.execute("DELETE FROM lineage_cache")
         connection.execute("DELETE FROM taxon_names")
         connection.execute("DELETE FROM taxa")
         connection.execute("DELETE FROM metadata")
@@ -186,28 +177,6 @@ def insert_taxon_name_rows(
                 name_class,
                 normalized_name
             ) VALUES (?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-        if commit:
-            connection.commit()
-
-
-def insert_lineage_rows(
-    rows: list[tuple[object, ...]],
-    db_path: DatabaseHandle = None,
-    *,
-    commit: bool = True,
-) -> None:
-    """Bulk insert materialized lineage cache rows."""
-
-    with connect(db_path or get_default_db_path()) as connection:
-        connection.executemany(
-            """
-            INSERT INTO lineage_cache(
-                taxid,
-                lineage_json
-            ) VALUES (?, ?)
             """,
             rows,
         )
@@ -330,7 +299,7 @@ def fetch_name_matches(
     if name_txt is not None:
         predicates.append("n.name_txt = ?")
         parameters.append(name_txt)
-        index_hint = "INDEXED BY idx_taxon_names_name_txt"
+        index_hint = "INDEXED BY idx_taxon_names_name_txt_class_taxid"
     if normalized_name is not None:
         predicates.append("n.normalized_name = ?")
         parameters.append(normalized_name)
@@ -348,16 +317,13 @@ def fetch_name_matches(
             n.name_txt AS matched_name,
             n.name_class,
             t.rank,
-            sci.name_txt AS scientific_name,
-            lc.lineage_json
+            sci.name_txt AS scientific_name
         FROM taxon_names AS n {index_hint}
         JOIN taxa AS t
             ON t.taxid = n.taxid
         LEFT JOIN taxon_names AS sci
             ON sci.taxid = n.taxid
            AND sci.name_class = 'scientific name'
-        LEFT JOIN lineage_cache AS lc
-            ON lc.taxid = n.taxid
         WHERE {where_clause}
     """
 
@@ -366,17 +332,35 @@ def fetch_name_matches(
 
 
 def fetch_lineage_entries(db_path: DatabaseHandle, taxid: int) -> list[dict[str, object]]:
-    """Return cached lineage entries for one taxid from the materialized cache."""
+    """Reconstruct a taxon's lineage by walking parent pointers (root first).
 
+    Replaces the old denormalized lineage_cache: a recursive CTE follows
+    ``taxa.parent_taxid`` from the taxon up to the root (using idx_taxa_parent_taxid),
+    then joins each ancestor's scientific name. Returns ``[]`` for unknown taxids.
+    """
+
+    query = """
+        WITH RECURSIVE anc(taxid, parent_taxid, rank, depth) AS (
+            SELECT taxid, parent_taxid, rank, 0 FROM taxa WHERE taxid = ?
+            UNION ALL
+            SELECT t.taxid, t.parent_taxid, t.rank, anc.depth + 1
+            FROM taxa AS t
+            JOIN anc ON t.taxid = anc.parent_taxid
+            WHERE anc.taxid <> 1 AND anc.parent_taxid <> anc.taxid
+        )
+        SELECT a.taxid, a.rank, sci.name_txt AS name
+        FROM anc AS a
+        LEFT JOIN taxon_names AS sci
+            ON sci.taxid = a.taxid AND sci.name_class = 'scientific name'
+        ORDER BY a.depth DESC
+    """
     with connect(db_path) as connection:
-        row = connection.execute(
-            "SELECT lineage_json FROM lineage_cache WHERE taxid = ?",
-            (taxid,),
-        ).fetchone()
+        rows = connection.execute(query, (taxid,)).fetchall()
 
-    if row is None:
-        return []
-    return list(json.loads(row["lineage_json"]))
+    return [
+        {"taxid": row["taxid"], "rank": row["rank"], "name": row["name"] or ""}
+        for row in rows
+    ]
 
 
 def fetch_fuzzy_name_pool(
@@ -412,16 +396,13 @@ def fetch_fuzzy_name_pool(
             n.normalized_name,
             n.name_class,
             t.rank,
-            sci.name_txt AS scientific_name,
-            lc.lineage_json
+            sci.name_txt AS scientific_name
         FROM taxon_names AS n INDEXED BY idx_taxon_names_normalized_name
         JOIN taxa AS t
             ON t.taxid = n.taxid
         LEFT JOIN taxon_names AS sci
             ON sci.taxid = n.taxid
            AND sci.name_class = 'scientific name'
-        LEFT JOIN lineage_cache AS lc
-            ON lc.taxid = n.taxid
         WHERE n.name_class = 'scientific name'
           AND n.normalized_name >= ?
           AND n.normalized_name < ?
@@ -434,16 +415,13 @@ def fetch_fuzzy_name_pool(
             n.normalized_name,
             n.name_class,
             t.rank,
-            sci.name_txt AS scientific_name,
-            lc.lineage_json
+            sci.name_txt AS scientific_name
         FROM taxon_names AS n
         JOIN taxa AS t
             ON t.taxid = n.taxid
         LEFT JOIN taxon_names AS sci
             ON sci.taxid = n.taxid
            AND sci.name_class = 'scientific name'
-        LEFT JOIN lineage_cache AS lc
-            ON lc.taxid = n.taxid
         WHERE n.name_class = 'scientific name'
           AND n.normalized_name LIKE ?
         LIMIT ?

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
-from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +16,6 @@ from .db import (
     clear_reference_tables,
     connect,
     initialize_database,
-    insert_lineage_rows,
     insert_taxa_rows,
     insert_taxon_name_rows,
     upsert_metadata,
@@ -52,7 +50,6 @@ class TaxonomyBuildSummary:
     name_count: int
     scientific_name_count: int
     synonym_count: int
-    lineage_cache_count: int
     root_taxid_count: int
     rankedlineage_present: bool
     validation_checks: dict[str, bool]
@@ -267,127 +264,6 @@ def _insert_names(
     return scientific_name_by_taxid, total_names, scientific_names, synonym_names
 
 
-def _lineage_row(
-    taxid: int,
-    lineage: list[dict[str, object]],
-) -> tuple[object, ...]:
-    """Convert one lineage list into the compact cache row shape."""
-
-    compact_lineage = [
-        [int(entry["taxid"]), str(entry["rank"]), str(entry["name"])]
-        for entry in lineage
-    ]
-    return (
-        taxid,
-        json.dumps(compact_lineage, ensure_ascii=True, separators=(",", ":")),
-    )
-
-
-def _iter_lineage_rows(
-    parent_by_taxid: dict[int, int],
-    rank_by_taxid: dict[int, str],
-    scientific_name_by_taxid: dict[int, str],
-) -> Iterator[tuple[object, ...]]:
-    """Yield lineage cache rows by walking the taxonomy tree once.
-
-    This keeps memory bounded to the current traversal path instead of caching a
-    full lineage list for every taxid in memory at once.
-    """
-
-    children_by_parent: dict[int, list[int]] = defaultdict(list)
-    root_taxids: list[int] = []
-
-    for taxid, parent_taxid in parent_by_taxid.items():
-        if taxid == parent_taxid or parent_taxid not in parent_by_taxid:
-            root_taxids.append(taxid)
-        else:
-            children_by_parent[parent_taxid].append(taxid)
-
-    for child_taxids in children_by_parent.values():
-        child_taxids.sort()
-    root_taxids.sort()
-
-    for root_taxid in root_taxids:
-        yield from _walk_lineage_tree(
-            root_taxid,
-            [],
-            children_by_parent,
-            rank_by_taxid,
-            scientific_name_by_taxid,
-        )
-
-
-def _walk_lineage_tree(
-    taxid: int,
-    lineage_prefix: list[dict[str, object]],
-    children_by_parent: dict[int, list[int]],
-    rank_by_taxid: dict[int, str],
-    scientific_name_by_taxid: dict[int, str],
-) -> Iterator[tuple[object, ...]]:
-    """Depth-first walk that emits one lineage cache row per taxid."""
-
-    current_lineage = list(lineage_prefix)
-    current_name = scientific_name_by_taxid.get(taxid)
-    if current_name:
-        current_lineage.append(
-            {"taxid": taxid, "rank": rank_by_taxid[taxid], "name": current_name}
-        )
-
-    yield _lineage_row(taxid, current_lineage)
-
-    for child_taxid in children_by_parent.get(taxid, []):
-        yield from _walk_lineage_tree(
-            child_taxid,
-            current_lineage,
-            children_by_parent,
-            rank_by_taxid,
-            scientific_name_by_taxid,
-        )
-
-
-def _insert_lineage_cache(
-    parent_by_taxid: dict[int, int],
-    rank_by_taxid: dict[int, str],
-    scientific_name_by_taxid: dict[int, str],
-    *,
-    db_handle: sqlite3.Connection,
-    batch_size: int = 25_000,
-    progress_callback: ProgressCallback | None = None,
-    progress_every: int = 250_000,
-) -> int:
-    """Materialize lineage cache rows for every taxon."""
-
-    row_count = 0
-    batch: list[tuple[object, ...]] = []
-
-    for row in _iter_lineage_rows(parent_by_taxid, rank_by_taxid, scientific_name_by_taxid):
-        batch.append(row)
-        row_count += 1
-        if len(batch) >= batch_size:
-            insert_lineage_rows(batch, db_handle, commit=False)
-            batch.clear()
-        if row_count % progress_every == 0:
-            _notify_progress(
-                progress_callback,
-                stage="lineage",
-                message="Materializing lineage cache",
-                current=row_count,
-            )
-
-    if batch:
-        insert_lineage_rows(batch, db_handle, commit=False)
-
-    _notify_progress(
-        progress_callback,
-        stage="lineage",
-        message="Materialized lineage cache",
-        current=row_count,
-        final=True,
-    )
-
-    return row_count
-
-
 def _apply_sqlite_pragmas(
     connection: sqlite3.Connection,
     statements: tuple[str, ...],
@@ -425,7 +301,6 @@ def _validate_build(
 
     taxa_count = _count_rows("taxa", db_handle)
     name_count = _count_rows("taxon_names", db_handle)
-    lineage_cache_count = _count_rows("lineage_cache", db_handle)
     root_taxid_count = _get_root_taxid_count(db_handle)
 
     scientific_name_count = int(
@@ -445,7 +320,6 @@ def _validate_build(
             scientific_name_count == expected_scientific_name_count
             and scientific_name_count > 0
         ),
-        "lineage_cache_complete": lineage_cache_count == expected_taxa_count,
         "root_present": root_taxid_count >= 1,
     }
 
@@ -521,7 +395,9 @@ def build_taxonomy_database(
                 message="Starting nodes.dmp load",
                 current=0,
             )
-            parent_by_taxid, rank_by_taxid, taxa_count = _insert_nodes(
+            # parent/rank maps are no longer materialized into a lineage cache;
+            # lineage is reconstructed on demand by walking taxa.parent_taxid.
+            _parent_by_taxid, _rank_by_taxid, taxa_count = _insert_nodes(
                 archive,
                 db_handle=build_connection,
                 progress_callback=progress_callback,
@@ -533,27 +409,13 @@ def build_taxonomy_database(
                 message="Starting names.dmp load",
                 current=0,
             )
-            scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = _insert_names(
+            _scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = _insert_names(
                 archive,
                 db_handle=build_connection,
                 progress_callback=progress_callback,
             )
             build_connection.commit()
 
-        _notify_progress(
-            progress_callback,
-            stage="lineage",
-            message="Starting lineage cache materialization",
-            current=0,
-            total=taxa_count,
-        )
-        lineage_cache_count = _insert_lineage_cache(
-            parent_by_taxid=parent_by_taxid,
-            rank_by_taxid=rank_by_taxid,
-            scientific_name_by_taxid=scientific_name_by_taxid,
-            db_handle=build_connection,
-            progress_callback=progress_callback,
-        )
         build_connection.commit()
         _notify_progress(
             progress_callback,
@@ -599,7 +461,6 @@ def build_taxonomy_database(
                 "name_count": str(name_count),
                 "scientific_name_count": str(scientific_name_count),
                 "synonym_count": str(synonym_count),
-                "lineage_cache_count": str(lineage_cache_count),
                 "root_taxid_count": str(root_taxid_count),
                 "rankedlineage_present": str("rankedlineage.dmp" in available_members).lower(),
                 "sqlite_build_pragmas_json": json.dumps(BUILD_PRAGMA_STATEMENTS),
@@ -635,7 +496,6 @@ def build_taxonomy_database(
         name_count=name_count,
         scientific_name_count=scientific_name_count,
         synonym_count=synonym_count,
-        lineage_cache_count=lineage_cache_count,
         root_taxid_count=root_taxid_count,
         rankedlineage_present="rankedlineage.dmp" in available_members,
         validation_checks=validation_checks,
