@@ -19,8 +19,13 @@ from taxonweaver import build_ncbi_weaver
 # API only — no local data needed (NCBI Datasets v2, over the network)
 weaver = build_ncbi_weaver(enable_api=True)
 
-# Local only — requires a prebuilt SQLite DB (see docs/database.md)
+# Local only — explicit prebuilt SQLite DB
 weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite")
+
+# Local with automatic setup — builds/reuses the DB in the per-user cache.
+# On a terminal it prompts before the ~70 MB download + ~1 min build; otherwise
+# it honors auto_setup / BRAIDWORKS_AUTO_DOWNLOAD or raises an actionable error.
+weaver = build_ncbi_weaver(auto_setup=True)
 
 # Both — local preferred, API as fallback
 weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite", enable_api=True)
@@ -28,6 +33,21 @@ weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite", enable_api=True)
 
 The manifest only ever advertises the backends you actually wired in, so a
 missing backend never breaks planning — it just isn't an option.
+
+### One-time local DB setup from the CLI
+
+The recommended way to provision the local database once:
+
+```bash
+taxon-weaver ensure              # prompt, then download + build into the user cache
+taxon-weaver ensure --yes        # non-interactive (CI/servers)
+taxon-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+```
+
+`ensure` is idempotent (a valid DB is reused instantly) and, when the DB is
+already present, reports whether a newer NCBI release is available. The DB lands
+in the per-user cache by default (override with `--db` or `BRAIDWORKS_DATA_DIR`),
+so `build_ncbi_weaver(auto_setup=True)` finds it automatically afterward.
 
 ## 2. Register, plan, run
 
