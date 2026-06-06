@@ -27,6 +27,9 @@ from platformdirs import user_cache_dir
 
 from braidworks.core import BackendConfigurationError
 from taxonomy_resolver.build import ProgressCallback, build_taxonomy_database
+from taxonomy_resolver.db import upsert_metadata
+
+_SOURCE_MD5_KEY = "source_dump_md5"
 
 logger = logging.getLogger("taxonweaver.setup")
 
@@ -133,17 +136,53 @@ def _download(
         progress("download", "Downloaded taxdump", downloaded, total, True)
 
 
-def _verify_download(archive: Path, url: str) -> None:
-    """Verify the downloaded archive against NCBI's published MD5 (raise on mismatch)."""
-    expected = _fetch_remote_md5(url)
-    if expected is None:
-        return
+def _verify_download(archive: Path, url: str) -> str:
+    """Verify the archive against NCBI's published MD5 (raise on mismatch); return its MD5."""
     actual = _md5_file(archive)
-    if actual != expected:
+    expected = _fetch_remote_md5(url)
+    if expected is not None and actual != expected:
         raise BackendConfigurationError(
             f"taxdump checksum mismatch: expected {expected}, got {actual} (download corrupt?)"
         )
-    logger.info("verified taxdump checksum (md5=%s)", actual)
+    if expected is not None:
+        logger.info("verified taxdump checksum (md5=%s)", actual)
+    return actual
+
+
+def _stored_source_md5(path: Path) -> str | None:
+    """Read the source taxdump MD5 recorded when this DB was built, if any."""
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        row = con.execute(
+            "SELECT value FROM metadata WHERE key = ?", (_SOURCE_MD5_KEY,)
+        ).fetchone()
+        return row[0] if row and row[0] else None
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+
+
+def check_for_update(path: str | Path, *, url: str = DEFAULT_TAXDUMP_URL) -> bool | None:
+    """Notify (never replace) whether a newer NCBI taxonomy release exists.
+
+    Compares the digest of the taxdump this DB was built from against NCBI's
+    current published MD5. Returns True if a newer release is available, False if
+    current, and None if it could not be determined (older DB or network error).
+    Decision 3: notify, never auto-replace — the caller rebuilds with refresh=True.
+    """
+    local = _stored_source_md5(Path(path))
+    remote = _fetch_remote_md5(url)
+    if local is None or remote is None:
+        return None
+    if local == remote:
+        logger.info("local taxonomy DB is current with the latest NCBI release")
+        return False
+    logger.info("a newer NCBI taxonomy release is available; rebuild with refresh=True")
+    return True
 
 
 def _check_disk(target_dir: Path) -> None:
@@ -209,13 +248,15 @@ def _build_into_place(
         tmp_dir = Path(tmp)
         archive = tmp_dir / "taxdump.tar.gz"
         _download(url, archive, progress=progress)
-        _verify_download(archive, url)
+        archive_md5 = _verify_download(archive, url)
         tmp_db = tmp_dir / "taxonomy.sqlite"
         summary = build_taxonomy_database(archive, tmp_db, progress_callback=progress)
         if not all(summary.validation_checks.values()):
             raise BackendConfigurationError(
                 f"built taxonomy DB failed validation: {summary.validation_checks}"
             )
+        # Record the source digest so check_for_update() can later detect staleness.
+        upsert_metadata(tmp_db, {_SOURCE_MD5_KEY: archive_md5})
         os.replace(tmp_db, db_path)
     logger.info(
         "taxonomy DB ready: %s (build %s)", db_path, summary.taxonomy_build_version

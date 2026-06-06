@@ -149,6 +149,33 @@ def test_refresh_rebuilds_existing_db(tmp_path, network) -> None:
     assert setup_mod.db_is_valid(db_path)
 
 
+def test_build_records_source_md5(tmp_path, network) -> None:
+    db_path = tmp_path / "taxonomy.sqlite"
+    ensure_taxonomy_db(db_path, auto=True)
+    assert setup_mod._stored_source_md5(db_path) == hashlib.md5(network.tarball).hexdigest()
+
+
+def test_check_for_update_current(tmp_path, network) -> None:
+    db_path = tmp_path / "taxonomy.sqlite"
+    ensure_taxonomy_db(db_path, auto=True)
+    # The fake serves the same tarball, so the remote md5 matches the stored one.
+    assert setup_mod.check_for_update(db_path) is False
+
+
+def test_check_for_update_newer_available(tmp_path, network, monkeypatch) -> None:
+    db_path = tmp_path / "taxonomy.sqlite"
+    ensure_taxonomy_db(db_path, auto=True)
+    monkeypatch.setattr(setup_mod, "_fetch_remote_md5", lambda url: "f" * 32)
+    assert setup_mod.check_for_update(db_path) is True
+
+
+def test_check_for_update_undetermined(tmp_path, network, monkeypatch) -> None:
+    db_path = tmp_path / "taxonomy.sqlite"
+    ensure_taxonomy_db(db_path, auto=True)
+    monkeypatch.setattr(setup_mod, "_fetch_remote_md5", lambda url: None)
+    assert setup_mod.check_for_update(db_path) is None
+
+
 def test_default_db_path_respects_data_dir(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("BRAIDWORKS_DATA_DIR", str(tmp_path))
     assert default_db_path() == tmp_path / "taxonomy" / "taxonomy.sqlite"

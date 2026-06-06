@@ -28,8 +28,18 @@ def test_already_present_skips_setup(tmp_path, mini_db_path, monkeypatch, capsys
         raise AssertionError("ensure_taxonomy_db must not run when DB is valid")
 
     monkeypatch.setattr(ensure_cmd, "ensure_taxonomy_db", _boom)
+    monkeypatch.setattr(ensure_cmd, "check_for_update", lambda *_a, **_k: None)
     ensure_cmd.run(_args(db=str(mini_db_path)))
     assert "already present" in capsys.readouterr().out
+
+
+def test_already_present_reports_available_update(mini_db_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(ensure_cmd, "ensure_taxonomy_db", lambda *_a, **_k: None)
+    monkeypatch.setattr(ensure_cmd, "check_for_update", lambda *_a, **_k: True)
+    ensure_cmd.run(_args(db=str(mini_db_path)))
+    out = capsys.readouterr().out
+    assert "newer NCBI taxonomy release is available" in out
+    assert "--refresh" in out
 
 
 def test_yes_flag_consents_and_builds(tmp_path, monkeypatch, capsys) -> None:

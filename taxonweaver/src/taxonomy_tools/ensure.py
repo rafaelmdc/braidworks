@@ -15,6 +15,7 @@ from pathlib import Path
 from taxonweaver.setup import (
     DEFAULT_TAXDUMP_URL,
     auto_consented,
+    check_for_update,
     db_is_valid,
     default_db_path,
     ensure_taxonomy_db,
@@ -70,6 +71,12 @@ def run(args: argparse.Namespace) -> None:
     target = Path(args.db) if args.db else default_db_path()
     if db_is_valid(target) and not args.refresh:
         print(f"Taxonomy DB already present: {target}")
+        status = check_for_update(target, url=args.url)
+        if status is True:
+            print("A newer NCBI taxonomy release is available. "
+                  "Rebuild with: taxon-weaver ensure --refresh")
+        elif status is False:
+            print("It is current with the latest NCBI release.")
         return
 
     _announce(target)
