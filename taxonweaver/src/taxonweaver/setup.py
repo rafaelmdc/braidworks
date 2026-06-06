@@ -49,7 +49,7 @@ def default_db_path() -> Path:
     return base / "taxonomy" / _DB_FILENAME
 
 
-def _auto_enabled(auto: bool) -> bool:
+def auto_consented(auto: bool) -> bool:
     """Return whether heavy acquisition is consented to (explicit flag or env var)."""
     if auto:
         return True
@@ -240,7 +240,7 @@ def ensure_taxonomy_db(
     db_path = Path(path) if path is not None else default_db_path()
     if db_is_valid(db_path) and not refresh:
         return db_path
-    if not _auto_enabled(auto):
+    if not auto_consented(auto):
         raise BackendConfigurationError(_consent_message(db_path))
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
