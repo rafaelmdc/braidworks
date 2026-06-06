@@ -1,56 +1,80 @@
 # Weaver roadmap — linking organisms to function (ORDINA)
 
 This document surveys the biological databases worth turning into Braidworks
-weavers, prioritizes them for **ORDINA** (linking a prokaryote to *what it does*),
-and gives a concrete "claim a weaver and build it" recipe. It is the strategic
-companion to [CONTRIBUTING.md](../CONTRIBUTING.md), which has the mechanical
-how-to; read this for *what to build next and why*, read that for *the exact shape*.
+weavers, makes them **reachable from one another** (each weaver's consumed/produced
+strands + the shared keys that bridge databases), prioritizes them for **ORDINA**
+(linking a prokaryote to *what it does*), and gives a "claim a weaver and build it"
+recipe. It is the strategic companion to [CONTRIBUTING.md](../CONTRIBUTING.md),
+which has the mechanical how-to.
 
 **ORDINA scope (decided):** prokaryotes / microbiome, **ecology- and trait-first**
 (what the organism does), with molecular/genomic function (genes → proteins → GO →
 pathways) captured here as **later notes** rather than first targets.
 
+**Naming rule:** name a weaver after its **database**, not the concept it serves —
+`bacdiveweaver`, `gtdbweaver`, `uniprotweaver`. Concept names (the old
+"traitweaver") are ambiguous: "trait" can mean a dozen things, and two databases
+may both be about traits. The DB name is unambiguous and tells a contributor
+exactly which source and license they're dealing with.
+
 ---
 
-## 1. The linking model — everything joins on the organism
+## 1. Reachability — how weavers connect
 
-`taxonweaver` already turns a name into a stable identity:
+The braider plans multi-hop paths automatically: **a weaver is reachable iff some
+registered weaver produces a strand type it consumes.** So "making weavers reach
+each other" is entirely a matter of documenting each weaver's interface precisely
+and agreeing on **shared key types**. Get the keys right and the graph wires itself.
 
-```
-organism.name ──[taxonweaver]──> ncbi.taxon.id
-                                  organism.scientific_name
-                                  ncbi.taxon.rank
-                                  ncbi.taxon.parent_id
-                                  ncbi.taxon.lineage   (ranked, [{taxid, rank, name}])
-```
+### Universal join keys (the bridges)
 
-Every downstream weaver hangs off one of those outputs. There are exactly **two
-join patterns**, and the braider chains them automatically — you declare what a
-weaver consumes/produces and it finds the path:
+| Entity | Key strand type | Bridges these databases |
+|---|---|---|
+| Organism | `ncbi.taxon.id` (taxid) | NCBI Taxonomy, GTDB, UniProt, BacDive, Madin, ProTraits, STRING, Ensembl, MGnify |
+| Organism (by clade) | `organism.scientific_name` + `ncbi.taxon.lineage` | FAPROTAX, ProTraits, MACADAM (annotated against taxonomic clades, not taxids) |
+| Protein | `protein.uniprot.accession` | UniProt ↔ GO, KEGG, InterPro, Pfam, STRING, PDB, Reactome, Rhea, BRENDA |
+| Gene | `gene.ncbi.id` / `gene.ensembl.id` | NCBI Gene, RefSeq, Ensembl, UniProt |
+| Chemical | `chem.chebi.id` | ChEBI ↔ Rhea ↔ KEGG compound ↔ PubChem; BacDive metabolites |
+| Reaction / pathway | `reaction.rhea.id`, `pathway.reactome.id`, `pathway.kegg.id` | Rhea, Reactome, KEGG, MetaCyc |
+| Function / ontology | `go.term`, `enzyme.ec` | GO/GOA, UniProt, BRENDA, KEGG |
 
-- **Pattern A — taxid-keyed.** Consume `ncbi.taxon.id`, produce trait/function
-  strands. Clean and exact. Used by genome/strain databases that record the NCBI
-  taxid (Madin traits, BacDive, UniProt).
-- **Pattern B — name/lineage-keyed.** Consume `organism.scientific_name` and/or
-  `ncbi.taxon.lineage`, produce function strands. Used by databases annotated
-  against *taxonomic clades at any rank* (FAPROTAX matches a lineage like
-  `…;Methanobacteriaceae;Methanobrevibacter` to functions). `taxonweaver` already
-  emits the scientific name and the full ranked lineage, so this needs no new core
-  work.
+`taxid` is the anchor for ORDINA (organism layer); `protein.uniprot.accession` is
+the anchor for the molecular layer; **UniProt is the hinge** that connects the two
+(it is taxid-queryable *and* cross-references nearly every molecular database).
 
-The payoff is composition. A single plan resolves all the way from a raw name to
-ecological function:
+### Two kinds of weaver: terminal vs. intermediate
 
-```
-organism.name
-   └─[taxonweaver]→ ncbi.taxon.id + lineage
-        ├─[traitweaver]→   microbe.trait.oxygen, .metabolism, .temperature_optimum, …
-        └─[faprotaxweaver]→ microbe.ecology.functional_groups  (e.g. methanotrophy, nitrogen_fixation)
-```
+- **Terminal weavers** produce the answer you actually want (ecological function,
+  a trait, a GO term). E.g. `madinweaver`, `faprotaxweaver`, `bacdiveweaver`.
+- **Intermediate weavers** exist to *translate one key into another* so a terminal
+  weaver downstream becomes reachable. E.g. a `uniprotweaver` operation
+  `taxid → protein.uniprot.accession`, or `accession → {go.term, enzyme.ec,
+  pathway.kegg.id, …}` (UniProt's cross-references). These are the **edges** of the
+  graph; without them the molecular databases are islands. Many weavers are both
+  (UniProt is terminal for "keywords/GO" and intermediate for "give me accessions
+  to hand to STRING").
 
-This means new weavers should **consume taxonweaver's outputs, not raw names** —
-let the resolver own identity, and inherit its caching, fuzzy matching, and review
-handling for free.
+Design implication: when adding a hub database, expose its **ID cross-references as
+their own capability/output group**, so it can act as an intermediate. That single
+choice is what lets the braider plan e.g.
+`organism.name → taxid → uniprot.accession → string.interaction`.
+
+### Weaver interface table (what each needs → offers)
+
+| Weaver (DB) | Consumes | Produces | Role |
+|---|---|---|---|
+| `taxonweaver` (NCBI Taxonomy) | `organism.name` | `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.lineage` | source of identity |
+| `gtdbweaver` (GTDB) | `ncbi.taxon.id` / name | `gtdb.taxon.id`, `gtdb.lineage` (rank-normalized) | intermediate (taxonomy bridge) |
+| `madinweaver` (bacteria-archaea-traits) | `ncbi.taxon.id` | `microbe.trait.*` (oxygen, metabolism, growth temp/pH, genome size…) | **terminal (traits)** |
+| `faprotaxweaver` (FAPROTAX) | `organism.scientific_name` + `ncbi.taxon.lineage` | `microbe.ecology.functional_groups` | **terminal (ecology)** |
+| `bacdiveweaver` (BacDive) | `ncbi.taxon.id` | `microbe.trait.*`, `enzyme.ec`, `chem.chebi.id` | terminal + intermediate |
+| `protraitsweaver` (ProTraits) | `organism.scientific_name` | `microbe.trait.*` (with precision scores) | terminal (traits) |
+| `uniprotweaver` (UniProt) | `ncbi.taxon.id` → / `protein.uniprot.accession` → | `protein.uniprot.accession`; `go.term`, `enzyme.ec`, `gene.*`, `pathway.kegg.id`, `pdb.id` (xrefs) | **hinge** (intermediate + terminal) |
+| `goweaver` (GO/QuickGO) | `protein.uniprot.accession` / `ncbi.taxon.id` | `go.term` (`{id, aspect, evidence}`) | terminal (ontology) |
+| `stringweaver` (STRING) | `protein.uniprot.accession` (+taxid) | `string.interaction` (partners + scores) | terminal (networks) |
+| `interproweaver` (InterPro/Pfam) | `protein.uniprot.accession` | `protein.interpro.id`, `protein.pfam.id` (families/domains) | terminal + intermediate |
+| `reactomeweaver` / `rheaweaver` | `protein.uniprot.accession` / `enzyme.ec` | `pathway.reactome.id` / `reaction.rhea.id` | terminal (pathways/reactions) |
+| `chebiweaver` (ChEBI) | `chem.chebi.id` / name | chemical descriptors, `reaction.rhea.id` xrefs | intermediate (chemistry) |
 
 ---
 
@@ -61,138 +85,164 @@ bulk download + taxid/lineage key = cheap and high-value).
 
 | Tier | Weaver (source) | Function spectrum | Join key | Access | License | Why this rank |
 |---|---|---|---|---|---|---|
-| **P0** | `traitweaver` — [bacteria-archaea-traits / Madin 2020](https://github.com/bacteria-archaea-traits/bacteria-archaea-traits) | Phenotype + growth + environment (14 phenotypic, 5 genomic, 4 environmental traits) | **NCBI taxid** | Bulk CSV (figshare + GitHub) | **CC BY** | Open, taxid-keyed, bulk → reuses our local-build + `ensure` pattern almost verbatim. The anchor trait weaver. |
-| **P0** | `faprotaxweaver` — [FAPROTAX](https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/lib/php/index.php) | Ecological/metabolic **functional groups** (~90: methanotrophy, N-fixation, sulfate respiration, fermentation, chemoheterotrophy, phototrophy…) | **lineage names** (Pattern B) | Small bundled text DB + rules | Academic, cite | Highest "organism → ecological function" signal — *exactly* ORDINA's goal. Tiny data; can ship inside the package. |
-| **P1** | `bacdiveweaver` — [BacDive (DSMZ)](https://bacdive.dsmz.de/) | Richest curated metabolic/physiological/ecological strain profiles (incl. enzymes via EnzymeDetector) | NCBI taxid / strain | REST API (free, **registration/key**) | Terms of use, cite | Deepest curation, but API-only + auth + rate limits; mirrors taxonweaver's `api` backend + `api_key` pattern. |
-| **P1** | `gtdbweaver` — [GTDB](https://gtdb.ecogenomic.org/) | Genome-based, rank-normalized prokaryote **taxonomy bridge** | taxid ↔ GTDB id | Bulk taxdump-format files ([gtdb-taxdump](https://github.com/shenwei356/gtdb-taxdump)) | CC BY-SA | Near-free: GTDB ships **taxdump-format** files, so it can reuse `build_taxonomy_database` directly. Normalizes lineages → better trait/FAPROTAX hits. |
-| **P2** | `protraitsweaver` — [ProTraits](http://protraits.irb.hr/data.html) | 424 traits × 3,046 species, text-mined + comparative genomics, **with precision scores** | species name | Bulk download | Open | Broad but noisier; the per-trait precision scores map cleanly onto Braidworks' confidence/review model. |
-| **P2** | `macadamweaver` — [MACADAM](https://macadam.toulouse.inrae.fr/) | Metabolic **pathways** per taxon | taxonomy | Bulk/web | Academic | Pathway-level bridge between traits and the molecular route. (Also note [Omnicrobe](https://omnicrobe.migale.inrae.fr/) for habitats/phenotypes.) |
-| **P3 (later notes — molecular/genomic)** | `uniprotweaver` — [UniProt](https://www.uniprot.org/) | taxid → proteome → proteins; **GO terms, EC numbers, keywords** | **NCBI taxid** (`organism_id:`) | REST API + bulk | CC BY 4.0 | The gateway from organism to *molecular* function; open and taxid-queryable. Start here when ORDINA grows beyond traits. |
-| **P3 (later notes)** | `goweaver` — [GO / QuickGO + GOA](https://www.ebi.ac.uk/QuickGO/) | Gene Ontology terms & annotations (ontology + evidence) | UniProt/gene id, taxid | REST + bulk | Open (CC BY) | Pairs with `uniprotweaver` to attach function ontology terms. |
-| **P3 (later notes — ⚠ licensing)** | KEGG | Pathways, modules, orthology (KO), EC | gene/KO | API + FTP | **Not open** | Flag: API is **academic-only, ≤3 req/s**; bulk FTP needs a **paid subscription**; commercial use needs a license. Prefer Reactome / Rhea / MetaCyc (each with their own caveats) before committing to KEGG. |
+| **P0** | `madinweaver` — [bacteria-archaea-traits / Madin 2020](https://github.com/bacteria-archaea-traits/bacteria-archaea-traits) | Phenotype + growth + environment (14 phenotypic, 5 genomic, 4 environmental) | **NCBI taxid** | Bulk CSV (figshare + GitHub) | **CC BY** | Open, taxid-keyed, bulk → reuses our local-build + `ensure` pattern almost verbatim. Anchor trait weaver. |
+| **P0** | `faprotaxweaver` — [FAPROTAX](https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/lib/php/index.php) | ~90 ecological/metabolic **functional groups** (methanotrophy, N-fixation, sulfate respiration, fermentation, phototrophy…) | **lineage names** | Small bundled text DB + rules | Academic, cite | Most direct "organism → ecological function" signal — *exactly* ORDINA. Tiny data; ship in-package. |
+| **P1** | `gtdbweaver` — [GTDB](https://gtdb.ecogenomic.org/) | Genome-based, rank-normalized **taxonomy bridge** | taxid ↔ GTDB id | Bulk taxdump-format ([gtdb-taxdump](https://github.com/shenwei356/gtdb-taxdump)) | CC BY-SA | Near-free: ships **taxdump-format** files → reuse `build_taxonomy_database` directly. Better lineages → better trait/FAPROTAX hits. |
+| **P1** | `bacdiveweaver` — [BacDive (DSMZ)](https://bacdive.dsmz.de/) | Richest curated metabolic/physiological/ecological strain profiles | NCBI taxid / strain | REST API (free, **registration/key**) | Terms of use, cite | Deepest curation; API-only + auth + rate limits; mirrors the `api` backend + `api_key` pattern. Also an intermediate (→ ChEBI, BRENDA, ENA). |
+| **P2** | `protraitsweaver` — [ProTraits](http://protraits.irb.hr/data.html) | 424 traits × 3,046 species, text-mined, **with precision scores** | species name | Bulk download | Open | Broad but noisier; precision scores map onto the confidence/review model. |
+| **P2** | `macadamweaver` — [MACADAM](https://macadam.toulouse.inrae.fr/) | Metabolic **pathways** per taxon | taxonomy | Bulk/web | Academic | Bridges traits ↔ the molecular route. (Also [Omnicrobe](https://omnicrobe.migale.inrae.fr/) for habitats/phenotypes.) |
 
-Also worth a mention when the molecular route matures: InterPro/Pfam (protein
-families/domains), STRING (interactions), Reactome (pathways), Rhea (reactions),
-BRENDA (enzymes).
-
-**Build order recommendation:** `traitweaver` → `faprotaxweaver` (these two
-deliver ORDINA's core organism→ecology mapping with open, low-effort data) →
-`gtdbweaver` (cheap, improves the first two) → `bacdiveweaver` (depth) → the rest
-as needed. Defer the entire P3 molecular block until the trait layer is in use.
+**Build order:** `madinweaver` → `faprotaxweaver` (open, low-effort, ORDINA's
+core) → `gtdbweaver` (cheap, improves both) → `bacdiveweaver` (depth) → P2 as
+needed. Defer the molecular block (§3) until the trait layer is in use.
 
 ---
 
-## 3. Proposed vocabulary (strand type IDs)
+## 3. The versatile hubs (top molecular databases — later notes)
 
-Keep core domain-neutral; each weaver defines its own `vocab.py` (like
-`taxonweaver/src/taxonweaver/vocab.py`). Suggested namespaces so weavers compose:
+The most-used, most-cross-referenced biological databases. They are mostly the
+**molecular** route (P3 for ORDINA), but they're listed because they interlink
+densely — adding any one makes several others reachable through shared keys, and
+they're how ORDINA would later go from organism → genes/proteins → mechanism.
 
-**Consumed (already produced by `taxonweaver`):**
-`ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.lineage`.
+| Weaver (DB) | What it is | Join key(s) | Access / license | Connects to |
+|---|---|---|---|---|
+| `uniprotweaver` — [UniProt](https://www.uniprot.org/) | Universal protein knowledgebase (the hinge) | taxid (`organism_id:`), accession | REST + bulk, CC BY 4.0 | GO, KEGG, InterPro, Pfam, STRING, PDB, Reactome, Rhea, BRENDA |
+| `goweaver` — [GO / QuickGO + GOA](https://www.ebi.ac.uk/QuickGO/) | Gene Ontology terms + annotations | accession, taxid, `go.term` | REST + bulk, open | UniProt, BRENDA, KEGG |
+| `ncbigeneweaver` — [NCBI Gene / RefSeq](https://www.ncbi.nlm.nih.gov/gene) | Genes & reference sequences | `gene.ncbi.id`, taxid | E-utils + bulk, public domain | UniProt, Ensembl |
+| `ensemblweaver` — [Ensembl (Bacteria)](https://bacteria.ensembl.org/) | Genomes, genes, comparative | `gene.ensembl.id`, taxid | REST + bulk, open | UniProt, STRING |
+| `stringweaver` — [STRING](https://string-db.org/) | Protein–protein interaction networks (5,000+ organisms) | accession/Ensembl + taxid | REST + bulk, CC BY 4.0 | UniProt, Ensembl |
+| `interproweaver` — [InterPro / Pfam](https://www.ebi.ac.uk/interpro/) | Protein families & domains | accession | REST + bulk, open | UniProt |
+| `keggweaver` — [KEGG](https://www.kegg.jp/) | Pathways, modules, orthology (KO), EC | KO, EC, gene | API + FTP, **NOT open** ⚠ | UniProt, GO |
+| `reactomeweaver` — [Reactome](https://reactome.org/) | Curated pathways | accession, `pathway.reactome.id` | REST + bulk, CC0 | UniProt, ChEBI |
+| `rheaweaver` — [Rhea](https://www.rhea-db.org/) | Biochemical reactions | `reaction.rhea.id`, EC, ChEBI | REST + bulk, CC BY 4.0 | UniProt, ChEBI, KEGG |
+| `chebiweaver` — [ChEBI](https://www.ebi.ac.uk/chebi/) | Chemical entities | `chem.chebi.id` | REST + bulk, CC BY 4.0 | Rhea, KEGG, PubChem, BacDive |
+| `brendaweaver` — [BRENDA](https://www.brenda-enzymes.org/) | Enzyme functional data | EC, accession | SOAP/REST, **registration** | UniProt, GO |
+| `pdbweaver` — [PDB / PDBe](https://www.ebi.ac.uk/pdbe/) | 3-D structures | `pdb.id`, accession | REST + bulk, CC0 | UniProt |
+| `mgnifyweaver` — [MGnify](https://www.ebi.ac.uk/metagenomics/) | Metagenomics / microbiome analyses | taxid, sample, MAG | REST + bulk, open | NCBI, GTDB |
 
-**Produced — traits (`traitweaver`, `bacdiveweaver`, `protraitsweaver`):**
+> ⚠ **KEGG licensing gotcha:** the API is **academic-only, ≤3 req/s**; bulk FTP
+> needs a **paid subscription**; commercial use needs a license. Prefer the open
+> alternatives (Reactome CC0, Rhea CC BY, UniProt, GO) before committing to KEGG.
 
-| type_id | example value | group |
-|---|---|---|
-| `microbe.trait.oxygen` | `aerobe` \| `anaerobe` \| `facultative` \| `microaerophile` | `traits.core` |
-| `microbe.trait.metabolism` | `methanogen`, `chemoheterotroph`, … | `traits.core` |
-| `microbe.trait.gram_stain` | `positive` \| `negative` | `traits.core` |
-| `microbe.trait.cell_shape` | `rod`, `coccus`, `spiral` | `traits.core` |
-| `microbe.trait.motility` / `.sporulation` | `bool` | `traits.core` |
-| `microbe.trait.temperature_optimum` / `.temperature_range` | `°C` | `traits.growth` |
-| `microbe.trait.ph_optimum` / `microbe.trait.salinity_optimum` | number | `traits.growth` |
-| `microbe.trait.habitat` | controlled tags | `traits.ecology` |
-| `microbe.trait.genome_size` / `microbe.trait.gc_content` | number | `traits.genomic` |
-| `microbe.trait.pathogenicity` | controlled tag | `traits.ecology` |
-
-**Produced — ecological function (`faprotaxweaver`):**
-
-| type_id | example value |
-|---|---|
-| `microbe.ecology.functional_groups` | `["methanotrophy", "nitrogen_fixation", "chemoheterotrophy"]` |
-
-Use **output groups** (like taxonweaver's `core` / `lineage`) so the cache stores
-partial computation: requesting any `traits.growth` output computes that whole
-group, and a later `traits.core` request is served from the same cached entry.
-Where a source gives a confidence/precision (ProTraits, FAPROTAX rule strength),
-populate the `WeaveResult` score and let low-confidence land in `review_queue`
-rather than silently asserting — consistent with the framework's contract.
-
-**Produced — molecular (later notes only):** `protein.uniprot.accession`,
-`go.term` (`{id, aspect, evidence}`), `enzyme.ec`, `pathway.id`.
+**Picking the "first molecular weaver" (when ORDINA gets there):** `uniprotweaver`,
+unquestionably — it's taxid-queryable (reachable straight from `taxonweaver`) and
+its cross-references make GO, InterPro, STRING, PDB, Reactome and Rhea all reachable
+in one more hop. Build it as both terminal (keywords/GO) and intermediate (emit
+accessions + xref ids).
 
 ---
 
-## 4. How to contribute a weaver
+## 4. Proposed vocabulary (strand type IDs)
 
-Follow CONTRIBUTING.md's 7-step recipe (`Adding a new weaver`) — neutral
-intermediate → one mapper → backends → `BackendDispatchWeaver` → two-layer factory
-glue → contract tests. `taxonweaver/` is the reference implementation. This section
-adds the **ecology-weaver specifics** and the conventions we've since standardized.
+Each weaver owns its `vocab.py` (see `taxonweaver/src/taxonweaver/vocab.py`). Keep
+core domain-neutral. Group outputs (like taxonweaver's `core`/`lineage`) so the
+cache stores partial computation.
 
-**Per-weaver layout** (mirror `taxonweaver/`):
+- **Identity (taxonweaver):** `ncbi.taxon.id`, `organism.scientific_name`,
+  `ncbi.taxon.rank`, `ncbi.taxon.lineage`; **(GTDB)** `gtdb.taxon.id`, `gtdb.lineage`.
+- **Traits:** `microbe.trait.oxygen` (`aerobe|anaerobe|facultative|microaerophile`),
+  `.metabolism`, `.gram_stain`, `.cell_shape`, `.motility`, `.sporulation`,
+  `.temperature_optimum`/`.temperature_range`, `.ph_optimum`, `.salinity_optimum`,
+  `.habitat`, `.genome_size`, `.gc_content`, `.pathogenicity`.
+- **Ecological function:** `microbe.ecology.functional_groups`
+  (`["methanotrophy", "nitrogen_fixation", …]`).
+- **Molecular keys (hubs):** `protein.uniprot.accession`, `gene.ncbi.id`,
+  `gene.ensembl.id`, `go.term`, `enzyme.ec`, `pathway.kegg.id`,
+  `pathway.reactome.id`, `reaction.rhea.id`, `chem.chebi.id`,
+  `protein.interpro.id`, `protein.pfam.id`, `pdb.id`, `string.interaction`.
+
+Where a source gives confidence (ProTraits precision, FAPROTAX rule strength),
+populate the `WeaveResult` score; low confidence → `review_queue` rather than
+silent assertion — consistent with the framework contract.
+
+---
+
+## 5. Repository organization (proposal — not yet done)
+
+Today both packages sit at the repo root (`members = ["braidworks-core",
+"taxonweaver"]`). With ~5–15 weavers ahead, the root would become a wall of
+`*weaver/` directories. **Recommendation: group weavers under `weavers/`** and use
+a glob member:
 
 ```
-<name>weaver/
-  pyproject.toml          depends on braidworks-core (workspace); add to root members
-  Makefile                weaver-specific macros: test, test-live, ensure, lint, fmt
-  src/<name>weaver/
-    vocab.py              strand type_ids + capabilities + manifest builder
-    intermediate.py       neutral dataclass your backends normalize into
-    mapper.py             intermediate -> WeaveResult (single source of strand shape)
-    weaver.py             BackendDispatchWeaver subclass
-    dispatch.py / factory.py / provider.py
-    backends/
-      local.py            bulk file -> SQLite (Pattern A: taxid index; Pattern B: lineage index)
-      api.py              REST backend (httpx, injectable client for MockTransport tests)
-    setup.py              (if it has a local DB) ensure_<name>_db(...) — copy taxonweaver/setup.py
-  tests/                  unit + contract mixins + an opt-in live E2E (BRAIDWORKS_RUN_LIVE)
+braidworks/
+  braidworks-core/
+  weavers/
+    taxonweaver/
+    madinweaver/
+    faprotaxweaver/
+    …
+  docs/  Makefile  pyproject.toml
+```
+```toml
+[tool.uv.workspace]
+members = ["braidworks-core", "weavers/*"]
 ```
 
-**Reuse what taxonweaver already proved out:**
+Benefits: the root stays legible; new weavers need no root edit (the glob picks
+them up); the root `Makefile` can iterate `weavers/*/Makefile`. Migration cost is
+moderate and mechanical — move `taxonweaver/`, update the root `Makefile`
+(`-C weavers/taxonweaver`), CI paths, `LINT_PATHS`, and the docs that cite paths
+(repo-structure.md, database.md). **Do this before the second weaver lands**, so
+only one package has to move. (Not done yet — confirm and it's a quick PR.)
 
-- **Local DB acquisition.** If the source ships a bulk file, copy the
-  `taxonweaver/src/taxonweaver/setup.py` pattern: `ensure_<name>_db(path, auto=, refresh=)`
+---
+
+## 6. How to contribute a weaver
+
+Follow CONTRIBUTING.md's 7-step recipe (`Adding a new weaver`); `taxonweaver/` is
+the reference implementation. This section adds the conventions we've since
+standardized and the ecology-weaver specifics.
+
+**Reuse what taxonweaver proved out:**
+
+- **Local DB acquisition.** Bulk-file sources: copy
+  `taxonweaver/src/taxonweaver/setup.py` — `ensure_<db>_db(path, auto=, refresh=)`
   with default-path resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache),
   consent gate (`auto=` / `BRAIDWORKS_AUTO_DOWNLOAD`), checksum verify, atomic
   build→rename, lock, disk precheck, and a `<tool> ensure` CLI subcommand. For
-  `gtdbweaver`, the source is **taxdump-format**, so you can reuse
+  `gtdbweaver`, the source is **taxdump-format** → reuse
   `taxonomy_resolver.build.build_taxonomy_database` directly.
-- **API backend.** Mirror `datasets_v2.py`: injectable `httpx.AsyncClient` (so
-  tests drive an `httpx.MockTransport`), `api_key`/registration where required
-  (BacDive), batched requests with paging, INFO logging for network use.
-- **Backend choice = data shape.** Bulk + permissive license → `local` first
-  (Madin, GTDB, FAPROTAX). API-gated → `api` (BacDive). Most useful weavers offer
-  both, `local`-preferred, exactly like taxonweaver.
+- **API backend.** Mirror `datasets_v2.py`: injectable `httpx.AsyncClient` (tests
+  drive `httpx.MockTransport`), `api_key`/registration where required (BacDive,
+  BRENDA), batched + paged requests, INFO logging for network use.
+- **Backend = data shape.** Bulk + permissive → `local` (Madin, GTDB, FAPROTAX);
+  API-gated → `api` (BacDive); offer both where possible, `local`-preferred.
+- **Be a good graph citizen.** Consume the **shared key types** from §1 (taxid;
+  scientific_name + lineage; uniprot.accession), never raw names. Expose any ID
+  cross-references as their own output group so the weaver can act as an
+  intermediate.
 - **Contract tests.** Subclass `WeaverOrderContractTests` and
-  `CacheFingerprintTests` from `braidworks.testing.contract` once per backend, plus
-  an opt-in live E2E gated by `BRAIDWORKS_RUN_LIVE=1` (see
-  `taxonweaver/tests/test_e2e_live.py`).
+  `CacheFingerprintTests` once per backend, plus an opt-in live E2E gated by
+  `BRAIDWORKS_RUN_LIVE=1` (see `taxonweaver/tests/test_e2e_live.py`).
 
 **Acceptance checklist** (a weaver is "done" when):
 
-- [ ] Added to root `pyproject.toml` `members` and has its own `Makefile`.
-- [ ] `vocab.py` defines type_ids, capabilities, and output groups; **consumes
-      taxonweaver outputs** (taxid and/or scientific_name + lineage), not raw names.
+- [ ] DB-named package added to workspace `members`; has its own `Makefile`.
+- [ ] `vocab.py` defines type_ids, capabilities, output groups; **consumes shared
+      keys** (§1), not raw names; documents `Consumes → Produces` (add a row to §1's
+      interface table).
 - [ ] One mapper is the single source of strand shape across all backends.
 - [ ] Failures are values (`NO_MATCH`); low confidence → `review_queue`; only
-      structural problems raise (`BackendConfigurationError`).
-- [ ] Contract mixins green for every backend; data round-trips `to_json`/`from_json`.
-- [ ] If it has a local DB: `ensure_*` + `<tool> ensure` CLI, and DB artifacts are
-      git-ignored (never commit multi-GB data).
-- [ ] `make -C <name>weaver test` green; live E2E self-skips without the env gate.
-- [ ] Licensing/attribution recorded in the weaver README (critical for BacDive,
-      KEGG, FAPROTAX).
+      structural problems raise.
+- [ ] Contract mixins green per backend; data round-trips `to_json`/`from_json`.
+- [ ] Local DB (if any): `ensure_*` + `<tool> ensure`; DB artifacts git-ignored.
+- [ ] `make -C <path> test` green; live E2E self-skips without the env gate.
+- [ ] Licensing/attribution in the weaver README (critical: BacDive, KEGG,
+      FAPROTAX, BRENDA).
 
 ---
 
-## 5. Sources
+## 7. Sources
 
-- bacteria-archaea-traits / Madin 2020 — [GitHub](https://github.com/bacteria-archaea-traits/bacteria-archaea-traits), [Open Traits Network](https://opentraits.org/datasets/madin-2020.html), [Scientific Data paper](https://www.nature.com/articles/s41597-020-0497-4)
-- FAPROTAX — [overview & application study (MDPI)](https://www.mdpi.com/2076-3417/11/2/688), [microbetag module notes](https://microbetag.readthedocs.io/en/latest/modules/modules.html)
-- BacDive — [BacDive in 2022 (NAR)](https://academic.oup.com/nar/article/50/D1/D741/6414049), [site](https://bacdive.dsmz.de/)
-- GTDB — [gtdb-taxdump (trackable TaxIds)](https://github.com/shenwei356/gtdb-taxdump), [GTDB (NAR)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8728215/), [gtdb_to_taxdump](https://github.com/nick-youngblut/gtdb_to_taxdump)
-- ProTraits — [landscape of microbial phenotypic traits (NAR)](https://academic.oup.com/nar/article/44/21/10074/2290929), [data portal](http://protraits.irb.hr/data.html)
-- MACADAM — [MACADAM database (PMC)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6487390/)
+- bacteria-archaea-traits / Madin 2020 — [GitHub](https://github.com/bacteria-archaea-traits/bacteria-archaea-traits), [Open Traits](https://opentraits.org/datasets/madin-2020.html), [Scientific Data](https://www.nature.com/articles/s41597-020-0497-4)
+- FAPROTAX — [application study (MDPI)](https://www.mdpi.com/2076-3417/11/2/688), [microbetag notes](https://microbetag.readthedocs.io/en/latest/modules/modules.html)
+- BacDive — [BacDive 2022 (NAR)](https://academic.oup.com/nar/article/50/D1/D741/6414049), [site](https://bacdive.dsmz.de/)
+- GTDB — [gtdb-taxdump](https://github.com/shenwei356/gtdb-taxdump), [GTDB (PMC)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8728215/), [gtdb_to_taxdump](https://github.com/nick-youngblut/gtdb_to_taxdump)
+- ProTraits — [NAR paper](https://academic.oup.com/nar/article/44/21/10074/2290929), [data portal](http://protraits.irb.hr/data.html)
+- MACADAM — [PMC](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6487390/); Omnicrobe — [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC9858090/)
 - UniProt — [website API (NAR)](https://academic.oup.com/nar/article/53/W1/W547/8126256), [api docs](https://www.uniprot.org/api-documentation)
+- STRING — [STRING 2023 (NAR)](https://academic.oup.com/nar/article/51/D1/D638/6825349)
 - KEGG licensing — [Licensing FAQ](https://www.pathway.jp/en/licensing_faq.html), [API terms](https://www.kegg.jp/kegg/rest/), [FTP](https://www.kegg.jp/kegg/download/)
+- Hubs — [QuickGO](https://www.ebi.ac.uk/QuickGO/), [InterPro](https://www.ebi.ac.uk/interpro/), [Reactome](https://reactome.org/), [Rhea](https://www.rhea-db.org/), [ChEBI](https://www.ebi.ac.uk/chebi/), [BRENDA](https://www.brenda-enzymes.org/), [PDBe](https://www.ebi.ac.uk/pdbe/), [MGnify](https://www.ebi.ac.uk/metagenomics/)
