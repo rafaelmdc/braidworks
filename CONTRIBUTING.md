@@ -53,7 +53,11 @@ CI runs `make lint` and `make test`; keep both green.
 ## Adding a new weaver
 
 Weavers follow a consistent shape so they plug into the framework uniformly. Use
-`taxonweaver/` as the reference implementation.
+`taxonweaver/` as the reference implementation. For a step-by-step build manual
+with per-module skeletons and a done-checklist, see
+[docs/weaver-implementation-guide.md](docs/weaver-implementation-guide.md); for
+*which* databases to build next and the reachability model, see
+[docs/weaver-roadmap.md](docs/weaver-roadmap.md). The short version:
 
 1. **Create a workspace member** `myweaver/` with its own `pyproject.toml`
    (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`)

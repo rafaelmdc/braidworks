@@ -11,6 +11,7 @@ Braidworks is the framework that turns TaxonWeaver into one node in a composable
 - [Implementation Plan](implementation-plan.md) — Concrete build order, deliverables, and definition of done for the MVP.
 - [Local DB Auto-Setup Plan](local-db-setup-plan.md) — design + decisions for automating local DB acquisition (implemented).
 - [Weaver Roadmap](weaver-roadmap.md) — prioritized biological databases to weave next (organism → function, for ORDINA) + how to claim and build one.
+- [Weaver Implementation Guide](weaver-implementation-guide.md) — step-by-step build manual (for agents): template, per-module skeletons, and the done-checklist.
 - [Contributing](../CONTRIBUTING.md) — Dev setup, testing, and how to add a new weaver.
 
 ## Concept in One Paragraph
