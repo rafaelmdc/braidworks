@@ -16,8 +16,8 @@ test: test-core test-weaver  ## Run every package's test suite
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
 
-test-weaver:  ## Run the taxonweaver suite
-	cd taxonweaver && uv run --extra test python -m pytest -q
+test-weaver:  ## Run the taxonweaver suite (delegates to taxonweaver/Makefile)
+	$(MAKE) -C taxonweaver test
 
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
 LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests
