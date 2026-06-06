@@ -51,7 +51,11 @@ class LocalTaxonomyBackend:
 
     def _validate(self) -> None:
         if not self._db_path.exists():
-            raise BackendConfigurationError(f"taxonomy db not found: {self._db_path}")
+            raise BackendConfigurationError(
+                f"taxonomy db not found: {self._db_path}\n"
+                "Create it with `taxon-weaver ensure`, or pass auto_setup=True to "
+                "build_ncbi_weaver(...), or set BRAIDWORKS_AUTO_DOWNLOAD=1."
+            )
         try:
             con = sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True)
             try:

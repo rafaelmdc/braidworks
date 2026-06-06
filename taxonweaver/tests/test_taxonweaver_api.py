@@ -79,6 +79,15 @@ async def test_api_exact_core_only():
     assert r.computed_groups == frozenset({"core"})
 
 
+async def test_api_logs_network_use_at_info(caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="taxonweaver.api"):
+        await _resolve(_weaver(), "Homo sapiens", {vocab.TAXON_ID})
+    messages = [rec.getMessage() for rec in caplog.records if rec.name == "taxonweaver.api"]
+    assert any("NCBI Datasets v2 over the network" in m for m in messages)
+
+
 async def test_api_lineage_resolves_ancestor_names():
     r = await _resolve(_weaver(), "Homo sapiens", {vocab.TAXON_ID, vocab.LINEAGE})
     assert r.status is WeaveStatus.OK

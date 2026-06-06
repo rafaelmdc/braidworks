@@ -106,6 +106,13 @@ def test_bad_db_path_raises_backend_configuration_error(tmp_path):
         build_ncbi_weaver(db_path=tmp_path / "does-not-exist.sqlite")
 
 
+def test_local_backend_missing_db_error_is_actionable(tmp_path):
+    from taxonweaver.backends.local import LocalTaxonomyBackend
+
+    with pytest.raises(BackendConfigurationError, match="taxon-weaver ensure"):
+        LocalTaxonomyBackend(tmp_path / "does-not-exist.sqlite")
+
+
 def test_backend_fingerprint_local_is_build_version(mini_db_path):
     w = build_ncbi_weaver(db_path=mini_db_path)
     fp = w.backend_fingerprint("local")

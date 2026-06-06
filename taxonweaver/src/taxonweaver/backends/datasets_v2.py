@@ -19,6 +19,7 @@ before production use.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -26,6 +27,8 @@ from rapidfuzz import fuzz
 
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .. import vocab
+
+logger = logging.getLogger("taxonweaver.api")
 
 DEFAULT_BASE_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2"
 _PAGE_LIMIT = 1000
@@ -79,6 +82,12 @@ class DatasetsV2Backend:
         if capability_id not in (vocab.RESOLVE_NAME, vocab.RESOLVE_TAXID):
             raise ValueError(f"unsupported capability {capability_id!r}")
         queries = [str(q) for q in queries]
+        logger.info(
+            "resolving %d quer%s via NCBI Datasets v2 over the network (%s)",
+            len(queries),
+            "y" if len(queries) == 1 else "ies",
+            self._base_url,
+        )
         nodes = await self._dataset_report(queries)
 
         matches: dict[str, TaxonMatch] = {}
