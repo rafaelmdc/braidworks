@@ -104,7 +104,7 @@ class BuildProgressPrinter:
             print(file=self.stream, flush=True)
             self._active_stage = None
 
-        line = self._render_line(message, current, total)
+        line = self._render_line(stage, message, current, total)
         if current is not None and not final:
             self._active_stage = stage
             print(f"\r{line}", end="", file=self.stream, flush=True)
@@ -122,11 +122,18 @@ class BuildProgressPrinter:
             print(file=self.stream, flush=True)
             self._active_stage = None
 
-    def _render_line(self, message: str, current: int | None, total: int | None) -> str:
-        """Render one build progress line."""
+    def _render_line(
+        self, stage: str, message: str, current: int | None, total: int | None
+    ) -> str:
+        """Render one build progress line (download stage counts bytes, others count rows)."""
 
         if current is None:
             return message
+        if stage == "download":
+            done = _format_size(current)
+            if total is not None and total > 0:
+                return f"{message}: {current / total * 100:5.1f}% ({done} / {_format_size(total)})"
+            return f"{message}: {done}"
         if total is not None and total > 0:
             percent = current / total * 100
             return f"{message}: {percent:5.1f}% ({current:,} / {total:,} rows)"

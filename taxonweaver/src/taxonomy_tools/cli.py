@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 import argparse
-from . import apply_decisions, build_info, build_ncbi_taxonomy, inspect_lineage, resolve_batch, resolve_name
+from . import (
+    apply_decisions,
+    build_info,
+    build_ncbi_taxonomy,
+    ensure,
+    inspect_lineage,
+    resolve_batch,
+    resolve_name,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -12,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified CLI for the taxonomy resolver.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     build_ncbi_taxonomy.configure_parser(subparsers)
+    ensure.configure_parser(subparsers)
     resolve_name.configure_parser(subparsers)
     resolve_batch.configure_parser(subparsers)
     inspect_lineage.configure_parser(subparsers)
