@@ -36,7 +36,7 @@ logger = logging.getLogger("taxonweaver.setup")
 DEFAULT_TAXDUMP_URL = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
 _ENV_DATA_DIR = "BRAIDWORKS_DATA_DIR"
 _ENV_AUTO = "BRAIDWORKS_AUTO_DOWNLOAD"
-_DB_FILENAME = "taxonomy.sqlite"
+_DB_FILENAME = "ncbi_taxonomy.sqlite"
 # A ~70 MB download + ~1.2 GB DB + temporary build headroom; require a safe margin.
 _MIN_FREE_BYTES = 4 * 1024**3
 # A lock older than this is assumed abandoned (a crashed build) and reclaimed.
@@ -249,7 +249,7 @@ def _build_into_place(
         archive = tmp_dir / "taxdump.tar.gz"
         _download(url, archive, progress=progress)
         archive_md5 = _verify_download(archive, url)
-        tmp_db = tmp_dir / "taxonomy.sqlite"
+        tmp_db = tmp_dir / _DB_FILENAME
         summary = build_taxonomy_database(archive, tmp_db, progress_callback=progress)
         if not all(summary.validation_checks.values()):
             raise BackendConfigurationError(

@@ -178,11 +178,11 @@ def test_check_for_update_undetermined(tmp_path, network, monkeypatch) -> None:
 
 def test_default_db_path_respects_data_dir(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("BRAIDWORKS_DATA_DIR", str(tmp_path))
-    assert default_db_path() == tmp_path / "taxonomy" / "taxonomy.sqlite"
+    assert default_db_path() == tmp_path / "taxonomy" / "ncbi_taxonomy.sqlite"
 
 
 def test_default_db_path_uses_cache_dir(monkeypatch) -> None:
     monkeypatch.delenv("BRAIDWORKS_DATA_DIR", raising=False)
     path = default_db_path()
-    assert path.name == "taxonomy.sqlite"
+    assert path.name == "ncbi_taxonomy.sqlite"
     assert "braidworks" in str(path)

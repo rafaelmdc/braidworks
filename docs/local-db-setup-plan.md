@@ -4,10 +4,11 @@
 (`ensure_taxonomy_db`, `check_for_update`), factory `auto_setup`, the
 `taxon-weaver ensure` CLI subcommand, the actionable local-backend error, and
 API-backend INFO logging are all in place and tested. One deviation from the
-sketch below: the default DB uses a stable filename (`taxonomy.sqlite`) rather
-than a versioned one, so `refresh=True` atomically replaces in place instead of
-accumulating ~1.2 GB builds. This document records the design and the decisions
-behind it.
+sketch below: the default DB uses a stable, source-prefixed filename
+(`ncbi_taxonomy.sqlite`) rather than a versioned one, so `refresh=True` atomically
+replaces in place instead of accumulating ~1.2 GB builds, and the name leaves room
+for other taxonomy sources alongside it. This document records the design and the
+decisions behind it.
 
 ## Problem & philosophy
 
