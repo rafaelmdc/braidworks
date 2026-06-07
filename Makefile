@@ -2,7 +2,7 @@
 # Tests are per-package and the working directory matters (taxonweaver tests
 # import `from tests....`), so each target cd's into the right package.
 
-.PHONY: help sync test test-core test-weaver lint fmt clean
+.PHONY: help sync test test-core test-weaver test-kit new-weaver verify-weaver lint fmt clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -11,7 +11,7 @@ help:  ## Show this help
 sync:  ## Create/refresh the workspace venv with all extras
 	uv sync --all-extras
 
-test: test-core test-weaver  ## Run every package's test suite
+test: test-core test-weaver test-kit  ## Run every package's test suite
 
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
@@ -19,8 +19,18 @@ test-core:  ## Run the braidworks-core suite
 test-weaver:  ## Run the taxonweaver suite (delegates to taxonweaver/Makefile)
 	$(MAKE) -C taxonweaver test
 
+test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
+	$(MAKE) -C weaverkit test
+
+new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=weavers/foo
+	$(MAKE) -C weaverkit new SPEC=$(abspath $(SPEC)) DEST=$(abspath $(DEST))
+
+verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=fooweaver
+	$(MAKE) -C weaverkit verify SPEC=$(abspath $(SPEC)) PACKAGE=$(PACKAGE)
+
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
-LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests
+LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests \
+	weaverkit/src weaverkit/tests
 
 lint:  ## Lint all packages and tests with ruff
 	uvx ruff check $(LINT_PATHS)
