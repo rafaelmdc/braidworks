@@ -265,7 +265,20 @@ output); the conformance suite runs them once a backend is configured.
 
 ```bash
 make verify   # check the weaver still matches its spec
-make test     # run conformance + golden tests
+make test     # run conformance + contract + golden tests
+```
+
+## Registering this weaver
+
+A weaver is only reachable to the braider once its provider is registered in the
+application's `WeaverFactory`. Wherever you assemble the factory:
+
+```python
+from braidworks.core import WeaverFactory
+import {{DBWEAVER}}
+
+factory = WeaverFactory()
+{{DBWEAVER}}.register(factory)        # makes "{{WEAVER_ID}}" buildable
 ```
 """
 
@@ -295,11 +308,12 @@ _INIT = '''\
 
 from {{DBWEAVER}}.factory import build_{{DBWEAVER}}
 from {{DBWEAVER}}.intermediate import {{CLASS}}Record
-from {{DBWEAVER}}.provider import {{CLASS}}WeaverProvider
+from {{DBWEAVER}}.provider import {{CLASS}}WeaverProvider, register
 from {{DBWEAVER}}.weaver import {{CLASS}}Weaver
 
 __all__ = [
     "build_{{DBWEAVER}}",
+    "register",
     "{{CLASS}}Record",
     "{{CLASS}}Weaver",
     "{{CLASS}}WeaverProvider",
@@ -622,13 +636,18 @@ def build_{{DBWEAVER}}(**config: Any) -> BaseWeaver:
 '''
 
 _PROVIDER = '''\
-"""{{CLASS}}WeaverProvider — the Layer 1 conformance wrapper for registration."""
+"""{{CLASS}}WeaverProvider — the Layer 1 conformance wrapper, plus registration.
+
+A weaver only becomes reachable to the braider once its provider is registered in
+the application's ``WeaverFactory``. ``register(factory)`` is the one-liner that
+does it; call it from wherever you assemble the factory (see the README).
+"""
 
 from __future__ import annotations
 
 from typing import Any, Mapping
 
-from braidworks.core import BaseWeaver
+from braidworks.core import BaseWeaver, WeaverFactory
 
 from {{DBWEAVER}} import vocab
 from {{DBWEAVER}}.factory import build_{{DBWEAVER}}
@@ -641,6 +660,11 @@ class {{CLASS}}WeaverProvider:
 
     def build(self, config: Mapping[str, Any]) -> BaseWeaver:
         return build_{{DBWEAVER}}(**dict(config))
+
+
+def register(factory: WeaverFactory) -> None:
+    """Register this weaver's provider so the braider can build "{{WEAVER_ID}}"."""
+    factory.register({{CLASS}}WeaverProvider())
 '''
 
 _TEST_CONFORMANCE = '''\

@@ -97,6 +97,16 @@ def test_generated_fingerprints_are_not_unknown(tmp_path):
     assert check_fingerprints(weaver, list(spec.backends)) == []
 
 
+def test_generated_register_wires_into_factory(tmp_path):
+    from braidworks.core import WeaverFactory
+
+    spec, dest, _ = _generate(tmp_path)
+    mod = _import_generated(dest, spec.package)
+    factory = WeaverFactory()
+    mod.register(factory)
+    assert spec.resolved_weaver_id in factory.providers()
+
+
 def test_generated_vocab_is_valid_python(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     source = (dest / "src" / spec.package / "vocab.py").read_text()
