@@ -1,0 +1,119 @@
+"""CLI tests for ``weaverkit new`` / ``weaverkit verify``.
+
+Drive ``main`` directly with argv and assert exit codes — 0 only when everything
+conforms, non-zero on any spec or conformance problem.
+"""
+
+from __future__ import annotations
+
+import importlib
+import sys
+from pathlib import Path
+
+from weaverkit.cli import main
+
+FIXTURE = Path(__file__).parent / "fixtures" / "valid.weaver.spec.toml"
+
+
+def test_new_scaffolds_package(tmp_path):
+    dest = tmp_path / "madinweaver"
+    rc = main(["new", "--spec", str(FIXTURE), "--dest", str(dest)])
+    assert rc == 0
+    assert (dest / "pyproject.toml").exists()
+    assert (dest / "src" / "madinweaver" / "vocab.py").exists()
+
+
+def test_new_rejects_invalid_spec(tmp_path, capsys):
+    bad = tmp_path / "bad.spec.toml"
+    bad.write_text(FIXTURE.read_text().replace('"ncbi.taxon.id"', '"not.a.key"'))
+    rc = main(["new", "--spec", str(bad), "--dest", str(tmp_path / "out")])
+    assert rc == 1
+    assert "invalid" in capsys.readouterr().err
+
+
+def test_new_refuses_nonempty_dest(tmp_path):
+    dest = tmp_path / "out"
+    dest.mkdir()
+    (dest / "x").write_text("x")
+    rc = main(["new", "--spec", str(FIXTURE), "--dest", str(dest)])
+    assert rc == 1
+
+
+def test_verify_valid_spec_uninstalled_package_is_ok(tmp_path, capsys):
+    """verify on a valid spec whose package isn't importable: spec-only pass (rc 0)."""
+    rc = main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver_absent"])
+    assert rc == 0
+    assert "not importable" in capsys.readouterr().out
+
+
+def test_verify_invalid_spec_fails(tmp_path):
+    bad = tmp_path / "bad.spec.toml"
+    bad.write_text(FIXTURE.read_text().replace('fingerprint_source = "release-tag"', 'fingerprint_source = "unknown"'))
+    rc = main(["verify", "--spec", str(bad)])
+    assert rc == 1
+
+
+def _with_generated_on_path(dest, package):
+    """Context-free helper: put a generated package's src on sys.path, cleaned up."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        src = str(dest / "src")
+        sys.path.insert(0, src)
+        for name in list(sys.modules):
+            if name == package or name.startswith(package + "."):
+                del sys.modules[name]
+        importlib.invalidate_caches()
+        try:
+            yield
+        finally:
+            sys.path.remove(src)
+            for name in list(sys.modules):
+                if name == package or name.startswith(package + "."):
+                    del sys.modules[name]
+
+    return _ctx()
+
+
+def test_verify_strict_fails_on_fresh_scaffold(tmp_path, capsys):
+    """A fresh scaffold conforms but is NOT done — --strict must reject it."""
+    dest = tmp_path / "madinweaver"
+    assert main(["new", "--spec", str(FIXTURE), "--dest", str(dest)]) == 0
+    with _with_generated_on_path(dest, "madinweaver"):
+        # non-strict passes (structure is right)...
+        assert main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver"]) == 0
+        # ...strict fails (placeholders remain).
+        rc = main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver", "--strict"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "not done" in err
+    assert "placeholder" in err
+
+
+def test_verify_strict_reports_missing_package(tmp_path, capsys):
+    rc = main(["verify", "--spec", str(FIXTURE), "--package", "nope_absent", "--strict"])
+    assert rc == 1
+    assert "not importable" in capsys.readouterr().err
+
+
+def test_verify_conforming_generated_package(tmp_path, capsys):
+    """new -> import generated package -> verify reports full conformance."""
+    dest = tmp_path / "madinweaver"
+    assert main(["new", "--spec", str(FIXTURE), "--dest", str(dest)]) == 0
+
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    for name in list(sys.modules):
+        if name == "madinweaver" or name.startswith("madinweaver."):
+            del sys.modules[name]
+    try:
+        importlib.invalidate_caches()
+        rc = main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver"])
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "madinweaver" or name.startswith("madinweaver."):
+                del sys.modules[name]
+    assert rc == 0
+    assert "conforms" in capsys.readouterr().out

@@ -22,6 +22,10 @@ def record_ensure(monkeypatch, mini_db_path):
         return mini_db_path
 
     monkeypatch.setattr(factory, "ensure_taxonomy_db", _fake)
+    # Hermetic precondition: these tests exercise the "no valid DB yet" path, so
+    # don't depend on whether the developer's cache already holds a real default
+    # DB (a live E2E run builds one there).
+    monkeypatch.setattr(factory, "db_is_valid", lambda *_a, **_k: False)
     return calls
 
 

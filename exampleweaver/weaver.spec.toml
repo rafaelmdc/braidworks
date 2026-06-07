@@ -1,0 +1,40 @@
+# exampleweaver — the canonical tiny, fully-implemented reference weaver.
+# A lookup weaver: ncbi.taxon.id -> a couple of microbe traits, from a small
+# committed CSV. Small enough to read end-to-end; passes `verify --strict`.
+[weaver]
+db_name = "example"
+weaver_id = "example"
+kind = "lookup"
+title = "Example reference weaver (taxid -> traits, from a tiny CSV)"
+version = "1.0.0"
+license = "CC0-1.0"
+source_url = "https://github.com/rafaelcorreia/braidworks (bundled sample data)"
+fingerprint_source = "the bundled CSV's version constant (DATA_VERSION)"
+backends = ["local"]
+source_sample = """
+tax_id,gram_stain,optimum_temp
+562,negative,37
+1423,positive,30
+"""
+
+[[capability]]
+id = "resolve_traits"
+consumes = ["ncbi.taxon.id"]
+
+  [[capability.group]]
+  id = "traits.core"
+  outputs = ["microbe.trait.gram_stain"]
+
+  [[capability.group]]
+  id = "traits.growth"
+  outputs = ["microbe.trait.optimum_temp"]
+
+[[golden]]
+capability = "resolve_traits"
+input = { "ncbi.taxon.id" = "562" }
+expect = { "microbe.trait.gram_stain" = "negative", "microbe.trait.optimum_temp" = "37" }
+
+[[golden]]
+capability = "resolve_traits"
+input = { "ncbi.taxon.id" = "1423" }
+expect = { "microbe.trait.gram_stain" = "positive" }

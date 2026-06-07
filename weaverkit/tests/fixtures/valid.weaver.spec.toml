@@ -1,0 +1,32 @@
+# A minimal-but-complete valid spec, used as the happy-path fixture in tests.
+[weaver]
+db_name = "madin"
+weaver_id = "madin"
+title = "Madin bacteria-archaea-traits"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://github.com/bacteria-archaea-traits/bacteria-archaea-traits"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = """
+species_tax_id,metabolism,gram_stain,optimum_tmp
+562,facultative,negative,37
+"""
+
+[[capability]]
+id = "resolve_traits"
+consumes = ["ncbi.taxon.id"]
+backends = ["local"]
+
+  [[capability.group]]
+  id = "traits.core"
+  outputs = ["microbe.trait.metabolism", "microbe.trait.gram_stain"]
+
+  [[capability.group]]
+  id = "traits.growth"
+  outputs = ["microbe.trait.optimum_temp"]
+
+[[golden]]
+capability = "resolve_traits"
+input = { "ncbi.taxon.id" = "562" }
+expect = { "microbe.trait.gram_stain" = "negative" }
