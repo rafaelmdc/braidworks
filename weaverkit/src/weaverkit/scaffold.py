@@ -237,6 +237,7 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         "```",
         "",
         "Per-function contracts: [../weaverkit/docs/implementing-backends.md](../weaverkit/docs/implementing-backends.md).  ",
+        "Common mistakes: [../weaverkit/docs/PITFALLS.md](../weaverkit/docs/PITFALLS.md).  ",
         "Worked example to copy: `../exampleweaver/src/exampleweaver/backends/local.py`.",
         "",
         "## 1. Implement the backend(s)",

@@ -85,6 +85,7 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
 
 ## Where to read more
 
+- `weaverkit/docs/PITFALLS.md` — the short do/don't list of mistakes that recur.
 - `weaverkit/docs/implementing-backends.md` — the per-`# TODO` contract for a
   backend's `fetch` / `fingerprint` / `is_configured` (the generated stubs link to it).
 - `docs/weaver-implementation-guide.md` — the full build manual, per-module.

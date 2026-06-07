@@ -7,7 +7,8 @@ you implement a backend by filling in three things — `is_configured`,
 
 Each generated `# TODO` links to the matching section below. Read only the section
 you're working on; the [wiring overview](#how-it-all-wires-together) explains how
-your backend fits the rest and is the same for every weaver.
+your backend fits the rest and is the same for every weaver. Skim
+[PITFALLS.md](PITFALLS.md) first — the short list of mistakes that recur.
 
 **Two worked references, by altitude:**
 
