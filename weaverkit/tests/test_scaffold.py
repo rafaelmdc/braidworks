@@ -126,3 +126,61 @@ def test_generated_backend_links_to_doc_anchors(tmp_path):
     assert "implementing-backends.md" in stub
     for anchor in _TODO_ANCHORS:
         assert f"implementing-backends.md#{anchor}" in stub
+
+
+def _load_module_from(path: Path, name: str):
+    import importlib.util
+
+    loader = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(module)
+    return module
+
+
+def test_generated_contract_tests_pass_on_fresh_scaffold(tmp_path):
+    """The pure contract tests must be green by construction; execute-tests skip.
+
+    Loads the generated test_contract.py and runs the cache-fingerprint tests
+    (which need no data) plus the sample-distinctness check — proving a fresh
+    scaffold ships a passing contract suite, not a red one.
+    """
+    from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
+
+    spec, dest, _ = _generate(tmp_path)
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    for mod_name in list(sys.modules):
+        if mod_name == spec.package or mod_name.startswith(spec.package + "."):
+            del sys.modules[mod_name]
+    try:
+        importlib.invalidate_caches()
+        mod = _load_module_from(dest / "tests" / "test_contract.py", "gen_test_contract")
+        classes = [c for c in vars(mod).values() if isinstance(c, type)]
+
+        cache_classes = [
+            c for c in classes if issubclass(c, CacheFingerprintTests) and c is not CacheFingerprintTests
+        ]
+        assert cache_classes, "expected a generated CacheFingerprintTests subclass"
+        ran = 0
+        for cls in cache_classes:
+            inst = cls()
+            for name in dir(inst):
+                if name.startswith("test_"):
+                    getattr(inst, name)()  # raises on failure
+                    ran += 1
+        assert ran >= 5
+
+        order_classes = [
+            c
+            for c in classes
+            if issubclass(c, WeaverOrderContractTests) and c is not WeaverOrderContractTests
+        ]
+        assert order_classes, "expected a generated WeaverOrderContractTests subclass"
+        for cls in order_classes:
+            cls().test_at_least_five_distinct_samples()  # seeded inputs are >=5 distinct
+    finally:
+        sys.path.remove(src)
+        sys.modules.pop("gen_test_contract", None)
+        for mod_name in list(sys.modules):
+            if mod_name == spec.package or mod_name.startswith(spec.package + "."):
+                del sys.modules[mod_name]
