@@ -29,9 +29,7 @@ _CONFORMING_MANIFEST = WeaverManifest(
             output_groups=(
                 OutputGroup(
                     id="traits.core",
-                    outputs=frozenset(
-                        {"microbe.trait.metabolism", "microbe.trait.gram_stain"}
-                    ),
+                    outputs=frozenset({"microbe.trait.metabolism", "microbe.trait.gram_stain"}),
                 ),
                 OutputGroup(
                     id="traits.growth",

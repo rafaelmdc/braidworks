@@ -1,0 +1,103 @@
+"""Scaffold generator tests — the round-trip is the headline.
+
+Generate a package from the valid fixture spec, import it, and assert the static
+conformance checks pass *by construction*: a freshly-scaffolded weaver's manifest
+must already match its spec. This is what lets an agent start from green.
+"""
+
+from __future__ import annotations
+
+import importlib
+import sys
+from pathlib import Path
+
+import pytest
+
+from weaverkit.conformance import check_fingerprints, check_manifest
+from weaverkit.scaffold import ScaffoldError, scaffold
+from weaverkit.spec import load_spec
+
+FIXTURE = Path(__file__).parent / "fixtures" / "valid.weaver.spec.toml"
+
+
+def _generate(tmp_path: Path):
+    spec = load_spec(FIXTURE)
+    dest = tmp_path / "out"
+    written = scaffold(spec, dest, spec_toml=FIXTURE.read_text())
+    return spec, dest, written
+
+
+def test_scaffold_writes_expected_files(tmp_path):
+    spec, dest, written = _generate(tmp_path)
+    names = {p.relative_to(dest).as_posix() for p in written}
+    assert "pyproject.toml" in names
+    assert "weaver.spec.toml" in names
+    assert "src/madinweaver/vocab.py" in names
+    assert "src/madinweaver/weaver.py" in names
+    assert "src/madinweaver/backends/local.py" in names
+    assert "tests/test_conformance.py" in names
+
+
+def test_scaffold_refuses_nonempty_dest(tmp_path):
+    spec = load_spec(FIXTURE)
+    dest = tmp_path / "out"
+    dest.mkdir()
+    (dest / "stuff.txt").write_text("x")
+    with pytest.raises(ScaffoldError):
+        scaffold(spec, dest, spec_toml=FIXTURE.read_text())
+
+
+def test_scaffold_force_overwrites(tmp_path):
+    spec = load_spec(FIXTURE)
+    dest = tmp_path / "out"
+    dest.mkdir()
+    (dest / "stuff.txt").write_text("x")
+    written = scaffold(spec, dest, spec_toml=FIXTURE.read_text(), force=True)
+    assert written
+
+
+def test_copied_spec_is_verbatim(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    assert (dest / "weaver.spec.toml").read_text() == FIXTURE.read_text()
+
+
+def _import_generated(dest: Path, pkg: str):
+    """Import a generated package from its src/ dir, isolating sys.path/modules."""
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    # Drop any cached submodules from a previous generation in the same process.
+    for name in list(sys.modules):
+        if name == pkg or name.startswith(pkg + "."):
+            del sys.modules[name]
+    try:
+        return importlib.import_module(pkg)
+    finally:
+        sys.path.remove(src)
+
+
+def test_generated_package_imports(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    mod = _import_generated(dest, spec.package)
+    assert hasattr(mod, "build_madinweaver")
+
+
+def test_generated_manifest_matches_spec(tmp_path):
+    """The round-trip: scaffold → build → conformance passes with zero edits."""
+    spec, dest, _ = _generate(tmp_path)
+    mod = _import_generated(dest, spec.package)
+    weaver = mod.build_madinweaver()
+    assert check_manifest(weaver.MANIFEST, spec) == []
+
+
+def test_generated_fingerprints_are_not_unknown(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    mod = _import_generated(dest, spec.package)
+    weaver = mod.build_madinweaver()
+    # Placeholder fingerprints are TODO but must already be valid (not '' / 'unknown').
+    assert check_fingerprints(weaver, list(spec.backends)) == []
+
+
+def test_generated_vocab_is_valid_python(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    source = (dest / "src" / spec.package / "vocab.py").read_text()
+    compile(source, "vocab.py", "exec")  # must parse

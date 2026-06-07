@@ -10,6 +10,7 @@ from weaverkit.conformance import (
     run_golden,
 )
 from weaverkit.keys import SHARED_KEYS, is_shared_key
+from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import (
     CapabilitySpec,
     GoldenSpec,
@@ -35,4 +36,6 @@ __all__ = [
     "check_golden",
     "check_manifest",
     "run_golden",
+    "scaffold",
+    "ScaffoldError",
 ]

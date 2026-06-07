@@ -50,9 +50,7 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
             problems.append(f"spec declares capability {cap_id!r} but the manifest does not")
     for cap_id in declared:
         if cap_id not in expected:
-            problems.append(
-                f"manifest declares capability {cap_id!r} that is not in the spec"
-            )
+            problems.append(f"manifest declares capability {cap_id!r} that is not in the spec")
 
     for cap_id, spec_cap in expected.items():
         man_cap = declared.get(cap_id)

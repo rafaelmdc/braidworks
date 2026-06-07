@@ -223,9 +223,7 @@ def test_multiple_problems_reported_at_once():
 
 
 def test_golden_spec_from_dict_roundtrip():
-    g = GoldenSpec.from_dict(
-        {"capability": "c", "input": {"k": "v"}, "expect": {"o": "r"}}
-    )
+    g = GoldenSpec.from_dict({"capability": "c", "input": {"k": "v"}, "expect": {"o": "r"}})
     assert g == GoldenSpec(capability="c", input={"k": "v"}, expect={"o": "r"})
 
 

@@ -64,9 +64,7 @@ def test_extra_capability_caught():
         id="ghost",
         consumes=frozenset({"ncbi.taxon.id"}),
         produces=frozenset({"microbe.trait.metabolism"}),
-        output_groups=(
-            OutputGroup(id="g", outputs=frozenset({"microbe.trait.metabolism"})),
-        ),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"microbe.trait.metabolism"})),),
         backends=("local",),
     )
     bad = _with_capabilities(_manifest(), [*_manifest().capabilities, extra])
@@ -151,7 +149,9 @@ async def test_golden_passes_for_conforming_weaver():
 async def test_golden_detects_wrong_value():
     spec = _spec()
     # Rewrite the golden to expect a value the fake won't produce.
-    bad_golden = dataclasses.replace(spec.golden[0], expect={"microbe.trait.gram_stain": "positive"})
+    bad_golden = dataclasses.replace(
+        spec.golden[0], expect={"microbe.trait.gram_stain": "positive"}
+    )
     spec = dataclasses.replace(spec, golden=(bad_golden,))
     problems = await check_golden(ConformingFakeWeaver(), spec, backend="local")
     assert any("expected" in p for p in problems)

@@ -156,9 +156,7 @@ class WeaverSpec:
                 source_sample=str(weaver["source_sample"]),
                 backends=tuple(weaver["backends"]),
                 weaver_id=str(weaver.get("weaver_id", "")),
-                capabilities=tuple(
-                    CapabilitySpec.from_dict(c) for c in data.get("capability", ())
-                ),
+                capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
             )
         except KeyError as exc:
