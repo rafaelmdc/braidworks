@@ -111,6 +111,28 @@ RESOLVER_FIXTURE = Path(__file__).parent / "fixtures" / "resolver.weaver.spec.to
 BULK_FIXTURE = Path(__file__).parent / "fixtures" / "bulk.weaver.spec.toml"
 
 
+def test_implementation_worklist_generated(tmp_path):
+    spec, dest, written = _generate(tmp_path)
+    names = {p.relative_to(dest).as_posix() for p in written}
+    assert "IMPLEMENTATION.md" in names
+    text = (dest / "IMPLEMENTATION.md").read_text()
+    # mentions each backend file and ends at the strict definition-of-done
+    for b in spec.backends:
+        assert f"src/{spec.package}/backends/{b}.py" in text
+    assert "--strict" in text
+    assert "make test" in text
+
+
+def test_implementation_worklist_adapts_to_bulk(tmp_path):
+    spec = load_spec(BULK_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=BULK_FIXTURE.read_text())
+    text = (dest / "IMPLEMENTATION.md").read_text()
+    assert "Wire the bulk local DB" in text
+    assert "setup.py" in text
+    assert "bulkdemoweaver-ensure" in text
+
+
 def test_lookup_scaffold_has_no_setup(tmp_path):
     spec, dest, written = _generate(tmp_path)
     names = {p.relative_to(dest).as_posix() for p in written}

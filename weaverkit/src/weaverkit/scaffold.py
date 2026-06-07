@@ -215,6 +215,78 @@ def _contract_test_source(spec: WeaverSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _implementation_md_source(spec: WeaverSpec) -> str:
+    """Generate IMPLEMENTATION.md — the ordered worklist for finishing the weaver.
+
+    The SDD ``tasks.md`` analog: it enumerates exactly which ``# TODO``s to fill,
+    in which files, with the command that verifies each, ending at the
+    ``verify --strict`` definition-of-done — so the agent doesn't re-derive the
+    plan from the scattered code markers.
+    """
+    pkg = spec.package
+    bulk = spec.bulk
+    lines: list[str] = [
+        f"# Implementing {pkg}",
+        "",
+        "Generated worklist — do these in order. Each step maps to `# TODO` markers in",
+        "the code. **Definition of done:**",
+        "",
+        "```bash",
+        "make test",
+        f"weaverkit verify --spec weaver.spec.toml --package {pkg} --strict",
+        "```",
+        "",
+        "Per-function contracts: [../weaverkit/docs/implementing-backends.md](../weaverkit/docs/implementing-backends.md).  ",
+        "Worked example to copy: `../exampleweaver/src/exampleweaver/backends/local.py`.",
+        "",
+        "## 1. Implement the backend(s)",
+        "",
+    ]
+    for b in spec.backends:
+        is_bulk = bulk is not None and b == bulk.backend
+        suffix = " (reads the bulk DB — see step 2 first)" if is_bulk else ""
+        lines.append(
+            f"- [ ] `src/{pkg}/backends/{b}.py` — fill `is_configured`, `fingerprint`, "
+            f"and `fetch`{suffix} "
+            "([#fingerprint](../weaverkit/docs/implementing-backends.md#fingerprint), "
+            "[#fetch](../weaverkit/docs/implementing-backends.md#fetch))"
+        )
+    lines.append("")
+
+    if bulk is not None:
+        lines += [
+            "## 2. Wire the bulk local DB",
+            "",
+            f"- [ ] `src/{pkg}/setup.py` — implement `_build` (download "
+            f"`{bulk.archive_url}` + parse into the DB) and tighten `db_is_valid`",
+            f"- [ ] build it locally: `uv run {pkg}-ensure`",
+            "",
+        ]
+
+    next_n = 3 if bulk is not None else 2
+    if not spec.golden:
+        lines += [
+            f"## {next_n}. Add golden examples",
+            "",
+            "- [ ] add at least one real `[[golden]]` (input -> expected) to "
+            "`weaver.spec.toml`; `--strict` requires them",
+            "",
+        ]
+        next_n += 1
+
+    lines += [
+        f"## {next_n}. Verify (definition of done)",
+        "",
+        "- [ ] `make test` — conformance + contract + golden all green",
+        f"- [ ] `weaverkit verify --spec weaver.spec.toml --package {pkg} --strict` "
+        "— no placeholders left, golden runs",
+        "- [ ] register the weaver where the app assembles its `WeaverFactory` "
+        "(see README)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 # --- string templates (rendered with {{TOKEN}} replacement) ------------------
 
 _PYPROJECT = """\
@@ -1118,6 +1190,7 @@ def scaffold(
     files: dict[Path, str] = {
         dest / "pyproject.toml": _render(_PYPROJECT, tokens),
         dest / "README.md": _render(_README, tokens),
+        dest / "IMPLEMENTATION.md": _implementation_md_source(spec),
         dest / "Makefile": _render(_MAKEFILE, tokens),
         dest / "weaver.spec.toml": spec_toml,
         src / "__init__.py": _render(_INIT, tokens),
