@@ -101,3 +101,28 @@ def test_generated_vocab_is_valid_python(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     source = (dest / "src" / spec.package / "vocab.py").read_text()
     compile(source, "vocab.py", "exec")  # must parse
+
+
+# Anchors the generated backend TODOs deep-link into implementing-backends.md.
+# If a heading is renamed, the links rot silently — this test catches that.
+_DOC = Path(__file__).resolve().parents[1] / "docs" / "implementing-backends.md"
+_TODO_ANCHORS = ("is_configured", "fingerprint", "fetch")
+
+
+def test_backend_doc_exists_with_referenced_anchors():
+    text = _DOC.read_text()
+    headings = {
+        line[3:].strip().lower().replace(" ", "-")
+        for line in text.splitlines()
+        if line.startswith("## ")
+    }
+    for anchor in _TODO_ANCHORS:
+        assert anchor in headings, f"implementing-backends.md is missing #{anchor}"
+
+
+def test_generated_backend_links_to_doc_anchors(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    stub = (dest / "src" / spec.package / "backends" / "local.py").read_text()
+    assert "implementing-backends.md" in stub
+    for anchor in _TODO_ANCHORS:
+        assert f"implementing-backends.md#{anchor}" in stub

@@ -12,8 +12,11 @@ weaver reliably instead of vibe-coding it. Three pieces:
   that the built weaver matches its spec, is reachable (consumes a shared key),
   and never returns an `"unknown"` fingerprint.
 
-See [docs/weaver-implementation-guide.md](../docs/weaver-implementation-guide.md)
-and [AGENTS.md](../AGENTS.md).
+When implementing the generated `# TODO` backend spots, see
+[docs/implementing-backends.md](docs/implementing-backends.md) — the per-function
+contract the stubs deep-link into. For the wider picture see
+[docs/weaver-implementation-guide.md](../docs/weaver-implementation-guide.md) and
+[AGENTS.md](../AGENTS.md).
 
 ## Decision: the spec is TOML, not YAML
 
