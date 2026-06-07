@@ -9,6 +9,18 @@ Each generated `# TODO` links to the matching section below. Read only the secti
 you're working on; the [wiring overview](#how-it-all-wires-together) explains how
 your backend fits the rest and is the same for every weaver.
 
+**Two worked references, by altitude:**
+
+- **`exampleweaver/`** — the canonical *minimal* one: a `lookup` weaver,
+  `ncbi.taxon.id → traits` from a ~5-row bundled CSV, ~80 lines you can read in a
+  minute. It is literally `weaverkit new` + the three TODOs filled in, and it
+  passes `weaverkit verify --strict`. **Copy this shape.** Start at
+  `exampleweaver/src/exampleweaver/backends/local.py`.
+- **`taxonweaver/`** — the *advanced, real-world* one you graduate to: a
+  `resolver` (fuzzy matching, candidates), two backends (local SQLite + a live
+  API), and a multi-GB bulk DB. Far more code; reach for it once the minimal
+  pattern is clear.
+
 ---
 
 ## How it all wires together

@@ -613,6 +613,7 @@ else (manifest, dispatch, mapper) is generated and wired. Implement the three
 contract and an example.
 
 Guide: weaverkit/docs/implementing-backends.md
+Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -675,6 +676,7 @@ cache path. Fill in ``fingerprint`` (read the version recorded at build time) an
 ``fetch`` (query the DB), normalizing each result into a ``{{CLASS}}Record``.
 
 Guide: weaverkit/docs/implementing-backends.md
+Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
 """
 
 from __future__ import annotations
