@@ -1,17 +1,24 @@
 # Weaver implementation guide (for agents)
 
 This is a build manual for an AI agent (or human) implementing a new Braidworks
-weaver. It is prescriptive: follow the steps in order, copy the named files from
-`taxonweaver/` (the reference implementation), change only what's marked, and run
-the verification commands at each gate. When in doubt, **read the corresponding
-file in `taxonweaver/src/taxonweaver/` — it is the source of truth, this guide
-just orients you.**
+weaver. It is prescriptive: follow the steps in order, change only what's marked,
+and run the verification commands at each gate. When in doubt, **read the
+corresponding file in `taxonweaver/src/taxonweaver/` — it is the source of truth,
+this guide just orients you.**
 
+> **Don't start by copying files by hand.** The deterministic path is
+> `make new-weaver SPEC=… DEST=…`, which stamps the whole package from a
+> `weaver.spec.toml` (see [weaverkit](../weaverkit/README.md)). This guide explains
+> what the generated files *are* and what you must fill in; §2 covers the loop.
+> The boundaries you must respect are in [AGENTS.md](../AGENTS.md).
+
+- *Boundaries & the Spec→Scaffold→Implement→Verify loop* → [AGENTS.md](../AGENTS.md)
 - *What to build next & why* → [weaver-roadmap.md](weaver-roadmap.md)
 - *Mechanical recipe (short)* → [CONTRIBUTING.md](../CONTRIBUTING.md) §"Adding a new weaver"
 - *Core abstractions & rationale* → [architecture.md](architecture.md)
+- *The guardrail toolkit (spec/scaffold/conformance)* → [weaverkit/README.md](../weaverkit/README.md)
 - *Local DB auto-setup design* → [local-db-setup-plan.md](local-db-setup-plan.md)
-- *This guide* → the long, copy-this-here version with checklists.
+- *This guide* → the long version: what each generated file is + checklists.
 
 ---
 
@@ -53,7 +60,18 @@ must rely on) an upstream weaver — usually `taxonweaver`.
 
 ## 2. Scaffold the package
 
-Copy `taxonweaver/` structure. Target layout (see the repo-org proposal in
+Write the decisions above into a `weaver.spec.toml`, then generate the package:
+
+```bash
+make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec first
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
+```
+
+`weaverkit new` stamps the layout below, generating `vocab.py` so the manifest
+already matches the spec (conformance passes by construction) and wiring up the
+conformance test. Then add the package to `members` in the root `pyproject.toml`
+and `make sync`. The only files you edit are the `# TODO` spots in the backend
+stubs (§4/§6). The generated structure (see the repo-org proposal in
 weaver-roadmap.md §5 — if `weavers/*` has landed, create under `weavers/`):
 
 ```

@@ -52,12 +52,22 @@ CI runs `make lint` and `make test`; keep both green.
 
 ## Adding a new weaver
 
-Weavers follow a consistent shape so they plug into the framework uniformly. Use
-`taxonweaver/` as the reference implementation. For a step-by-step build manual
-with per-module skeletons and a done-checklist, see
+Weavers follow a consistent shape so they plug into the framework uniformly. The
+deterministic path is **not** copying files by hand — use the scaffold generator:
+
+```bash
+make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
+```
+
+This stamps a complete package from a `weaver.spec.toml`; you then implement only
+the `# TODO` backend spots. See [`weaverkit/README.md`](weaverkit/README.md) for
+the toolkit and [AGENTS.md](AGENTS.md) for the Spec→Scaffold→Implement→Verify loop
+and the boundaries. For a step-by-step build manual with per-module skeletons and a
+done-checklist, see
 [docs/weaver-implementation-guide.md](docs/weaver-implementation-guide.md); for
 *which* databases to build next and the reachability model, see
-[docs/weaver-roadmap.md](docs/weaver-roadmap.md). The short version:
+[docs/weaver-roadmap.md](docs/weaver-roadmap.md). The manual shape, for reference:
 
 1. **Create a workspace member** `myweaver/` with its own `pyproject.toml`
    (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`)
