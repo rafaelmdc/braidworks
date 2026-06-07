@@ -213,6 +213,27 @@ def test_golden_expect_key_not_in_produces_rejected():
     assert any("not in capability" in p and "produces" in p for p in problems)
 
 
+def test_kind_defaults_to_lookup():
+    data = _valid_dict()
+    assert "kind" not in data["weaver"]
+    assert WeaverSpec.from_dict(data).kind == "lookup"
+
+
+def test_kind_resolver_accepted():
+    data = _valid_dict()
+    data["weaver"]["kind"] = "resolver"
+    spec = WeaverSpec.from_dict(data)
+    assert spec.kind == "resolver"
+    assert validate_spec(spec) == []
+
+
+def test_kind_invalid_rejected():
+    data = _valid_dict()
+    data["weaver"]["kind"] = "fuzzy"
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("kind" in p for p in problems)
+
+
 def test_multiple_problems_reported_at_once():
     data = _valid_dict()
     data["weaver"]["source_sample"] = ""

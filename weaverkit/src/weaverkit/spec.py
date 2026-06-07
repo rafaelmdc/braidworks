@@ -124,6 +124,7 @@ class WeaverSpec:
     backends: tuple[str, ...]
     capabilities: tuple[CapabilitySpec, ...]
     weaver_id: str = ""
+    kind: str = "lookup"
     golden: tuple[GoldenSpec, ...] = field(default_factory=tuple)
 
     @property
@@ -156,6 +157,7 @@ class WeaverSpec:
                 source_sample=str(weaver["source_sample"]),
                 backends=tuple(weaver["backends"]),
                 weaver_id=str(weaver.get("weaver_id", "")),
+                kind=str(weaver.get("kind", "lookup")),
                 capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
             )
@@ -200,6 +202,12 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
         )
     if spec.weaver_id and not _DB_NAME_RE.match(spec.weaver_id):
         problems.append(f"weaver_id {spec.weaver_id!r} must match ^[a-z][a-z0-9_]*$")
+
+    if spec.kind not in ("lookup", "resolver"):
+        problems.append(
+            f"kind {spec.kind!r} must be 'lookup' (clean id->data) or 'resolver' "
+            "(fuzzy/ambiguous matching with candidates)"
+        )
 
     for fieldname in ("title", "version", "license", "source_url"):
         if not str(getattr(spec, fieldname)).strip():

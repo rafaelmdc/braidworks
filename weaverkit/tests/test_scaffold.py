@@ -107,6 +107,49 @@ def test_generated_register_wires_into_factory(tmp_path):
     assert spec.resolved_weaver_id in factory.providers()
 
 
+RESOLVER_FIXTURE = Path(__file__).parent / "fixtures" / "resolver.weaver.spec.toml"
+
+
+def test_lookup_intermediate_is_flat(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    text = (dest / "src" / spec.package / "intermediate.py").read_text()
+    assert "MatchStatus" not in text
+    assert "found: bool" in text
+
+
+def test_resolver_generates_match_status_and_candidates(tmp_path):
+    spec = load_spec(RESOLVER_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
+    inter = (dest / "src" / spec.package / "intermediate.py").read_text()
+    mapper = (dest / "src" / spec.package / "mapper.py").read_text()
+    assert "class MatchStatus" in inter
+    assert "class Candidate" in inter
+    assert "WeaveStatus.AMBIGUOUS" in mapper
+    assert "CandidateResult" in mapper
+    assert "requires_review" in mapper
+
+
+def test_resolver_manifest_matches_spec(tmp_path):
+    """Resolver scaffold is conformant by construction, same as lookup."""
+    spec = load_spec(RESOLVER_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
+    mod = _import_generated(dest, spec.package)
+    weaver = getattr(mod, f"build_{spec.package}")()
+    assert check_manifest(weaver.MANIFEST, spec) == []
+    assert check_fingerprints(weaver, list(spec.backends)) == []
+
+
+def test_resolver_intermediate_and_mapper_compile(tmp_path):
+    spec = load_spec(RESOLVER_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
+    for name in ("intermediate.py", "mapper.py"):
+        source = (dest / "src" / spec.package / name).read_text()
+        compile(source, name, "exec")
+
+
 def test_generated_vocab_is_valid_python(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     source = (dest / "src" / spec.package / "vocab.py").read_text()

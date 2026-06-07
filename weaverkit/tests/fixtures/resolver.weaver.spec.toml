@@ -1,0 +1,32 @@
+# A kind = "resolver" spec fixture — fuzzy name matching with candidates.
+[weaver]
+db_name = "resolverdemo"
+weaver_id = "resolverdemo"
+kind = "resolver"
+title = "Resolver demo (fuzzy name matching)"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://example.org/resolverdemo"
+fingerprint_source = "release-tag"
+backends = ["local", "api"]
+source_sample = """
+name,tax_id,scientific_name,rank
+Escherichia coli,562,Escherichia coli,species
+"""
+
+[[capability]]
+id = "resolve_name"
+consumes = ["organism.name"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["ncbi.taxon.id", "organism.scientific_name"]
+
+  [[capability.group]]
+  id = "rank"
+  outputs = ["ncbi.taxon.rank"]
+
+[[golden]]
+capability = "resolve_name"
+input = { "organism.name" = "Escherichia coli" }
+expect = { "ncbi.taxon.id" = "562" }

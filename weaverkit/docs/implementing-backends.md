@@ -55,6 +55,27 @@ class <Db>Record:
 
 ---
 
+## lookup vs resolver weavers
+
+The spec's `kind` field decides the shape of the generated `intermediate.py` and
+`mapper.py` — pick it up front, it changes what `fetch` returns:
+
+- **`kind = "lookup"`** (default) — clean ID→data. The input already identifies the
+  record exactly (a taxid, an accession). The `<Db>Record` is flat:
+  `found` / `values` / `error`. Most weavers are this.
+- **`kind = "resolver"`** — fuzzy/ambiguous matching (names → ids, like
+  `taxonweaver`). The record carries a `MatchStatus`
+  (`RESOLVED` / `FUZZY_UNIQUE` / `AMBIGUOUS` / `NO_MATCH` / `ERROR`), an optional
+  `score`, a `requires_review` flag, and a list of `Candidate`s for the ambiguous
+  case. The generated mapper turns these into `OK` / `AMBIGUOUS` (with
+  `candidates`) / `NO_MATCH` / `ERROR` and sets `requires_review`.
+
+The `fetch` contract below is written for `lookup`; the resolver differences are
+called out inline. Everything else (dispatch, manifest, registration, the cache
+contract) is identical.
+
+---
+
 ## is_configured
 
 `is_configured()` reports whether this backend can actually run *in this instance*
@@ -170,6 +191,12 @@ async def fetch(self, capability_id, queries, *, requested_outputs):
 Multiple consumed keys: a `query` dict carries all of them, e.g.
 `{"organism.scientific_name": "...", "ncbi.taxon.lineage": [...]}`. Use whichever
 the source needs.
+
+**Resolver variant** (`kind = "resolver"`): instead of `found`, set
+`record.status` to a `MatchStatus` and, for the ambiguous case, populate
+`record.candidates` with `Candidate(values=…, score=…)`; set `record.score` /
+`record.requires_review` for fuzzy single matches. The generated `fetch` stub and
+mapper already reflect this — see [lookup vs resolver](#lookup-vs-resolver-weavers).
 
 ---
 

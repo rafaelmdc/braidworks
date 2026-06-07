@@ -33,7 +33,9 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
 1. **Spec.** Write a `weaver.spec.toml` (see `weaverkit/tests/fixtures/` for a
    complete example, and `docs/weaver-implementation-guide.md` for each field).
    Pick `consumes` from the **shared-key registry** (`weaverkit/src/weaverkit/keys.py`)
-   so the weaver is reachable. Validate it: `make verify-weaver SPEC=... ` —
+   so the weaver is reachable, and set `kind` (`lookup` for clean ID→data, the
+   default; `resolver` for fuzzy/ambiguous name matching — it generates the richer
+   candidate/`MatchStatus` shape). Validate it: `make verify-weaver SPEC=... ` —
    it reports every problem at once.
 2. **Scaffold.** `make new-weaver SPEC=... DEST=weavers/<db>weaver`. This stamps a
    complete, importable package whose manifest already matches the spec and whose

@@ -398,6 +398,166 @@ def map_record(
     )
 '''
 
+_INTERMEDIATE_RESOLVER = '''\
+"""Neutral record every backend normalizes into before the single mapper runs.
+
+This is the *resolver* shape: matching is fuzzy/ambiguous, so a record carries a
+``status`` and may carry ranked ``candidates`` instead of a single answer. The
+mapper turns it into OK / AMBIGUOUS / NO_MATCH / ERROR. This type is
+weaver-specific — never leak it into ``braidworks-core``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+
+class MatchStatus(Enum):
+    """Backend-neutral outcome for one resolved input."""
+
+    RESOLVED = "resolved"  # a confident single match
+    FUZZY_UNIQUE = "fuzzy_unique"  # one low-confidence guess; needs review
+    AMBIGUOUS = "ambiguous"  # multiple candidates, no single answer
+    NO_MATCH = "no_match"  # nothing found
+    ERROR = "error"  # per-entity backend failure
+
+
+@dataclass
+class Candidate:
+    """One alternative when a match is ambiguous (values keyed by produced type_id)."""
+
+    values: dict[str, Any] = field(default_factory=dict)
+    score: float | None = None  # 0..1 fraction, or a 0..100 fuzzy score
+
+
+@dataclass
+class {{CLASS}}Record:
+    """One backend's resolution of one input. Backend-neutral."""
+
+    query: dict[str, Any]
+    status: MatchStatus = MatchStatus.NO_MATCH
+    values: dict[str, Any] = field(default_factory=dict)
+    score: float | None = None  # None means "treat as exact (1.0)"
+    requires_review: bool = False
+    candidates: list[Candidate] = field(default_factory=list)
+    error: str | None = None
+'''
+
+_MAPPER_RESOLVER = '''\
+"""The single ``{{CLASS}}Record -> WeaveResult`` mapper (resolver shape).
+
+Every backend feeds results through this one function, so all backends emit
+identical strand shapes. Handles OK / AMBIGUOUS / NO_MATCH / ERROR and surfaces
+candidates and the review flag.
+"""
+
+from __future__ import annotations
+
+from braidworks.core import (
+    CandidateResult,
+    Capability,
+    Strand,
+    WeaveResult,
+    WeaveStatus,
+)
+
+from {{DBWEAVER}}.intermediate import Candidate, MatchStatus, {{CLASS}}Record
+
+_STATUS = {
+    MatchStatus.RESOLVED: WeaveStatus.OK,
+    MatchStatus.FUZZY_UNIQUE: WeaveStatus.OK,
+    MatchStatus.AMBIGUOUS: WeaveStatus.AMBIGUOUS,
+    MatchStatus.NO_MATCH: WeaveStatus.NO_MATCH,
+    MatchStatus.ERROR: WeaveStatus.ERROR,
+}
+
+
+def _confidence(score: float | None) -> float:
+    """Normalize a score to [0, 1] (exact->1.0; 0..1 kept; 0..100 fuzzy scaled)."""
+    if score is None:
+        return 1.0
+    if score <= 1.0:
+        return float(score)
+    return min(score / 100.0, 1.0)
+
+
+def _candidate_result(
+    candidate: Candidate, allowed: frozenset[str], provenance: tuple[str, ...]
+) -> CandidateResult:
+    conf = _confidence(candidate.score)
+    strands = tuple(
+        Strand(t, v, confidence=conf, provenance=provenance)
+        for t, v in candidate.values.items()
+        if t in allowed and v is not None
+    )
+    return CandidateResult(strands=strands, confidence=conf)
+
+
+def map_record(
+    record: {{CLASS}}Record,
+    *,
+    capability: Capability,
+    requested_outputs: frozenset[str],
+    backend: str,
+    weaver_version: str,
+) -> WeaveResult:
+    """Map a neutral resolver record to a ``WeaveResult`` for the requested outputs."""
+    computed_groups = capability.triggered_groups(requested_outputs)
+    allowed = capability.outputs_to_compute(requested_outputs)
+    provenance = (f"{{WEAVER_ID}}:{backend}",)
+    status = _STATUS[record.status]
+    conf = _confidence(record.score)
+
+    strands: list[Strand] = []
+    candidates: tuple[CandidateResult, ...] = ()
+    errors: tuple[str, ...] = ()
+    requires_review = record.requires_review
+
+    if status is WeaveStatus.OK:
+        if record.status is MatchStatus.FUZZY_UNIQUE:
+            requires_review = True
+        for type_id, value in record.values.items():
+            if type_id in allowed and value is not None:
+                strands.append(Strand(type_id, value, confidence=conf, provenance=provenance))
+    elif status is WeaveStatus.AMBIGUOUS:
+        candidates = tuple(_candidate_result(c, allowed, provenance) for c in record.candidates)
+        requires_review = True
+    elif status is WeaveStatus.ERROR:
+        errors = (record.error or "backend error",)
+
+    return WeaveResult(
+        capability_id=capability.id,
+        weaver_version=weaver_version,
+        backend_used=backend,
+        computed_groups=computed_groups,
+        status=status,
+        strands=tuple(strands),
+        candidates=candidates,
+        errors=errors,
+        requires_review=requires_review,
+    )
+'''
+
+# Per-kind body of the backend stub's fetch TODO (spliced in as {{FETCH_HINT}}).
+_FETCH_HINT_LOOKUP = """\
+        #   - on a hit:   record.found=True, record.values={produced_type_id: value, ...}
+        #                 (only keys this capability produces; the mapper filters
+        #                  to the requested subset);
+        #   - on a miss:  record.found=False (a normal data outcome, not an error);
+        #   - on failure: record.error="..." (per-entity; do not raise for data
+        #                 problems — failures are values)."""
+
+_FETCH_HINT_RESOLVER = """\
+        #   - resolved:   record.status=MatchStatus.RESOLVED, record.values={...};
+        #   - fuzzy:      MatchStatus.FUZZY_UNIQUE + record.score (one low-confidence
+        #                 guess; the mapper flags requires_review);
+        #   - ambiguous:  MatchStatus.AMBIGUOUS + record.candidates=[Candidate(values=...,
+        #                 score=...), ...] (no single answer);
+        #   - miss:       MatchStatus.NO_MATCH;
+        #   - failure:    MatchStatus.ERROR + record.error (per-entity; don't raise)."""
+
 _BACKENDS_INIT = '''\
 """Backends — one per data source. Each normalizes into a {{CLASS}}Record."""
 '''
@@ -499,12 +659,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         # {{CLASS}}Record PER input query, IN THE SAME ORDER (the dispatch relies
         # on positional alignment — never drop, reorder, or merge).
         #   - each ``query`` is {consumed_type_id: value} for one entity;
-        #   - on a hit:   record.found=True, record.values={produced_type_id: value, ...}
-        #                 (only keys this capability produces; the mapper filters
-        #                  to the requested subset);
-        #   - on a miss:  record.found=False (a normal data outcome, not an error);
-        #   - on failure: record.error="..." (per-entity; do not raise for data
-        #                 problems — failures are values).
+{{FETCH_HINT}}
         # ``capability_id`` tells you which capability is running if the backend
         # serves more than one; ``requested_outputs`` lets you skip expensive
         # fields nobody asked for.
@@ -760,6 +915,11 @@ def scaffold(
         "FIRST_BACKEND": first_backend,
     }
 
+    is_resolver = spec.kind == "resolver"
+    intermediate_tmpl = _INTERMEDIATE_RESOLVER if is_resolver else _INTERMEDIATE
+    mapper_tmpl = _MAPPER_RESOLVER if is_resolver else _MAPPER
+    fetch_hint = _FETCH_HINT_RESOLVER if is_resolver else _FETCH_HINT_LOOKUP
+
     backend_imports = "\n".join(
         f"from {pkg}.backends.{b} import {cls}{_camel(b)}Backend" for b in spec.backends
     )
@@ -778,8 +938,8 @@ def scaffold(
         dest / "weaver.spec.toml": spec_toml,
         src / "__init__.py": _render(_INIT, tokens),
         src / "vocab.py": _vocab_source(spec),
-        src / "intermediate.py": _render(_INTERMEDIATE, tokens),
-        src / "mapper.py": _render(_MAPPER, tokens),
+        src / "intermediate.py": _render(intermediate_tmpl, tokens),
+        src / "mapper.py": _render(mapper_tmpl, tokens),
         src / "dispatch.py": _render(_DISPATCH, tokens),
         src / "weaver.py": _render(_WEAVER, tokens),
         src / "factory.py": _render(_FACTORY, factory_tokens),
@@ -791,7 +951,12 @@ def scaffold(
     }
 
     for b in spec.backends:
-        bt = {**tokens, "BACKEND": b, "BACKEND_CLASS": f"{cls}{_camel(b)}Backend"}
+        bt = {
+            **tokens,
+            "BACKEND": b,
+            "BACKEND_CLASS": f"{cls}{_camel(b)}Backend",
+            "FETCH_HINT": fetch_hint,
+        }
         files[src / "backends" / f"{b}.py"] = _render(_BACKEND_STUB, bt)
 
     written: list[Path] = []
