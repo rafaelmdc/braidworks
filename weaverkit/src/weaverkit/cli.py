@@ -5,20 +5,27 @@
 
 ``new`` validates the spec, then stamps a package. ``verify`` validates the spec
 and — if the built package is importable — checks its manifest, reachability, and
-fingerprints against the spec. Both exit non-zero on any problem, so they slot
-straight into a Makefile or CI gate.
+fingerprints against the spec. ``verify --strict`` is the definition-of-done: it
+additionally fails while any scaffold placeholder remains (``NotImplementedError``,
+``# TODO(...)``, a ``-TODO`` fingerprint) or the golden examples can't actually run.
+Both exit non-zero on any problem, so they slot straight into a Makefile or CI gate.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import importlib
 import sys
 from pathlib import Path
 
-from weaverkit.conformance import check_fingerprints, check_manifest
+from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
+
+# Substrings the scaffold leaves at unimplemented spots; --strict fails while any
+# remain. '# TODO(' / '-TODO"' are scaffold-specific (won't flag generic TODOs).
+_INCOMPLETE_MARKERS = ("NotImplementedError", '-TODO"', "# TODO(")
 
 
 def _load_validated(spec_path: str) -> tuple[WeaverSpec | None, list[str]]:
@@ -64,6 +71,42 @@ def _build_weaver(package: str):
     return builder()
 
 
+def _completeness_problems(package: str) -> list[str]:
+    """Source files still carrying scaffold placeholders (NotImplemented / TODO)."""
+    module = importlib.import_module(package)
+    if not getattr(module, "__file__", None):
+        return []
+    pkg_dir = Path(module.__file__).parent
+    problems: list[str] = []
+    for py in sorted(pkg_dir.rglob("*.py")):
+        text = py.read_text()
+        hit = next((m for m in _INCOMPLETE_MARKERS if m in text), None)
+        if hit is not None:
+            rel = py.relative_to(pkg_dir.parent)
+            problems.append(f"{rel}: still a scaffold placeholder ({hit!r}) — implement it")
+    return problems
+
+
+def _strict_problems(package: str, spec: WeaverSpec, weaver) -> list[str]:
+    """Definition-of-done: no placeholders left, and golden examples actually run."""
+    problems = _completeness_problems(package)
+    if not spec.golden:
+        problems.append(
+            "--strict: spec has no golden examples; add at least one known "
+            "input -> expected output so behavior is verified, not just structure"
+        )
+        return problems
+    backend = spec.backends[0]
+    try:
+        problems += asyncio.run(check_golden(weaver, spec, backend=backend))
+    except Exception as exc:  # noqa: BLE001 - convert any run failure into a finding
+        problems.append(
+            f"--strict: golden examples could not run on backend {backend!r} "
+            f"({exc}); configure the backend / implement fetch and retry"
+        )
+    return problems
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     spec, problems = _load_validated(args.spec)
     if problems:
@@ -75,6 +118,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
     try:
         weaver = _build_weaver(package)
     except ModuleNotFoundError:
+        if args.strict:
+            _print_problems(
+                f"--strict: package {package!r} is not importable:",
+                ["run from the weaver's directory, or pass --package"],
+            )
+            return 1
         print(
             f"spec is valid; package {package!r} is not importable, so manifest/"
             "fingerprint checks were skipped (run from the weaver's directory, or "
@@ -87,6 +136,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if conformance:
         _print_problems(f"{package} does not conform to {args.spec}:", conformance)
         return 1
+
+    if args.strict:
+        incomplete = _strict_problems(package, spec, weaver)
+        if incomplete:
+            _print_problems(f"{package} is not done (--strict):", incomplete)
+            return 1
+        print(f"{package} is complete: conforms + no placeholders + golden examples pass")
+        return 0
 
     print(f"{package} conforms to {args.spec} (spec valid, manifest + fingerprints OK)")
     return 0
@@ -108,6 +165,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--package",
         default=None,
         help="importable package name (defaults to <db_name>weaver)",
+    )
+    p_verify.add_argument(
+        "--strict",
+        action="store_true",
+        help="definition-of-done: fail if any scaffold placeholder remains or golden can't run",
     )
     p_verify.set_defaults(func=cmd_verify)
 

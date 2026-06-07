@@ -53,6 +53,50 @@ def test_verify_invalid_spec_fails(tmp_path):
     assert rc == 1
 
 
+def _with_generated_on_path(dest, package):
+    """Context-free helper: put a generated package's src on sys.path, cleaned up."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        src = str(dest / "src")
+        sys.path.insert(0, src)
+        for name in list(sys.modules):
+            if name == package or name.startswith(package + "."):
+                del sys.modules[name]
+        importlib.invalidate_caches()
+        try:
+            yield
+        finally:
+            sys.path.remove(src)
+            for name in list(sys.modules):
+                if name == package or name.startswith(package + "."):
+                    del sys.modules[name]
+
+    return _ctx()
+
+
+def test_verify_strict_fails_on_fresh_scaffold(tmp_path, capsys):
+    """A fresh scaffold conforms but is NOT done — --strict must reject it."""
+    dest = tmp_path / "madinweaver"
+    assert main(["new", "--spec", str(FIXTURE), "--dest", str(dest)]) == 0
+    with _with_generated_on_path(dest, "madinweaver"):
+        # non-strict passes (structure is right)...
+        assert main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver"]) == 0
+        # ...strict fails (placeholders remain).
+        rc = main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver", "--strict"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "not done" in err
+    assert "placeholder" in err
+
+
+def test_verify_strict_reports_missing_package(tmp_path, capsys):
+    rc = main(["verify", "--spec", str(FIXTURE), "--package", "nope_absent", "--strict"])
+    assert rc == 1
+    assert "not importable" in capsys.readouterr().err
+
+
 def test_verify_conforming_generated_package(tmp_path, capsys):
     """new -> import generated package -> verify reports full conformance."""
     dest = tmp_path / "madinweaver"
