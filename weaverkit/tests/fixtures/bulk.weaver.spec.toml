@@ -1,0 +1,31 @@
+# A spec with a [bulk] source — the local backend builds a DB from a download.
+[weaver]
+db_name = "bulkdemo"
+weaver_id = "bulkdemo"
+title = "Bulk demo (local DB from a download)"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://example.org/bulkdemo"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = """
+tax_id,trait
+562,negative
+"""
+
+[bulk]
+backend = "local"
+archive_url = "https://example.org/bulkdemo/dump.tar.gz"
+filename = "bulkdemo.sqlite"
+
+[[capability]]
+id = "resolve_traits"
+consumes = ["ncbi.taxon.id"]
+
+  [[capability.group]]
+  id = "traits.core"
+  outputs = ["microbe.trait.gram_stain"]
+
+  [[capability.group]]
+  id = "traits.growth"
+  outputs = ["microbe.trait.optimum_temp"]

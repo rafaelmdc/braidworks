@@ -224,11 +224,11 @@ version = "{{VERSION}}"
 description = "{{TITLE}} — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core"]
+dependencies = [{{DEPS}}]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23", "weaverkit"]
-
+{{SCRIPTS_BLOCK}}
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -295,7 +295,7 @@ test:
 
 verify:
 \tuv run --extra test weaverkit verify --spec weaver.spec.toml --package {{DBWEAVER}}
-
+{{ENSURE_TARGET}}
 lint:
 \tuv run ruff check .
 
@@ -667,6 +667,169 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
 
+_BACKEND_STUB_BULK = '''\
+"""The {{BACKEND}} backend for {{DBWEAVER}} — reads the bulk local DB. IMPLEMENT ME.
+
+Auto-configures once the DB built by ``{{DBWEAVER}}-ensure`` exists at the default
+cache path. Fill in ``fingerprint`` (read the version recorded at build time) and
+``fetch`` (query the DB), normalizing each result into a ``{{CLASS}}Record``.
+
+Guide: weaverkit/docs/implementing-backends.md
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from {{DBWEAVER}}.backends.base import {{CLASS}}Backend
+from {{DBWEAVER}}.intermediate import {{CLASS}}Record
+from {{DBWEAVER}}.setup import db_is_valid, default_db_path
+
+
+class {{BACKEND_CLASS}}({{CLASS}}Backend):
+    """{{BACKEND}} backend over the bulk local DB built by ``{{DBWEAVER}}-ensure``."""
+
+    name = "{{BACKEND}}"
+
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        self._db_path = Path(db_path) if db_path else default_db_path()
+        self._configured = db_is_valid(self._db_path)
+
+    def is_configured(self) -> bool:
+        return self._configured
+
+    def fingerprint(self) -> str:
+        # TODO(fingerprint): read the version recorded when the DB was built (e.g.
+        # a metadata row) and return it. Never "" or "unknown".
+        # Spec's declared source of truth: {{FINGERPRINT_SOURCE}}.
+        # See: weaverkit/docs/implementing-backends.md#fingerprint
+        return "{{DBWEAVER}}-{{BACKEND}}-TODO"
+
+    async def fetch(
+        self,
+        capability_id: str,
+        queries: list[dict[str, Any]],
+        *,
+        requested_outputs: frozenset[str],
+    ) -> list[{{CLASS}}Record]:
+        # TODO(fetch): open self._db_path and look up each query. Return one
+        # {{CLASS}}Record PER input query, IN THE SAME ORDER.
+{{FETCH_HINT}}
+        # See: weaverkit/docs/implementing-backends.md#fetch
+        raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
+'''
+
+_SETUP = '''\
+"""Local DB setup for {{DBWEAVER}} — fetch/build the bulk source into the user cache.
+
+The {{BULK_BACKEND}} backend reads a large local DB built from the source archive.
+It is multi-GB and must not be committed; ``ensure_{{DB}}_db`` downloads and builds
+it into the per-user cache on first use. Implement the two TODOs (``_build`` and the
+validity check) for your source's format — model on taxonweaver's ``setup.py``.
+
+See: weaverkit/docs/implementing-backends.md#bulk-file-sources-setuppy
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from platformdirs import user_cache_dir
+
+from braidworks.core import BackendConfigurationError
+
+_ENV_DATA_DIR = "BRAIDWORKS_DATA_DIR"
+_ENV_AUTO = "BRAIDWORKS_AUTO_DOWNLOAD"
+_DB_FILENAME = "{{BULK_FILENAME}}"
+ARCHIVE_URL = "{{ARCHIVE_URL}}"
+
+
+def default_db_path() -> Path:
+    """Per-user default DB path (``BRAIDWORKS_DATA_DIR`` overrides the cache dir)."""
+    override = os.environ.get(_ENV_DATA_DIR)
+    base = Path(override) if override else Path(user_cache_dir("braidworks"))
+    return base / "{{DB}}" / _DB_FILENAME
+
+
+def auto_consented(auto: bool | None) -> bool:
+    """Whether to proceed without prompting (explicit arg wins, else the env flag)."""
+    if auto is not None:
+        return auto
+    return os.environ.get(_ENV_AUTO, "").lower() in ("1", "true", "yes")
+
+
+def db_is_valid(path: Path) -> bool:
+    """Whether ``path`` is a usable built DB."""
+    # TODO: tighten this — check the expected tables/metadata exist, not just the file.
+    return path.exists() and path.stat().st_size > 0
+
+
+def _consent_message(db_path: Path) -> str:
+    return (
+        f"{{DBWEAVER}}'s local DB is not present at {db_path}.\\n"
+        f"Build it from {ARCHIVE_URL} by running `{{DBWEAVER}}-ensure`, or pass "
+        "auto=True / set BRAIDWORKS_AUTO_DOWNLOAD=1 to allow automatic download."
+    )
+
+
+def _build(target: Path) -> None:
+    """Download ARCHIVE_URL and build the DB at ``target``. IMPLEMENT ME."""
+    # TODO: stream-download ARCHIVE_URL, parse it, and write the DB to ``target``.
+    # Record the source version so the backend's fingerprint() can read it back.
+    raise NotImplementedError("TODO: build the {{DBWEAVER}} DB from " + ARCHIVE_URL)
+
+
+def _build_into_place(db_path: Path) -> None:
+    """Build atomically: into a temp file, then rename into place."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = db_path.with_name(db_path.name + ".tmp")
+    if tmp.exists():
+        tmp.unlink()
+    _build(tmp)
+    os.replace(tmp, db_path)
+
+
+def ensure_{{DB}}_db(
+    target: str | Path | None = None, *, auto: bool | None = None, refresh: bool = False
+) -> Path:
+    """Ensure the local DB exists (default cache path), building it if needed."""
+    db_path = Path(target) if target is not None else default_db_path()
+    if db_is_valid(db_path) and not refresh:
+        return db_path
+    if not auto_consented(auto):
+        raise BackendConfigurationError(_consent_message(db_path))
+    _build_into_place(db_path)
+    return db_path
+'''
+
+_ENSURE_CLI = '''\
+"""``{{DBWEAVER}}-ensure`` — build/refresh the local {{DBWEAVER}} DB in the user cache."""
+
+from __future__ import annotations
+
+import argparse
+
+from {{DBWEAVER}}.setup import default_db_path, ensure_{{DB}}_db
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="{{DBWEAVER}}-ensure", description=__doc__)
+    parser.add_argument("--refresh", action="store_true", help="rebuild even if present")
+    args = parser.parse_args(argv)
+    target = default_db_path()
+    print(f"ensuring {{DBWEAVER}} DB at {target} ...")
+    # Running ensure is itself consent to download/build.
+    path = ensure_{{DB}}_db(target, auto=True, refresh=args.refresh)
+    print(f"ready: {path}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
+'''
+
 _DISPATCH = '''\
 """BackendDispatchWeaver — routes a capability to a named backend, then maps.
 
@@ -913,12 +1076,31 @@ def scaffold(
         "SOURCE_URL": spec.source_url,
         "FINGERPRINT_SOURCE": spec.fingerprint_source,
         "FIRST_BACKEND": first_backend,
+        "DB": spec.db_name,
     }
 
     is_resolver = spec.kind == "resolver"
     intermediate_tmpl = _INTERMEDIATE_RESOLVER if is_resolver else _INTERMEDIATE
     mapper_tmpl = _MAPPER_RESOLVER if is_resolver else _MAPPER
     fetch_hint = _FETCH_HINT_RESOLVER if is_resolver else _FETCH_HINT_LOOKUP
+
+    # Bulk-source tokens: a local DB built from a download (setup.py + ensure CLI).
+    bulk = spec.bulk
+    if bulk is not None:
+        tokens["DEPS"] = '"braidworks-core", "platformdirs>=4.0"'
+        tokens["SCRIPTS_BLOCK"] = (
+            f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
+        )
+        tokens["ENSURE_TARGET"] = (
+            "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
+        )
+        tokens["ARCHIVE_URL"] = bulk.archive_url
+        tokens["BULK_FILENAME"] = bulk.filename
+        tokens["BULK_BACKEND"] = bulk.backend
+    else:
+        tokens["DEPS"] = '"braidworks-core"'
+        tokens["SCRIPTS_BLOCK"] = ""
+        tokens["ENSURE_TARGET"] = ""
 
     backend_imports = "\n".join(
         f"from {pkg}.backends.{b} import {cls}{_camel(b)}Backend" for b in spec.backends
@@ -950,6 +1132,10 @@ def scaffold(
         dest / "tests" / "test_contract.py": _contract_test_source(spec),
     }
 
+    if bulk is not None:
+        files[src / "setup.py"] = _render(_SETUP, tokens)
+        files[src / "ensure.py"] = _render(_ENSURE_CLI, tokens)
+
     for b in spec.backends:
         bt = {
             **tokens,
@@ -957,7 +1143,8 @@ def scaffold(
             "BACKEND_CLASS": f"{cls}{_camel(b)}Backend",
             "FETCH_HINT": fetch_hint,
         }
-        files[src / "backends" / f"{b}.py"] = _render(_BACKEND_STUB, bt)
+        stub = _BACKEND_STUB_BULK if (bulk is not None and b == bulk.backend) else _BACKEND_STUB
+        files[src / "backends" / f"{b}.py"] = _render(stub, bt)
 
     written: list[Path] = []
     for path, content in files.items():

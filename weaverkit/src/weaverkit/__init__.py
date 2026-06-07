@@ -12,6 +12,7 @@ from weaverkit.conformance import (
 from weaverkit.keys import SHARED_KEYS, is_shared_key
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import (
+    BulkSpec,
     CapabilitySpec,
     GoldenSpec,
     GroupSpec,
@@ -24,6 +25,7 @@ from weaverkit.spec import (
 __all__ = [
     "SHARED_KEYS",
     "is_shared_key",
+    "BulkSpec",
     "CapabilitySpec",
     "GoldenSpec",
     "GroupSpec",

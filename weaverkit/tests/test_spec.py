@@ -234,6 +234,44 @@ def test_kind_invalid_rejected():
     assert any("kind" in p for p in problems)
 
 
+def test_bulk_parsed_when_present():
+    data = _valid_dict()
+    data["bulk"] = {
+        "backend": "local",
+        "archive_url": "https://example.org/d.tar.gz",
+        "filename": "x.sqlite",
+    }
+    spec = WeaverSpec.from_dict(data)
+    assert spec.bulk is not None
+    assert spec.bulk.backend == "local"
+    assert validate_spec(spec) == []
+
+
+def test_bulk_absent_by_default():
+    assert WeaverSpec.from_dict(_valid_dict()).bulk is None
+
+
+def test_bulk_backend_not_in_backends_rejected():
+    data = _valid_dict()
+    data["bulk"] = {"backend": "api", "archive_url": "https://x", "filename": "x.sqlite"}
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("[bulk]" in p and "not in the weaver's backends" in p for p in problems)
+
+
+def test_bulk_empty_archive_url_rejected():
+    data = _valid_dict()
+    data["bulk"] = {"backend": "local", "archive_url": "  ", "filename": "x.sqlite"}
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("archive_url" in p for p in problems)
+
+
+def test_bulk_filename_defaults_to_db_name():
+    data = _valid_dict()
+    data["bulk"] = {"backend": "local", "archive_url": "https://x"}
+    spec = WeaverSpec.from_dict(data)
+    assert spec.bulk.filename == "madin.sqlite"
+
+
 def test_multiple_problems_reported_at_once():
     data = _valid_dict()
     data["weaver"]["source_sample"] = ""

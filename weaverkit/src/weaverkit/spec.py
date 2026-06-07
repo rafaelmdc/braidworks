@@ -111,6 +111,31 @@ class GoldenSpec:
 
 
 @dataclass(frozen=True)
+class BulkSpec:
+    """A bulk-file source: one backend builds a large local DB from a download.
+
+    Its presence triggers generation of ``setup.py`` (``ensure_<db>_db``) and an
+    ``ensure`` CLI so the multi-GB artifact is fetched into the user cache on first
+    use rather than committed.
+    """
+
+    backend: str
+    archive_url: str
+    filename: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], *, db_name: str) -> BulkSpec:
+        try:
+            return cls(
+                backend=str(data["backend"]),
+                archive_url=str(data["archive_url"]),
+                filename=str(data.get("filename", f"{db_name}.sqlite")),
+            )
+        except KeyError as exc:
+            raise SpecError(f"[bulk] missing required key: {exc}") from None
+
+
+@dataclass(frozen=True)
 class WeaverSpec:
     """The whole contract for one weaver, loaded from ``weaver.spec.toml``."""
 
@@ -125,6 +150,7 @@ class WeaverSpec:
     capabilities: tuple[CapabilitySpec, ...]
     weaver_id: str = ""
     kind: str = "lookup"
+    bulk: BulkSpec | None = None
     golden: tuple[GoldenSpec, ...] = field(default_factory=tuple)
 
     @property
@@ -146,9 +172,12 @@ class WeaverSpec:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WeaverSpec:
         weaver = data.get("weaver", data)
+        bulk_data = data.get("bulk")
         try:
+            db_name = str(weaver["db_name"])
+            bulk = BulkSpec.from_dict(bulk_data, db_name=db_name) if bulk_data else None
             return cls(
-                db_name=str(weaver["db_name"]),
+                db_name=db_name,
                 title=str(weaver["title"]),
                 version=str(weaver["version"]),
                 license=str(weaver["license"]),
@@ -158,6 +187,7 @@ class WeaverSpec:
                 backends=tuple(weaver["backends"]),
                 weaver_id=str(weaver.get("weaver_id", "")),
                 kind=str(weaver.get("kind", "lookup")),
+                bulk=bulk,
                 capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
             )
@@ -285,6 +315,18 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
 
         if not cap.produces:
             problems.append(f"{where}: produces nothing (groups have no outputs)")
+
+    # --- bulk source ---------------------------------------------------------
+    if spec.bulk is not None:
+        if spec.bulk.backend not in spec.backends:
+            problems.append(
+                f"[bulk]: backend {spec.bulk.backend!r} is not in the weaver's "
+                f"backends {list(spec.backends)}"
+            )
+        if not spec.bulk.archive_url.strip():
+            problems.append("[bulk]: archive_url must be non-empty")
+        if not spec.bulk.filename.strip():
+            problems.append("[bulk]: filename must be non-empty")
 
     # --- golden examples -----------------------------------------------------
     for i, gold in enumerate(spec.golden):

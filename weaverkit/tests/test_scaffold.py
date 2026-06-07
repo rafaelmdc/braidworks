@@ -108,6 +108,56 @@ def test_generated_register_wires_into_factory(tmp_path):
 
 
 RESOLVER_FIXTURE = Path(__file__).parent / "fixtures" / "resolver.weaver.spec.toml"
+BULK_FIXTURE = Path(__file__).parent / "fixtures" / "bulk.weaver.spec.toml"
+
+
+def test_lookup_scaffold_has_no_setup(tmp_path):
+    spec, dest, written = _generate(tmp_path)
+    names = {p.relative_to(dest).as_posix() for p in written}
+    assert f"src/{spec.package}/setup.py" not in names
+    assert f"src/{spec.package}/ensure.py" not in names
+    assert '"platformdirs' not in (dest / "pyproject.toml").read_text()
+
+
+def _generate_bulk(tmp_path):
+    spec = load_spec(BULK_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=BULK_FIXTURE.read_text())
+    return spec, dest
+
+
+def test_bulk_scaffold_emits_setup_and_ensure(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    assert (dest / "src" / spec.package / "setup.py").exists()
+    assert (dest / "src" / spec.package / "ensure.py").exists()
+    setup = (dest / "src" / spec.package / "setup.py").read_text()
+    assert "def ensure_bulkdemo_db" in setup
+    assert "def default_db_path" in setup
+
+
+def test_bulk_pyproject_wires_platformdirs_and_script(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    pyproject = (dest / "pyproject.toml").read_text()
+    assert "platformdirs" in pyproject
+    assert "bulkdemoweaver-ensure" in pyproject
+    assert "uv run bulkdemoweaver-ensure" in (dest / "Makefile").read_text()
+
+
+def test_bulk_backend_uses_default_db_path(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    local = (dest / "src" / spec.package / "backends" / "local.py").read_text()
+    assert "default_db_path" in local
+    assert "db_is_valid" in local
+
+
+def test_bulk_manifest_conformant_and_compiles(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    for name in ("setup.py", "ensure.py", "backends/local.py"):
+        compile((dest / "src" / spec.package / name).read_text(), name, "exec")
+    mod = _import_generated(dest, spec.package)
+    weaver = getattr(mod, f"build_{spec.package}")()
+    assert check_manifest(weaver.MANIFEST, spec) == []
+    assert check_fingerprints(weaver, list(spec.backends)) == []
 
 
 def test_lookup_intermediate_is_flat(tmp_path):
