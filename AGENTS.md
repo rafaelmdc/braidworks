@@ -46,7 +46,8 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
 3. **Implement.** The only edits you should need are the spots marked `# TODO`:
    each backend's `fetch` (currently `NotImplementedError`) and its `fingerprint`
    (currently a placeholder). Normalize each source result into the generated
-   `*Record` intermediate; the shared mapper turns it into strands. Add real
+   core `LookupRecord` / `ResolverRecord`; the shared core mapper turns it into
+   strands. Add real
    golden examples to the spec. For real-world use add a *configured* builder
    alongside the generated zero-config `build_<package>()` (two-builder convention —
    the generated `factory.py` has a commented skeleton); if no backend reads

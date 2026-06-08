@@ -24,11 +24,20 @@ this guide just orients you.**
 
 ## 0. Orient: the five things a weaver is
 
-1. A **`vocab.py`** — the strand `type_id`s, `Capability`s, and `WeaverManifest`.
-2. A **neutral intermediate** dataclass (`intermediate.py`) every backend normalizes into.
-3. One or more **backends** (`backends/*.py`) — one per data source (local DB, REST API).
-4. One **mapper** (`mapper.py`) — `intermediate → WeaveResult`, the single source of strand shape.
-5. **Assembly + factory glue** — a `BackendDispatchWeaver` subclass, a zero-config `build_<package>()` introspection builder (verify's target) + a configured builder (the two-builder convention), and a `WeaverProvider`.
+> **Shared runtime (read first):** the *records*, *mapper*, *dispatch*, and *backend
+> ABC* now live in `braidworks-core` (`LookupRecord`/`ResolverRecord`, `map_lookup`/
+> `map_resolver`, `BackendDispatchWeaver`, `BackendBase`). A scaffolded weaver
+> **imports** them — it does not generate `intermediate.py` / `mapper.py` /
+> `dispatch.py` / `backends/base.py`. The numbered concepts below still describe what
+> each piece *does* (and match `taxonweaver`, which keeps its own hand-tuned versions
+> as the "bring your own plumbing" reference) — but for a new weaver, items 2 and 4
+> are just `from braidworks.core import ...`.
+
+1. A **`vocab.py`** — the strand `type_id`s, `Capability`s, and `WeaverManifest` (generated).
+2. A **neutral record** every backend fills — `LookupRecord` / `ResolverRecord` (from core).
+3. One or more **backends** (`backends/*.py`) — one per data source (local DB, REST API). *You write these.*
+4. One **mapper** (`record → WeaveResult`, the single source of strand shape) — `map_lookup` / `map_resolver` (from core).
+5. **Assembly + factory glue** — a `BackendDispatchWeaver` subclass (sets `MAPPER` + `MANIFEST`), a zero-config `build_<package>()` introspection builder (verify's target) + a configured builder (the two-builder convention), and a `WeaverProvider`.
 
 Plus, around it: a **per-weaver `Makefile`**, **tests** (unit + contract mixins + opt-in live E2E), and — if the source ships a bulk file — a **`setup.py`** with `ensure_<db>_db(...)`.
 

@@ -6,8 +6,10 @@ weaver reliably instead of vibe-coding it. Three pieces:
 - **spec** (`weaver.spec.toml`) — the contract an agent fills *before* coding:
   db name, source, license, capabilities (consuming **registered shared keys**),
   output groups, backends, and golden examples. Validated by `weaverkit.spec`.
-- **scaffold** (`weaverkit new`) — stamps the deterministic 80% of a weaver
-  package from a spec, so the structure/wiring is generated, not hand-written.
+- **scaffold** (`weaverkit new`) — stamps a thin weaver package from a spec (vocab,
+  thin glue, backend stubs); the routing/mapping/record runtime is imported from
+  `braidworks-core`, not copied. So the structure/wiring is generated, not
+  hand-written, and you implement only the backends.
 - **conformance** (`weaverkit verify` + `WeaverConformanceTests`) — machine checks
   that the built weaver matches its spec, is reachable (consumes a shared key),
   and never returns an `"unknown"` fingerprint.
