@@ -16,9 +16,10 @@ from weaverkit.index import (
     build_rows,
     discover_specs,
     render,
+    uncatalogued_outputs,
     write_index,
 )
-from weaverkit.keys import SHARED_KEYS, is_shared_key
+from weaverkit.keys import OUTPUT_KEYS, SHARED_KEYS, is_known_output, is_shared_key
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import (
     BulkSpec,
@@ -33,7 +34,9 @@ from weaverkit.spec import (
 
 __all__ = [
     "SHARED_KEYS",
+    "OUTPUT_KEYS",
     "is_shared_key",
+    "is_known_output",
     "BulkSpec",
     "CapabilitySpec",
     "GoldenSpec",
@@ -55,5 +58,6 @@ __all__ = [
     "build_rows",
     "discover_specs",
     "render",
+    "uncatalogued_outputs",
     "write_index",
 ]

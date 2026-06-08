@@ -34,5 +34,10 @@ class ExampleBackend(ABC):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[ExampleRecord]:
-        """Resolve consumed inputs into records — exactly one per input, in order."""
+        """Resolve consumed inputs into records — exactly one per input, in order.
+
+        ``groups_to_compute`` is the resolved set of triggered output-group ids
+        (the dispatch computes it); gate any expensive path on membership in it.
+        """

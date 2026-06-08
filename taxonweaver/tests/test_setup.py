@@ -74,7 +74,8 @@ class _FakeNetwork:
 def network(monkeypatch) -> _FakeNetwork:
     """Patch setup's urlopen with a deterministic fake serving the mini taxdump."""
     fake = _FakeNetwork(_mini_taxdump_bytes())
-    monkeypatch.setattr(setup_mod.urllib.request, "urlopen", fake.urlopen)
+    # The download/md5 helpers now live in braidworks.core.localdb; patch the global.
+    monkeypatch.setattr("urllib.request.urlopen", fake.urlopen)
     return fake
 
 
@@ -121,7 +122,7 @@ def test_env_var_grants_consent(tmp_path, network, monkeypatch) -> None:
 
 def test_md5_mismatch_raises_and_leaves_no_db(tmp_path, monkeypatch) -> None:
     fake = _FakeNetwork(_mini_taxdump_bytes(), md5_text="0" * 32 + "  taxdump.tar.gz")
-    monkeypatch.setattr(setup_mod.urllib.request, "urlopen", fake.urlopen)
+    monkeypatch.setattr("urllib.request.urlopen", fake.urlopen)
     db_path = tmp_path / "taxonomy.sqlite"
     with pytest.raises(BackendConfigurationError, match="checksum mismatch"):
         ensure_taxonomy_db(db_path, auto=True)

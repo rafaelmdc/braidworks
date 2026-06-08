@@ -15,7 +15,9 @@ lazily inside ``resolve()``.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -104,3 +106,41 @@ def build_ncbi_weaver(
             "(pass db_path or auto_setup=True for local and/or enable_api for the API backend)"
         )
     return NCBITaxonWeaver(backends)
+
+
+def build_taxonweaver(**_config: Any) -> NCBITaxonWeaver:
+    """Zero-config introspection builder — the weaverkit ``verify`` entry point.
+
+    Wires every declared backend *present but possibly unconfigured*: the local
+    backend points at the default DB path (configured only if it's already built;
+    it never downloads), and the API backend needs no local data. The manifest is
+    therefore complete for inspection and fingerprint checks, while an unconfigured
+    backend simply skips at run/golden time. For a real, configured weaver — with
+    consent-gated DB acquisition, an injected client, etc. — use
+    :func:`build_ncbi_weaver`.
+    """
+    return NCBITaxonWeaver(
+        {
+            "local": LocalTaxonomyBackend(default_db_path()),
+            "api": DatasetsV2Backend(),
+        }
+    )
+
+
+# Process-lifetime cache so repeated fixture builds in one run don't rebuild the DB.
+_FIXTURE_DB: Path | None = None
+
+
+def build_taxonweaver_fixture(**_config: Any) -> NCBITaxonWeaver:
+    """Build a weaver backed by the tiny deterministic fixture DB (no download).
+
+    The ``weaverkit verify --strict`` golden hook and tests use this to run real
+    resolutions reproducibly. The local backend is configured against a ~6-species
+    *Faecalibacterium* SQLite built from inline dumps (see :mod:`taxonweaver.fixture`).
+    """
+    global _FIXTURE_DB
+    from .fixture import build_fixture_db
+
+    if _FIXTURE_DB is None or not db_is_valid(_FIXTURE_DB):
+        _FIXTURE_DB = build_fixture_db(Path(tempfile.mkdtemp(prefix="taxonweaver-fixture-")))
+    return NCBITaxonWeaver({"local": LocalTaxonomyBackend(_FIXTURE_DB)})

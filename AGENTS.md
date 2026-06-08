@@ -19,8 +19,8 @@ make test                 # run every package's suite (core + weavers + weaverki
 make lint                 # ruff check across all packages
 make fmt                  # ruff format
 
-# adding a weaver:
-make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
+# adding a weaver (weavers live at the repo root, like taxonweaver/ and exampleweaver/):
+make new-weaver  SPEC=path/to/weaver.spec.toml DEST=<db>weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>weaver
 make index                # rebuild docs/weavers-index.tsv (the key map)
 ```
@@ -31,14 +31,15 @@ CI runs `make lint` and `make test`; both must stay green.
 
 Do **not** hand-write a weaver from scratch. Follow the loop:
 
-1. **Spec.** Write a `weaver.spec.toml` (see `weaverkit/tests/fixtures/` for a
-   complete example, and `docs/weaver-implementation-guide.md` for each field).
-   Pick `consumes` from the **shared-key registry** (`weaverkit/src/weaverkit/keys.py`)
+1. **Spec.** Write a `weaver.spec.toml` (see `weaverkit/tests/fixtures/` for complete
+   examples, and the field reference in `weaverkit/README.md`). Pick `consumes` from
+   the **shared-key registry** (`weaverkit/src/weaverkit/keys.py`)
    so the weaver is reachable, and set `kind` (`lookup` for clean ID→data, the
    default; `resolver` for fuzzy/ambiguous name matching — it generates the richer
    candidate/`MatchStatus` shape). Validate it: `make verify-weaver SPEC=... ` —
    it reports every problem at once.
-2. **Scaffold.** `make new-weaver SPEC=... DEST=weavers/<db>weaver`. This stamps a
+2. **Scaffold.** `make new-weaver SPEC=... DEST=<db>weaver` (root-level, so the
+   generated `IMPLEMENTATION.md`'s `../weaverkit/...` links resolve). This stamps a
    complete, importable package whose manifest already matches the spec and whose
    conformance test is wired up. Add the new package to `members` in the root
    `pyproject.toml`, then `make sync`.
@@ -46,11 +47,18 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    each backend's `fetch` (currently `NotImplementedError`) and its `fingerprint`
    (currently a placeholder). Normalize each source result into the generated
    `*Record` intermediate; the shared mapper turns it into strands. Add real
-   golden examples to the spec.
-4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` and
-   `cd weavers/<db>weaver && make test`. Green means the manifest matches the
-   spec, the weaver is reachable, fingerprints are real, and the golden examples
-   pass.
+   golden examples to the spec. For real-world use add a *configured* builder
+   alongside the generated zero-config `build_<package>()` (two-builder convention —
+   the generated `factory.py` has a commented skeleton); if no backend reads
+   bundled data, add a `build_<package>_fixture()` so `verify --strict` can run
+   golden against a tiny deterministic dataset.
+4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` (spec valid +
+   manifest matches + reachable + real fingerprints) and `cd <db>weaver &&
+   make test`. The **definition of done** is the `--strict` gate (what the generated
+   `IMPLEMENTATION.md` ends on): `weaverkit verify --spec ... --package <db>weaver
+   --strict` — it additionally fails while any `# TODO` placeholder remains and runs
+   the golden examples (against a fixture or a configured backend; plain `verify`
+   lets them skip).
 
 ## Boundaries (do not cross these)
 

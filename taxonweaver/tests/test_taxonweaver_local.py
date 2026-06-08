@@ -106,11 +106,14 @@ def test_bad_db_path_raises_backend_configuration_error(tmp_path):
         build_ncbi_weaver(db_path=tmp_path / "does-not-exist.sqlite")
 
 
-def test_local_backend_missing_db_error_is_actionable(tmp_path):
+def test_local_backend_missing_db_constructs_unconfigured(tmp_path):
+    # Backbone contract: construction is cheap and never raises for a missing DB;
+    # is_configured() reports the data state instead. The actionable "build it"
+    # error lives in the configured builder path (see test_factory_autosetup).
     from taxonweaver.backends.local import LocalTaxonomyBackend
 
-    with pytest.raises(BackendConfigurationError, match="taxon-weaver ensure"):
-        LocalTaxonomyBackend(tmp_path / "does-not-exist.sqlite")
+    backend = LocalTaxonomyBackend(tmp_path / "does-not-exist.sqlite")
+    assert backend.is_configured() is False
 
 
 def test_backend_fingerprint_local_is_build_version(mini_db_path):

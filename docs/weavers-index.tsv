@@ -1,2 +1,4 @@
 weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
-example	resolve_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	ncbi.taxon.id
+example	resolve_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
+ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage	
+ncbi	ncbi.resolve_taxid	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage	

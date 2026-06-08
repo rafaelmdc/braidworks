@@ -24,6 +24,25 @@ your backend fits the rest and is the same for every weaver. Skim
 
 ---
 
+## Builders: introspection vs configured vs fixture
+
+The generated `factory.py` follows a two-builder convention (decisions.md C/D):
+
+- **`build_<package>()`** — the **zero-config introspection** builder `weaverkit
+  verify` calls. It wires every declared backend *present but possibly
+  unconfigured*, never raises for missing data, and gives a manifest-complete
+  weaver to inspect. The scaffold generates this for you.
+- **a configured builder** (you write it, usually domain-named, e.g.
+  `build_ncbi_weaver(...)`) — takes real config (db paths, API keys, injected
+  clients) and may raise if nothing is usable. A commented skeleton sits at the
+  bottom of the generated `factory.py`.
+- **`build_<package>_fixture()`** (optional) — only if no backend reads bundled
+  data; lets `verify --strict` run golden against a tiny deterministic dataset
+  (see [golden under `--strict`](#golden-under---strict-provide-a-fixture-the-build_package_fixture-hook)).
+
+`weaver_id` may differ from the package name (taxonweaver's is `ncbi`); verify
+always targets `build_<package>()`.
+
 ## Connectivity: aim to connect, but an island is still allowed
 
 A weaver is most useful when it *links* — when some other weaver produces a key it
@@ -103,6 +122,28 @@ The spec's `kind` field decides the shape of the generated `intermediate.py` and
 The `fetch` contract below is written for `lookup`; the resolver differences are
 called out inline. Everything else (dispatch, manifest, registration, the cache
 contract) is identical.
+
+### Always-computed groups (`always_computed_groups`)
+
+The mapper reports `computed_groups` — the output groups actually computed — as part
+of the **cache key**. Normally that's just the groups whose outputs were requested.
+But some backends compute a group *unconditionally*: a resolver, for instance,
+always resolves the name → id (`core`) before it can fetch `lineage`, even when the
+caller asked only for lineage. If that internal work isn't reported, the cache key
+under-counts what was computed.
+
+Declare it per capability in the spec — don't hand-edit the mapper:
+
+```toml
+[[capability]]
+id = "resolve_name"
+consumes = ["organism.name"]
+always_computed_groups = ["core"]   # always computed, even if only lineage is asked
+```
+
+The generated `vocab.py` emits an `ALWAYS_COMPUTED_GROUPS` map and the mapper unions
+it into `computed_groups`. (This only affects the reported `computed_groups`/cache
+key — it does *not* emit the group's strands unless they were requested.)
 
 ---
 
@@ -211,6 +252,7 @@ async def fetch(
     queries: list[dict[str, Any]],
     *,
     requested_outputs: frozenset[str],
+    groups_to_compute: frozenset[str],
 ) -> list[<Db>Record]:
 ```
 
@@ -237,11 +279,16 @@ Parameters you can use:
 - `requested_outputs` — the externally requested type_ids. Optional optimization:
   skip computing expensive `values` nobody asked for. (Correctness doesn't depend
   on it — the mapper filters anyway — but it can save work.)
+- `groups_to_compute` — the **resolved** set of triggered output-group ids (the
+  dispatch computed it from `requested_outputs` via `Capability.triggered_groups`).
+  Gate expensive paths on membership in it — `if "lineage" in groups_to_compute:` —
+  instead of re-deriving group semantics from `requested_outputs` yourself. This is
+  the dispatcher-owns-interpretation / backend-owns-fulfillment split (decisions.md B).
 
 Example (local SQLite, single-input capability keyed on `ncbi.taxon.id`):
 
 ```python
-async def fetch(self, capability_id, queries, *, requested_outputs):
+async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
     records: list[MadinRecord] = []
     for q in queries:
         taxid = q.get("ncbi.taxon.id")
@@ -289,16 +336,73 @@ expect = { "microbe.trait.gram_stain" = "negative" }   # keys must be in its pro
 
 `WeaverConformanceTests.test_golden_examples` runs each one through `execute` on the
 configured backend and checks every `expect` key comes back with the expected value.
-They **skip** while the backend is unconfigured, so add them alongside `fetch`. Pick
-inputs whose answers are stable and you can verify against the source.
+They **skip** (in plain `verify`) while the backend is unconfigured, so add them
+alongside `fetch`. Pick inputs whose answers are stable and you can verify.
+
+### Golden under `--strict`: provide a fixture (the `build_<package>_fixture()` hook)
+
+`verify --strict` (definition-of-done) must *run* golden, reproducibly, without
+external data (see [decisions.md](decisions.md) Decision E). It picks the data to
+run against in this order:
+
+1. `build_<package>_fixture()` in your `factory.py`, if present — a builder that
+   returns a weaver wired against a **tiny, deterministic dataset** (committed or
+   synthesized at call time; no download, no network). This is the preferred path
+   for any weaver whose real backend needs a large or external source.
+2. otherwise, an already-configured backend on `build_<package>()` — e.g. a backend
+   that reads a small *bundled* dataset (like `exampleweaver`'s CSV).
+
+If neither is runnable, `--strict` fails with an actionable message — "skipped, no
+data" is **not** a pass. Your golden inputs must be resident in whatever fixture/
+bundled data you point at. `taxonweaver` is the worked example:
+`build_taxonweaver_fixture()` builds a ~6-species SQLite from inline dumps
+(`taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
+clade — so `verify --strict` is green with no 1.2 GB build.
+
+---
+
+## Advanced: conform with your own plumbing
+
+weaverkit defines a **contract**, not an implementation (decisions.md, the
+unifying principle). What `verify` checks is the *manifest* (capabilities /
+consumes / produces / groups / reachability), real fingerprints, and golden — **not**
+that your package uses the generated `intermediate.py` / `mapper.py` / `dispatch.py`
+verbatim. Two blessed patterns follow from that:
+
+- **Bring your own dispatch/mapper/intermediate.** A rich weaver may keep
+  hand-tuned internals and still conform, as long as `MANIFEST` matches the spec and
+  golden passes. `taxonweaver` is the worked example: it has its own
+  `BackendDispatchWeaver`, a typed `TaxonMatch`, and a resolver-specific mapper — and
+  passes `weaverkit verify --strict`. The generated files are the *default* for
+  simple weavers, not a requirement.
+- **Typed domain record → project to `values` at the seam.** The generic mapper is
+  keyed by `type_id → value` (it must stay domain-neutral). If you want real typing,
+  keep a typed intermediate in your weaver (like `TaxonMatch` with `taxid`,
+  `scientific_name`, …) and flatten it into `record.values` only at the mapper
+  boundary. Typed where your logic lives; dynamic at the framework seam.
+
+If you go this route, the contract you must still honor is unchanged: one record
+per input in order, miss-is-data, never-`unknown` fingerprints, emit only produced
+`type_id`s, and `is_configured()` reflecting data presence.
 
 ---
 
 ## Bulk-file sources: `setup.py`
 
-If the backend reads a large bulk file (a multi-GB dump), don't commit it — add a
-`setup.py` with an `ensure_<db>_db(...)` that downloads/builds it into the user
-cache on first use, mirroring `taxonweaver/src/taxonweaver/setup.py`
-(`ensure_taxonomy_db`: default cache path, consent gate, checksum verify, atomic
-build→rename, cross-process lock). Record the source version there so `fingerprint`
-can read it back. See `docs/local-db-setup-plan.md` for the full design.
+If the backend reads a large bulk file (a multi-GB dump), don't commit it. With
+`[bulk]` in the spec the scaffold generates `setup.py` + an `<db>-ensure` CLI for
+you. The generic acquisition plumbing — consent gate, streamed download, MD5 check,
+disk precheck, cross-process lock, **atomic publish** — lives in
+`braidworks.core.localdb` (`ensure_local_db`); the generated `setup.py` just
+delegates to it. You implement only two domain pieces in `setup.py`:
+
+- **`db_is_valid(path)`** — is this a usable, fully-built DB? (check the expected
+  tables/metadata, not just that the file exists);
+- **`_build(target)`** — download (`from braidworks.core.localdb import download`),
+  parse, and write the DB to `target`. `ensure_local_db` runs this inside a temp dir
+  and publishes atomically only if `db_is_valid(target)`, so don't hand-roll locking
+  or renaming. Record the source version (e.g. an MD5 in a metadata row) so
+  `fingerprint()` can read it back.
+
+`taxonweaver/src/taxonweaver/setup.py` is the worked example (delegates to
+`ensure_local_db`, keeping only taxdump specifics).

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Core abstractions for Braidworks: strands, weavers, registry, braider, executor."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["networkx>=3.0"]
+dependencies = ["networkx>=3.0", "platformdirs>=4.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]

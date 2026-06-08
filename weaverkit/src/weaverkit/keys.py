@@ -35,6 +35,34 @@ SHARED_KEYS: dict[str, str] = {
 }
 
 
+# Catalog of produced *leaf/payload* outputs that are NOT join keys (nothing
+# consumes them) — descriptive fields a weaver emits. Unlike SHARED_KEYS this is a
+# naming catalog, not a reachability gate: membership grants no join-eligibility,
+# it just keeps output names consistent across weavers (so we don't drift between
+# e.g. ``ncbi.taxon.parent_id`` and ``ncbi.parent_taxon_id``). To make a leaf output
+# a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
+# weaverkit/docs/decisions.md (Decision F).
+OUTPUT_KEYS: dict[str, str] = {
+    # taxonweaver leaf outputs
+    "ncbi.taxon.parent_id": "Parent taxid of the resolved node (descriptive).",
+    "ncbi.taxon.match_type": "How a name matched (exact/synonym/fuzzy/taxid).",
+    "ncbi.taxon.review_required": "Whether the match needs human review (bool).",
+    # microbe trait outputs (exampleweaver / future trait weavers)
+    "microbe.trait.gram_stain": "Gram stain (positive/negative).",
+    "microbe.trait.optimum_temp": "Optimum growth temperature.",
+    "microbe.trait.metabolism": "Metabolic strategy (aerobe/anaerobe/…).",
+}
+
+
 def is_shared_key(type_id: str) -> bool:
     """Whether ``type_id`` is a registered, connectable shared key."""
     return type_id in SHARED_KEYS
+
+
+def is_known_output(type_id: str) -> bool:
+    """Whether ``type_id`` is a known output — a shared key or a catalogued leaf.
+
+    Used for the (advisory, non-failing) output-name check: a produced type_id that
+    is neither a shared key nor catalogued is a naming-drift risk worth flagging.
+    """
+    return type_id in SHARED_KEYS or type_id in OUTPUT_KEYS

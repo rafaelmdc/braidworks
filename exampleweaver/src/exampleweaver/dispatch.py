@@ -60,7 +60,13 @@ class BackendDispatchWeaver(BaseWeaver):
             {t: (ss.get(t).value if ss.get(t) is not None else None) for t in consumed}
             for ss in strand_sets
         ]
-        records = await strategy.fetch(capability_id, queries, requested_outputs=requested_outputs)
+        groups_to_compute = cap.triggered_groups(requested_outputs)
+        records = await strategy.fetch(
+            capability_id,
+            queries,
+            requested_outputs=requested_outputs,
+            groups_to_compute=groups_to_compute,
+        )
         return [
             map_record(
                 r,

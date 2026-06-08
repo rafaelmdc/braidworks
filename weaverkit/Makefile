@@ -10,7 +10,7 @@ help:  ## Show this help
 test:  ## Run the weaverkit suite (spec, conformance, scaffold, CLI)
 	uv run --extra test python -m pytest -q
 
-new:  ## Scaffold a weaver: make new SPEC=path/weaver.spec.toml DEST=weavers/foo
+new:  ## Scaffold a weaver: make new SPEC=path/weaver.spec.toml DEST=fooweaver
 	uv run weaverkit new --spec "$(SPEC)" --dest "$(DEST)"
 
 verify:  ## Verify a weaver against its spec: make verify SPEC=path PACKAGE=fooweaver

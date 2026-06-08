@@ -7,6 +7,7 @@ must already match its spec. This is what lets an agent start from green.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
 from pathlib import Path
@@ -157,12 +158,20 @@ def test_bulk_scaffold_emits_setup_and_ensure(tmp_path):
     assert "def default_db_path" in setup
 
 
-def test_bulk_pyproject_wires_platformdirs_and_script(tmp_path):
+def test_bulk_pyproject_wires_core_and_script(tmp_path):
     spec, dest = _generate_bulk(tmp_path)
     pyproject = (dest / "pyproject.toml").read_text()
-    assert "platformdirs" in pyproject
+    # Local-DB plumbing (and platformdirs) come from braidworks-core now.
+    assert "braidworks-core" in pyproject
     assert "bulkdemoweaver-ensure" in pyproject
     assert "uv run bulkdemoweaver-ensure" in (dest / "Makefile").read_text()
+
+
+def test_bulk_setup_delegates_to_core_localdb(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    setup = (dest / "src" / spec.package / "setup.py").read_text()
+    assert "from braidworks.core.localdb import" in setup
+    assert "ensure_local_db" in setup
 
 
 def test_bulk_backend_uses_default_db_path(tmp_path):
@@ -370,3 +379,121 @@ def test_api_key_none_uses_plain_stub(tmp_path):
     # No api_key need -> the api backend gets the plain stub, no env read.
     assert "API_KEY_ENV" not in api
     assert "self._configured = False" in api
+
+
+_ALWAYS_SPEC = """\
+[weaver]
+db_name = "acgdemo"
+weaver_id = "acgdemo"
+kind = "resolver"
+title = "always-computed demo"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://example.org/acg"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = "name,id\\nEscherichia coli,562\\n"
+
+[[capability]]
+id = "resolve_name"
+consumes = ["organism.name"]
+always_computed_groups = ["core"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["ncbi.taxon.id", "organism.scientific_name"]
+
+  [[capability.group]]
+  id = "rank"
+  outputs = ["ncbi.taxon.rank"]
+"""
+
+
+def test_always_computed_group_reported_even_when_not_requested(tmp_path):
+    """Finding A: the mapper unions always_computed_groups into computed_groups."""
+    toml = tmp_path / "acg.weaver.spec.toml"
+    toml.write_text(_ALWAYS_SPEC)
+    spec = load_spec(toml)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=toml.read_text())
+
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        vocab = importlib.import_module("acgdemoweaver.vocab")
+        mapper = importlib.import_module("acgdemoweaver.mapper")
+        inter = importlib.import_module("acgdemoweaver.intermediate")
+
+        assert vocab.ALWAYS_COMPUTED_GROUPS == {"resolve_name": frozenset({"core"})}
+
+        cap = vocab.build_manifest(backends=("local",)).capability("resolve_name")
+        record = inter.AcgdemoRecord(
+            query={"organism.name": "Escherichia coli"},
+            status=inter.MatchStatus.RESOLVED,
+            values={"ncbi.taxon.rank": "species"},
+        )
+        # Ask for only the 'rank' group's output; 'core' must still be reported.
+        result = mapper.map_record(
+            record,
+            capability=cap,
+            requested_outputs=frozenset({"ncbi.taxon.rank"}),
+            backend="local",
+            weaver_version="0.1.0",
+        )
+        assert "core" in result.computed_groups
+        assert "rank" in result.computed_groups
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "acgdemoweaver" or name.startswith("acgdemoweaver."):
+                del sys.modules[name]
+
+
+def test_generated_dispatch_passes_groups_to_compute(tmp_path):
+    """Finding B: the dispatch hands the backend the resolved triggered-group set."""
+    from braidworks.core import Strand, StrandSet
+
+    spec = load_spec(RESOLVER_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
+
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        weaver_mod = importlib.import_module("resolverdemoweaver.weaver")
+        inter = importlib.import_module("resolverdemoweaver.intermediate")
+
+        captured: dict[str, frozenset[str]] = {}
+
+        class _CapturingBackend:
+            name = "local"
+
+            def is_configured(self):
+                return True
+
+            def fingerprint(self):
+                return "capture-v1"
+
+            async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
+                captured["groups"] = groups_to_compute
+                return [inter.ResolverdemoRecord(query=q) for q in queries]
+
+        weaver = weaver_mod.ResolverdemoWeaver({"local": _CapturingBackend()})
+        ss = StrandSet.from_strands("g", [Strand(type_id="organism.name", value="x")])
+        # Request only the 'rank' group's output -> triggered groups == {"rank"}.
+        asyncio.run(
+            weaver.execute(
+                "resolve_name",
+                ss,
+                requested_outputs=frozenset({"ncbi.taxon.rank"}),
+                backend="local",
+            )
+        )
+        assert captured["groups"] == frozenset({"rank"})
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "resolverdemoweaver" or name.startswith("resolverdemoweaver."):
+                del sys.modules[name]

@@ -10,9 +10,54 @@ import importlib
 import sys
 from pathlib import Path
 
-from weaverkit.cli import main
+from weaverkit.cli import _build_fixture_weaver, _first_runnable_backend, main
 
 FIXTURE = Path(__file__).parent / "fixtures" / "valid.weaver.spec.toml"
+
+
+class _FakeWeaver:
+    """Minimal stand-in exposing only backend_fingerprint, for helper unit tests."""
+
+    def __init__(self, fps: dict[str, object]) -> None:
+        self._fps = fps
+
+    def backend_fingerprint(self, backend: str) -> str:
+        v = self._fps[backend]
+        if isinstance(v, Exception):
+            raise v
+        return str(v)
+
+
+def test_first_runnable_backend_picks_first_configured():
+    w = _FakeWeaver({"local": "unconfigured:local", "api": "datasets-v2"})
+    assert _first_runnable_backend(w, ("local", "api")) == "api"
+
+
+def test_first_runnable_backend_none_when_all_unconfigured():
+    w = _FakeWeaver({"local": "unconfigured:local", "api": "unknown"})
+    assert _first_runnable_backend(w, ("local", "api")) is None
+
+
+def test_first_runnable_backend_skips_raising_backend():
+    w = _FakeWeaver({"local": RuntimeError("boom"), "api": "real-v1"})
+    assert _first_runnable_backend(w, ("local", "api")) == "api"
+
+
+def test_build_fixture_weaver_absent_returns_none(tmp_path):
+    pkg = tmp_path / "src" / "nofixtureweaver"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "factory.py").write_text("def build_nofixtureweaver(**c):\n    return None\n")
+    src = str(tmp_path / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        assert _build_fixture_weaver("nofixtureweaver") is None
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "nofixtureweaver" or name.startswith("nofixtureweaver."):
+                del sys.modules[name]
 
 
 def test_new_scaffolds_package(tmp_path):
@@ -48,7 +93,11 @@ def test_verify_valid_spec_uninstalled_package_is_ok(tmp_path, capsys):
 
 def test_verify_invalid_spec_fails(tmp_path):
     bad = tmp_path / "bad.spec.toml"
-    bad.write_text(FIXTURE.read_text().replace('fingerprint_source = "release-tag"', 'fingerprint_source = "unknown"'))
+    bad.write_text(
+        FIXTURE.read_text().replace(
+            'fingerprint_source = "release-tag"', 'fingerprint_source = "unknown"'
+        )
+    )
     rc = main(["verify", "--spec", str(bad)])
     assert rc == 1
 
@@ -95,6 +144,34 @@ def test_verify_strict_reports_missing_package(tmp_path, capsys):
     rc = main(["verify", "--spec", str(FIXTURE), "--package", "nope_absent", "--strict"])
     assert rc == 1
     assert "not importable" in capsys.readouterr().err
+
+
+def test_verify_reports_misnamed_builder_without_crashing(tmp_path, capsys):
+    """A package whose factory imports but lacks build_<package> gets a clean finding.
+
+    This is taxonweaver's real case: the factory module is importable, but its
+    builder is named differently (build_ncbi_weaver), so verify must report a fix
+    instead of crashing with an AttributeError traceback.
+    """
+    pkg = tmp_path / "src" / "madinweaver"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    # Factory imports fine, but the builder is named differently.
+    (pkg / "factory.py").write_text("def build_madin_weaver(**c):\n    raise SystemExit\n")
+    src = str(tmp_path / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        rc = main(["verify", "--spec", str(FIXTURE), "--package", "madinweaver"])
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "madinweaver" or name.startswith("madinweaver."):
+                del sys.modules[name]
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "has no build_madinweaver" in err
+    assert "Traceback" not in err
 
 
 def test_verify_conforming_generated_package(tmp_path, capsys):

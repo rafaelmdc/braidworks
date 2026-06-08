@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
-from weaverkit.index import write_index
+from weaverkit.index import uncatalogued_outputs, write_index
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
 
@@ -66,10 +66,24 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+class BuilderNotFound(Exception):
+    """The package imports, but has no ``build_<package>()`` introspection builder."""
+
+
 def _build_weaver(package: str):
-    """Import ``<package>.factory.build_<package>`` and call it. May raise."""
+    """Import and call ``<package>.factory.build_<package>`` (the zero-config builder).
+
+    Raises :class:`BuilderNotFound` (not a bare ``AttributeError``) when the builder
+    is misnamed, so ``verify`` can report a fix instead of crashing with a traceback.
+    """
     module = importlib.import_module(f"{package}.factory")
-    builder = getattr(module, f"build_{package}")
+    builder = getattr(module, f"build_{package}", None)
+    if builder is None:
+        raise BuilderNotFound(
+            f"{package}.factory has no build_{package}(). verify calls the zero-config "
+            f"introspection builder by that exact name. fix: add (or alias) "
+            f"build_{package}() that wires the backends present-but-unconfigured."
+        )
     return builder()
 
 
@@ -89,22 +103,64 @@ def _completeness_problems(package: str) -> list[str]:
     return problems
 
 
+def _build_fixture_weaver(package: str):
+    """Return a fixture-backed weaver via ``build_<package>_fixture()``, or None.
+
+    The fixture is the deterministic substrate for ``--strict`` golden (Decision E):
+    a weaver wired against a tiny, committed/synthesized dataset that needs no
+    download or network. Optional — absent is fine unless no backend is otherwise
+    runnable.
+    """
+    module = importlib.import_module(f"{package}.factory")
+    builder = getattr(module, f"build_{package}_fixture", None)
+    return builder() if builder is not None else None
+
+
+def _first_runnable_backend(weaver, backends: tuple[str, ...]) -> str | None:
+    """First backend whose fingerprint shows it's configured (so golden can run)."""
+    for b in backends:
+        try:
+            fp = weaver.backend_fingerprint(b)
+        except Exception:  # noqa: BLE001 - an unconfigured backend just isn't runnable
+            continue
+        text = str(fp).strip().lower()
+        if fp and text not in ("", "unknown") and not text.startswith("unconfigured:"):
+            return b
+    return None
+
+
 def _strict_problems(package: str, spec: WeaverSpec, weaver) -> list[str]:
-    """Definition-of-done: no placeholders left, and golden examples actually run."""
+    """Definition-of-done: no placeholders, and golden runs against deterministic data.
+
+    Golden runs against a fixture (``build_<package>_fixture()``) when present, else
+    against an already-configured backend on the introspection build (e.g. a bundled
+    local dataset). It never falls back to external data, so the result is
+    reproducible regardless of CI's environment (Decision E).
+    """
     problems = _completeness_problems(package)
+    if problems:
+        return problems  # golden can't run while fetch is still a placeholder
     if not spec.golden:
         problems.append(
             "--strict: spec has no golden examples; add at least one known "
             "input -> expected output so behavior is verified, not just structure"
         )
         return problems
-    backend = spec.backends[0]
+    candidate = _build_fixture_weaver(package) or weaver
+    backend = _first_runnable_backend(candidate, spec.backends)
+    if backend is None:
+        problems.append(
+            "--strict: golden cannot run — no configured backend and no fixture. fix: add "
+            f"build_{package}_fixture() returning a weaver backed by a tiny deterministic "
+            "dataset so golden runs reproducibly (see weaverkit/docs/decisions.md, Decision E)"
+        )
+        return problems
     try:
-        problems += asyncio.run(check_golden(weaver, spec, backend=backend))
+        problems += asyncio.run(check_golden(candidate, spec, backend=backend))
     except Exception as exc:  # noqa: BLE001 - convert any run failure into a finding
         problems.append(
             f"--strict: golden examples could not run on backend {backend!r} "
-            f"({exc}); configure the backend / implement fetch and retry"
+            f"({exc}); check the fixture / backend and the fetch implementation"
         )
     return problems
 
@@ -119,6 +175,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
     package = args.package or spec.package
     try:
         weaver = _build_weaver(package)
+    except BuilderNotFound as exc:
+        _print_problems(f"{package}: cannot build to verify:", [str(exc)])
+        return 1
     except ModuleNotFoundError:
         if args.strict:
             _print_problems(
@@ -160,6 +219,13 @@ def cmd_index(args: argparse.Namespace) -> int:
         print(
             f"note: {unmet} capability row(s) have unmet inputs (no other weaver "
             "produces them). That's allowed — see the 'unmet_inputs' column."
+        )
+    uncatalogued = uncatalogued_outputs(rows)
+    if uncatalogued:
+        print(
+            f"note: {len(uncatalogued)} produced field(s) are not in the output catalog "
+            "(weaverkit.keys.OUTPUT_KEYS) or SHARED_KEYS — catalog them to keep names "
+            f"consistent: {', '.join(uncatalogued)}"
         )
     return 0
 

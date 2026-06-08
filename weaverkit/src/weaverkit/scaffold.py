@@ -139,6 +139,19 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "    )",
         "",
     ]
+
+    # Groups always computed internally (see CapabilitySpec.always_computed_groups);
+    # the mapper unions these into computed_groups so the cache key isn't under-reported.
+    always = {c.id: c.always_computed_groups for c in spec.capabilities if c.always_computed_groups}
+    lines += ["", ""]
+    if always:
+        lines.append("ALWAYS_COMPUTED_GROUPS: dict[str, frozenset[str]] = {")
+        for cap_id, gids in always.items():
+            lines.append(f"    {cap_id!r}: {_frozenset_literal(gids)},")
+        lines.append("}")
+    else:
+        lines.append("ALWAYS_COMPUTED_GROUPS: dict[str, frozenset[str]] = {}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -293,8 +306,13 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
             "## 2. Wire the bulk local DB",
             "",
             f"- [ ] `src/{pkg}/setup.py` — implement `_build` (download "
-            f"`{bulk.archive_url}` + parse into the DB) and tighten `db_is_valid`",
+            f"`{bulk.archive_url}` + parse into the DB) and tighten `db_is_valid`. "
+            "The generic plumbing (consent/lock/disk/atomic publish) is inherited from "
+            "`braidworks.core.localdb`; you only fill those two.",
             f"- [ ] build it locally: `uv run {pkg}-ensure`",
+            f"- [ ] add `build_{pkg}_fixture()` in `factory.py` returning a weaver on a "
+            "*tiny deterministic* dataset, so `--strict` can run golden without the full "
+            "download (see implementing-backends.md; taxonweaver's `fixture.py` is the model)",
             "",
         ]
 
@@ -463,6 +481,7 @@ from __future__ import annotations
 
 from braidworks.core import Capability, Strand, WeaveResult, WeaveStatus
 
+from {{DBWEAVER}} import vocab
 from {{DBWEAVER}}.intermediate import {{CLASS}}Record
 
 
@@ -475,7 +494,9 @@ def map_record(
     weaver_version: str,
 ) -> WeaveResult:
     """Map a neutral record to a ``WeaveResult`` for the requested outputs."""
-    computed_groups = capability.triggered_groups(requested_outputs)
+    computed_groups = capability.triggered_groups(
+        requested_outputs
+    ) | vocab.ALWAYS_COMPUTED_GROUPS.get(capability.id, frozenset())
     allowed = capability.outputs_to_compute(requested_outputs)
     provenance = (f"{{WEAVER_ID}}:{backend}",)
 
@@ -569,6 +590,7 @@ from braidworks.core import (
     WeaveStatus,
 )
 
+from {{DBWEAVER}} import vocab
 from {{DBWEAVER}}.intermediate import Candidate, MatchStatus, {{CLASS}}Record
 
 _STATUS = {
@@ -610,7 +632,9 @@ def map_record(
     weaver_version: str,
 ) -> WeaveResult:
     """Map a neutral resolver record to a ``WeaveResult`` for the requested outputs."""
-    computed_groups = capability.triggered_groups(requested_outputs)
+    computed_groups = capability.triggered_groups(
+        requested_outputs
+    ) | vocab.ALWAYS_COMPUTED_GROUPS.get(capability.id, frozenset())
     allowed = capability.outputs_to_compute(requested_outputs)
     provenance = (f"{{WEAVER_ID}}:{backend}",)
     status = _STATUS[record.status]
@@ -705,8 +729,15 @@ class {{CLASS}}Backend(ABC):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
-        """Resolve consumed inputs into records — exactly one per input, in order."""
+        """Resolve consumed inputs into records — exactly one per input, in order.
+
+        ``groups_to_compute`` is the resolved set of triggered output-group ids
+        (the dispatch computed it from ``requested_outputs``); key any expensive
+        path off membership in it (e.g. ``"lineage" in groups_to_compute``) instead
+        of re-deriving group semantics yourself.
+        """
 '''
 
 _BACKEND_STUB = '''\
@@ -761,6 +792,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): look the inputs up in the {{BACKEND}} source and return one
         # {{CLASS}}Record PER input query, IN THE SAME ORDER (the dispatch relies
@@ -769,7 +801,8 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
 {{FETCH_HINT}}
         # ``capability_id`` tells you which capability is running if the backend
         # serves more than one; ``requested_outputs`` lets you skip expensive
-        # fields nobody asked for.
+        # fields nobody asked for; ``groups_to_compute`` is the resolved set of
+        # triggered group ids — gate expensive paths on membership in it.
         # See: weaverkit/docs/implementing-backends.md#fetch
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
@@ -820,6 +853,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): open self._db_path and look up each query. Return one
         # {{CLASS}}Record PER input query, IN THE SAME ORDER.
@@ -881,6 +915,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): call the API for each input and return one {{CLASS}}Record
         # PER input query, IN THE SAME ORDER (the dispatch relies on positional
@@ -897,39 +932,29 @@ _SETUP = '''\
 
 The {{BULK_BACKEND}} backend reads a large local DB built from the source archive.
 It is multi-GB and must not be committed; ``ensure_{{DB}}_db`` downloads and builds
-it into the per-user cache on first use. Implement the two TODOs (``_build`` and the
-validity check) for your source's format — model on taxonweaver's ``setup.py``.
+it into the per-user cache on first use. The generic plumbing — consent gate,
+download, MD5 check, disk precheck, cross-process lock, and atomic publish — lives
+in ``braidworks.core.localdb``; you implement only the two domain TODOs below
+(``db_is_valid`` and ``_build``). Model on taxonweaver's ``setup.py``.
 
 See: weaverkit/docs/implementing-backends.md#bulk-file-sources-setuppy
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from platformdirs import user_cache_dir
+from braidworks.core.localdb import default_db_path as _default_db_path
+from braidworks.core.localdb import ensure_local_db
 
-from braidworks.core import BackendConfigurationError
-
-_ENV_DATA_DIR = "BRAIDWORKS_DATA_DIR"
-_ENV_AUTO = "BRAIDWORKS_AUTO_DOWNLOAD"
+_NAMESPACE = "{{DB}}"
 _DB_FILENAME = "{{BULK_FILENAME}}"
 ARCHIVE_URL = "{{ARCHIVE_URL}}"
 
 
 def default_db_path() -> Path:
     """Per-user default DB path (``BRAIDWORKS_DATA_DIR`` overrides the cache dir)."""
-    override = os.environ.get(_ENV_DATA_DIR)
-    base = Path(override) if override else Path(user_cache_dir("braidworks"))
-    return base / "{{DB}}" / _DB_FILENAME
-
-
-def auto_consented(auto: bool | None) -> bool:
-    """Whether to proceed without prompting (explicit arg wins, else the env flag)."""
-    if auto is not None:
-        return auto
-    return os.environ.get(_ENV_AUTO, "").lower() in ("1", "true", "yes")
+    return _default_db_path(_NAMESPACE, _DB_FILENAME)
 
 
 def db_is_valid(path: Path) -> bool:
@@ -947,33 +972,39 @@ def _consent_message(db_path: Path) -> str:
 
 
 def _build(target: Path) -> None:
-    """Download ARCHIVE_URL and build the DB at ``target``. IMPLEMENT ME."""
-    # TODO: stream-download ARCHIVE_URL, parse it, and write the DB to ``target``.
+    """Download ARCHIVE_URL and build the DB at ``target``. IMPLEMENT ME.
+
+    ``ensure_local_db`` calls this inside a temp dir on the DB's filesystem and
+    publishes ``target`` atomically only if ``db_is_valid(target)`` — so just build
+    into ``target``; don't worry about locking or atomic rename.
+    """
+    # TODO: build the DB into ``target``. Typically:
+    #   from braidworks.core.localdb import download, md5_file, fetch_remote_md5
+    #   archive = target.parent / "source.archive"
+    #   download(ARCHIVE_URL, archive)          # stream + progress
+    #   ... verify, parse the archive, and write the DB to ``target`` ...
     # Record the source version so the backend's fingerprint() can read it back.
     raise NotImplementedError("TODO: build the {{DBWEAVER}} DB from " + ARCHIVE_URL)
 
 
-def _build_into_place(db_path: Path) -> None:
-    """Build atomically: into a temp file, then rename into place."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = db_path.with_name(db_path.name + ".tmp")
-    if tmp.exists():
-        tmp.unlink()
-    _build(tmp)
-    os.replace(tmp, db_path)
-
-
 def ensure_{{DB}}_db(
-    target: str | Path | None = None, *, auto: bool | None = None, refresh: bool = False
+    target: str | Path | None = None, *, auto: bool = False, refresh: bool = False
 ) -> Path:
-    """Ensure the local DB exists (default cache path), building it if needed."""
+    """Ensure the local DB exists (default cache path), building it if needed.
+
+    Delegates orchestration (consent, lock, disk precheck, atomic publish) to
+    ``braidworks.core.localdb.ensure_local_db``; this module supplies only the
+    domain pieces (``db_is_valid`` / ``_build`` / the consent message).
+    """
     db_path = Path(target) if target is not None else default_db_path()
-    if db_is_valid(db_path) and not refresh:
-        return db_path
-    if not auto_consented(auto):
-        raise BackendConfigurationError(_consent_message(db_path))
-    _build_into_place(db_path)
-    return db_path
+    return ensure_local_db(
+        db_path,
+        is_valid=db_is_valid,
+        build=_build,
+        consent_message=_consent_message(db_path),
+        auto=auto,
+        refresh=refresh,
+    )
 '''
 
 _ENSURE_CLI = '''\
@@ -1041,7 +1072,12 @@ class BackendDispatchWeaver(BaseWeaver):
 
     def backend_fingerprint(self, backend: str) -> str:
         strat = self._backends.get(backend)
-        return strat.fingerprint() if strat is not None else f"unconfigured:{backend}"
+        # Guard on is_configured(): fingerprint() may read the data source, which an
+        # unconfigured backend can't. It never produces a cached result anyway
+        # (execute_batch raises BackendUnavailable upstream).
+        if strat is None or not strat.is_configured():
+            return f"unconfigured:{backend}"
+        return strat.fingerprint()
 
     async def execute(
         self, capability_id, strand_set, *, requested_outputs, backend
@@ -1065,8 +1101,15 @@ class BackendDispatchWeaver(BaseWeaver):
             {t: (ss.get(t).value if ss.get(t) is not None else None) for t in consumed}
             for ss in strand_sets
         ]
+        # Pre-resolve request interpretation here (which output groups are triggered)
+        # so the backend keys its fulfillment strategy off a declarative set rather
+        # than re-deriving it from requested_outputs. See weaverkit/docs/decisions.md (B).
+        groups_to_compute = cap.triggered_groups(requested_outputs)
         records = await strategy.fetch(
-            capability_id, queries, requested_outputs=requested_outputs
+            capability_id,
+            queries,
+            requested_outputs=requested_outputs,
+            groups_to_compute=groups_to_compute,
         )
         return [
             map_record(
@@ -1105,7 +1148,19 @@ class {{CLASS}}Weaver(BackendDispatchWeaver):
 '''
 
 _FACTORY = '''\
-"""build_{{DBWEAVER}} — the Layer 2 builder (only this package knows its backends)."""
+"""Builders for {{DBWEAVER}} — how the weaver is assembled from its backends.
+
+Two-builder convention (see weaverkit/docs/decisions.md C/D):
+
+- ``build_{{DBWEAVER}}()`` — the ZERO-CONFIG *introspection* builder that
+  ``weaverkit verify`` calls. It wires every declared backend present (possibly
+  unconfigured), so the manifest is complete and fingerprint/golden checks can run.
+  It never raises for missing data.
+- a CONFIGURED builder (you write it, usually domain-named) — takes real config
+  (db paths, API keys, injected clients) and may raise if nothing is usable. See
+  ``taxonweaver``'s ``build_ncbi_weaver`` for a worked example; a commented
+  skeleton is at the bottom of this file.
+"""
 
 from __future__ import annotations
 
@@ -1117,12 +1172,37 @@ from braidworks.core import BaseWeaver
 from {{DBWEAVER}}.weaver import {{CLASS}}Weaver
 
 
-def build_{{DBWEAVER}}(**config: Any) -> BaseWeaver:
-    """Construct a configured {{CLASS}}Weaver with every declared backend wired in."""
+def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
+    """Zero-config introspection builder (``weaverkit verify``'s entry point).
+
+    Wires every declared backend present-but-possibly-unconfigured. For real use,
+    add a configured builder (see the module docstring / the commented skeletons).
+    """
     backends = {
 {{BACKEND_WIRING}}
     }
     return {{CLASS}}Weaver(backends)
+
+
+# --- Optional builders (uncomment + fill in for real use) -----------------------
+#
+# A CONFIGURED builder — takes real config and raises if nothing is usable:
+#
+# from braidworks.core import BackendConfigurationError
+#
+# def build_{{DBWEAVER}}_configured(**config: Any) -> BaseWeaver:
+#     backends = {}
+#     # ... wire backends from real config (paths / keys / clients) ...
+#     if not backends:
+#         raise BackendConfigurationError("configure at least one backend")
+#     return {{CLASS}}Weaver(backends)
+#
+# A FIXTURE builder — only if no backend reads bundled/committed data; lets
+# `weaverkit verify --strict` run golden against a tiny deterministic dataset
+# (see decisions.md E and taxonweaver's build_{{DBWEAVER}}_fixture):
+#
+# def build_{{DBWEAVER}}_fixture() -> BaseWeaver:
+#     ...  # return a weaver wired against a small synthesized/committed dataset
 '''
 
 _PROVIDER = '''\
@@ -1259,7 +1339,8 @@ def scaffold(
     # Bulk-source tokens: a local DB built from a download (setup.py + ensure CLI).
     bulk = spec.bulk
     if bulk is not None:
-        tokens["DEPS"] = '"braidworks-core", "platformdirs>=4.0"'
+        # The local-DB plumbing (incl. platformdirs) now lives in braidworks-core.
+        tokens["DEPS"] = '"braidworks-core"'
         tokens["SCRIPTS_BLOCK"] = f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
         tokens["ENSURE_TARGET"] = "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
         tokens["ARCHIVE_URL"] = bulk.archive_url

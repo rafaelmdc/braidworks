@@ -129,6 +129,21 @@ def test_unregistered_consume_key_rejected():
     assert any("not a registered shared key" in p for p in problems)
 
 
+def test_always_computed_groups_accepts_declared_group():
+    data = _valid_dict()
+    data["capability"][0]["always_computed_groups"] = ["traits.core"]
+    spec = WeaverSpec.from_dict(data)
+    assert spec.capabilities[0].always_computed_groups == ("traits.core",)
+    assert validate_spec(spec) == []
+
+
+def test_always_computed_groups_rejects_undeclared_group():
+    data = _valid_dict()
+    data["capability"][0]["always_computed_groups"] = ["nope"]
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("always_computed_groups references 'nope'" in p for p in problems)
+
+
 def test_overlapping_group_outputs_rejected():
     data = _valid_dict()
     data["capability"][0]["group"][1]["outputs"] = ["microbe.trait.gram_stain"]
