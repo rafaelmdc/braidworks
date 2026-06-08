@@ -11,6 +11,24 @@ Status legend: 🔴 blocker · 🟠 friction · 🟡 papercut · 🔵 observatio
 Each entry: what the guide/backbone assumes, what the real weaver needs, and a
 proposed direction.
 
+## ⏸ Decision needed before the build can continue (see J)
+
+The blocking realization: taxonweaver already has a **deliberate, test-locked
+contract that conflicts with the backbone's** (no-arg build raises; local backend
+raises on a missing DB and is always "configured" once built). Migrating is not
+"copy code over" — it's choosing one of:
+
+1. **Adapt weaverkit** to the real weaver's shape (zero-config introspection
+   builder *plus* a configured builder; `is_configured()` reflecting data; a
+   conformance hook to build a tiny fixture DB). Findings A/C/H/I become weaverkit
+   tickets. taxonweaver's existing tests mostly stand.
+2. **Rewrite taxonweaver** (and ~15 tests) to the current backbone contract.
+   Faster to a green `verify`, but throws away a working, well-tested contract and
+   the rich configured builder.
+
+Recommendation: **(1)** — the backbone is young and these gaps are real; the weaver
+is the proven artifact. But this is the user's call; logged and paused here.
+
 ---
 
 ## A. 🔴 `computed_groups` cannot express "a group is always computed internally"
@@ -88,6 +106,12 @@ proposed direction.
   state — e.g. `--strict` passes if golden ran *or* was legitimately skipped, with
   a separate `--strict-golden` to demand execution. Otherwise big-DB weavers can
   never be "done."
+- **Mitigation found:** taxonweaver's `tests/conftest.py::build_mini_db` builds a
+  *tiny synthetic* taxonomy SQLite (a handful of `names.dmp`/`nodes.dmp` rows,
+  inline) on the fly — golden/verify *can* run real resolutions with no 1.2 GB
+  download. This is a reusable pattern: weaverkit conformance could accept a
+  "build a fixture DB" hook so `--strict` runs golden against a fixture, not the
+  full bulk source. Strongly softens E.
 
 ## F. 🔵 Produced type_ids that aren't registered shared keys are invisible to the index
 
@@ -125,6 +149,10 @@ proposed direction.
   `__init__` stores the path and sets `self._configured = db_is_valid(path)`
   (no raise); `is_configured()` returns it. Move the hard "you asked for local but
   it's absent" error to the *configured* builder path, not construction.
+- **Test lock-in:** the current behavior is asserted by `test_factory_autosetup.py`
+  and `test_taxonweaver_integration.py` (e.g. `build_ncbi_weaver(db_path=missing)`
+  → `BackendConfigurationError`; no-arg → "at least one backend"). Changing the
+  contract means rewriting these — part of the J decision.
 
 ## I. 🟠 `verify` crashes (uncaught `AttributeError`) when the builder isn't `build_<package>`
 
@@ -134,6 +162,29 @@ proposed direction.
 - **Proposed direction:** catch `AttributeError` and report a fix-oriented finding
   ("expected `build_<package>(...)`; found none — rename or add an alias"). Cheap,
   and pairs with the Finding D naming decision.
+
+## J. 🔴 The central fork: backbone contract vs. taxonweaver's test-locked contract
+
+This is the meta-finding the others roll up into. The backbone assumes a weaver
+that (a) constructs zero-config, (b) reports configured/unconfigured via
+`is_configured()`, (c) has a `build_<package>()` introspection entry point, and
+(d) can run golden against available data. taxonweaver instead has a rich,
+*configuration-required* contract that **raises** when unconfigured and is locked
+in by ~15 passing tests. Neither side is wrong — the weaver predates the backbone.
+
+The migration therefore can't proceed as a mechanical "scaffold + copy" without
+first deciding direction (see the ⏸ box up top). The proposed split is:
+
+- **weaverkit changes** (Findings A, C, E, I; D as a doc decision): always-computed
+  groups in the spec; a two-builder convention (introspection vs configured);
+  fixture-DB conformance hook; graceful `AttributeError` handling. These are the
+  real product of this exercise.
+- **taxonweaver changes** (Findings H, G; B at the dispatch): backbone-shaped
+  backend construction, flatten `TaxonMatch` into `values`, derive `need_lineage`
+  from `requested_outputs`. Plus a rewrite of the ~15 contract tests.
+
+Until (1) vs (2) is chosen, the build is paused here intentionally — going further
+would either silently rewrite the backbone or break the suite.
 
 ---
 
