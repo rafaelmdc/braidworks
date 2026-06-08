@@ -51,11 +51,14 @@ optional `backends` / `max_batch_size` / `cost`, optional `always_computed_group
 (group ids always computed internally, e.g. `["core"]`), and one or more
 `[[capability.group]]` (`id` + `outputs`, disjoint across groups).
 
-**`[bulk]`** (optional) — `backend`, `archive_url`, `filename`: triggers the
-generated `setup.py` + `<db>-ensure` CLI for a multi-GB local DB.
+**`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
+`filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB
+local DB.
 
-**`[[golden]]`** (one or more) — `capability`, `input` (keys ⊆ consumes), `expect`
-(keys ⊆ produces). `--strict` requires at least one and runs it against a fixture.
+**`[[golden]]`** (optional for `verify`; `--strict` requires ≥1) — `capability`,
+`input` (keys ⊆ that capability's consumes), `expect` (keys ⊆ its produces). Under
+`--strict` each runs against a fixture (`build_<package>_fixture()`) or an
+already-configured backend, so pick inputs resident in that data.
 
 ## Decision: the spec is TOML, not YAML
 

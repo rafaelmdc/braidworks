@@ -52,10 +52,13 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    the generated `factory.py` has a commented skeleton); if no backend reads
    bundled data, add a `build_<package>_fixture()` so `verify --strict` can run
    golden against a tiny deterministic dataset.
-4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` and
-   `cd <db>weaver && make test`. Green means the manifest matches the
-   spec, the weaver is reachable, fingerprints are real, and the golden examples
-   pass.
+4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` (spec valid +
+   manifest matches + reachable + real fingerprints) and `cd <db>weaver &&
+   make test`. The **definition of done** is the `--strict` gate (what the generated
+   `IMPLEMENTATION.md` ends on): `weaverkit verify --spec ... --package <db>weaver
+   --strict` — it additionally fails while any `# TODO` placeholder remains and runs
+   the golden examples (against a fixture or a configured backend; plain `verify`
+   lets them skip).
 
 ## Boundaries (do not cross these)
 
