@@ -389,9 +389,20 @@ per input in order, miss-is-data, never-`unknown` fingerprints, emit only produc
 
 ## Bulk-file sources: `setup.py`
 
-If the backend reads a large bulk file (a multi-GB dump), don't commit it — add a
-`setup.py` with an `ensure_<db>_db(...)` that downloads/builds it into the user
-cache on first use, mirroring `taxonweaver/src/taxonweaver/setup.py`
-(`ensure_taxonomy_db`: default cache path, consent gate, checksum verify, atomic
-build→rename, cross-process lock). Record the source version there so `fingerprint`
-can read it back. See `docs/local-db-setup-plan.md` for the full design.
+If the backend reads a large bulk file (a multi-GB dump), don't commit it. With
+`[bulk]` in the spec the scaffold generates `setup.py` + an `<db>-ensure` CLI for
+you. The generic acquisition plumbing — consent gate, streamed download, MD5 check,
+disk precheck, cross-process lock, **atomic publish** — lives in
+`braidworks.core.localdb` (`ensure_local_db`); the generated `setup.py` just
+delegates to it. You implement only two domain pieces in `setup.py`:
+
+- **`db_is_valid(path)`** — is this a usable, fully-built DB? (check the expected
+  tables/metadata, not just that the file exists);
+- **`_build(target)`** — download (`from braidworks.core.localdb import download`),
+  parse, and write the DB to `target`. `ensure_local_db` runs this inside a temp dir
+  and publishes atomically only if `db_is_valid(target)`, so don't hand-roll locking
+  or renaming. Record the source version (e.g. an MD5 in a metadata row) so
+  `fingerprint()` can read it back.
+
+`taxonweaver/src/taxonweaver/setup.py` is the worked example (delegates to
+`ensure_local_db`, keeping only taxdump specifics).

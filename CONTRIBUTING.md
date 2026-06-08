@@ -83,9 +83,12 @@ done-checklist, see
 5. **Assemble** with a `BackendDispatchWeaver` subclass that holds
    `{backend_name: backend}`, declares a `MANIFEST` for the backends actually
    wired in, and dispatches `execute_batch`.
-6. **Provide the two-layer factory glue:**
-   - a builder `build_myweaver(config) -> BaseWeaver` (Layer 2 — only your
-     package knows how to construct its backends);
+6. **Provide the factory glue** (Layer 2 — only your package knows how to
+   construct its backends), following the **two-builder convention**:
+   - `build_<package>()` — a zero-config *introspection* builder (backends present,
+     possibly unconfigured) that `weaverkit verify` calls;
+   - a domain-named *configured* builder (e.g. `build_myweaver(...)`) for real use,
+     which may raise if nothing is usable;
    - a `WeaverProvider` (`weaver_id`, `build(config)`) wrapping it (Layer 1
      conformance), so it can be registered in a `WeaverFactory`.
 7. **Ship contract tests.** Subclass `WeaverOrderContractTests` and

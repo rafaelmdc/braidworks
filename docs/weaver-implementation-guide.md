@@ -28,7 +28,7 @@ this guide just orients you.**
 2. A **neutral intermediate** dataclass (`intermediate.py`) every backend normalizes into.
 3. One or more **backends** (`backends/*.py`) — one per data source (local DB, REST API).
 4. One **mapper** (`mapper.py`) — `intermediate → WeaveResult`, the single source of strand shape.
-5. **Assembly + factory glue** — a `BackendDispatchWeaver` subclass, `build_<db>_weaver(...)`, and a `WeaverProvider`.
+5. **Assembly + factory glue** — a `BackendDispatchWeaver` subclass, a zero-config `build_<package>()` introspection builder (verify's target) + a configured builder (the two-builder convention), and a `WeaverProvider`.
 
 Plus, around it: a **per-weaver `Makefile`**, **tests** (unit + contract mixins + opt-in live E2E), and — if the source ships a bulk file — a **`setup.py`** with `ensure_<db>_db(...)`.
 
@@ -106,7 +106,7 @@ weaver-roadmap.md §5 — if `weavers/*` has landed, create under `weavers/`):
 name = "<db>weaver"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core", "httpx>=0.27"]   # add platformdirs if you use setup.py
+dependencies = ["braidworks-core", "httpx>=0.27"]   # local-DB plumbing (+platformdirs) comes via braidworks-core
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 [project.scripts]
@@ -226,10 +226,13 @@ class TraitBackend(ABC):
         """One TraitMatch per input, in input order."""
 ```
 
-**`local.py`** (bulk → SQLite). Mirror `backends/local.py`: validate the DB path
-in `__init__` (raise `BackendConfigurationError` with an **actionable** message),
-one connection per thread via `threading.local`, run sync queries off the loop with
-`asyncio.to_thread`, derive `fingerprint()` from a stored dataset version.
+**`local.py`** (bulk → SQLite). Mirror `backends/local.py`: **construct cheap and
+never raise for a missing DB** — set `self._configured = db_is_valid(path)` and have
+`is_configured()` return it (the dispatch gates on it; the actionable "build it"
+error lives in the configured builder / `ensure_*` path, not `__init__`). One
+connection per thread via `threading.local`, run sync queries off the loop with
+`asyncio.to_thread`, derive `fingerprint()` from a stored dataset version (only ever
+called when configured).
 
 **`api.py`** (REST). Mirror `backends/datasets_v2.py`: an **injectable**
 `httpx.AsyncClient` (tests pass an `httpx.MockTransport`), `api_key`/registration
@@ -341,13 +344,16 @@ consent). Otherwise omit.
 
 ## 9. `setup.py` — local DB acquisition (only if bulk file)
 
-If the source ships a bulk file, copy `taxonweaver/src/taxonweaver/setup.py` and
-adapt: `ensure_<db>_db(path, *, auto, refresh, url, progress)` with default-path
-resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache, **DB-named** file like
-`madin_traits.sqlite`), consent gate (`auto=` / `BRAIDWORKS_AUTO_DOWNLOAD`),
-checksum verify, atomic temp→`os.replace`, cross-process lock, disk precheck,
-idempotent reuse, and `check_for_update`. Add a `<db>-weaver ensure` CLI
-subcommand (copy `taxonomy_tools/ensure.py`).
+If the source ships a bulk file, the generic acquisition plumbing — default-path
+resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache), consent gate (`auto=` /
+`BRAIDWORKS_AUTO_DOWNLOAD`), download, checksum verify, disk precheck, cross-process
+lock, atomic temp→`os.replace`, idempotent reuse — lives in
+**`braidworks.core.localdb.ensure_local_db`**. Your `setup.py` supplies only the
+domain pieces: `db_is_valid(path)`, `_build(target)` (download + parse into the DB,
+recording the source version), and the consent message; then delegate to
+`ensure_local_db`. The `[bulk]` spec table makes the scaffold stamp this shape plus
+a `<db>-ensure` CLI for you. `taxonweaver/src/taxonweaver/setup.py` is the worked
+example (it adds `check_for_update` on top).
 
 **Reuse shortcut:** if the source is already in **NCBI taxdump format** (e.g.
 GTDB via gtdb-taxdump), call `taxonomy_resolver.build.build_taxonomy_database`

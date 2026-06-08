@@ -306,8 +306,13 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
             "## 2. Wire the bulk local DB",
             "",
             f"- [ ] `src/{pkg}/setup.py` — implement `_build` (download "
-            f"`{bulk.archive_url}` + parse into the DB) and tighten `db_is_valid`",
+            f"`{bulk.archive_url}` + parse into the DB) and tighten `db_is_valid`. "
+            "The generic plumbing (consent/lock/disk/atomic publish) is inherited from "
+            "`braidworks.core.localdb`; you only fill those two.",
             f"- [ ] build it locally: `uv run {pkg}-ensure`",
+            f"- [ ] add `build_{pkg}_fixture()` in `factory.py` returning a weaver on a "
+            "*tiny deterministic* dataset, so `--strict` can run golden without the full "
+            "download (see implementing-backends.md; taxonweaver's `fixture.py` is the model)",
             "",
         ]
 
