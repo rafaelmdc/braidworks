@@ -124,6 +124,19 @@ def test_implementation_worklist_generated(tmp_path):
     assert "make test" in text
 
 
+def test_contributing_doc_generated(tmp_path):
+    spec, dest, written = _generate(tmp_path)
+    names = {p.relative_to(dest).as_posix() for p in written}
+    assert "CONTRIBUTING.md" in names
+    text = (dest / "CONTRIBUTING.md").read_text()
+    assert f"# Contributing to {spec.package}" in text
+    assert "Add an output to an existing capability" in text
+    assert "OUTPUT_KEYS" in text  # how to register a new leaf output
+    assert "Expansion notes" in text  # the author-filled section
+    # spec-aware: lists this weaver's actual produced outputs
+    assert "microbe.trait.gram_stain" in text
+
+
 def test_implementation_worklist_adapts_to_bulk(tmp_path):
     spec = load_spec(BULK_FIXTURE)
     dest = tmp_path / "out"

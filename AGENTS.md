@@ -41,8 +41,11 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
 2. **Scaffold.** `make new-weaver SPEC=... DEST=weavers/<db>weaver` (under `weavers/`,
    so the generated `IMPLEMENTATION.md`'s `../../weaverkit/...` links resolve). This stamps a
    complete, importable package whose manifest already matches the spec and whose
-   conformance test is wired up. Add the new package to `members` in the root
-   `pyproject.toml`, then `make sync`.
+   conformance test is wired up. It also generates two per-weaver docs:
+   `IMPLEMENTATION.md` (the one-time worklist to finish the stubs) and
+   `CONTRIBUTING.md` (how to *extend* the weaver later — add a trait/capability/backend;
+   fill in its "Expansion notes" with weaver-specific limitations as you build). Add
+   the new package to `members` in the root `pyproject.toml`, then `make sync`.
 3. **Implement.** The only edits you should need are the spots marked `# TODO`:
    each backend's `fetch` (currently `NotImplementedError`) and its `fingerprint`
    (currently a placeholder). Normalize each source result into the generated

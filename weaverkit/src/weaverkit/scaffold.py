@@ -333,6 +333,73 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
     return "\n".join(lines)
 
 
+def _contributing_md_source(spec: WeaverSpec) -> str:
+    """Generate CONTRIBUTING.md — how to *extend/maintain* this weaver over time.
+
+    Distinct from IMPLEMENTATION.md (the one-time "finish the stubs" worklist): this
+    is the ongoing "how to add a trait / capability / backend" guide, spec-aware so
+    it names this weaver's actual capabilities and the spec-driven loop. Authors fill
+    the "Expansion notes" section with weaver-specific TODOs.
+    """
+    pkg = spec.package
+    produced = sorted({o for c in spec.capabilities for o in c.produces})
+    cap_list = ", ".join(f"`{c.id}`" for c in spec.capabilities)
+    lines = [
+        f"# Contributing to {pkg}",
+        "",
+        f"{spec.title}. Source: {spec.source_url} ({spec.license}). "
+        f"Kind: `{spec.kind}`. Capabilities: {cap_list}.",
+        "",
+        "This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and",
+        "`vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop",
+        "and boundaries are in [../../AGENTS.md](../../AGENTS.md); the spec field reference",
+        "is in [../../weaverkit/README.md](../../weaverkit/README.md); per-backend contracts",
+        "are in [../../weaverkit/docs/implementing-backends.md](../../weaverkit/docs/implementing-backends.md).",
+        "",
+        "After any change, re-verify:",
+        "",
+        "```bash",
+        f"weaverkit verify --spec weaver.spec.toml --package {pkg} --strict",
+        "```",
+        "",
+        "## Add an output to an existing capability",
+        "",
+        "1. Add the `type_id` to the relevant `[[capability.group]].outputs` in `weaver.spec.toml`",
+        "   (or add a new group).",
+        "2. If it's a new *leaf* output, catalog it in `weaverkit.keys.OUTPUT_KEYS`; if it's a",
+        "   genuine *join key* others will consume, add it to `SHARED_KEYS` instead.",
+        "3. Regenerate vocab: `weaverkit new --spec weaver.spec.toml --dest . --force`",
+        "   (this only re-stamps generated files; your backend code is yours to edit).",
+        "4. Map it in each backend's `fetch` (`record.values[<type_id>] = ...`).",
+        "5. Add/adjust a `[[golden]]` example so the new output is verified.",
+        "",
+        "## Add a capability or a backend",
+        "",
+        "- **Capability:** add a `[[capability]]` block (consume a registered shared key),",
+        "  regenerate, and handle it in `fetch` (branch on `capability_id` if needed).",
+        "- **Backend:** add its name to `[weaver].backends`, regenerate, and implement the",
+        "  new `src/" + pkg + "/backends/<name>.py` (`is_configured` / `fingerprint` / `fetch`).",
+        "",
+        "## Keep the fixture & golden honest",
+        "",
+        f"- Golden inputs must resolve in whatever `--strict` runs against (a `build_{pkg}_fixture()`",
+        "  or a configured backend). When the source data changes, bump the backend `fingerprint`",
+        "  and refresh the fixture/golden.",
+        "",
+        "## Current outputs",
+        "",
+        "This weaver currently produces: " + (", ".join(f"`{o}`" for o in produced) or "(none yet)") + ".",
+        "",
+        "## Expansion notes",
+        "",
+        "<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,",
+        "     data quirks, columns not yet mapped, etc. Fill this in as you build. -->",
+        "- TODO: record this weaver's specific expansion ideas and known limitations here.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 # --- string templates (rendered with {{TOKEN}} replacement) ------------------
 
 _PYPROJECT = """\
@@ -1010,6 +1077,7 @@ def scaffold(
         dest / "pyproject.toml": _render(_PYPROJECT, tokens),
         dest / "README.md": _render(_README, tokens),
         dest / "IMPLEMENTATION.md": _implementation_md_source(spec),
+        dest / "CONTRIBUTING.md": _contributing_md_source(spec),
         dest / "Makefile": _render(_MAKEFILE, tokens),
         dest / "weaver.spec.toml": spec_toml,
         src / "__init__.py": _render(_INIT, tokens),
