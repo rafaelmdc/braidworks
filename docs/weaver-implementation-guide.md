@@ -64,7 +64,7 @@ Write the decisions above into a `weaver.spec.toml`, then generate the package:
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec first
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=<db>weaver
 ```
 
 `weaverkit new` stamps the layout below, generating `vocab.py` so the manifest

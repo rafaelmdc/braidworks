@@ -25,7 +25,7 @@ test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
 test-example:  ## Run the exampleweaver reference suite (delegates to its Makefile)
 	$(MAKE) -C exampleweaver test
 
-new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=weavers/foo
+new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=fooweaver
 	$(MAKE) -C weaverkit new SPEC=$(abspath $(SPEC)) DEST=$(abspath $(DEST))
 
 verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=fooweaver

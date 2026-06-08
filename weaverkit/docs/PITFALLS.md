@@ -49,4 +49,4 @@ do/don't pair. Keep this list short; if it grows, the important ones get lost.
    bundled sample like `exampleweaver`'s 5-row CSV is fine.)
 
 See also: [implementing-backends.md](implementing-backends.md) (per-function
-contracts) and [../AGENTS.md](../AGENTS.md) (the full boundaries).
+contracts) and [AGENTS.md](../../AGENTS.md) (the full boundaries).
