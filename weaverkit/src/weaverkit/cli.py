@@ -2,6 +2,7 @@
 
     weaverkit new    --spec weaver.spec.toml --dest weavers/madinweaver
     weaverkit verify --spec weaver.spec.toml [--package madinweaver]
+    weaverkit index  [--root .] [--out weavers-index.tsv]
 
 ``new`` validates the spec, then stamps a package. ``verify`` validates the spec
 and — if the built package is importable — checks its manifest, reachability, and
@@ -20,6 +21,7 @@ import sys
 from pathlib import Path
 
 from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
+from weaverkit.index import write_index
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
 
@@ -149,6 +151,19 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_index(args: argparse.Namespace) -> int:
+    rows = write_index(args.root, args.out)
+    weavers = sorted({r.weaver for r in rows})
+    unmet = sum(1 for r in rows if r.unmet_inputs)
+    print(f"indexed {len(rows)} capabilities across {len(weavers)} weaver(s) -> {args.out}")
+    if unmet:
+        print(
+            f"note: {unmet} capability row(s) have unmet inputs (no other weaver "
+            "produces them). That's allowed — see the 'unmet_inputs' column."
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="weaverkit", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -172,6 +187,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="definition-of-done: fail if any scaffold placeholder remains or golden can't run",
     )
     p_verify.set_defaults(func=cmd_verify)
+
+    p_index = sub.add_parser(
+        "index", help="build a key index (consumes/produces) across all weavers"
+    )
+    p_index.add_argument("--root", default=".", help="workspace root to scan (default: .)")
+    p_index.add_argument(
+        "--out", default="weavers-index.tsv", help="output file (.tsv or .csv; default .tsv)"
+    )
+    p_index.set_defaults(func=cmd_index)
 
     return parser
 

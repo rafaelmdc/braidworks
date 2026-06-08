@@ -2,7 +2,7 @@
 # Tests are per-package and the working directory matters (taxonweaver tests
 # import `from tests....`), so each target cd's into the right package.
 
-.PHONY: help sync test test-core test-weaver test-kit test-example new-weaver verify-weaver lint fmt clean
+.PHONY: help sync test test-core test-weaver test-kit test-example new-weaver verify-weaver index lint fmt clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -30,6 +30,9 @@ new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DE
 
 verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=fooweaver
 	$(MAKE) -C weaverkit verify SPEC=$(abspath $(SPEC)) PACKAGE=$(PACKAGE)
+
+index:  ## Build the cross-weaver key index -> docs/weavers-index.tsv
+	uv run weaverkit index --root . --out docs/weavers-index.tsv
 
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
 LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests \

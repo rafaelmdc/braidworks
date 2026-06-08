@@ -1,0 +1,2 @@
+weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
+example	resolve_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	ncbi.taxon.id

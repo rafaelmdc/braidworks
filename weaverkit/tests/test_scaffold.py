@@ -283,7 +283,9 @@ def test_generated_contract_tests_pass_on_fresh_scaffold(tmp_path):
         classes = [c for c in vars(mod).values() if isinstance(c, type)]
 
         cache_classes = [
-            c for c in classes if issubclass(c, CacheFingerprintTests) and c is not CacheFingerprintTests
+            c
+            for c in classes
+            if issubclass(c, CacheFingerprintTests) and c is not CacheFingerprintTests
         ]
         assert cache_classes, "expected a generated CacheFingerprintTests subclass"
         ran = 0
@@ -309,3 +311,62 @@ def test_generated_contract_tests_pass_on_fresh_scaffold(tmp_path):
         for mod_name in list(sys.modules):
             if mod_name == spec.package or mod_name.startswith(spec.package + "."):
                 del sys.modules[mod_name]
+
+
+_API_SPEC = """\
+[weaver]
+db_name = "apidemo"
+weaver_id = "apidemo"
+kind = "lookup"
+title = "API demo weaver"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://example.org/api"
+fingerprint_source = "API contract version"
+api_key = "{api_key}"
+backends = ["local", "api"]
+source_sample = "accession,go\\nP12345,GO:1\\n"
+
+[[capability]]
+id = "resolve"
+consumes = ["protein.uniprot.accession"]
+
+  [[capability.group]]
+  id = "g"
+  outputs = ["go.term"]
+"""
+
+
+def _generate_api(tmp_path: Path, api_key: str):
+    toml = tmp_path / "api.weaver.spec.toml"
+    toml.write_text(_API_SPEC.format(api_key=api_key))
+    spec = load_spec(toml)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=toml.read_text())
+    return dest / "src" / spec.package / "backends"
+
+
+def test_api_required_backend_reads_env_and_gates_on_key(tmp_path):
+    backends = _generate_api(tmp_path, "required")
+    api = (backends / "api.py").read_text()
+    # Reads the key from a db-named env var, and is_configured gates on it.
+    assert 'API_KEY_ENV = "APIDEMO_API_KEY"' in api
+    assert "os.environ.get(API_KEY_ENV)" in api
+    assert "return self._api_key is not None" in api
+    # The local backend stays the plain (no-key) stub.
+    assert "self._configured = False" in (backends / "local.py").read_text()
+
+
+def test_api_optional_backend_is_configured_without_key(tmp_path):
+    backends = _generate_api(tmp_path, "optional")
+    api = (backends / "api.py").read_text()
+    assert "os.environ.get(API_KEY_ENV)" in api
+    assert "return True" in api  # optional: works without the key
+
+
+def test_api_key_none_uses_plain_stub(tmp_path):
+    backends = _generate_api(tmp_path, "none")
+    api = (backends / "api.py").read_text()
+    # No api_key need -> the api backend gets the plain stub, no env read.
+    assert "API_KEY_ENV" not in api
+    assert "self._configured = False" in api

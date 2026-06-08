@@ -48,6 +48,40 @@ def _frozenset_literal(items: tuple[str, ...]) -> str:
     return f"frozenset({{{inner}}})"
 
 
+def _backend_needs_key(spec: WeaverSpec, backend: str) -> bool:
+    """Whether ``backend`` should get API-key plumbing.
+
+    The weaver declares an ``api_key`` need (``optional``/``required``), and the
+    backend is a remote one — i.e. not the bundled ``local`` backend (a local file
+    source never needs a key). The bulk backend is handled separately upstream.
+    """
+    return spec.api_key in ("optional", "required") and backend != "local"
+
+
+def _api_key_tokens(api_key: str, env_var: str) -> dict[str, str]:
+    """Render the api-key-dependent bits of the API backend stub."""
+    if api_key == "required":
+        return {
+            "API_KEY_ENV": env_var,
+            "API_KEY_PHRASE": "requires an API key",
+            "API_KEY_CONFIGURED_EXPR": "self._api_key is not None",
+            "API_KEY_CONFIGURED_COMMENT": (
+                f"Requires the key: unconfigured until {env_var} is set "
+                "(golden tests skip until then)."
+            ),
+        }
+    # optional: the public API works without a key; one just unlocks more.
+    return {
+        "API_KEY_ENV": env_var,
+        "API_KEY_PHRASE": "can use an optional API key",
+        "API_KEY_CONFIGURED_EXPR": "True",
+        "API_KEY_CONFIGURED_COMMENT": (
+            f"Optional key: the API works without it; set {env_var} for higher "
+            "rate limits / private data."
+        ),
+    }
+
+
 def _vocab_source(spec: WeaverSpec) -> str:
     """Generate ``vocab.py`` from the spec — the manifest matches the spec exactly."""
     lines: list[str] = [
@@ -281,8 +315,7 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         "- [ ] `make test` — conformance + contract + golden all green",
         f"- [ ] `weaverkit verify --spec weaver.spec.toml --package {pkg} --strict` "
         "— no placeholders left, golden runs",
-        "- [ ] register the weaver where the app assembles its `WeaverFactory` "
-        "(see README)",
+        "- [ ] register the weaver where the app assembles its `WeaverFactory` (see README)",
         "",
     ]
     return "\n".join(lines)
@@ -795,6 +828,70 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
 
+_BACKEND_STUB_API = '''\
+"""The {{BACKEND}} backend for {{DBWEAVER}} — calls a remote API. IMPLEMENT ME.
+
+This backend talks to a remote API that {{API_KEY_PHRASE}}. The key is read from
+the ``{{API_KEY_ENV}}`` environment variable (or passed to ``__init__``); everything
+else (manifest, dispatch, mapper) is generated and wired. Implement the three
+``# TODO`` spots below; each links to the section of the guide with the full contract.
+
+Guide: weaverkit/docs/implementing-backends.md
+Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from {{DBWEAVER}}.backends.base import {{CLASS}}Backend
+from {{DBWEAVER}}.intermediate import {{CLASS}}Record
+
+# Environment variable holding the API key for the {{BACKEND}} backend.
+API_KEY_ENV = "{{API_KEY_ENV}}"
+
+
+class {{BACKEND_CLASS}}({{CLASS}}Backend):
+    """{{BACKEND}} backend — calls the remote API ({{API_KEY_PHRASE}})."""
+
+    name = "{{BACKEND}}"
+
+    def __init__(self, api_key: str | None = None) -> None:
+        # Key precedence: explicit arg > environment. Keep this cheap and
+        # side-effect-free — it may be called just to decide routing.
+        self._api_key = api_key or os.environ.get(API_KEY_ENV)
+
+    def is_configured(self) -> bool:
+        # {{API_KEY_CONFIGURED_COMMENT}}
+        # See: weaverkit/docs/implementing-backends.md#is_configured
+        return {{API_KEY_CONFIGURED_EXPR}}
+
+    def fingerprint(self) -> str:
+        # TODO(fingerprint): return a STABLE, version-specific string for this API's
+        # data/contract. A live API with no version surface: name the contract, not
+        # "live"-of-now, e.g. "{{DBWEAVER}}-{{BACKEND}}-v1". NEVER "" or "unknown".
+        # Spec's declared source of truth for the version: {{FINGERPRINT_SOURCE}}.
+        # See: weaverkit/docs/implementing-backends.md#fingerprint
+        return "{{DBWEAVER}}-{{BACKEND}}-TODO"
+
+    async def fetch(
+        self,
+        capability_id: str,
+        queries: list[dict[str, Any]],
+        *,
+        requested_outputs: frozenset[str],
+    ) -> list[{{CLASS}}Record]:
+        # TODO(fetch): call the API for each input and return one {{CLASS}}Record
+        # PER input query, IN THE SAME ORDER (the dispatch relies on positional
+        # alignment — never drop, reorder, or merge). Send the key with each request,
+        # e.g. headers={"Authorization": f"Bearer {self._api_key}"} (use the scheme
+        # the API expects). If results come back keyed by id, re-expand to input order.
+{{FETCH_HINT}}
+        # See: weaverkit/docs/implementing-backends.md#fetch
+        raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
+'''
+
 _SETUP = '''\
 """Local DB setup for {{DBWEAVER}} — fetch/build the bulk source into the user cache.
 
@@ -1163,12 +1260,8 @@ def scaffold(
     bulk = spec.bulk
     if bulk is not None:
         tokens["DEPS"] = '"braidworks-core", "platformdirs>=4.0"'
-        tokens["SCRIPTS_BLOCK"] = (
-            f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
-        )
-        tokens["ENSURE_TARGET"] = (
-            "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
-        )
+        tokens["SCRIPTS_BLOCK"] = f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
+        tokens["ENSURE_TARGET"] = "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
         tokens["ARCHIVE_URL"] = bulk.archive_url
         tokens["BULK_FILENAME"] = bulk.filename
         tokens["BULK_BACKEND"] = bulk.backend
@@ -1212,6 +1305,7 @@ def scaffold(
         files[src / "setup.py"] = _render(_SETUP, tokens)
         files[src / "ensure.py"] = _render(_ENSURE_CLI, tokens)
 
+    api_key_env = f"{spec.db_name.upper()}_API_KEY"
     for b in spec.backends:
         bt = {
             **tokens,
@@ -1219,7 +1313,14 @@ def scaffold(
             "BACKEND_CLASS": f"{cls}{_camel(b)}Backend",
             "FETCH_HINT": fetch_hint,
         }
-        stub = _BACKEND_STUB_BULK if (bulk is not None and b == bulk.backend) else _BACKEND_STUB
+        is_bulk = bulk is not None and b == bulk.backend
+        if is_bulk:
+            stub = _BACKEND_STUB_BULK
+        elif _backend_needs_key(spec, b):
+            stub = _BACKEND_STUB_API
+            bt.update(_api_key_tokens(spec.api_key, api_key_env))
+        else:
+            stub = _BACKEND_STUB
         files[src / "backends" / f"{b}.py"] = _render(stub, bt)
 
     written: list[Path] = []

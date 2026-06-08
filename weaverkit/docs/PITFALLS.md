@@ -22,10 +22,12 @@ do/don't pair. Keep this list short; if it grows, the important ones get lost.
    It's generated from `weaver.spec.toml`. Edit the spec and re-run
    `weaverkit new --force`; `verify` checks the two stay in sync.
 
-5. **`consumes` must be a registered shared key.**
-   Don't invent a private input type — that makes an unreachable island weaver.
-   Do pick from `weaverkit/src/weaverkit/keys.py`, or add a genuinely new bridge
-   key there in the same PR.
+5. **`consumes` must be a registered shared key (but an unmet key is OK).**
+   Don't invent a private input type. Do pick from `weaverkit/src/weaverkit/keys.py`,
+   or add a genuinely new bridge key there in the same PR. Aim to consume something
+   another weaver produces — but if nothing produces it *yet*, keep the weaver
+   anyway; it still retrieves data, and may link in later. Connect when you can;
+   an island is allowed.
 
 6. **`source_sample` must be real.**
    Don't invent a plausible-looking schema. Do paste an actual snippet of the

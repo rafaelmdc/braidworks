@@ -1,0 +1,118 @@
+"""Index builder tests — discovery, reachability, and rendering.
+
+The index is a map (not a gate), so these check that it flattens specs correctly,
+computes unmet inputs across weavers, and round-trips through TSV/CSV.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+from pathlib import Path
+
+from weaverkit.index import (
+    COLUMNS,
+    build_index,
+    build_rows,
+    discover_specs,
+    render,
+    write_index,
+)
+from weaverkit.spec import CapabilitySpec, GroupSpec, WeaverSpec
+
+
+def _spec(db_name: str, consumes: tuple[str, ...], outputs: tuple[str, ...], **kw) -> WeaverSpec:
+    return WeaverSpec(
+        db_name=db_name,
+        title=f"{db_name} title",
+        version="0.1.0",
+        license="CC0-1.0",
+        source_url="https://example.org",
+        fingerprint_source="release-tag",
+        source_sample="a,b\n1,2\n",
+        backends=kw.pop("backends", ("local",)),
+        capabilities=(
+            CapabilitySpec(
+                id=kw.pop("cap_id", "resolve"),
+                consumes=consumes,
+                groups=(GroupSpec(id="g", outputs=outputs),),
+            ),
+        ),
+        **kw,
+    )
+
+
+def test_build_rows_flattens_and_joins_multivalue() -> None:
+    spec = _spec("madin", ("ncbi.taxon.id",), ("microbe.trait.gram_stain", "microbe.trait.opt"))
+    (row,) = build_rows([spec])
+    assert row.weaver == "madin"
+    assert row.capability == "resolve"
+    assert row.consumes == "ncbi.taxon.id"
+    assert row.produces == "microbe.trait.gram_stain;microbe.trait.opt"
+
+
+def test_entry_key_is_never_unmet() -> None:
+    # organism.name is the user-supplied entry point, so it's always "met".
+    spec = _spec("taxon", ("organism.name",), ("ncbi.taxon.id",))
+    (row,) = build_rows([spec])
+    assert row.unmet_inputs == ""
+
+
+def test_input_met_by_another_weaver() -> None:
+    producer = _spec("taxon", ("organism.name",), ("ncbi.taxon.id",))
+    consumer = _spec("madin", ("ncbi.taxon.id",), ("microbe.trait.gram_stain",))
+    rows = {r.weaver: r for r in build_rows([producer, consumer])}
+    assert rows["madin"].unmet_inputs == ""  # taxon produces ncbi.taxon.id
+
+
+def test_island_input_is_reported_unmet() -> None:
+    # gene.ncbi.id is a registered shared key but nothing here produces it.
+    spec = _spec("orphan", ("gene.ncbi.id",), ("go.term",))
+    (row,) = build_rows([spec])
+    assert row.unmet_inputs == "gene.ncbi.id"
+
+
+def test_api_key_column_carried_through() -> None:
+    spec = _spec("api", ("ncbi.taxon.id",), ("go.term",), backends=("api",), api_key="required")
+    (row,) = build_rows([spec])
+    assert row.api_key == "required"
+
+
+def test_render_tsv_header_and_parse() -> None:
+    spec = _spec("madin", ("ncbi.taxon.id",), ("go.term",))
+    text = render(build_rows([spec]), delimiter="\t")
+    reader = csv.DictReader(io.StringIO(text), delimiter="\t")
+    assert tuple(reader.fieldnames) == COLUMNS
+    (parsed,) = list(reader)
+    assert parsed["weaver"] == "madin"
+    assert parsed["consumes"] == "ncbi.taxon.id"
+
+
+def test_discover_skips_fixtures(tmp_path: Path) -> None:
+    (tmp_path / "realweaver").mkdir()
+    (tmp_path / "realweaver" / "weaver.spec.toml").write_text("x")
+    (tmp_path / "tests" / "fixtures").mkdir(parents=True)
+    (tmp_path / "tests" / "fixtures" / "weaver.spec.toml").write_text("x")
+    found = discover_specs(tmp_path)
+    assert [p.parent.name for p in found] == ["realweaver"]
+
+
+def test_write_index_picks_delimiter_from_suffix(tmp_path: Path) -> None:
+    weaver_dir = tmp_path / "exampleweaver"
+    weaver_dir.mkdir()
+    spec_toml = (Path(__file__).parents[2] / "exampleweaver" / "weaver.spec.toml").read_text()
+    (weaver_dir / "weaver.spec.toml").write_text(spec_toml)
+
+    tsv = tmp_path / "out.tsv"
+    csv_out = tmp_path / "out.csv"
+    write_index(tmp_path, tsv)
+    write_index(tmp_path, csv_out)
+    assert "\t" in tsv.read_text()
+    assert "," in csv_out.read_text()
+
+
+def test_build_index_real_workspace() -> None:
+    # The real repo root has at least exampleweaver with a valid spec.
+    root = Path(__file__).parents[2]
+    rows = build_index(root)
+    assert any(r.weaver == "example" for r in rows)
