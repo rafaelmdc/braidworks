@@ -17,7 +17,6 @@ from typing import Callable, ClassVar
 from braidworks.core.backend import BackendBase
 from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
 from braidworks.core.result import WeaveResult
-from braidworks.core.strand import StrandSet
 from braidworks.core.weaver import BaseWeaver
 
 
@@ -96,8 +95,3 @@ class BackendDispatchWeaver(BaseWeaver):
             )
             for r in records
         ]
-
-    @staticmethod
-    def _value(strand_set: StrandSet, type_id: str):
-        strand = strand_set.get(type_id)
-        return strand.value if strand is not None else None
