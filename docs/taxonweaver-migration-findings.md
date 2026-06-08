@@ -199,9 +199,27 @@ would either silently rewrite the backbone or break the suite.
 - [x] Read existing taxonweaver contract (vocab/intermediate/mapper/dispatch/
       backends/factory/provider/setup).
 - [x] Write `taxonweaver/weaver.spec.toml` (resolver, 2 caps, [bulk], golden) —
-      spec validates clean (verify got past validation to the build step).
-- [~] `weaverkit verify` the spec against the existing package; log mismatches —
-      surfaced findings C/D/H/I before manifest comparison could even run.
-- [ ] Reconcile manifest/dispatch/mapper onto the backbone.
-- [ ] Reconcile backends (local/api) to the `fetch` contract.
+      validates clean, now declares `always_computed_groups = ["core"]`.
+- [x] `weaverkit verify` the spec against the existing package; log mismatches —
+      surfaced findings C/D/H/I before manifest comparison could run.
+- [x] **Decision (J): adapt weaverkit** (user, 2026-06-08).
+- [x] Fix Finding I (verify reports a misnamed builder, no crash). ✅
+- [x] Fix Finding A (`always_computed_groups` → mapper `computed_groups`). ✅
+- [ ] Fix Finding C/D: two-builder convention — scaffold/doc + taxonweaver
+      `build_taxonweaver()` (zero-config introspection builder).
+- [ ] Fix Finding H: backbone-shaped backend construction (local backend
+      constructs cheap, `is_configured()` reflects DB) + rewrite the ~15 locked
+      tests. **(Biggest remaining chunk — needs its own focused pass.)**
+- [ ] Fix Finding B: derive `need_lineage` from `requested_outputs` in dispatch.
+- [ ] Fix Finding E: fixture-DB conformance hook so `--strict` can run golden.
+- [ ] Reconcile manifest/dispatch/mapper onto the backbone; flatten `TaxonMatch`
+      into `values` (Finding G).
 - [ ] Green `weaverkit verify` (non-strict) + package test suite.
+
+### Where the build stands now
+
+Branch `taxonweaver-weaverkit-migration`. weaverkit is green (95 tests) with the
+two backbone fixes landed. The taxonweaver *package* is untouched (still the old
+contract), so its suite stays green (92 + 8 skipped). `weaverkit verify` against
+taxonweaver now stops with the clean Finding-C message (no `build_taxonweaver()`
+yet) instead of a traceback — exactly the next thing to build.
