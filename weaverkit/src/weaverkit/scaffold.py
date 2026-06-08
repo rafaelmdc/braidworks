@@ -1060,7 +1060,12 @@ class BackendDispatchWeaver(BaseWeaver):
 
     def backend_fingerprint(self, backend: str) -> str:
         strat = self._backends.get(backend)
-        return strat.fingerprint() if strat is not None else f"unconfigured:{backend}"
+        # Guard on is_configured(): fingerprint() may read the data source, which an
+        # unconfigured backend can't. It never produces a cached result anyway
+        # (execute_batch raises BackendUnavailable upstream).
+        if strat is None or not strat.is_configured():
+            return f"unconfigured:{backend}"
+        return strat.fingerprint()
 
     async def execute(
         self, capability_id, strand_set, *, requested_outputs, backend

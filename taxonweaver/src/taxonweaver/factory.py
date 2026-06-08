@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -104,3 +105,22 @@ def build_ncbi_weaver(
             "(pass db_path or auto_setup=True for local and/or enable_api for the API backend)"
         )
     return NCBITaxonWeaver(backends)
+
+
+def build_taxonweaver(**_config: Any) -> NCBITaxonWeaver:
+    """Zero-config introspection builder — the weaverkit ``verify`` entry point.
+
+    Wires every declared backend *present but possibly unconfigured*: the local
+    backend points at the default DB path (configured only if it's already built;
+    it never downloads), and the API backend needs no local data. The manifest is
+    therefore complete for inspection and fingerprint checks, while an unconfigured
+    backend simply skips at run/golden time. For a real, configured weaver — with
+    consent-gated DB acquisition, an injected client, etc. — use
+    :func:`build_ncbi_weaver`.
+    """
+    return NCBITaxonWeaver(
+        {
+            "local": LocalTaxonomyBackend(default_db_path()),
+            "api": DatasetsV2Backend(),
+        }
+    )

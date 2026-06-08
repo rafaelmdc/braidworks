@@ -1,15 +1,14 @@
 """LocalTaxonomyBackend — wraps the SQLite TaxonomyResolverService.
 
 One service per thread (``threading.local``), lazily created; sync calls are run
-off the event loop with ``asyncio.to_thread``. The DB path is validated at
-construction (``BackendConfigurationError``), but the persistent connection is
-created lazily on first use.
+off the event loop with ``asyncio.to_thread``. Construction is cheap and never
+raises: ``is_configured()`` reports whether the DB is present and built, and the
+persistent connection is created lazily on first use.
 """
 
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 import threading
 from pathlib import Path
 
@@ -17,10 +16,9 @@ from taxonomy_resolver.policy import ResolutionStatus
 from taxonomy_resolver.schemas import BatchResolveRequest, ResolveRequest, ResolveResult
 from taxonomy_resolver.service import TaxonomyResolverService
 
-from braidworks.core import BackendConfigurationError
-
 from .. import vocab
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
+from ..setup import db_is_valid
 
 _NEUTRAL_STATUS = {
     ResolutionStatus.RESOLVED_EXACT_SCIENTIFIC: TaxonMatchStatus.RESOLVED,
@@ -43,31 +41,21 @@ class LocalTaxonomyBackend:
     name = "local"
 
     def __init__(self, db_path: str | Path, *, cache_db_path: str | Path | None = None) -> None:
+        # Backbone contract: construct cheap and never raise for missing data —
+        # ``is_configured()`` reports whether the DB is actually present and built.
+        # The hard "you asked for local but it's absent" error lives in the
+        # configured builder path (``build_ncbi_weaver`` -> ``ensure_taxonomy_db``),
+        # not here, so a zero-config introspection build can wire an unconfigured
+        # backend (manifest-complete, golden skips) without a 1.2 GB download.
         self._db_path = Path(db_path)
         self._cache_db_path = Path(cache_db_path) if cache_db_path else None
         self._tl = threading.local()
         self._fingerprint: str | None = None
-        self._validate()
-
-    def _validate(self) -> None:
-        if not self._db_path.exists():
-            raise BackendConfigurationError(
-                f"taxonomy db not found: {self._db_path}\n"
-                "Create it with `taxon-weaver ensure`, or pass auto_setup=True to "
-                "build_ncbi_weaver(...), or set BRAIDWORKS_AUTO_DOWNLOAD=1."
-            )
-        try:
-            con = sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True)
-            try:
-                con.execute("SELECT 1 FROM sqlite_master LIMIT 1")
-            finally:
-                con.close()
-        except sqlite3.Error as exc:
-            raise BackendConfigurationError(f"invalid taxonomy db {self._db_path}: {exc}") from exc
+        self._configured = db_is_valid(self._db_path)
 
     def is_configured(self) -> bool:
-        """Always true once constructed — the DB path was validated in ``__init__``."""
-        return True
+        """Whether the taxonomy DB is present and built (checked at construction)."""
+        return self._configured
 
     def _service(self) -> TaxonomyResolverService:
         """Return this thread's resolver service, creating it lazily on first use."""
@@ -119,12 +107,21 @@ class LocalTaxonomyBackend:
         if status is TaxonMatchStatus.FUZZY_UNIQUE and r.candidates:
             c = r.candidates[0]
             taxid, name, rank, score, mtype, inline = (
-                c.taxid, c.name, c.rank, c.score, str(c.match_type), c.lineage,
+                c.taxid,
+                c.name,
+                c.rank,
+                c.score,
+                str(c.match_type),
+                c.lineage,
             )
         else:
             taxid, name, rank, score, mtype, inline = (
-                r.matched_taxid, r.matched_name, r.matched_rank,
-                r.score, str(r.match_type), r.lineage,
+                r.matched_taxid,
+                r.matched_name,
+                r.matched_rank,
+                r.score,
+                str(r.match_type),
+                r.lineage,
             )
         parent = inline[-2].taxid if len(inline) >= 2 else None
         candidates = [
