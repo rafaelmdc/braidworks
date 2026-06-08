@@ -61,7 +61,15 @@ behavioral weaverkit test. Documented in implementing-backends.md.
 - **Done when:** a backend never imports/re-implements `triggered_groups`; generated
   + taxonweaver backends use the resolved set; tests cover empty-means-all.
 
-## P3 — Scaffold the two-builder convention by default (Decisions C/D)
+## P3 — Scaffold the two-builder convention by default (Decisions C/D) — ✅ DONE
+
+**Shipped:** the generated `factory.py` now documents the convention and ships
+`build_<package>()` as the explicit zero-config *introspection* builder, plus
+commented skeletons for a *configured* builder and an optional
+`build_<package>_fixture()`. Documented in implementing-backends.md ("Builders")
+and AGENTS.md (the Implement step).
+
+### original notes
 
 - The generated `_FACTORY` should emit **both** a zero-config `build_<package>()`
   (introspection: backends present, possibly unconfigured) **and** a config-taking
@@ -71,7 +79,15 @@ behavioral weaverkit test. Documented in implementing-backends.md.
 - **Done when:** a freshly scaffolded weaver has both builders and `verify` targets
   the introspection one with no extra work.
 
-## P4 — Document "thin contract, free implementation" (Decisions B/G)
+## P4 — Document "thin contract, free implementation" (Decisions B/G) — ✅ DONE
+
+**Shipped:** implementing-backends.md now has an "Advanced: conform with your own
+plumbing" section blessing both patterns — (1) bring your own
+dispatch/mapper/intermediate (taxonweaver as the worked example), and (2) typed
+domain record projected to `values` at the mapper seam — and states the generated
+files are the default, not a requirement.
+
+### original notes
 
 - In the guide / `PITFALLS.md`: bless two patterns explicitly —
   (1) "conform via the manifest, bring your own dispatch/mapper/intermediate"

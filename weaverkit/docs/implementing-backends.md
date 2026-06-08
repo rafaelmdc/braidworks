@@ -24,6 +24,25 @@ your backend fits the rest and is the same for every weaver. Skim
 
 ---
 
+## Builders: introspection vs configured vs fixture
+
+The generated `factory.py` follows a two-builder convention (decisions.md C/D):
+
+- **`build_<package>()`** — the **zero-config introspection** builder `weaverkit
+  verify` calls. It wires every declared backend *present but possibly
+  unconfigured*, never raises for missing data, and gives a manifest-complete
+  weaver to inspect. The scaffold generates this for you.
+- **a configured builder** (you write it, usually domain-named, e.g.
+  `build_ncbi_weaver(...)`) — takes real config (db paths, API keys, injected
+  clients) and may raise if nothing is usable. A commented skeleton sits at the
+  bottom of the generated `factory.py`.
+- **`build_<package>_fixture()`** (optional) — only if no backend reads bundled
+  data; lets `verify --strict` run golden against a tiny deterministic dataset
+  (see [golden under `--strict`](#golden-under---strict-provide-a-fixture-the-build_package_fixture-hook)).
+
+`weaver_id` may differ from the package name (taxonweaver's is `ncbi`); verify
+always targets `build_<package>()`.
+
 ## Connectivity: aim to connect, but an island is still allowed
 
 A weaver is most useful when it *links* — when some other weaver produces a key it
@@ -339,6 +358,32 @@ bundled data you point at. `taxonweaver` is the worked example:
 `build_taxonweaver_fixture()` builds a ~6-species SQLite from inline dumps
 (`taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
 clade — so `verify --strict` is green with no 1.2 GB build.
+
+---
+
+## Advanced: conform with your own plumbing
+
+weaverkit defines a **contract**, not an implementation (decisions.md, the
+unifying principle). What `verify` checks is the *manifest* (capabilities /
+consumes / produces / groups / reachability), real fingerprints, and golden — **not**
+that your package uses the generated `intermediate.py` / `mapper.py` / `dispatch.py`
+verbatim. Two blessed patterns follow from that:
+
+- **Bring your own dispatch/mapper/intermediate.** A rich weaver may keep
+  hand-tuned internals and still conform, as long as `MANIFEST` matches the spec and
+  golden passes. `taxonweaver` is the worked example: it has its own
+  `BackendDispatchWeaver`, a typed `TaxonMatch`, and a resolver-specific mapper — and
+  passes `weaverkit verify --strict`. The generated files are the *default* for
+  simple weavers, not a requirement.
+- **Typed domain record → project to `values` at the seam.** The generic mapper is
+  keyed by `type_id → value` (it must stay domain-neutral). If you want real typing,
+  keep a typed intermediate in your weaver (like `TaxonMatch` with `taxid`,
+  `scientific_name`, …) and flatten it into `record.values` only at the mapper
+  boundary. Typed where your logic lives; dynamic at the framework seam.
+
+If you go this route, the contract you must still honor is unchanged: one record
+per input in order, miss-is-data, never-`unknown` fingerprints, emit only produced
+`type_id`s, and `is_configured()` reflecting data presence.
 
 ---
 

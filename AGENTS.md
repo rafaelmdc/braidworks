@@ -46,7 +46,11 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    each backend's `fetch` (currently `NotImplementedError`) and its `fingerprint`
    (currently a placeholder). Normalize each source result into the generated
    `*Record` intermediate; the shared mapper turns it into strands. Add real
-   golden examples to the spec.
+   golden examples to the spec. For real-world use add a *configured* builder
+   alongside the generated zero-config `build_<package>()` (two-builder convention —
+   the generated `factory.py` has a commented skeleton); if no backend reads
+   bundled data, add a `build_<package>_fixture()` so `verify --strict` can run
+   golden against a tiny deterministic dataset.
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` and
    `cd weavers/<db>weaver && make test`. Green means the manifest matches the
    spec, the weaver is reachable, fingerprints are real, and the golden examples

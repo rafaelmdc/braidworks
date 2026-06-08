@@ -1147,7 +1147,19 @@ class {{CLASS}}Weaver(BackendDispatchWeaver):
 '''
 
 _FACTORY = '''\
-"""build_{{DBWEAVER}} — the Layer 2 builder (only this package knows its backends)."""
+"""Builders for {{DBWEAVER}} — how the weaver is assembled from its backends.
+
+Two-builder convention (see weaverkit/docs/decisions.md C/D):
+
+- ``build_{{DBWEAVER}}()`` — the ZERO-CONFIG *introspection* builder that
+  ``weaverkit verify`` calls. It wires every declared backend present (possibly
+  unconfigured), so the manifest is complete and fingerprint/golden checks can run.
+  It never raises for missing data.
+- a CONFIGURED builder (you write it, usually domain-named) — takes real config
+  (db paths, API keys, injected clients) and may raise if nothing is usable. See
+  ``taxonweaver``'s ``build_ncbi_weaver`` for a worked example; a commented
+  skeleton is at the bottom of this file.
+"""
 
 from __future__ import annotations
 
@@ -1159,12 +1171,37 @@ from braidworks.core import BaseWeaver
 from {{DBWEAVER}}.weaver import {{CLASS}}Weaver
 
 
-def build_{{DBWEAVER}}(**config: Any) -> BaseWeaver:
-    """Construct a configured {{CLASS}}Weaver with every declared backend wired in."""
+def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
+    """Zero-config introspection builder (``weaverkit verify``'s entry point).
+
+    Wires every declared backend present-but-possibly-unconfigured. For real use,
+    add a configured builder (see the module docstring / the commented skeletons).
+    """
     backends = {
 {{BACKEND_WIRING}}
     }
     return {{CLASS}}Weaver(backends)
+
+
+# --- Optional builders (uncomment + fill in for real use) -----------------------
+#
+# A CONFIGURED builder — takes real config and raises if nothing is usable:
+#
+# from braidworks.core import BackendConfigurationError
+#
+# def build_{{DBWEAVER}}_configured(**config: Any) -> BaseWeaver:
+#     backends = {}
+#     # ... wire backends from real config (paths / keys / clients) ...
+#     if not backends:
+#         raise BackendConfigurationError("configure at least one backend")
+#     return {{CLASS}}Weaver(backends)
+#
+# A FIXTURE builder — only if no backend reads bundled/committed data; lets
+# `weaverkit verify --strict` run golden against a tiny deterministic dataset
+# (see decisions.md E and taxonweaver's build_{{DBWEAVER}}_fixture):
+#
+# def build_{{DBWEAVER}}_fixture() -> BaseWeaver:
+#     ...  # return a weaver wired against a small synthesized/committed dataset
 '''
 
 _PROVIDER = '''\
