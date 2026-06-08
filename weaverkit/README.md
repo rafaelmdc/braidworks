@@ -16,6 +16,11 @@ weaver reliably instead of vibe-coding it. Three pieces:
   `produces`, `unmet_inputs`) so you can see what join keys already exist and pick a
   new weaver's inputs to connect. An `unmet_inputs` entry is a hint, not an error.
 
+The architectural decisions behind the toolkit (what's contract vs weaver freedom,
+the `--strict` regimes, dispatcher/backend split) live in
+[docs/decisions.md](docs/decisions.md); the resulting work is tracked in
+[docs/backlog.md](docs/backlog.md).
+
 When implementing the generated `# TODO` backend spots, see
 [docs/implementing-backends.md](docs/implementing-backends.md) — the per-function
 contract the stubs deep-link into. For the wider picture see
