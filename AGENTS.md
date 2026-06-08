@@ -19,8 +19,8 @@ make test                 # run every package's suite (core + weavers + weaverki
 make lint                 # ruff check across all packages
 make fmt                  # ruff format
 
-# adding a weaver (weavers live at the repo root, like taxonweaver/ and exampleweaver/):
-make new-weaver  SPEC=path/to/weaver.spec.toml DEST=<db>weaver
+# adding a weaver (weavers live under weavers/, e.g. weavers/taxonweaver/, weavers/exampleweaver/):
+make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>weaver
 make index                # rebuild docs/weavers-index.tsv (the key map)
 ```
@@ -38,8 +38,8 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    default; `resolver` for fuzzy/ambiguous name matching — it generates the richer
    candidate/`MatchStatus` shape). Validate it: `make verify-weaver SPEC=... ` —
    it reports every problem at once.
-2. **Scaffold.** `make new-weaver SPEC=... DEST=<db>weaver` (root-level, so the
-   generated `IMPLEMENTATION.md`'s `../weaverkit/...` links resolve). This stamps a
+2. **Scaffold.** `make new-weaver SPEC=... DEST=weavers/<db>weaver` (under `weavers/`,
+   so the generated `IMPLEMENTATION.md`'s `../../weaverkit/...` links resolve). This stamps a
    complete, importable package whose manifest already matches the spec and whose
    conformance test is wired up. Add the new package to `members` in the root
    `pyproject.toml`, then `make sync`.
@@ -53,7 +53,7 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    bundled data, add a `build_<package>_fixture()` so `verify --strict` can run
    golden against a tiny deterministic dataset.
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>weaver` (spec valid +
-   manifest matches + reachable + real fingerprints) and `cd <db>weaver &&
+   manifest matches + reachable + real fingerprints) and `cd weavers/<db>weaver &&
    make test`. The **definition of done** is the `--strict` gate (what the generated
    `IMPLEMENTATION.md` ends on): `weaverkit verify --spec ... --package <db>weaver
    --strict` — it additionally fails while any `# TODO` placeholder remains and runs

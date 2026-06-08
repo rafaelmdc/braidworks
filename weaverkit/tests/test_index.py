@@ -102,7 +102,9 @@ def test_discover_skips_fixtures(tmp_path: Path) -> None:
 def test_write_index_picks_delimiter_from_suffix(tmp_path: Path) -> None:
     weaver_dir = tmp_path / "exampleweaver"
     weaver_dir.mkdir()
-    spec_toml = (Path(__file__).parents[2] / "exampleweaver" / "weaver.spec.toml").read_text()
+    spec_toml = (
+        Path(__file__).parents[2] / "weavers" / "exampleweaver" / "weaver.spec.toml"
+    ).read_text()
     (weaver_dir / "weaver.spec.toml").write_text(spec_toml)
 
     tsv = tmp_path / "out.tsv"
