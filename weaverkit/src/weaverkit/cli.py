@@ -66,10 +66,24 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+class BuilderNotFound(Exception):
+    """The package imports, but has no ``build_<package>()`` introspection builder."""
+
+
 def _build_weaver(package: str):
-    """Import ``<package>.factory.build_<package>`` and call it. May raise."""
+    """Import and call ``<package>.factory.build_<package>`` (the zero-config builder).
+
+    Raises :class:`BuilderNotFound` (not a bare ``AttributeError``) when the builder
+    is misnamed, so ``verify`` can report a fix instead of crashing with a traceback.
+    """
     module = importlib.import_module(f"{package}.factory")
-    builder = getattr(module, f"build_{package}")
+    builder = getattr(module, f"build_{package}", None)
+    if builder is None:
+        raise BuilderNotFound(
+            f"{package}.factory has no build_{package}(). verify calls the zero-config "
+            f"introspection builder by that exact name. fix: add (or alias) "
+            f"build_{package}() that wires the backends present-but-unconfigured."
+        )
     return builder()
 
 
@@ -119,6 +133,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
     package = args.package or spec.package
     try:
         weaver = _build_weaver(package)
+    except BuilderNotFound as exc:
+        _print_problems(f"{package}: cannot build to verify:", [str(exc)])
+        return 1
     except ModuleNotFoundError:
         if args.strict:
             _print_problems(
