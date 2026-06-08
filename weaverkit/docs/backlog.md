@@ -98,12 +98,14 @@ files are the default, not a requirement.
 - **Done when:** the docs name both patterns and point at taxonweaver as the
   advanced reference.
 
-## P5 (soft) — Output-name catalog (Decision F)
+## P5 — Output-name catalog (Decision F) — ✅ DONE
 
-- Optional, low priority. A lightweight catalog of produced (non-shared) type_id
-  names so descriptive outputs don't drift (`parent_id` vs `parent_taxon_id`).
-  **Not** shared-key registry membership — visibility/naming only. Revisit when a
-  second weaver emits overlapping descriptive fields.
+**Shipped:** `weaverkit.keys.OUTPUT_KEYS` catalogs produced *leaf/payload* outputs
+(non-join fields) with `is_known_output()` (= shared key or catalogued). `weaverkit
+index` prints an **advisory** (non-failing) listing produced fields in neither
+registry, so descriptive names don't drift (`parent_id` vs `parent_taxon_id`).
+Catalog seeded with the current weavers' leaf outputs; not registry membership —
+promote to `SHARED_KEYS` to make a field join-eligible.
 
 ---
 

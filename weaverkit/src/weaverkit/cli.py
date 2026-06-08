@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
-from weaverkit.index import write_index
+from weaverkit.index import uncatalogued_outputs, write_index
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
 
@@ -219,6 +219,13 @@ def cmd_index(args: argparse.Namespace) -> int:
         print(
             f"note: {unmet} capability row(s) have unmet inputs (no other weaver "
             "produces them). That's allowed — see the 'unmet_inputs' column."
+        )
+    uncatalogued = uncatalogued_outputs(rows)
+    if uncatalogued:
+        print(
+            f"note: {len(uncatalogued)} produced field(s) are not in the output catalog "
+            "(weaverkit.keys.OUTPUT_KEYS) or SHARED_KEYS — catalog them to keep names "
+            f"consistent: {', '.join(uncatalogued)}"
         )
     return 0
 

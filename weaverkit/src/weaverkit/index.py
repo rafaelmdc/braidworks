@@ -19,6 +19,7 @@ import io
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from weaverkit.keys import is_known_output
 from weaverkit.spec import SpecError, WeaverSpec, load_spec
 
 SPEC_FILENAME = "weaver.spec.toml"
@@ -92,6 +93,19 @@ def build_rows(specs: list[WeaverSpec]) -> list[IndexRow]:
                 )
             )
     return rows
+
+
+def uncatalogued_outputs(rows: list[IndexRow]) -> list[str]:
+    """Produced type_ids that are neither shared keys nor catalogued leaf outputs.
+
+    Advisory only (Decision F): a produced field outside both registries is a
+    naming-drift risk — catalog it in ``weaverkit.keys.OUTPUT_KEYS`` (or promote it
+    to ``SHARED_KEYS`` if it's meant to be a join target).
+    """
+    produced: set[str] = set()
+    for r in rows:
+        produced.update(p for p in r.produces.split(";") if p)
+    return sorted(p for p in produced if not is_known_output(p))
 
 
 def render(rows: list[IndexRow], *, delimiter: str = "\t") -> str:

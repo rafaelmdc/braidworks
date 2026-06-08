@@ -102,9 +102,12 @@ deliberate edit to `keys.py`).
 **Why.** "Join keys" (must be registered for reachability) and "leaf/payload
 outputs" (emitted, nothing joins on them) are different things; forcing every
 produced field into the shared registry would pollute it and blur its one job.
-Deliberate promotion is how we avoid accidental islands and naming drift. (A soft
-*output-name catalog* to prevent `parent_id` vs `parent_taxon_id` drift is worth
-considering, but is not registry membership.)
+Deliberate promotion is how we avoid accidental islands and naming drift.
+
+**Resolution:** implemented `weaverkit.keys.OUTPUT_KEYS` (a naming catalog of leaf
+outputs) + `is_known_output()`; `weaverkit index` prints a non-failing advisory for
+produced fields in neither `OUTPUT_KEYS` nor `SHARED_KEYS`. Catalog membership grants
+no join-eligibility — promote to `SHARED_KEYS` for that.
 
 ---
 

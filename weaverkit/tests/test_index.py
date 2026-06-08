@@ -16,8 +16,10 @@ from weaverkit.index import (
     build_rows,
     discover_specs,
     render,
+    uncatalogued_outputs,
     write_index,
 )
+from weaverkit.keys import is_known_output
 from weaverkit.spec import CapabilitySpec, GroupSpec, WeaverSpec
 
 
@@ -109,6 +111,23 @@ def test_write_index_picks_delimiter_from_suffix(tmp_path: Path) -> None:
     write_index(tmp_path, csv_out)
     assert "\t" in tsv.read_text()
     assert "," in csv_out.read_text()
+
+
+def test_is_known_output_shared_catalogued_and_unknown() -> None:
+    assert is_known_output("ncbi.taxon.id")  # shared key
+    assert is_known_output("ncbi.taxon.parent_id")  # catalogued leaf output
+    assert not is_known_output("some.invented.field")
+
+
+def test_uncatalogued_outputs_flags_unknown_produced_field() -> None:
+    spec = _spec("widget", ("ncbi.taxon.id",), ("some.invented.field", "ncbi.taxon.parent_id"))
+    rows = build_rows([spec])
+    assert uncatalogued_outputs(rows) == ["some.invented.field"]
+
+
+def test_uncatalogued_outputs_empty_when_all_known() -> None:
+    spec = _spec("widget", ("ncbi.taxon.id",), ("ncbi.taxon.parent_id",))
+    assert uncatalogued_outputs(build_rows([spec])) == []
 
 
 def test_build_index_real_workspace() -> None:
