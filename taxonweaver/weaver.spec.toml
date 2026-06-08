@@ -30,6 +30,9 @@ filename = "ncbi_taxonomy.sqlite"
 id = "ncbi.resolve_name"
 consumes = ["organism.name"]
 max_batch_size = 1000
+# The resolver always resolves the name -> taxid ("core") first, even if only
+# lineage was requested, so core is always part of the computed cache key.
+always_computed_groups = ["core"]
 
   [[capability.group]]
   id = "core"
@@ -52,6 +55,7 @@ max_batch_size = 1000
 id = "ncbi.resolve_taxid"
 consumes = ["ncbi.taxon.id"]
 max_batch_size = 1000
+always_computed_groups = ["core"]
 
   [[capability.group]]
   id = "core"

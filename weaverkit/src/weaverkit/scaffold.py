@@ -139,6 +139,19 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "    )",
         "",
     ]
+
+    # Groups always computed internally (see CapabilitySpec.always_computed_groups);
+    # the mapper unions these into computed_groups so the cache key isn't under-reported.
+    always = {c.id: c.always_computed_groups for c in spec.capabilities if c.always_computed_groups}
+    lines += ["", ""]
+    if always:
+        lines.append("ALWAYS_COMPUTED_GROUPS: dict[str, frozenset[str]] = {")
+        for cap_id, gids in always.items():
+            lines.append(f"    {cap_id!r}: {_frozenset_literal(gids)},")
+        lines.append("}")
+    else:
+        lines.append("ALWAYS_COMPUTED_GROUPS: dict[str, frozenset[str]] = {}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -463,6 +476,7 @@ from __future__ import annotations
 
 from braidworks.core import Capability, Strand, WeaveResult, WeaveStatus
 
+from {{DBWEAVER}} import vocab
 from {{DBWEAVER}}.intermediate import {{CLASS}}Record
 
 
@@ -475,7 +489,9 @@ def map_record(
     weaver_version: str,
 ) -> WeaveResult:
     """Map a neutral record to a ``WeaveResult`` for the requested outputs."""
-    computed_groups = capability.triggered_groups(requested_outputs)
+    computed_groups = capability.triggered_groups(
+        requested_outputs
+    ) | vocab.ALWAYS_COMPUTED_GROUPS.get(capability.id, frozenset())
     allowed = capability.outputs_to_compute(requested_outputs)
     provenance = (f"{{WEAVER_ID}}:{backend}",)
 
@@ -569,6 +585,7 @@ from braidworks.core import (
     WeaveStatus,
 )
 
+from {{DBWEAVER}} import vocab
 from {{DBWEAVER}}.intermediate import Candidate, MatchStatus, {{CLASS}}Record
 
 _STATUS = {
@@ -610,7 +627,9 @@ def map_record(
     weaver_version: str,
 ) -> WeaveResult:
     """Map a neutral resolver record to a ``WeaveResult`` for the requested outputs."""
-    computed_groups = capability.triggered_groups(requested_outputs)
+    computed_groups = capability.triggered_groups(
+        requested_outputs
+    ) | vocab.ALWAYS_COMPUTED_GROUPS.get(capability.id, frozenset())
     allowed = capability.outputs_to_compute(requested_outputs)
     provenance = (f"{{WEAVER_ID}}:{backend}",)
     status = _STATUS[record.status]

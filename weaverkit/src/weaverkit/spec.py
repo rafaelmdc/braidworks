@@ -60,6 +60,11 @@ class CapabilitySpec:
     backends: tuple[str, ...] = ()
     max_batch_size: int | None = None
     cost: float = 1.0
+    # Group ids the backend *always* computes internally, even when the caller asked
+    # for none of their outputs (e.g. a resolver always resolves the name -> id
+    # "core" before it can fetch lineage). These are unioned into the mapper's
+    # ``computed_groups`` (the cache key) so it isn't under-reported.
+    always_computed_groups: tuple[str, ...] = ()
 
     @property
     def produces(self) -> tuple[str, ...]:
@@ -81,6 +86,7 @@ class CapabilitySpec:
                 backends=tuple(data.get("backends", ())),
                 max_batch_size=data.get("max_batch_size"),
                 cost=float(data.get("cost", 1.0)),
+                always_computed_groups=tuple(data.get("always_computed_groups", ())),
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -323,6 +329,13 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
 
         if not cap.produces:
             problems.append(f"{where}: produces nothing (groups have no outputs)")
+
+        for gid in cap.always_computed_groups:
+            if gid not in group_ids:
+                problems.append(
+                    f"{where}: always_computed_groups references {gid!r}, which is not "
+                    f"a declared output group of this capability ({sorted(group_ids)})"
+                )
 
     # --- bulk source ---------------------------------------------------------
     if spec.bulk is not None:

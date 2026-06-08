@@ -104,6 +104,28 @@ The `fetch` contract below is written for `lookup`; the resolver differences are
 called out inline. Everything else (dispatch, manifest, registration, the cache
 contract) is identical.
 
+### Always-computed groups (`always_computed_groups`)
+
+The mapper reports `computed_groups` — the output groups actually computed — as part
+of the **cache key**. Normally that's just the groups whose outputs were requested.
+But some backends compute a group *unconditionally*: a resolver, for instance,
+always resolves the name → id (`core`) before it can fetch `lineage`, even when the
+caller asked only for lineage. If that internal work isn't reported, the cache key
+under-counts what was computed.
+
+Declare it per capability in the spec — don't hand-edit the mapper:
+
+```toml
+[[capability]]
+id = "resolve_name"
+consumes = ["organism.name"]
+always_computed_groups = ["core"]   # always computed, even if only lineage is asked
+```
+
+The generated `vocab.py` emits an `ALWAYS_COMPUTED_GROUPS` map and the mapper unions
+it into `computed_groups`. (This only affects the reported `computed_groups`/cache
+key — it does *not* emit the group's strands unless they were requested.)
+
 ---
 
 ## is_configured

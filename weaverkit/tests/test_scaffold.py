@@ -370,3 +370,72 @@ def test_api_key_none_uses_plain_stub(tmp_path):
     # No api_key need -> the api backend gets the plain stub, no env read.
     assert "API_KEY_ENV" not in api
     assert "self._configured = False" in api
+
+
+_ALWAYS_SPEC = """\
+[weaver]
+db_name = "acgdemo"
+weaver_id = "acgdemo"
+kind = "resolver"
+title = "always-computed demo"
+version = "0.1.0"
+license = "CC-BY-4.0"
+source_url = "https://example.org/acg"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = "name,id\\nEscherichia coli,562\\n"
+
+[[capability]]
+id = "resolve_name"
+consumes = ["organism.name"]
+always_computed_groups = ["core"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["ncbi.taxon.id", "organism.scientific_name"]
+
+  [[capability.group]]
+  id = "rank"
+  outputs = ["ncbi.taxon.rank"]
+"""
+
+
+def test_always_computed_group_reported_even_when_not_requested(tmp_path):
+    """Finding A: the mapper unions always_computed_groups into computed_groups."""
+    toml = tmp_path / "acg.weaver.spec.toml"
+    toml.write_text(_ALWAYS_SPEC)
+    spec = load_spec(toml)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=toml.read_text())
+
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        vocab = importlib.import_module("acgdemoweaver.vocab")
+        mapper = importlib.import_module("acgdemoweaver.mapper")
+        inter = importlib.import_module("acgdemoweaver.intermediate")
+
+        assert vocab.ALWAYS_COMPUTED_GROUPS == {"resolve_name": frozenset({"core"})}
+
+        cap = vocab.build_manifest(backends=("local",)).capability("resolve_name")
+        record = inter.AcgdemoRecord(
+            query={"organism.name": "Escherichia coli"},
+            status=inter.MatchStatus.RESOLVED,
+            values={"ncbi.taxon.rank": "species"},
+        )
+        # Ask for only the 'rank' group's output; 'core' must still be reported.
+        result = mapper.map_record(
+            record,
+            capability=cap,
+            requested_outputs=frozenset({"ncbi.taxon.rank"}),
+            backend="local",
+            weaver_version="0.1.0",
+        )
+        assert "core" in result.computed_groups
+        assert "rank" in result.computed_groups
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "acgdemoweaver" or name.startswith("acgdemoweaver."):
+                del sys.modules[name]

@@ -31,7 +31,7 @@ is the proven artifact. But this is the user's call; logged and paused here.
 
 ---
 
-## A. 🔴 `computed_groups` cannot express "a group is always computed internally"
+## A. ✅ FIXED — `computed_groups` cannot express "a group is always computed internally"
 
 - **Backbone:** the generated resolver mapper sets
   `computed_groups = capability.triggered_groups(requested_outputs)`
@@ -48,6 +48,12 @@ is the proven artifact. But this is the user's call; logged and paused here.
   `computed_groups`. Keeps the mapper generated (no hand-edit) and the fact
   declared in the spec. *(This is the one real backbone change anticipated in the
   task plan.)*
+- **Resolution:** implemented. `CapabilitySpec.always_computed_groups` (validated
+  against declared group ids); `vocab.py` emits `ALWAYS_COMPUTED_GROUPS`; both
+  generated mappers union it into `computed_groups`. Documented in
+  implementing-backends.md. The taxonweaver spec now sets
+  `always_computed_groups = ["core"]` on both capabilities, matching the old
+  `triggered | {"core"}`.
 
 ## B. 🟠 Backend only receives `requested_outputs`, not the triggered-group semantics
 
