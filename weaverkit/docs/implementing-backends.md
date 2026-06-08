@@ -311,8 +311,28 @@ expect = { "microbe.trait.gram_stain" = "negative" }   # keys must be in its pro
 
 `WeaverConformanceTests.test_golden_examples` runs each one through `execute` on the
 configured backend and checks every `expect` key comes back with the expected value.
-They **skip** while the backend is unconfigured, so add them alongside `fetch`. Pick
-inputs whose answers are stable and you can verify against the source.
+They **skip** (in plain `verify`) while the backend is unconfigured, so add them
+alongside `fetch`. Pick inputs whose answers are stable and you can verify.
+
+### Golden under `--strict`: provide a fixture (the `build_<package>_fixture()` hook)
+
+`verify --strict` (definition-of-done) must *run* golden, reproducibly, without
+external data (see [decisions.md](decisions.md) Decision E). It picks the data to
+run against in this order:
+
+1. `build_<package>_fixture()` in your `factory.py`, if present — a builder that
+   returns a weaver wired against a **tiny, deterministic dataset** (committed or
+   synthesized at call time; no download, no network). This is the preferred path
+   for any weaver whose real backend needs a large or external source.
+2. otherwise, an already-configured backend on `build_<package>()` — e.g. a backend
+   that reads a small *bundled* dataset (like `exampleweaver`'s CSV).
+
+If neither is runnable, `--strict` fails with an actionable message — "skipped, no
+data" is **not** a pass. Your golden inputs must be resident in whatever fixture/
+bundled data you point at. `taxonweaver` is the worked example:
+`build_taxonweaver_fixture()` builds a ~6-species SQLite from inline dumps
+(`taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
+clade — so `verify --strict` is green with no 1.2 GB build.
 
 ---
 

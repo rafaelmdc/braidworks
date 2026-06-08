@@ -15,6 +15,7 @@ lazily inside ``resolve()``.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -124,3 +125,22 @@ def build_taxonweaver(**_config: Any) -> NCBITaxonWeaver:
             "api": DatasetsV2Backend(),
         }
     )
+
+
+# Process-lifetime cache so repeated fixture builds in one run don't rebuild the DB.
+_FIXTURE_DB: Path | None = None
+
+
+def build_taxonweaver_fixture(**_config: Any) -> NCBITaxonWeaver:
+    """Build a weaver backed by the tiny deterministic fixture DB (no download).
+
+    The ``weaverkit verify --strict`` golden hook and tests use this to run real
+    resolutions reproducibly. The local backend is configured against a ~6-species
+    *Faecalibacterium* SQLite built from inline dumps (see :mod:`taxonweaver.fixture`).
+    """
+    global _FIXTURE_DB
+    from .fixture import build_fixture_db
+
+    if _FIXTURE_DB is None or not db_is_valid(_FIXTURE_DB):
+        _FIXTURE_DB = build_fixture_db(Path(tempfile.mkdtemp(prefix="taxonweaver-fixture-")))
+    return NCBITaxonWeaver({"local": LocalTaxonomyBackend(_FIXTURE_DB)})

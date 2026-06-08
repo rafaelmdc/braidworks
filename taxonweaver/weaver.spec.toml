@@ -69,12 +69,14 @@ always_computed_groups = ["core"]
   id = "lineage"
   outputs = ["ncbi.taxon.lineage"]
 
+# Golden inputs are resident in the deterministic fixture DB (taxonweaver.fixture,
+# the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.
 [[golden]]
 capability = "ncbi.resolve_name"
-input = { "organism.name" = "Escherichia coli" }
-expect = { "ncbi.taxon.id" = 562, "organism.scientific_name" = "Escherichia coli" }
+input = { "organism.name" = "Faecalibacterium prausnitzii" }
+expect = { "ncbi.taxon.id" = 853, "organism.scientific_name" = "Faecalibacterium prausnitzii" }
 
 [[golden]]
 capability = "ncbi.resolve_taxid"
-input = { "ncbi.taxon.id" = 562 }
-expect = { "organism.scientific_name" = "Escherichia coli" }
+input = { "ncbi.taxon.id" = 853 }
+expect = { "organism.scientific_name" = "Faecalibacterium prausnitzii" }

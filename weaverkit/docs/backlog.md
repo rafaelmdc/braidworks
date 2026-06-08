@@ -9,10 +9,18 @@ Status: the taxonweaver migration goal is **met** — it conforms to its spec an
 
 ---
 
-## P1 — `--strict` fixture hook + formal regimes (Decision E)
+## P1 — `--strict` fixture hook + formal regimes (Decision E) — ✅ DONE
 
 **Why first:** it's the only item that changes what "done" *means*, and it unblocks
 `verify --strict` for every real (big-dataset) weaver. Highest leverage.
+
+**Shipped:** `verify --strict` now runs golden against `build_<package>_fixture()`
+when present, else an already-configured backend on `build_<package>()`, else fails
+with an actionable message (skip ≠ pass). `taxonweaver` ships
+`build_taxonweaver_fixture()` (mini *Faecalibacterium* SQLite from inline dumps in
+`taxonweaver/fixture.py`, single source shared with the tests) and **passes
+`verify --strict` with no 1.2 GB build**. `exampleweaver` stays green via the
+bundled-data fallback. Documented in implementing-backends.md.
 
 - Add a fixture mechanism the conformance harness can call to build/point at a tiny
   deterministic dataset, generalizing taxonweaver's `tests/conftest.py::build_mini_db`.
