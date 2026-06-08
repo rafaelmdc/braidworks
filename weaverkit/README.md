@@ -11,6 +11,10 @@ weaver reliably instead of vibe-coding it. Three pieces:
 - **conformance** (`weaverkit verify` + `WeaverConformanceTests`) — machine checks
   that the built weaver matches its spec, is reachable (consumes a shared key),
   and never returns an `"unknown"` fingerprint.
+- **index** (`weaverkit index`) — scans every `weaver.spec.toml` and writes a small
+  delimited map (`weaver`, `capability`, `kind`, `api_key`, `backends`, `consumes`,
+  `produces`, `unmet_inputs`) so you can see what join keys already exist and pick a
+  new weaver's inputs to connect. An `unmet_inputs` entry is a hint, not an error.
 
 When implementing the generated `# TODO` backend spots, see
 [docs/implementing-backends.md](docs/implementing-backends.md) — the per-function

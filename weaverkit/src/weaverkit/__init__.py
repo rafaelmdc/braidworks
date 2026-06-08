@@ -9,6 +9,15 @@ from weaverkit.conformance import (
     check_manifest,
     run_golden,
 )
+from weaverkit.index import (
+    COLUMNS,
+    IndexRow,
+    build_index,
+    build_rows,
+    discover_specs,
+    render,
+    write_index,
+)
 from weaverkit.keys import SHARED_KEYS, is_shared_key
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import (
@@ -40,4 +49,11 @@ __all__ = [
     "run_golden",
     "scaffold",
     "ScaffoldError",
+    "COLUMNS",
+    "IndexRow",
+    "build_index",
+    "build_rows",
+    "discover_specs",
+    "render",
+    "write_index",
 ]

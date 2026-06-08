@@ -22,6 +22,7 @@ make fmt                  # ruff format
 # adding a weaver:
 make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>weaver
+make index                # rebuild docs/weavers-index.tsv (the key map)
 ```
 
 CI runs `make lint` and `make test`; both must stay green.
@@ -58,9 +59,10 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
   one fails, fix the code, not the test. Changing a check requires a deliberate,
   reviewed edit with justification — not a quiet edit to make CI pass.
 - **`consumes` must be a registered shared key.** Don't invent a private input
-  type — that makes an unreachable "island" weaver. Adding a genuinely new bridge
-  key is a deliberate edit to `weaverkit/src/weaverkit/keys.py` *in the same PR*,
-  with a one-line description of what produces it.
+  type. Adding a genuinely new bridge key is a deliberate edit to
+  `weaverkit/src/weaverkit/keys.py` *in the same PR*, with a one-line description of
+  what produces it. (A registered key keeps the weaver *connectable*; whether a
+  producer exists *yet* is a softer matter — see "Connectivity" below.)
 - **Never return `"unknown"` (or empty) from a fingerprint.** It silently disables
   cache invalidation. Use a release tag, dump date, or checksum.
 - **Don't hand-edit generated `vocab.py`.** It mirrors the spec. Change the spec
@@ -75,6 +77,19 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
   leak into core; weaver-specific types stay in the weaver package.
 - **Never commit data artifacts.** Databases, dumps, and archives are multi-GB and
   git-ignored (`*.sqlite`, `*.tar.gz`, `/data/`). See `docs/database.md`.
+
+## Connectivity: aim to connect, islands are allowed
+
+Weavers are worth most when they *link* — when another weaver produces a key this
+one consumes, so data flows across them. So **always try to connect**: prefer
+`consumes` keys that something already produces. Run `make index` and read
+`docs/weavers-index.tsv` (the `unmet_inputs` column) to see what's already in play
+before picking inputs.
+
+But a new weaver **might not be able to connect**, and **that is fine**. If a source's
+only sensible input isn't produced by anything yet, keep the weaver anyway — it still
+retrieves real information when called directly, and a later weaver may produce the key
+and link it in. An unmet input is a hint, not a failure: `verify` does not reject it.
 
 ## Conventions
 

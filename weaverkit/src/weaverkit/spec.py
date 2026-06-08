@@ -150,6 +150,7 @@ class WeaverSpec:
     capabilities: tuple[CapabilitySpec, ...]
     weaver_id: str = ""
     kind: str = "lookup"
+    api_key: str = "none"
     bulk: BulkSpec | None = None
     golden: tuple[GoldenSpec, ...] = field(default_factory=tuple)
 
@@ -187,6 +188,7 @@ class WeaverSpec:
                 backends=tuple(weaver["backends"]),
                 weaver_id=str(weaver.get("weaver_id", "")),
                 kind=str(weaver.get("kind", "lookup")),
+                api_key=str(weaver.get("api_key", "none")),
                 bulk=bulk,
                 capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
@@ -237,6 +239,12 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
         problems.append(
             f"kind {spec.kind!r} must be 'lookup' (clean id->data) or 'resolver' "
             "(fuzzy/ambiguous matching with candidates)"
+        )
+
+    if spec.api_key not in ("none", "optional", "required"):
+        problems.append(
+            f"api_key {spec.api_key!r} must be 'none' (no key needed), 'optional' "
+            "(works without a key, better with one), or 'required' (unusable without one)"
         )
 
     for fieldname in ("title", "version", "license", "source_url"):

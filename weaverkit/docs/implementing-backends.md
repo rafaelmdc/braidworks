@@ -24,6 +24,23 @@ your backend fits the rest and is the same for every weaver. Skim
 
 ---
 
+## Connectivity: aim to connect, but an island is still allowed
+
+A weaver is most useful when it *links* — when some other weaver produces a key it
+consumes, so results can flow from one to the next. So always try to connect:
+pick `consumes` keys from the shared-key registry (`weaverkit/src/weaverkit/keys.py`)
+and, where you have a choice, prefer an input that another weaver already produces.
+`weaverkit index` shows you which keys are in play (the `unmet_inputs` column flags
+consumed keys nothing currently produces).
+
+But sometimes a source simply can't connect — its only sensible input isn't produced
+by anything else yet. **That is fine.** Keep the weaver: it can still retrieve real
+information when called directly with that input, and a future weaver may produce the
+key and link it in later. An unmet input is a hint, not an error — `verify` does not
+fail on it. The one hard rule stays: the input must still be a *registered* shared key
+(add the new bridge key to `keys.py` in the same PR), so the door to connecting is
+open even if nothing walks through it today.
+
 ## How it all wires together
 
 One capability call flows through fixed, generated machinery — your backend is the
