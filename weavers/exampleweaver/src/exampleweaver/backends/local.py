@@ -14,8 +14,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
-from exampleweaver.backends.base import ExampleBackend
-from exampleweaver.intermediate import ExampleRecord
+from braidworks.core import BackendBase, LookupRecord
 
 # Bump this whenever the bundled data changes — it is the backend's fingerprint,
 # so it must change when the data changes and stay identical for identical data.
@@ -42,7 +41,7 @@ def _load_table() -> dict[str, dict[str, str]]:
     return table
 
 
-class ExampleLocalBackend(ExampleBackend):
+class ExampleLocalBackend(BackendBase):
     """Looks up taxon traits in the bundled CSV.
 
     Always configured — the data ships inside the package, so there is nothing to
@@ -64,16 +63,16 @@ class ExampleLocalBackend(ExampleBackend):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
-    ) -> list[ExampleRecord]:
+    ) -> list[LookupRecord]:
         # This lookup has no expensive path, so groups_to_compute is unused here;
         # the mapper still filters to the requested outputs.
         table = _load_table()
-        records: list[ExampleRecord] = []
+        records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             taxid = str(query.get("ncbi.taxon.id"))
             values = table.get(taxid)
             if values is None:
-                records.append(ExampleRecord(query=query, found=False))  # a miss is normal
+                records.append(LookupRecord(query=query, found=False))  # a miss is normal
             else:
-                records.append(ExampleRecord(query=query, found=True, values=dict(values)))
+                records.append(LookupRecord(query=query, found=True, values=dict(values)))
         return records

@@ -33,6 +33,15 @@ from braidworks.core.executor import (
     ReviewPolicy,
     ReviewQueueItem,
 )
+from braidworks.core.backend import BackendBase
+from braidworks.core.dispatch import BackendDispatchWeaver
+from braidworks.core.mapper import map_lookup, map_resolver
+from braidworks.core.records import (
+    Candidate,
+    LookupRecord,
+    MatchStatus,
+    ResolverRecord,
+)
 from braidworks.core.localdb import (
     BuildLock,
     auto_consented,
@@ -88,6 +97,14 @@ __all__ = [
     "WeaverProvider",
     "BraidRegistry",
     "validate_manifest",
+    "BackendBase",
+    "BackendDispatchWeaver",
+    "map_lookup",
+    "map_resolver",
+    "MatchStatus",
+    "Candidate",
+    "LookupRecord",
+    "ResolverRecord",
     "ensure_local_db",
     "default_db_path",
     "auto_consented",

@@ -27,8 +27,17 @@ These are decided and landed; listed for completeness.
 
 - **A — always-computed groups.** A capability may declare
   `always_computed_groups` (e.g. a resolver always computes `core` before
-  `lineage`); the generated mapper unions them into `computed_groups` so the cache
-  key isn't under-reported. *(Mapper stays generated; the fact is declared.)*
+  `lineage`); the shared mapper unions them into `computed_groups` so the cache key
+  isn't under-reported. Lives as a field on the core `Capability`; the fact is
+  declared in the spec, the mechanism is shared.
+- **Shared runtime (maximize reuse).** The domain-neutral 80% of a weaver lives in
+  `braidworks-core` — `BackendDispatchWeaver`, `map_lookup`/`map_resolver`,
+  `LookupRecord`/`ResolverRecord`/`MatchStatus`/`Candidate`, and `BackendBase`. The
+  scaffold generates a *thin* weaver that imports them (vocab + thin glue + backend
+  stubs), instead of copying the machinery into every package. A bug fix in the
+  runtime now propagates to all weavers (rather than needing a template-and-copies
+  edit). "Bring your own plumbing" remains available (taxonweaver) per the principle
+  above — the shared runtime is the default, not a mandate.
 - **C/D — two-builder convention.** `build_<package>()` is the zero-config
   *introspection* builder that `verify` calls (backends present, possibly
   unconfigured); a domain-named builder (e.g. `build_ncbi_weaver(...)`) is the
@@ -88,8 +97,9 @@ the **weaver**, projected into the map only at the mapper seam.
 
 **Why.** A typed record *in core* would force core to know domain types — breaking
 the domain-neutrality invariant. But typing shouldn't be lost: rich weavers keep a
-typed intermediate and flatten at the edge. The generated `values`-dict record
-stays the fine default for simple weavers. ("Bring your own typed record, project
+typed intermediate and flatten at the edge. The shared `values`-dict records
+(`LookupRecord` / `ResolverRecord` in core) stay the fine default for simple
+weavers. ("Bring your own typed record, project
 at the seam" is blessed, same as B.)
 
 ## F — Produced non-shared fields are visible outputs but not join-eligible

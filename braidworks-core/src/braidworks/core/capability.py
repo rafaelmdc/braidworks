@@ -38,6 +38,11 @@ class Capability:
     backends: tuple[str, ...]
     max_batch_size: int | None = None
     cost: float = 1.0
+    # Group ids the backend always computes internally, even when none of their
+    # outputs were requested (e.g. a resolver always resolves name->id "core"
+    # before fetching lineage). Unioned into WeaveResult.computed_groups so the
+    # cache key isn't under-reported. Does not, by itself, emit those outputs.
+    always_computed_groups: frozenset[str] = frozenset()
 
     def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
         """Group ids containing at least one of the requested outputs."""
@@ -67,6 +72,7 @@ class Capability:
             "backends": list(self.backends),
             "max_batch_size": self.max_batch_size,
             "cost": self.cost,
+            "always_computed_groups": sorted(self.always_computed_groups),
         }
 
     @classmethod
@@ -79,6 +85,7 @@ class Capability:
             backends=tuple(data["backends"]),
             max_batch_size=data.get("max_batch_size"),
             cost=data.get("cost", 1.0),
+            always_computed_groups=frozenset(data.get("always_computed_groups", ())),
         )
 
 

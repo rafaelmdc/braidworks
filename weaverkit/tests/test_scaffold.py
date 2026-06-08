@@ -191,24 +191,24 @@ def test_bulk_manifest_conformant_and_compiles(tmp_path):
     assert check_fingerprints(weaver, list(spec.backends)) == []
 
 
-def test_lookup_intermediate_is_flat(tmp_path):
+def test_lookup_weaver_is_thin_and_uses_core(tmp_path):
+    """Thin model: records/mapper/dispatch/base are NOT generated — imported from core."""
     spec, dest, _ = _generate(tmp_path)
-    text = (dest / "src" / spec.package / "intermediate.py").read_text()
-    assert "MatchStatus" not in text
-    assert "found: bool" in text
+    pkg_dir = dest / "src" / spec.package
+    for gone in ("intermediate.py", "mapper.py", "dispatch.py"):
+        assert not (pkg_dir / gone).exists(), f"{gone} should no longer be generated"
+    assert not (pkg_dir / "backends" / "base.py").exists()
+    assert "from braidworks.core import LookupRecord" in (pkg_dir / "backends" / "local.py").read_text()
+    assert "map_lookup" in (pkg_dir / "weaver.py").read_text()
 
 
-def test_resolver_generates_match_status_and_candidates(tmp_path):
+def test_resolver_weaver_uses_core_resolver_runtime(tmp_path):
     spec = load_spec(RESOLVER_FIXTURE)
     dest = tmp_path / "out"
     scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
-    inter = (dest / "src" / spec.package / "intermediate.py").read_text()
-    mapper = (dest / "src" / spec.package / "mapper.py").read_text()
-    assert "class MatchStatus" in inter
-    assert "class Candidate" in inter
-    assert "WeaveStatus.AMBIGUOUS" in mapper
-    assert "CandidateResult" in mapper
-    assert "requires_review" in mapper
+    backend = (dest / "src" / spec.package / "backends" / "local.py").read_text()
+    assert "from braidworks.core import Candidate, MatchStatus, ResolverRecord" in backend
+    assert "map_resolver" in (dest / "src" / spec.package / "weaver.py").read_text()
 
 
 def test_resolver_manifest_matches_spec(tmp_path):
@@ -220,15 +220,6 @@ def test_resolver_manifest_matches_spec(tmp_path):
     weaver = getattr(mod, f"build_{spec.package}")()
     assert check_manifest(weaver.MANIFEST, spec) == []
     assert check_fingerprints(weaver, list(spec.backends)) == []
-
-
-def test_resolver_intermediate_and_mapper_compile(tmp_path):
-    spec = load_spec(RESOLVER_FIXTURE)
-    dest = tmp_path / "out"
-    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
-    for name in ("intermediate.py", "mapper.py"):
-        source = (dest / "src" / spec.package / name).read_text()
-        compile(source, name, "exec")
 
 
 def test_generated_vocab_is_valid_python(tmp_path):
@@ -409,50 +400,27 @@ always_computed_groups = ["core"]
 """
 
 
-def test_always_computed_group_reported_even_when_not_requested(tmp_path):
-    """Finding A: the mapper unions always_computed_groups into computed_groups."""
+def test_vocab_puts_always_computed_groups_on_capability(tmp_path):
+    """Finding A (thin model): vocab sets always_computed_groups on the core Capability.
+
+    The mapper that unions it into computed_groups now lives in core (covered by
+    braidworks-core's test_runtime); here we check the scaffold's half — that the
+    spec field reaches the generated manifest.
+    """
     toml = tmp_path / "acg.weaver.spec.toml"
     toml.write_text(_ALWAYS_SPEC)
     spec = load_spec(toml)
     dest = tmp_path / "out"
     scaffold(spec, dest, spec_toml=toml.read_text())
-
-    src = str(dest / "src")
-    sys.path.insert(0, src)
-    try:
-        importlib.invalidate_caches()
-        vocab = importlib.import_module("acgdemoweaver.vocab")
-        mapper = importlib.import_module("acgdemoweaver.mapper")
-        inter = importlib.import_module("acgdemoweaver.intermediate")
-
-        assert vocab.ALWAYS_COMPUTED_GROUPS == {"resolve_name": frozenset({"core"})}
-
-        cap = vocab.build_manifest(backends=("local",)).capability("resolve_name")
-        record = inter.AcgdemoRecord(
-            query={"organism.name": "Escherichia coli"},
-            status=inter.MatchStatus.RESOLVED,
-            values={"ncbi.taxon.rank": "species"},
-        )
-        # Ask for only the 'rank' group's output; 'core' must still be reported.
-        result = mapper.map_record(
-            record,
-            capability=cap,
-            requested_outputs=frozenset({"ncbi.taxon.rank"}),
-            backend="local",
-            weaver_version="0.1.0",
-        )
-        assert "core" in result.computed_groups
-        assert "rank" in result.computed_groups
-    finally:
-        sys.path.remove(src)
-        for name in list(sys.modules):
-            if name == "acgdemoweaver" or name.startswith("acgdemoweaver."):
-                del sys.modules[name]
+    mod = _import_generated(dest, spec.package)
+    cap = getattr(mod, f"build_{spec.package}")().MANIFEST.capability("resolve_name")
+    assert cap.always_computed_groups == frozenset({"core"})
 
 
-def test_generated_dispatch_passes_groups_to_compute(tmp_path):
-    """Finding B: the dispatch hands the backend the resolved triggered-group set."""
-    from braidworks.core import Strand, StrandSet
+def test_generated_weaver_wires_core_dispatch(tmp_path):
+    """Finding B (thin model): the generated weaver routes through core's dispatch,
+    which hands the backend the resolved triggered-group set."""
+    from braidworks.core import ResolverRecord, Strand, StrandSet
 
     spec = load_spec(RESOLVER_FIXTURE)
     dest = tmp_path / "out"
@@ -463,7 +431,6 @@ def test_generated_dispatch_passes_groups_to_compute(tmp_path):
     try:
         importlib.invalidate_caches()
         weaver_mod = importlib.import_module("resolverdemoweaver.weaver")
-        inter = importlib.import_module("resolverdemoweaver.intermediate")
 
         captured: dict[str, frozenset[str]] = {}
 
@@ -478,7 +445,7 @@ def test_generated_dispatch_passes_groups_to_compute(tmp_path):
 
             async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
                 captured["groups"] = groups_to_compute
-                return [inter.ResolverdemoRecord(query=q) for q in queries]
+                return [ResolverRecord(query=q) for q in queries]
 
         weaver = weaver_mod.ResolverdemoWeaver({"local": _CapturingBackend()})
         ss = StrandSet.from_strands("g", [Strand(type_id="organism.name", value="x")])

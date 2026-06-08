@@ -62,19 +62,20 @@ open even if nothing walks through it today.
 
 ## How it all wires together
 
-One capability call flows through fixed, generated machinery — your backend is the
-only custom link:
+One capability call flows through the **shared runtime** in `braidworks-core` — your
+backend is the only custom link. The generated weaver is thin: it subclasses core's
+`BackendDispatchWeaver` and picks a shared mapper; it does not copy this machinery.
 
 ```
 StrandSet(s)
-   │   (BackendDispatchWeaver.execute_batch — generated)
+   │   (core BackendDispatchWeaver.execute_batch)
    │   pulls each consumed type_id off the StrandSet
    ▼
 queries: list[{consumed_type_id: value}]        one dict per input entity
    │   (your backend — the only part you write)
    ▼
-YourBackend.fetch(...) -> list[<Db>Record]      one record per input, in order
-   │   (mapper.map_record — generated)
+YourBackend.fetch(...) -> list[LookupRecord]    one record per input, in order
+   │   (core map_lookup / map_resolver)
    │   keeps only requested outputs; sets status from found/error
    ▼
 list[WeaveResult]                               one per input, in order
@@ -83,19 +84,20 @@ list[WeaveResult]                               one per input, in order
 What this means for you:
 
 - You never build `WeaveResult`/`Strand` objects or worry about output groups,
-  requested-output filtering, or status codes — the **mapper** does that from your
-  `<Db>Record`. Your job is only: *look it up, fill the record.*
+  requested-output filtering, or status codes — the shared **mapper** does that from
+  your record. Your job is only: *look it up, fill the record.*
 - The **dispatch** guarantees `fetch` is only called with the backend selected and
   configured; an unconfigured backend raises `BackendUnavailable` upstream.
-- The **manifest** (in `vocab.py`) is generated from `weaver.spec.toml`, so the
-  capabilities, `consumes`, `produces`, and output groups already match the spec.
-  Don't hand-edit `vocab.py` — change the spec and regenerate.
+- The **manifest** (in the generated `vocab.py`) is generated from
+  `weaver.spec.toml`, so capabilities/`consumes`/`produces`/groups already match the
+  spec. Don't hand-edit `vocab.py` — change the spec and regenerate.
 
-The neutral record you fill (`src/<db>weaver/intermediate.py`):
+The neutral record you fill is **`braidworks.core.LookupRecord`** (import it; don't
+define your own):
 
 ```python
 @dataclass
-class <Db>Record:
+class LookupRecord:          # from braidworks.core
     query: dict[str, Any]         # the input you were given (echo it back)
     found: bool = False           # True on a hit
     values: dict[str, Any] = ...  # produced type_id -> value (hits only)
@@ -106,22 +108,24 @@ class <Db>Record:
 
 ## lookup vs resolver weavers
 
-The spec's `kind` field decides the shape of the generated `intermediate.py` and
-`mapper.py` — pick it up front, it changes what `fetch` returns:
+The spec's `kind` field decides which shared record + mapper the generated weaver
+uses (`map_lookup` vs `map_resolver`, both in `braidworks.core`) — pick it up front,
+it changes what `fetch` returns:
 
 - **`kind = "lookup"`** (default) — clean ID→data. The input already identifies the
-  record exactly (a taxid, an accession). The `<Db>Record` is flat:
+  record exactly (a taxid, an accession). `fetch` returns `LookupRecord`s, flat:
   `found` / `values` / `error`. Most weavers are this.
 - **`kind = "resolver"`** — fuzzy/ambiguous matching (names → ids, like
-  `taxonweaver`). The record carries a `MatchStatus`
+  `taxonweaver`). `fetch` returns `ResolverRecord`s carrying a `MatchStatus`
   (`RESOLVED` / `FUZZY_UNIQUE` / `AMBIGUOUS` / `NO_MATCH` / `ERROR`), an optional
   `score`, a `requires_review` flag, and a list of `Candidate`s for the ambiguous
-  case. The generated mapper turns these into `OK` / `AMBIGUOUS` (with
-  `candidates`) / `NO_MATCH` / `ERROR` and sets `requires_review`.
+  case. `map_resolver` turns these into `OK` / `AMBIGUOUS` (with `candidates`) /
+  `NO_MATCH` / `ERROR` and sets `requires_review`. (`MatchStatus`, `Candidate`,
+  `ResolverRecord` are all in `braidworks.core`.)
 
 The `fetch` contract below is written for `lookup`; the resolver differences are
 called out inline. Everything else (dispatch, manifest, registration, the cache
-contract) is identical.
+contract) is identical and shared from core.
 
 ### Always-computed groups (`always_computed_groups`)
 
@@ -141,9 +145,10 @@ consumes = ["organism.name"]
 always_computed_groups = ["core"]   # always computed, even if only lineage is asked
 ```
 
-The generated `vocab.py` emits an `ALWAYS_COMPUTED_GROUPS` map and the mapper unions
-it into `computed_groups`. (This only affects the reported `computed_groups`/cache
-key — it does *not* emit the group's strands unless they were requested.)
+The generated `vocab.py` puts `always_computed_groups` on the core `Capability`, and
+the shared mapper unions it into `computed_groups`. (This only affects the reported
+`computed_groups`/cache key — it does *not* emit the group's strands unless they were
+requested.)
 
 ---
 
@@ -253,7 +258,7 @@ async def fetch(
     *,
     requested_outputs: frozenset[str],
     groups_to_compute: frozenset[str],
-) -> list[<Db>Record]:
+) -> list[LookupRecord]:    # ResolverRecord for kind="resolver"
 ```
 
 Hard rules:
@@ -364,17 +369,19 @@ clade — so `verify --strict` is green with no 1.2 GB build.
 ## Advanced: conform with your own plumbing
 
 weaverkit defines a **contract**, not an implementation (decisions.md, the
-unifying principle). What `verify` checks is the *manifest* (capabilities /
-consumes / produces / groups / reachability), real fingerprints, and golden — **not**
-that your package uses the generated `intermediate.py` / `mapper.py` / `dispatch.py`
-verbatim. Two blessed patterns follow from that:
+unifying principle). The **default** is the shared runtime in `braidworks-core`
+(`BackendDispatchWeaver` + `map_lookup`/`map_resolver` + `LookupRecord`/
+`ResolverRecord` + `BackendBase`), which the generated weaver imports. But what
+`verify` checks is only the *manifest* (capabilities / consumes / produces / groups
+/ reachability), real fingerprints, and golden — **not** that you used the shared
+runtime. Two blessed patterns follow:
 
-- **Bring your own dispatch/mapper/intermediate.** A rich weaver may keep
-  hand-tuned internals and still conform, as long as `MANIFEST` matches the spec and
-  golden passes. `taxonweaver` is the worked example: it has its own
-  `BackendDispatchWeaver`, a typed `TaxonMatch`, and a resolver-specific mapper — and
-  passes `weaverkit verify --strict`. The generated files are the *default* for
-  simple weavers, not a requirement.
+- **Bring your own dispatch/mapper/records.** A rich weaver may implement
+  `BaseWeaver` directly with hand-tuned internals and still conform, as long as
+  `MANIFEST` matches the spec and golden passes. `taxonweaver` is the worked example:
+  its own `BackendDispatchWeaver`, a typed `TaxonMatch`, and a resolver-specific
+  mapper — and it passes `weaverkit verify --strict`. The shared core runtime is the
+  *default*, not a requirement.
 - **Typed domain record → project to `values` at the seam.** The generic mapper is
   keyed by `type_id → value` (it must stay domain-neutral). If you want real typing,
   keep a typed intermediate in your weaver (like `TaxonMatch` with `taxid`,
