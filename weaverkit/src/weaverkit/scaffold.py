@@ -724,8 +724,15 @@ class {{CLASS}}Backend(ABC):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
-        """Resolve consumed inputs into records — exactly one per input, in order."""
+        """Resolve consumed inputs into records — exactly one per input, in order.
+
+        ``groups_to_compute`` is the resolved set of triggered output-group ids
+        (the dispatch computed it from ``requested_outputs``); key any expensive
+        path off membership in it (e.g. ``"lineage" in groups_to_compute``) instead
+        of re-deriving group semantics yourself.
+        """
 '''
 
 _BACKEND_STUB = '''\
@@ -780,6 +787,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): look the inputs up in the {{BACKEND}} source and return one
         # {{CLASS}}Record PER input query, IN THE SAME ORDER (the dispatch relies
@@ -788,7 +796,8 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
 {{FETCH_HINT}}
         # ``capability_id`` tells you which capability is running if the backend
         # serves more than one; ``requested_outputs`` lets you skip expensive
-        # fields nobody asked for.
+        # fields nobody asked for; ``groups_to_compute`` is the resolved set of
+        # triggered group ids — gate expensive paths on membership in it.
         # See: weaverkit/docs/implementing-backends.md#fetch
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
@@ -839,6 +848,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): open self._db_path and look up each query. Return one
         # {{CLASS}}Record PER input query, IN THE SAME ORDER.
@@ -900,6 +910,7 @@ class {{BACKEND_CLASS}}({{CLASS}}Backend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[{{CLASS}}Record]:
         # TODO(fetch): call the API for each input and return one {{CLASS}}Record
         # PER input query, IN THE SAME ORDER (the dispatch relies on positional
@@ -1089,8 +1100,15 @@ class BackendDispatchWeaver(BaseWeaver):
             {t: (ss.get(t).value if ss.get(t) is not None else None) for t in consumed}
             for ss in strand_sets
         ]
+        # Pre-resolve request interpretation here (which output groups are triggered)
+        # so the backend keys its fulfillment strategy off a declarative set rather
+        # than re-deriving it from requested_outputs. See weaverkit/docs/decisions.md (B).
+        groups_to_compute = cap.triggered_groups(requested_outputs)
         records = await strategy.fetch(
-            capability_id, queries, requested_outputs=requested_outputs
+            capability_id,
+            queries,
+            requested_outputs=requested_outputs,
+            groups_to_compute=groups_to_compute,
         )
         return [
             map_record(

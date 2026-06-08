@@ -35,7 +35,20 @@ bundled-data fallback. Documented in implementing-backends.md.
   download, golden running against the mini fixture; a weaver with no fixture fails
   `--strict` with the actionable message.
 
-## P2 — Dispatcher pre-resolves `groups_to_compute` (Decision B)
+## P2 — Dispatcher pre-resolves `groups_to_compute` (Decision B) — ✅ DONE
+
+**Shipped:** `fetch` now takes `groups_to_compute: frozenset[str]` — the dispatch
+computes `cap.triggered_groups(requested_outputs)` and passes it; backends gate
+expensive paths on membership (`"lineage" in groups_to_compute`) instead of
+re-deriving group semantics. Updated across the generated templates (dispatch,
+base, 3 stubs, fetch-hints) and exampleweaver (dispatch + base + local). Note: the
+earlier "empty means all" worry was a red herring — `triggered_groups` returns
+groups whose outputs intersect the request, no implicit expansion. **taxonweaver
+already complied** (its own dispatch pre-resolves `need_lineage` and passes it to
+`resolve()`), so it needed no change — a nice confirmation of the principle. +1
+behavioral weaverkit test. Documented in implementing-backends.md.
+
+### original notes
 
 - Dispatcher computes the normalized triggered-group set (empty = all expanded) and
   passes `groups_to_compute: frozenset[str]` to `fetch` alongside `requested_outputs`.

@@ -7,6 +7,7 @@ must already match its spec. This is what lets an agent start from green.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
 from pathlib import Path
@@ -438,4 +439,53 @@ def test_always_computed_group_reported_even_when_not_requested(tmp_path):
         sys.path.remove(src)
         for name in list(sys.modules):
             if name == "acgdemoweaver" or name.startswith("acgdemoweaver."):
+                del sys.modules[name]
+
+
+def test_generated_dispatch_passes_groups_to_compute(tmp_path):
+    """Finding B: the dispatch hands the backend the resolved triggered-group set."""
+    from braidworks.core import Strand, StrandSet
+
+    spec = load_spec(RESOLVER_FIXTURE)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=RESOLVER_FIXTURE.read_text())
+
+    src = str(dest / "src")
+    sys.path.insert(0, src)
+    try:
+        importlib.invalidate_caches()
+        weaver_mod = importlib.import_module("resolverdemoweaver.weaver")
+        inter = importlib.import_module("resolverdemoweaver.intermediate")
+
+        captured: dict[str, frozenset[str]] = {}
+
+        class _CapturingBackend:
+            name = "local"
+
+            def is_configured(self):
+                return True
+
+            def fingerprint(self):
+                return "capture-v1"
+
+            async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
+                captured["groups"] = groups_to_compute
+                return [inter.ResolverdemoRecord(query=q) for q in queries]
+
+        weaver = weaver_mod.ResolverdemoWeaver({"local": _CapturingBackend()})
+        ss = StrandSet.from_strands("g", [Strand(type_id="organism.name", value="x")])
+        # Request only the 'rank' group's output -> triggered groups == {"rank"}.
+        asyncio.run(
+            weaver.execute(
+                "resolve_name",
+                ss,
+                requested_outputs=frozenset({"ncbi.taxon.rank"}),
+                backend="local",
+            )
+        )
+        assert captured["groups"] == frozenset({"rank"})
+    finally:
+        sys.path.remove(src)
+        for name in list(sys.modules):
+            if name == "resolverdemoweaver" or name.startswith("resolverdemoweaver."):
                 del sys.modules[name]

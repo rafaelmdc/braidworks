@@ -233,6 +233,7 @@ async def fetch(
     queries: list[dict[str, Any]],
     *,
     requested_outputs: frozenset[str],
+    groups_to_compute: frozenset[str],
 ) -> list[<Db>Record]:
 ```
 
@@ -259,11 +260,16 @@ Parameters you can use:
 - `requested_outputs` — the externally requested type_ids. Optional optimization:
   skip computing expensive `values` nobody asked for. (Correctness doesn't depend
   on it — the mapper filters anyway — but it can save work.)
+- `groups_to_compute` — the **resolved** set of triggered output-group ids (the
+  dispatch computed it from `requested_outputs` via `Capability.triggered_groups`).
+  Gate expensive paths on membership in it — `if "lineage" in groups_to_compute:` —
+  instead of re-deriving group semantics from `requested_outputs` yourself. This is
+  the dispatcher-owns-interpretation / backend-owns-fulfillment split (decisions.md B).
 
 Example (local SQLite, single-input capability keyed on `ncbi.taxon.id`):
 
 ```python
-async def fetch(self, capability_id, queries, *, requested_outputs):
+async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
     records: list[MadinRecord] = []
     for q in queries:
         taxid = q.get("ncbi.taxon.id")

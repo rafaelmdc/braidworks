@@ -63,7 +63,10 @@ class ExampleLocalBackend(ExampleBackend):
         queries: list[dict[str, Any]],
         *,
         requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
     ) -> list[ExampleRecord]:
+        # This lookup has no expensive path, so groups_to_compute is unused here;
+        # the mapper still filters to the requested outputs.
         table = _load_table()
         records: list[ExampleRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
