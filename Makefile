@@ -16,16 +16,16 @@ test: test-core test-weaver test-kit test-example  ## Run every package's test s
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
 
-test-weaver:  ## Run the taxonweaver suite (delegates to taxonweaver/Makefile)
-	$(MAKE) -C taxonweaver test
+test-weaver:  ## Run the taxonweaver suite (delegates to weavers/taxonweaver/Makefile)
+	$(MAKE) -C weavers/taxonweaver test
 
 test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
 	$(MAKE) -C weaverkit test
 
 test-example:  ## Run the exampleweaver reference suite (delegates to its Makefile)
-	$(MAKE) -C exampleweaver test
+	$(MAKE) -C weavers/exampleweaver test
 
-new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=fooweaver
+new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=weavers/fooweaver
 	$(MAKE) -C weaverkit new SPEC=$(abspath $(SPEC)) DEST=$(abspath $(DEST))
 
 verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=fooweaver
@@ -35,8 +35,8 @@ index:  ## Build the cross-weaver key index -> docs/weavers-index.tsv
 	uv run weaverkit index --root . --out docs/weavers-index.tsv
 
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
-LINT_PATHS = braidworks-core/src braidworks-core/tests taxonweaver/src taxonweaver/tests \
-	weaverkit/src weaverkit/tests exampleweaver/src exampleweaver/tests
+LINT_PATHS = braidworks-core/src braidworks-core/tests weavers/taxonweaver/src weavers/taxonweaver/tests \
+	weaverkit/src weaverkit/tests weavers/exampleweaver/src weavers/exampleweaver/tests
 
 lint:  ## Lint all packages and tests with ruff
 	uvx ruff check $(LINT_PATHS)

@@ -12,12 +12,12 @@ your backend fits the rest and is the same for every weaver. Skim
 
 **Two worked references, by altitude:**
 
-- **`exampleweaver/`** — the canonical *minimal* one: a `lookup` weaver,
+- **`weavers/exampleweaver/`** — the canonical *minimal* one: a `lookup` weaver,
   `ncbi.taxon.id → traits` from a ~5-row bundled CSV, ~80 lines you can read in a
   minute. It is literally `weaverkit new` + the three TODOs filled in, and it
   passes `weaverkit verify --strict`. **Copy this shape.** Start at
-  `exampleweaver/src/exampleweaver/backends/local.py`.
-- **`taxonweaver/`** — the *advanced, real-world* one you graduate to: a
+  `weavers/exampleweaver/src/exampleweaver/backends/local.py`.
+- **`weavers/taxonweaver/`** — the *advanced, real-world* one you graduate to: a
   `resolver` (fuzzy matching, candidates), two backends (local SQLite + a live
   API), and a multi-GB bulk DB. Far more code; reach for it once the minimal
   pattern is clear.
@@ -356,7 +356,7 @@ If neither is runnable, `--strict` fails with an actionable message — "skipped
 data" is **not** a pass. Your golden inputs must be resident in whatever fixture/
 bundled data you point at. `taxonweaver` is the worked example:
 `build_taxonweaver_fixture()` builds a ~6-species SQLite from inline dumps
-(`taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
+(`weavers/taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
 clade — so `verify --strict` is green with no 1.2 GB build.
 
 ---
@@ -404,5 +404,5 @@ delegates to it. You implement only two domain pieces in `setup.py`:
   or renaming. Record the source version (e.g. an MD5 in a metadata row) so
   `fingerprint()` can read it back.
 
-`taxonweaver/src/taxonweaver/setup.py` is the worked example (delegates to
+`weavers/taxonweaver/src/taxonweaver/setup.py` is the worked example (delegates to
 `ensure_local_db`, keeping only taxdump specifics).

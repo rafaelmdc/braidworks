@@ -283,8 +283,8 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         f"weaverkit verify --spec weaver.spec.toml --package {pkg} --strict",
         "```",
         "",
-        "Per-function contracts: [../weaverkit/docs/implementing-backends.md](../weaverkit/docs/implementing-backends.md).  ",
-        "Common mistakes: [../weaverkit/docs/PITFALLS.md](../weaverkit/docs/PITFALLS.md).  ",
+        "Per-function contracts: [../../weaverkit/docs/implementing-backends.md](../../weaverkit/docs/implementing-backends.md).  ",
+        "Common mistakes: [../../weaverkit/docs/PITFALLS.md](../../weaverkit/docs/PITFALLS.md).  ",
         "Worked example to copy: `../exampleweaver/src/exampleweaver/backends/local.py`.",
         "",
         "## 1. Implement the backend(s)",
@@ -296,8 +296,8 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         lines.append(
             f"- [ ] `src/{pkg}/backends/{b}.py` — fill `is_configured`, `fingerprint`, "
             f"and `fetch`{suffix} "
-            "([#fingerprint](../weaverkit/docs/implementing-backends.md#fingerprint), "
-            "[#fetch](../weaverkit/docs/implementing-backends.md#fetch))"
+            "([#fingerprint](../../weaverkit/docs/implementing-backends.md#fingerprint), "
+            "[#fetch](../../weaverkit/docs/implementing-backends.md#fetch))"
         )
     lines.append("")
 
@@ -750,7 +750,7 @@ else (manifest, dispatch, mapper) is generated and wired. Implement the three
 contract and an example.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -815,7 +815,7 @@ cache path. Fill in ``fingerprint`` (read the version recorded at build time) an
 ``fetch`` (query the DB), normalizing each result into a ``{{CLASS}}Record``.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -871,7 +871,7 @@ else (manifest, dispatch, mapper) is generated and wired. Implement the three
 ``# TODO`` spots below; each links to the section of the guide with the full contract.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
 """
 
 from __future__ import annotations

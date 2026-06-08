@@ -13,7 +13,7 @@ uv sync --all-extras
 
 Tests are **per package**, and the working directory matters: `taxonweaver`'s
 suite imports fixtures via `from tests....`, which only resolves when pytest runs
-from inside `taxonweaver/`. Use the Makefile and you won't have to think about it:
+from inside `weavers/taxonweaver/`. Use the Makefile and you won't have to think about it:
 
 ```bash
 make test          # both suites
@@ -57,7 +57,7 @@ deterministic path is **not** copying files by hand — use the scaffold generat
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=<db>weaver   # root-level, like taxonweaver/
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver   # under weavers/, like weavers/taxonweaver/
 ```
 
 This stamps a complete package from a `weaver.spec.toml`; you then implement only
