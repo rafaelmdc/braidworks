@@ -927,39 +927,29 @@ _SETUP = '''\
 
 The {{BULK_BACKEND}} backend reads a large local DB built from the source archive.
 It is multi-GB and must not be committed; ``ensure_{{DB}}_db`` downloads and builds
-it into the per-user cache on first use. Implement the two TODOs (``_build`` and the
-validity check) for your source's format — model on taxonweaver's ``setup.py``.
+it into the per-user cache on first use. The generic plumbing — consent gate,
+download, MD5 check, disk precheck, cross-process lock, and atomic publish — lives
+in ``braidworks.core.localdb``; you implement only the two domain TODOs below
+(``db_is_valid`` and ``_build``). Model on taxonweaver's ``setup.py``.
 
 See: weaverkit/docs/implementing-backends.md#bulk-file-sources-setuppy
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from platformdirs import user_cache_dir
+from braidworks.core.localdb import default_db_path as _default_db_path
+from braidworks.core.localdb import ensure_local_db
 
-from braidworks.core import BackendConfigurationError
-
-_ENV_DATA_DIR = "BRAIDWORKS_DATA_DIR"
-_ENV_AUTO = "BRAIDWORKS_AUTO_DOWNLOAD"
+_NAMESPACE = "{{DB}}"
 _DB_FILENAME = "{{BULK_FILENAME}}"
 ARCHIVE_URL = "{{ARCHIVE_URL}}"
 
 
 def default_db_path() -> Path:
     """Per-user default DB path (``BRAIDWORKS_DATA_DIR`` overrides the cache dir)."""
-    override = os.environ.get(_ENV_DATA_DIR)
-    base = Path(override) if override else Path(user_cache_dir("braidworks"))
-    return base / "{{DB}}" / _DB_FILENAME
-
-
-def auto_consented(auto: bool | None) -> bool:
-    """Whether to proceed without prompting (explicit arg wins, else the env flag)."""
-    if auto is not None:
-        return auto
-    return os.environ.get(_ENV_AUTO, "").lower() in ("1", "true", "yes")
+    return _default_db_path(_NAMESPACE, _DB_FILENAME)
 
 
 def db_is_valid(path: Path) -> bool:
@@ -977,33 +967,39 @@ def _consent_message(db_path: Path) -> str:
 
 
 def _build(target: Path) -> None:
-    """Download ARCHIVE_URL and build the DB at ``target``. IMPLEMENT ME."""
-    # TODO: stream-download ARCHIVE_URL, parse it, and write the DB to ``target``.
+    """Download ARCHIVE_URL and build the DB at ``target``. IMPLEMENT ME.
+
+    ``ensure_local_db`` calls this inside a temp dir on the DB's filesystem and
+    publishes ``target`` atomically only if ``db_is_valid(target)`` — so just build
+    into ``target``; don't worry about locking or atomic rename.
+    """
+    # TODO: build the DB into ``target``. Typically:
+    #   from braidworks.core.localdb import download, md5_file, fetch_remote_md5
+    #   archive = target.parent / "source.archive"
+    #   download(ARCHIVE_URL, archive)          # stream + progress
+    #   ... verify, parse the archive, and write the DB to ``target`` ...
     # Record the source version so the backend's fingerprint() can read it back.
     raise NotImplementedError("TODO: build the {{DBWEAVER}} DB from " + ARCHIVE_URL)
 
 
-def _build_into_place(db_path: Path) -> None:
-    """Build atomically: into a temp file, then rename into place."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = db_path.with_name(db_path.name + ".tmp")
-    if tmp.exists():
-        tmp.unlink()
-    _build(tmp)
-    os.replace(tmp, db_path)
-
-
 def ensure_{{DB}}_db(
-    target: str | Path | None = None, *, auto: bool | None = None, refresh: bool = False
+    target: str | Path | None = None, *, auto: bool = False, refresh: bool = False
 ) -> Path:
-    """Ensure the local DB exists (default cache path), building it if needed."""
+    """Ensure the local DB exists (default cache path), building it if needed.
+
+    Delegates orchestration (consent, lock, disk precheck, atomic publish) to
+    ``braidworks.core.localdb.ensure_local_db``; this module supplies only the
+    domain pieces (``db_is_valid`` / ``_build`` / the consent message).
+    """
     db_path = Path(target) if target is not None else default_db_path()
-    if db_is_valid(db_path) and not refresh:
-        return db_path
-    if not auto_consented(auto):
-        raise BackendConfigurationError(_consent_message(db_path))
-    _build_into_place(db_path)
-    return db_path
+    return ensure_local_db(
+        db_path,
+        is_valid=db_is_valid,
+        build=_build,
+        consent_message=_consent_message(db_path),
+        auto=auto,
+        refresh=refresh,
+    )
 '''
 
 _ENSURE_CLI = '''\
@@ -1338,7 +1334,8 @@ def scaffold(
     # Bulk-source tokens: a local DB built from a download (setup.py + ensure CLI).
     bulk = spec.bulk
     if bulk is not None:
-        tokens["DEPS"] = '"braidworks-core", "platformdirs>=4.0"'
+        # The local-DB plumbing (incl. platformdirs) now lives in braidworks-core.
+        tokens["DEPS"] = '"braidworks-core"'
         tokens["SCRIPTS_BLOCK"] = f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
         tokens["ENSURE_TARGET"] = "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
         tokens["ARCHIVE_URL"] = bulk.archive_url

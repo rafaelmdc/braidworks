@@ -33,6 +33,16 @@ from braidworks.core.executor import (
     ReviewPolicy,
     ReviewQueueItem,
 )
+from braidworks.core.localdb import (
+    BuildLock,
+    auto_consented,
+    check_disk,
+    default_db_path,
+    download,
+    ensure_local_db,
+    fetch_remote_md5,
+    md5_file,
+)
 from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
@@ -78,5 +88,13 @@ __all__ = [
     "WeaverProvider",
     "BraidRegistry",
     "validate_manifest",
+    "ensure_local_db",
+    "default_db_path",
+    "auto_consented",
+    "md5_file",
+    "fetch_remote_md5",
+    "download",
+    "check_disk",
+    "BuildLock",
     "Braider",
 ]

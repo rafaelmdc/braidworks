@@ -29,6 +29,7 @@ version = "0.1.0"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
+    { name = "platformdirs" },
 ]
 
 [package.optional-dependencies]
@@ -40,6 +41,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "networkx", specifier = ">=3.0" },
+    { name = "platformdirs", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
 ]

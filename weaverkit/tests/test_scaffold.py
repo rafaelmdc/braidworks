@@ -158,12 +158,20 @@ def test_bulk_scaffold_emits_setup_and_ensure(tmp_path):
     assert "def default_db_path" in setup
 
 
-def test_bulk_pyproject_wires_platformdirs_and_script(tmp_path):
+def test_bulk_pyproject_wires_core_and_script(tmp_path):
     spec, dest = _generate_bulk(tmp_path)
     pyproject = (dest / "pyproject.toml").read_text()
-    assert "platformdirs" in pyproject
+    # Local-DB plumbing (and platformdirs) come from braidworks-core now.
+    assert "braidworks-core" in pyproject
     assert "bulkdemoweaver-ensure" in pyproject
     assert "uv run bulkdemoweaver-ensure" in (dest / "Makefile").read_text()
+
+
+def test_bulk_setup_delegates_to_core_localdb(tmp_path):
+    spec, dest = _generate_bulk(tmp_path)
+    setup = (dest / "src" / spec.package / "setup.py").read_text()
+    assert "from braidworks.core.localdb import" in setup
+    assert "ensure_local_db" in setup
 
 
 def test_bulk_backend_uses_default_db_path(tmp_path):

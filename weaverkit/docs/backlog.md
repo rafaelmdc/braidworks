@@ -111,8 +111,14 @@ promote to `SHARED_KEYS` to make a field join-eligible.
 
 ## Pre-existing / separate
 
-- **#7 (deferred)** — extract shared local-DB plumbing into `braidworks-core` (not
-  weaverkit), seeded from taxonweaver's `setup.py`, once ≥2 real bulk weavers exist.
+- **#7 — ✅ DONE (un-deferred).** Extracted the generic local-DB plumbing into
+  `braidworks.core.localdb` (`ensure_local_db` + `default_db_path` / `auto_consented`
+  / `download` / `md5_file` / `fetch_remote_md5` / `check_disk` / `BuildLock`). It's
+  **callback-shaped** (caller supplies `is_valid` + `build` + consent message), so
+  it carries no taxonomy assumptions — mitigating the rule-of-three risk. taxonweaver's
+  `setup.py` now delegates to it (keeping only taxdump specifics), and the scaffold's
+  bulk `setup.py` template delegates too, so future bulk weavers get the plumbing
+  free. +12 core tests.
 - taxonweaver optional: adopt the generated dispatch/mapper/intermediate verbatim
   (only if we decide rich weavers should converge on generated plumbing — currently
   P4 says no, they needn't).
