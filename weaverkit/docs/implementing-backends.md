@@ -126,6 +126,51 @@ def __init__(self, db_path: Path | None = None) -> None:
 
 ---
 
+## API keys
+
+If a backend talks to a remote API that needs a key, you don't wire the key
+plumbing by hand — declare it once in the spec and the scaffold generates it. Set
+the weaver-level `api_key` field:
+
+```toml
+[weaver]
+# ...
+api_key = "required"   # "none" (default) | "optional" | "required"
+```
+
+- **`none`** (default) — no key. Every backend gets the plain stub.
+- **`required`** — the API is unusable without a key.
+- **`optional`** — the API works without a key, but one unlocks more (higher rate
+  limits, private data).
+
+When `api_key` is `optional` or `required`, every **non-`local`** backend (the
+`local` backend reads a bundled/built file, so it never needs a key) is stamped
+from the API variant instead of the plain stub. That variant:
+
+- defines `API_KEY_ENV = "<DB_NAME>_API_KEY"` (e.g. `UNIPROT_API_KEY`) and reads
+  the key in `__init__` with **explicit-arg-then-environment** precedence:
+
+  ```python
+  def __init__(self, api_key: str | None = None) -> None:
+      self._api_key = api_key or os.environ.get(API_KEY_ENV)
+  ```
+
+- wires `is_configured()` to the declared need, so routing and the golden-test skip
+  behave correctly out of the box:
+  - `required` → `return self._api_key is not None` (unconfigured, and golden tests
+    skip, until the env var is set);
+  - `optional` → `return True` (the backend always runs; the key just improves it).
+
+You implement only the call itself, in `fetch`: send `self._api_key` with each
+request using whatever scheme the API expects, e.g.
+`headers={"Authorization": f"Bearer {self._api_key}"}`. The key is already loaded;
+don't re-read the environment in `fetch`.
+
+`api_key` is also surfaced in `weaverkit index` (the `api_key` column), so the key
+requirements of every weaver are visible at a glance.
+
+---
+
 ## fingerprint
 
 `fingerprint()` returns a **stable, version-specific** string identifying the data
