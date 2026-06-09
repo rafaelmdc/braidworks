@@ -1,0 +1,76 @@
+# bacdive_weaver — BacDive (DSMZ) curated prokaryote strain phenotypes.
+# A lookup weaver: organism.scientific_name -> microbe traits, via the free
+# BacDive v2 REST API. BacDive is strain-level (no species aggregation endpoint),
+# so the MVP resolves the species' *type strain* as the representative (each record
+# carries a "type strain" yes/no flag). See CONTRIBUTING.md for the planned
+# expansion to aggregate-across-strains and strain-level lookups.
+[weaver]
+db_name = "bacdive"
+weaver_id = "bacdive"
+kind = "lookup"
+title = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
+version = "0.1.0"
+license = "CC BY 4.0 (BacDive / DSMZ; cite https://doi.org/10.1093/nar/gkab961)"
+source_url = "https://bacdive.dsmz.de"
+fingerprint_source = "BacDive API contract version (v2) — endpoints + record schema"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://api.bacdive.dsmz.de/v2/fetch/4409 (Escherichia coli),
+# showing the nested shape the mapper reads. Subfields are a dict for one entry,
+# a list of dicts for many — the backend must normalize both.
+source_sample = """
+{
+  "results": {
+    "4409": {
+      "General": { "NCBI tax id": { "NCBI tax id": 562, "Matching level": "species" } },
+      "Name and taxonomic classification": {
+        "genus": "Escherichia", "species": "Escherichia coli", "type strain": "no"
+      },
+      "Morphology": {
+        "cell morphology": { "gram stain": "negative", "cell shape": "rod-shaped", "motility": "yes" }
+      },
+      "Physiology and metabolism": {
+        "oxygen tolerance": { "oxygen tolerance": "facultative anaerobe" }
+      },
+      "Culture and growth conditions": {
+        "culture temp": [
+          { "growth": "positive", "type": "optimum", "temperature": "37" },
+          { "growth": "positive", "type": "range", "temperature": "10-41" }
+        ]
+      }
+    }
+  }
+}
+"""
+
+# One name -> one taxon query -> fetch the matching type strain. The API has no
+# multi-name batch endpoint, so batches fan out into per-name taxon lookups.
+[[capability]]
+id = "resolve_traits"
+consumes = ["organism.scientific_name"]
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "morphology"
+  outputs = [
+    "microbe.trait.gram_stain",
+    "microbe.trait.cell_shape",
+    "microbe.trait.motility",
+    "microbe.trait.spore_formation",
+  ]
+
+  [[capability.group]]
+  id = "physiology"
+  outputs = ["microbe.trait.oxygen_tolerance"]
+
+  [[capability.group]]
+  id = "growth"
+  outputs = ["microbe.trait.optimum_temp", "microbe.trait.optimum_ph"]
+
+# Golden runs against the deterministic fixture (bacdive_weaver.fixture, an
+# httpx.MockTransport serving canned taxon + fetch responses for the type strain
+# of Escherichia coli) so `weaverkit verify --strict` is reproducible offline.
+[[golden]]
+capability = "resolve_traits"
+input = { "organism.scientific_name" = "Escherichia coli" }
+expect = { "microbe.trait.gram_stain" = "negative", "microbe.trait.cell_shape" = "rod-shaped" }

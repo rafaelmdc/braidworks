@@ -54,7 +54,7 @@ never raw user input.
 
 | Decision | Question | Example (madin_weaver) |
 |---|---|---|
-| DB name | What's the source? Name the package `<db>weaver`. | `madin_weaver` (bacteria-archaea-traits) |
+| DB name | What's the source? Name the package `<db>_weaver`. | `madin_weaver` (bacteria-archaea-traits) |
 | Consumes | Which **shared key** identifies a record? | `ncbi.taxon.id` |
 | Produces | Which `type_id`s + how do they group? | `microbe.trait.*` in `traits.core` / `traits.growth` |
 | Backends | Bulk file → `local`; REST → `api`; both? | `local` (CC BY bulk CSV) |
@@ -73,7 +73,7 @@ Write the decisions above into a `weaver.spec.toml`, then generate the package:
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec first
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
 ```
 
 `weaverkit new` stamps the layout below, generating `vocab.py` so the manifest
@@ -84,10 +84,10 @@ stubs (§4/§6). The generated structure (see the repo-org proposal in
 weaver-roadmap.md §5 — if `weavers/*` has landed, create under `weavers/`):
 
 ```
-<db>weaver/
+<db>_weaver/
   pyproject.toml
   Makefile
-  src/<db>weaver/
+  src/<db>_weaver/
     __init__.py        # re-export build_<db>_weaver, vocab, the weaver class
     vocab.py
     intermediate.py
@@ -112,7 +112,7 @@ weaver-roadmap.md §5 — if `weavers/*` has landed, create under `weavers/`):
 
 ```toml
 [project]
-name = "<db>weaver"
+name = "<db>_weaver"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["braidworks-core", "httpx>=0.27"]   # local-DB plumbing (+platformdirs) comes via braidworks-core
@@ -123,7 +123,7 @@ test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 [tool.uv.sources]
 braidworks-core = { workspace = true }
 [tool.hatch.build.targets.wheel]
-packages = ["src/<db>weaver"]
+packages = ["src/<db>_weaver"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]
@@ -245,7 +245,7 @@ called when configured).
 
 **`api.py`** (REST). Mirror `backends/datasets_v2.py`: an **injectable**
 `httpx.AsyncClient` (tests pass an `httpx.MockTransport`), `api_key`/registration
-where required, batched + paged requests, `logging.getLogger("<db>weaver.api")`
+where required, batched + paged requests, `logging.getLogger("<db>_weaver.api")`
 INFO line on network use, a fixed `fingerprint()` like `"<db>-live"`.
 
 **Fingerprint rule (critical):** versioned dataset → version string
@@ -405,14 +405,14 @@ package's `src`/`tests` to the root `LINT_PATHS`.
 
 ```bash
 uv sync --all-extras
-make -C <db>weaver test       # unit + contract mixins; live E2E self-skips
+make -C <db>_weaver test       # unit + contract mixins; live E2E self-skips
 make lint                     # ruff over all packages (add your paths to LINT_PATHS)
 # once, to prove the real path:
-make -C <db>weaver test-live  # BRAIDWORKS_RUN_LIVE=1 — real download/build/resolve
+make -C <db>_weaver test-live  # BRAIDWORKS_RUN_LIVE=1 — real download/build/resolve
 ```
 
 Then plan an end-to-end chain to confirm reachability, e.g.:
-`organism.name → [taxon_weaver] → ncbi.taxon.id → [<db>weaver] → microbe.trait.*`.
+`organism.name → [taxon_weaver] → ncbi.taxon.id → [<db>_weaver] → microbe.trait.*`.
 
 ---
 

@@ -1,7 +1,7 @@
 # Implementing a weaver backend
 
 This is the reference for the `# TODO` spots in a scaffolded weaver's
-`src/<db>weaver/backends/<backend>.py`. The scaffold generates everything else;
+`src/<db>_weaver/backends/<backend>.py`. The scaffold generates everything else;
 you implement a backend by filling in three things — `is_configured`,
 `fingerprint`, and `fetch` — plus adding golden examples to the spec.
 

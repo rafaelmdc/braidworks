@@ -27,7 +27,7 @@ Registered bridge keys — what links weavers together.
 | `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name` | `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
-| `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
+| `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
 | `pathway.kegg.id` | KEGG pathway id. | — | — |
 | `pathway.reactome.id` | Reactome pathway id. | — | — |
 | `pdb.id` | PDB / PDBe structure id. | — | — |
@@ -42,9 +42,14 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
-| `microbe.trait.gram_stain` | Gram stain (positive/negative). | `example:resolve_traits` | — |
+| `microbe.trait.cell_shape` | Cell morphology / shape (rod-shaped, coccus-shaped, …). | `bacdive:resolve_traits` | — |
+| `microbe.trait.gram_stain` | Gram stain (positive/negative). | `bacdive:resolve_traits`, `example:resolve_traits` | — |
 | `microbe.trait.metabolism` | Metabolic strategy (aerobe/anaerobe/…). | — | — |
-| `microbe.trait.optimum_temp` | Optimum growth temperature. | `example:resolve_traits` | — |
+| `microbe.trait.motility` | Whether the organism is motile (yes/no). | `bacdive:resolve_traits` | — |
+| `microbe.trait.optimum_ph` | Optimum growth pH. | `bacdive:resolve_traits` | — |
+| `microbe.trait.optimum_temp` | Optimum growth temperature. | `bacdive:resolve_traits`, `example:resolve_traits` | — |
+| `microbe.trait.oxygen_tolerance` | Oxygen relationship (aerobe/anaerobe/facultative/…). | `bacdive:resolve_traits` | — |
+| `microbe.trait.spore_formation` | Whether it forms spores (yes/no). | `bacdive:resolve_traits` | — |
 | `ncbi.taxon.match_type` | How a name matched (exact/synonym/fuzzy/taxid). | `ncbi:ncbi.resolve_name` | — |
 | `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |

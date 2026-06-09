@@ -11,7 +11,7 @@ help:  ## Show this help
 sync:  ## Create/refresh the workspace venv with all extras
 	uv sync --all-extras
 
-test: test-core test-weaver test-kit test-example  ## Run every package's test suite
+test: test-core test-weaver test-kit test-example test-bacdive  ## Run every package's test suite
 
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
@@ -25,6 +25,9 @@ test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
 test-example:  ## Run the example_weaver reference suite (delegates to its Makefile)
 	$(MAKE) -C weavers/example_weaver test
 
+test-bacdive:  ## Run the bacdive_weaver suite (delegates to its Makefile)
+	$(MAKE) -C weavers/bacdive_weaver test
+
 new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=weavers/foo_weaver
 	$(MAKE) -C weaverkit new SPEC=$(abspath $(SPEC)) DEST=$(abspath $(DEST))
 
@@ -36,7 +39,8 @@ index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-in
 
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
 LINT_PATHS = braidworks-core/src braidworks-core/tests weavers/taxon_weaver/src weavers/taxon_weaver/tests \
-	weaverkit/src weaverkit/tests weavers/example_weaver/src weavers/example_weaver/tests
+	weaverkit/src weaverkit/tests weavers/example_weaver/src weavers/example_weaver/tests \
+	weavers/bacdive_weaver/src weavers/bacdive_weaver/tests
 
 lint:  ## Lint all packages and tests with ruff
 	uvx ruff check $(LINT_PATHS)

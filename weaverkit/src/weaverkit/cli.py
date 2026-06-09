@@ -249,7 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify.add_argument(
         "--package",
         default=None,
-        help="importable package name (defaults to <db_name>weaver)",
+        help="importable package name (defaults to <db_name>_weaver)",
     )
     p_verify.add_argument(
         "--strict",
