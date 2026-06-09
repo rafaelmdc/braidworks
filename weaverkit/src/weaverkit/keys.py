@@ -13,13 +13,13 @@ from __future__ import annotations
 SHARED_KEYS: dict[str, str] = {
     # Entry point
     "organism.name": "Free-text organism name — the entry input (user-provided).",
-    # Organism layer (taxonweaver / gtdbweaver)
+    # Organism layer (taxon_weaver / gtdb_weaver)
     "ncbi.taxon.id": "NCBI Taxonomy taxid — the primary organism join key.",
     "organism.scientific_name": "Canonical scientific name — clade-keyed joins (e.g. FAPROTAX).",
     "ncbi.taxon.lineage": "Ranked lineage [{taxid,rank,name}] — clade-keyed joins.",
     "ncbi.taxon.rank": "Taxonomic rank (species, genus, …).",
     "gtdb.taxon.id": "GTDB genome-based taxonomy id.",
-    # Molecular layer (uniprotweaver hinge + hubs)
+    # Molecular layer (uniprot_weaver hinge + hubs)
     "protein.uniprot.accession": "UniProt accession — the primary protein join key.",
     "gene.ncbi.id": "NCBI Gene id.",
     "gene.ensembl.id": "Ensembl gene id.",
@@ -43,11 +43,11 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
-    # taxonweaver leaf outputs
+    # taxon_weaver leaf outputs
     "ncbi.taxon.parent_id": "Parent taxid of the resolved node (descriptive).",
     "ncbi.taxon.match_type": "How a name matched (exact/synonym/fuzzy/taxid).",
     "ncbi.taxon.review_required": "Whether the match needs human review (bool).",
-    # microbe trait outputs (exampleweaver / future trait weavers)
+    # microbe trait outputs (example_weaver / future trait weavers)
     "microbe.trait.gram_stain": "Gram stain (positive/negative).",
     "microbe.trait.optimum_temp": "Optimum growth temperature.",
     "microbe.trait.metabolism": "Metabolic strategy (aerobe/anaerobe/…).",

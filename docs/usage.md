@@ -10,11 +10,11 @@ uv sync --all-extras
 
 ## 1. Choose and build a weaver
 
-`taxonweaver` exposes NCBI taxonomy with two interchangeable backends. Build a
+`taxon_weaver` exposes NCBI taxonomy with two interchangeable backends. Build a
 weaver with the factory:
 
 ```python
-from taxonweaver import build_ncbi_weaver
+from taxon_weaver import build_ncbi_weaver
 
 # API only — no local data needed (NCBI Datasets v2, over the network)
 weaver = build_ncbi_weaver(enable_api=True)
@@ -56,7 +56,7 @@ import asyncio
 from braidworks.core import (
     BraidRegistry, Braider, LocalExecutor, BackendPolicy, Strand, StrandSet,
 )
-from taxonweaver import build_ncbi_weaver
+from taxon_weaver import build_ncbi_weaver
 
 async def main():
     registry = BraidRegistry()
@@ -97,7 +97,7 @@ Every input lands in exactly one bucket of `ExecutionResult`:
 `len(resolved) + len(unresolved) + len(review_queue) + len(errors)` always equals
 the number of inputs.
 
-## Strand types produced by `taxonweaver`
+## Strand types produced by `taxon_weaver`
 
 | type_id | group | notes |
 |---|---|---|
@@ -121,7 +121,7 @@ calling each `build_*` function directly:
 
 ```python
 from braidworks.core import WeaverFactory
-from taxonweaver import NCBIWeaverProvider
+from taxon_weaver import NCBIWeaverProvider
 
 factory = WeaverFactory()
 factory.register(NCBIWeaverProvider())

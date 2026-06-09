@@ -94,19 +94,19 @@ def test_render_tsv_header_and_parse() -> None:
 
 
 def test_discover_skips_fixtures(tmp_path: Path) -> None:
-    (tmp_path / "realweaver").mkdir()
-    (tmp_path / "realweaver" / "weaver.spec.toml").write_text("x")
+    (tmp_path / "real_weaver").mkdir()
+    (tmp_path / "real_weaver" / "weaver.spec.toml").write_text("x")
     (tmp_path / "tests" / "fixtures").mkdir(parents=True)
     (tmp_path / "tests" / "fixtures" / "weaver.spec.toml").write_text("x")
     found = discover_specs(tmp_path)
-    assert [p.parent.name for p in found] == ["realweaver"]
+    assert [p.parent.name for p in found] == ["real_weaver"]
 
 
 def test_write_index_picks_delimiter_from_suffix(tmp_path: Path) -> None:
-    weaver_dir = tmp_path / "exampleweaver"
+    weaver_dir = tmp_path / "example_weaver"
     weaver_dir.mkdir()
     spec_toml = (
-        Path(__file__).parents[2] / "weavers" / "exampleweaver" / "weaver.spec.toml"
+        Path(__file__).parents[2] / "weavers" / "example_weaver" / "weaver.spec.toml"
     ).read_text()
     (weaver_dir / "weaver.spec.toml").write_text(spec_toml)
 
@@ -136,7 +136,7 @@ def test_uncatalogued_outputs_empty_when_all_known() -> None:
 
 
 def test_build_index_real_workspace() -> None:
-    # The real repo root has at least exampleweaver with a valid spec.
+    # The real repo root has at least example_weaver with a valid spec.
     root = Path(__file__).parents[2]
     rows = build_index(root)
     assert any(r.weaver == "example" for r in rows)
@@ -182,10 +182,10 @@ def test_render_keys_md_has_note_sections_and_rows() -> None:
 
 
 def test_write_key_index_emits_markdown(tmp_path: Path) -> None:
-    weaver_dir = tmp_path / "exampleweaver"
+    weaver_dir = tmp_path / "example_weaver"
     weaver_dir.mkdir()
     spec_toml = (
-        Path(__file__).parents[2] / "weavers" / "exampleweaver" / "weaver.spec.toml"
+        Path(__file__).parents[2] / "weavers" / "example_weaver" / "weaver.spec.toml"
     ).read_text()
     (weaver_dir / "weaver.spec.toml").write_text(spec_toml)
 

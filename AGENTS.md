@@ -8,7 +8,7 @@ before making changes. It is intentionally short and prescriptive; the deeper
 
 Braidworks is a `uv` workspace of composable biological data resolvers called
 **weavers**. `braidworks-core` is the domain-neutral framework; each weaver (e.g.
-`taxonweaver`) wraps one data source. `weaverkit` is the toolkit that makes adding
+`taxon_weaver`) wraps one data source. `weaverkit` is the toolkit that makes adding
 a weaver deterministic rather than improvised.
 
 ## Commands
@@ -19,7 +19,7 @@ make test                 # run every package's suite (core + weavers + weaverki
 make lint                 # ruff check across all packages
 make fmt                  # ruff format
 
-# adding a weaver (weavers live under weavers/, e.g. weavers/taxonweaver/, weavers/exampleweaver/):
+# adding a weaver (weavers live under weavers/, e.g. weavers/taxon_weaver/, weavers/example_weaver/):
 make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>weaver
 make index                # rebuild docs/weavers-index.tsv (machine) + docs/keys-index.md (human)

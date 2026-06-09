@@ -1,6 +1,6 @@
 # NCBI Taxonomy Database
 
-The `taxonweaver` **`local` backend** resolves names against a local SQLite copy
+The `taxon_weaver` **`local` backend** resolves names against a local SQLite copy
 of the NCBI taxonomy. The **`api` backend** uses NCBI Datasets v2 remotely and
 needs **no database** — if you only use `api`, skip this page entirely.
 
@@ -9,11 +9,11 @@ acquisition is an explicit, one-time step.
 
 ## Build it (download + build in one step)
 
-A console script (`taxon-weaver`) ships with the `taxonweaver` package:
+A console script (`taxon-weaver`) ships with the `taxon_weaver` package:
 
 ```bash
 # from the repo root
-uv run --package taxonweaver taxon-weaver build-db \
+uv run --package taxon_weaver taxon-weaver build-db \
     --download \
     --dump  data/taxdump.tar.gz \
     --db    data/ncbi_taxonomy.sqlite
@@ -33,7 +33,7 @@ automatically invalidates stale cache entries.
 ## Use it
 
 ```python
-from taxonweaver import build_ncbi_weaver
+from taxon_weaver import build_ncbi_weaver
 
 weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite")   # local backend
 ```

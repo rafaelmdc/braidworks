@@ -1,7 +1,7 @@
 # weaverkit design decisions
 
 ADR-style record of the architectural decisions behind weaverkit. Most were forced
-by reshaping the real `taxonweaver` onto the backbone (the migration acted as an
+by reshaping the real `taxon_weaver` onto the backbone (the migration acted as an
 acceptance test) — that surfaced the difference between a *toy* weaver and a real
 one with two backends, a multi-GB dataset, and resolver semantics.
 
@@ -36,7 +36,7 @@ These are decided and landed; listed for completeness.
   scaffold generates a *thin* weaver that imports them (vocab + thin glue + backend
   stubs), instead of copying the machinery into every package. A bug fix in the
   runtime now propagates to all weavers (rather than needing a template-and-copies
-  edit). "Bring your own plumbing" remains available (taxonweaver) per the principle
+  edit). "Bring your own plumbing" remains available (taxon_weaver) per the principle
   above — the shared runtime is the default, not a mandate.
 - **C/D — two-builder convention.** `build_<package>()` is the zero-config
   *introspection* builder that `verify` calls (backends present, possibly
@@ -92,7 +92,7 @@ separate concern and must not masquerade as definition-of-done.
 ## G — Dynamic `values` map at the core boundary; typed records in the weaver
 
 **Decision.** Keep the generic mapper keyed by `type_id → value` (`values:
-dict[str, Any]`). Typed domain records (like taxonweaver's `TaxonMatch`) live in
+dict[str, Any]`). Typed domain records (like taxon_weaver's `TaxonMatch`) live in
 the **weaver**, projected into the map only at the mapper seam.
 
 **Why.** A typed record *in core* would force core to know domain types — breaking

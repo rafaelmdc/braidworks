@@ -631,8 +631,8 @@ braidworks-core/
                           NoPathError, NoPlanError, UnsupportedCapability,
                           ReviewRequired, MissingInputError, InvalidManifestError
 
-taxonweaver/                              current taxonbridge, renamed
-  taxonweaver/
+taxon_weaver/                              current taxonbridge, renamed
+  taxon_weaver/
     weaver.py             NCBITaxonWeaver  ← new
     service.py            TaxonomyResolverService  ← unchanged
     ...existing modules unchanged...
