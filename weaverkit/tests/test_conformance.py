@@ -166,3 +166,39 @@ class TestConformanceMixin(WeaverConformanceTests):
 
     def build_weaver(self):
         return ConformingFakeWeaver()
+
+
+# --- canonical-type / shared-key parity --------------------------------------
+
+
+def test_every_shared_key_has_a_canonical_type():
+    """Lockstep contract: weaverkit.keys.SHARED_KEYS and core CANONICAL_TYPES.
+
+    Core declares one value type per shared (bridge) key; the reachability registry
+    lives here in weaverkit. They must stay in sync, or a new shared key would have
+    no declared shape (cache/join fragmentation) — caught here at CI time.
+    """
+    from braidworks.core import CANONICAL_TYPES
+
+    from weaverkit.keys import SHARED_KEYS
+
+    missing = sorted(set(SHARED_KEYS) - set(CANONICAL_TYPES))
+    assert not missing, (
+        "shared keys with no canonical type in braidworks.core.keytypes: "
+        f"{missing} — add them to CANONICAL_TYPES"
+    )
+    extra = sorted(set(CANONICAL_TYPES) - set(SHARED_KEYS))
+    assert not extra, (
+        "CANONICAL_TYPES declares keys that are not registered shared keys: "
+        f"{extra} — add them to weaverkit.keys.SHARED_KEYS or drop them"
+    )
+
+
+def test_unconfigured_fingerprint_is_not_treated_as_configured():
+    """#1 regression: an ``unconfigured:<backend>`` sentinel must not run golden."""
+    from weaverkit.conformance import _is_configured_fingerprint
+
+    assert not _is_configured_fingerprint("unconfigured:local")
+    assert not _is_configured_fingerprint("")
+    assert not _is_configured_fingerprint("unknown")
+    assert _is_configured_fingerprint("disbiome@2024-01-01")

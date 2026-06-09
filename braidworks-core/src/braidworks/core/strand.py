@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from braidworks.core.keytypes import canonicalize
+
 if TYPE_CHECKING:
     from braidworks.core.result import WeaveResult
 
@@ -34,6 +36,12 @@ class Strand:
     confidence: float = 1.0
     provenance: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Normalize the value to the canonical type for this (shared) key, so the
+        # same identifier has one shape everywhere — consistent cache keys + joins.
+        # Unregistered (weaver-private) keys pass through unchanged.
+        self.value = canonicalize(self.type_id, self.value)
 
     def to_json(self) -> dict[str, Any]:
         return {
