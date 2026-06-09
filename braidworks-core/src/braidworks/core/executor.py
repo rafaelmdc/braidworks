@@ -17,8 +17,8 @@ from braidworks.core.exceptions import (
 )
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
+from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.strand import MergePolicy, StrandSet
-from braidworks.core.weaver import BaseWeaver
 
 
 class ReviewPolicy(Enum):
@@ -146,11 +146,23 @@ class LocalExecutor:
     RAISE policy or ``BackendConfigurationError`` aborts the whole run.
     """
 
-    def __init__(self, registry: BraidRegistry, cache: StrandCache | None = None) -> None:
+    def __init__(
+        self,
+        registry: BraidRegistry,
+        cache: StrandCache | None = None,
+        *,
+        runner: WeaveStepRunner | None = None,
+    ) -> None:
         from braidworks.core.cache import InMemoryStrandCache
 
         self._registry = registry
         self._cache: StrandCache = cache if cache is not None else InMemoryStrandCache()
+        # The seam: how a single weave-step batch actually executes. Default is
+        # in-process (historical behavior); a distributed runner can be injected to
+        # dispatch steps to workers without changing any orchestration below.
+        self._runner: WeaveStepRunner = (
+            runner if runner is not None else InProcessStepRunner(registry)
+        )
 
     async def execute(
         self,
@@ -244,7 +256,7 @@ class LocalExecutor:
 
             # Resolve misses (with backend fallback), cache them, queue for classify.
             if misses:
-                miss_results = await self._resolve_misses(weaver, cap, invocation, misses)
+                miss_results = await self._resolve_misses(cap, invocation, misses)
                 for ss, r in zip(misses, miss_results):
                     if r.status is not WeaveStatus.ERROR:
                         # Cache every non-error result, including NO_MATCH and AMBIGUOUS,
@@ -286,7 +298,6 @@ class LocalExecutor:
 
     async def _resolve_misses(
         self,
-        weaver: BaseWeaver,
         cap: Capability,
         invocation: CapabilityInvocation,
         entities: list[StrandSet],
@@ -310,7 +321,7 @@ class LocalExecutor:
             sub_entities = [entities[i] for i in pending_idx]
             try:
                 batch_results = await self._call_batch(
-                    weaver, cap, invocation, sub_entities, backend
+                    cap, invocation, sub_entities, backend
                 )
             except BackendConfigurationError:
                 raise  # run-level: abort immediately
@@ -343,13 +354,12 @@ class LocalExecutor:
 
     async def _call_batch(
         self,
-        weaver: BaseWeaver,
         cap: Capability,
         invocation: CapabilityInvocation,
         entities: list[StrandSet],
         backend: str,
     ) -> list[WeaveResult]:
-        """Call execute_batch, splitting into sub-batches of at most max_batch_size."""
+        """Run the step via the runner, splitting into sub-batches of max_batch_size."""
         requested = invocation.output_types
         size = cap.max_batch_size
         if size is None:
@@ -359,11 +369,12 @@ class LocalExecutor:
         out: list[WeaveResult] = []
         for sb in sub_batches:
             out.extend(
-                await weaver.execute_batch(
+                await self._runner.run_step(
+                    invocation.weaver_id,
                     invocation.capability_id,
+                    backend,
                     sb,
-                    requested_outputs=requested,
-                    backend=backend,
+                    requested,
                 )
             )
         return out
