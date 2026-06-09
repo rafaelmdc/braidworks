@@ -34,16 +34,42 @@ weaverkit verify --spec weaver.spec.toml --package disbiome_weaver --strict
 
 ## Keep the fixture & golden honest
 
-- Golden inputs must resolve in whatever `--strict` runs against (a `build_disbiome_weaver_fixture()`
-  or a configured backend). When the source data changes, bump the backend `fingerprint`
-  and refresh the fixture/golden.
+- Golden runs against `build_disbiome_weaver_fixture()` (canned records in
+  `src/disbiome_weaver/fixture.py` — Lactobacillus/1591 and Enterococcus/1350). The
+  conformance and order-contract tests use the fixture too, so they run offline.
+- After touching `setup.py` or the join, run the live E2E (`make test-live`,
+  `BRAIDWORKS_RUN_LIVE=1`) to confirm the real API shapes still parse.
 
 ## Current outputs
 
-This weaver currently produces: `microbe.disease.associations`, `microbe.disease.count`, `microbe.disease.names`, `microbe.disease.records`.
+`microbe.disease.names`, `microbe.disease.count` (summary group);
+`microbe.disease.associations` (associations group); `microbe.disease.records`
+(full group — the complete joined blob).
+
+## How the local backend works
+
+`setup.py` fetches the keyless Disbiome tables whole (`/experiment` + `/disease` +
+`/organism` + `/publication`, ~7 MB), joins each experiment to its disease/organism/
+publication, and writes one row per experiment into a SQLite indexed by NCBI taxid
+(via `braidworks.core.localdb.ensure_local_db`). `/sample` and `/method` are just
+`{id, name}` and already denormalized onto each experiment, so they aren't fetched.
+Disbiome encodes missing values as the string `"None"` → normalized to `None` in
+`_clean`. The fingerprint is a content hash of the fetched tables (no release tag).
+`write_db` is shared by the live build and the fixture, so the schema lives in one
+place.
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- **Reverse lookup (disease → microbes).** Disbiome is equally queryable by disease;
+  a second capability consuming a disease key (e.g. `disease.meddra.id` /
+  `disease.name`, registered in `weaverkit.keys`) → the microbes Elevated/Reduced in
+  it would make this an intermediate as well as a terminal weaver.
+- **Emit the taxid back out.** Records carry `organism_ncbi_id`; the weaver could
+  also *produce* `ncbi.taxon.id` so a disease-keyed entry links back to the organism
+  layer.
+- **Taxid granularity.** Lookups are exact-taxid; Disbiome organisms are often
+  genus-level and its `organism_ncbi_id` may differ from a species taxid a caller
+  holds (e.g. genus 1578 vs a species under it). A future lineage-aware roll-up
+  (genus match for a species query) would raise recall — needs a defined policy.
+- **Quantitative effect sizes.** `subject_value`/`control_value`/`ratio` are often
+  absent; surfaced in the full blob when present, not interpreted.
