@@ -19,13 +19,15 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
-# Refill by elapsed*rate (capped at capacity), then take one token if available.
-# Returns "-1" on success, else the seconds to wait before retrying (as a string).
+# Refill by elapsed*rate (capped at capacity), then take ``cost`` tokens if available.
+# Returns "-1" on success, else the seconds to wait before the cost can be met (string).
+# ``cost`` is clamped to capacity so a request larger than the burst can still drain.
 _LUA = """
 local key = KEYS[1]
 local rate = tonumber(ARGV[1])
 local capacity = tonumber(ARGV[2])
 local now = tonumber(ARGV[3])
+local cost = math.min(tonumber(ARGV[4]), capacity)
 local state = redis.call('HMGET', key, 'tokens', 'ts')
 local tokens = tonumber(state[1])
 local ts = tonumber(state[2])
@@ -33,15 +35,15 @@ if tokens == nil then tokens = capacity; ts = now end
 local elapsed = math.max(0, now - ts)
 tokens = math.min(capacity, tokens + elapsed * rate)
 local ttl = math.ceil(capacity / rate) + 1
-if tokens >= 1 then
-  tokens = tokens - 1
+if tokens >= cost then
+  tokens = tokens - cost
   redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
   redis.call('EXPIRE', key, ttl)
   return "-1"
 else
   redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
   redis.call('EXPIRE', key, ttl)
-  return tostring((1 - tokens) / rate)
+  return tostring((cost - tokens) / rate)
 end
 """
 
@@ -65,19 +67,27 @@ class TokenBucket:
     rate: float
     capacity: float
 
-    async def acquire(self, *, timeout: float | None = None) -> bool:
-        """Take one token, awaiting until one is free. False if ``timeout`` elapses."""
+    async def acquire(self, cost: float = 1.0, *, timeout: float | None = None) -> bool:
+        """Take ``cost`` tokens, awaiting until they are free. False on ``timeout``.
+
+        ``cost`` lets one acquisition stand for a whole batch (one token per expected
+        external call), so the bucket bounds the aggregate call rate, not just the
+        task-dispatch rate. A cost above ``capacity`` is clamped server-side so an
+        oversized batch still drains rather than blocking forever.
+        """
         deadline = None if timeout is None else time.monotonic() + timeout
         while True:
-            wait = await self._try_take()
+            wait = await self._try_take(cost)
             if wait < 0:
                 return True
             if deadline is not None and time.monotonic() + wait > deadline:
                 return False
             await asyncio.sleep(min(wait, 0.5))
 
-    async def _try_take(self) -> float:
-        raw = await self.redis.eval(_LUA, 1, self.key, self.rate, self.capacity, time.time())
+    async def _try_take(self, cost: float = 1.0) -> float:
+        raw = await self.redis.eval(
+            _LUA, 1, self.key, self.rate, self.capacity, time.time(), cost
+        )
         return _as_float(raw)
 
 

@@ -54,6 +54,32 @@ Configuration (all env, all optional):
 | `BRAIDWORKS_QUEUE` | `weaver.default` | the queue a worker consumes (set to `weaver.<id>`) |
 | `BRAIDWORKS_WEAVERS` | _(all)_ | comma list of weaver ids to load into a worker |
 | `BRAIDWORKS_RATE_LIMITS` | _(off)_ | `weaver[:backend]=per_sec`, e.g. `ncbi:api=3` |
+| `BRAIDWORKS_FANOUT` | _(off)_ | `weaver[:backend]=width` — split a step's batch across up to `width` concurrent workers |
+| `BRAIDWORKS_FANOUT_UNBUDGETED` | _(empty)_ | `weaver[:backend]` list asserted to make **no** rate-limited external calls (local-DB backends) |
+| `BRAIDWORKS_FANOUT_CHUNK` | _(auto)_ | `weaver[:backend]=N` entities-per-task override |
+
+### Entity-level fan-out
+
+By default a step's whole batch runs as one job on one worker. For bulk workloads,
+fan-out splits the batch into contiguous chunks dispatched as **concurrent jobs**, so
+multiple workers process one batch in parallel; results are gathered back in input
+order. It is opt-in per `weaver:backend` and **gated on a rate budget** so it can never
+storm an upstream:
+
+- **Local backends** (no external rate limit) are the throughput win. Enable with a
+  width and assert them unbudgeted:
+  `BRAIDWORKS_FANOUT=ncbi:local=8` + `BRAIDWORKS_FANOUT_UNBUDGETED=ncbi:local`.
+- **Rate-limited API backends** must have a budget. Fan-out for a backend with neither
+  a `BRAIDWORKS_RATE_LIMITS` entry nor an unbudgeted assertion **raises
+  `FanoutConfigError`** (loud, never a silent storm). With a budget, each fanned task
+  takes one token per entity (≈ per external call), so the cluster-wide token bucket
+  caps the *aggregate* call rate regardless of fan-out width — extra workers simply
+  block on tokens. Budgeted backends default to 1 entity/task for the smoothest burst;
+  unbudgeted backends split evenly across `width`.
+
+Fan-out is a property of the distributed runner only — `braidworks-core` and the
+weavers are unchanged. (Per-call rate granularity *inside* a weaver is a future
+refinement; today the token cost is charged per task at the batch boundary.)
 
 ### Worker discovery
 
