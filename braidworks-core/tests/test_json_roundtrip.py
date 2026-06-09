@@ -35,15 +35,23 @@ def test_strand_collection_value_roundtrip():
 
 
 def test_strandset_roundtrip():
+    from braidworks.core.strand import StepOutcome
+
     ss = StrandSet.from_strands("e1", [Strand("organism.name", "Mus musculus")])
     ss.requires_review = True
     ss.warnings.append("w")
     ss.errors.append("err")
+    ss.completion.append(StepOutcome("bacdive.traits", "local", "ok", ("microbe.trait.gram_stain",)))
+    ss.completion.append(StepOutcome("disbiome.assoc", "local", "no_match"))
     again = StrandSet.from_json(ss.to_json())
     assert again.entity_id == "e1"
     assert again.get("organism.name").value == "Mus musculus"
     assert again.requires_review is True
     assert again.warnings == ["w"] and again.errors == ["err"]
+    assert [(o.capability_id, o.status, o.produced) for o in again.completion] == [
+        ("bacdive.traits", "ok", ("microbe.trait.gram_stain",)),
+        ("disbiome.assoc", "no_match", ()),
+    ]
     _json_stable(ss)
 
 

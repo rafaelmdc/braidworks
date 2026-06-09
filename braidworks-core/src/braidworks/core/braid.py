@@ -107,3 +107,43 @@ class Braid:
             from_types=frozenset(data["from_types"]),
             to_types=frozenset(data["to_types"]),
         )
+
+    def waves(self) -> tuple[tuple[int, ...], ...]:
+        """Group step indices into dependency *waves* for concurrent execution.
+
+        Step ``B`` depends on step ``A`` when one of ``B``'s input types is produced
+        by ``A``. Each step's wave is ``1 + max(wave of its dependencies)`` (0 when it
+        depends on nothing but the braid's starting types). Steps in the same wave are
+        independent and may run concurrently; waves run in order. For a purely linear
+        braid every step lands in its own successive wave, so execution is sequential —
+        identical to running ``steps`` in order.
+
+        ``steps`` is topologically ordered by the braider, so the dependency graph is a
+        DAG and this terminates.
+        """
+        produced_by: dict[str, set[int]] = {}
+        for i, step in enumerate(self.steps):
+            for t in step.output_types:
+                produced_by.setdefault(t, set()).add(i)
+
+        deps: list[set[int]] = []
+        for i, step in enumerate(self.steps):
+            d: set[int] = set()
+            for t in step.input_types:
+                d |= {j for j in produced_by.get(t, ()) if j != i}
+            deps.append(d)
+
+        level: dict[int, int] = {}
+
+        def _level(i: int) -> int:
+            if i not in level:
+                level[i] = 1 + max((_level(j) for j in deps[i]), default=-1)
+            return level[i]
+
+        for i in range(len(self.steps)):
+            _level(i)
+
+        by_level: dict[int, list[int]] = {}
+        for i, lvl in level.items():
+            by_level.setdefault(lvl, []).append(i)
+        return tuple(tuple(sorted(by_level[lvl])) for lvl in sorted(by_level))

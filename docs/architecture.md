@@ -485,7 +485,7 @@ ExecutionResult
 
 These four buckets are mutually exclusive and exhaustive. Every entity in the input batch ends up in exactly one.
 
-- `resolved` — all requested target types were found or already present. StrandSet contains them.
+- `resolved` — the braid ran to completion and produced target data. For a linear braid this means all target types were found or already present; for a braid with independent branches it means *at least one* target type was produced (see "Branch parallelism and completion metadata" below). StrandSet contains whatever the succeeding branches produced.
 - `unresolved` — the braid ran but a step returned `NO_MATCH` with no remaining fallbacks. Valid biological outcome ("we searched and found nothing"), not an error.
 - `review_queue` — a step returned `AMBIGUOUS` or `OK + requires_review=True` with `ReviewPolicy.HALT`. The `ReviewQueueItem` includes `remaining_steps` so the caller can resume: inject chosen strands, build a braid from `remaining_steps`, call `execute()` again.
 - `errors` — a structural failure recorded under `ErrorPolicy.RECORD_AND_CONTINUE`: preflight validation failure (`MissingInputError`) or `WeaveStatus.ERROR` after all backends exhausted.
@@ -512,6 +512,16 @@ These four buckets are mutually exclusive and exhaustive. Every entity in the in
 To trigger backend fallback on `WeaveStatus.ERROR` before `ErrorPolicy` is applied, put `FallbackCondition.ERROR` in the `CapabilityInvocation.fallback_on` set.
 
 **`confidence_threshold`** is an independent check. If any produced strand has `confidence < threshold`, the entity is halted by the same halt/continue/raise behaviour as `ReviewPolicy`. Both checks run independently; either can halt an entity.
+
+### Branch parallelism and completion metadata
+
+`Braid.waves()` groups steps into dependency **waves**: a step is in wave `1 + max(wave of the steps producing its inputs)`, or wave 0 if it depends only on the braid's starting types. Steps in the same wave are independent and the executor runs them **concurrently** (`asyncio.gather`); waves run in order. A purely linear braid is one step per wave, so it executes sequentially exactly as before — branch concurrency only appears when the graph actually forks (e.g. `taxid → traits` and `taxid → disease` from one `name → taxid`). Under the Celery executor this means independent branch steps dispatch to workers in parallel.
+
+Because branches are independent, filtering is **input-gated rather than global**: a step runs for an entity only if the entity has the step's input types. So a `NO_MATCH` is *branch-local* — it is recorded and the entity keeps going, and an independent branch that doesn't need the missing type still runs. (`ERROR`, `AMBIGUOUS`, and `requires_review` remain entity-terminal and route to `errors`/`review_queue` as before.) After all waves, a survivor is `resolved` if it acquired at least one requested target type, else `unresolved`.
+
+Every step that touched an entity leaves a `StepOutcome` in `StrandSet.completion` (`capability_id`, `backend`, `status` ∈ {`ok`, `no_match`, `skipped`}, `produced` types). This is how a caller sees *which* branches produced data when only some did — the partial-success signal lives in per-entity completion metadata, not in a separate bucket.
+
+> **Note — partial results bucket.** We deliberately keep the four buckets and record partial branch success as completion metadata rather than adding a dedicated `partial` bucket to `ExecutionResult`. Partial results are expected to be uncommon. If they turn out to be frequent and callers want to branch on them directly, a `partial` bucket can be added later as an additive change — the `StepOutcome` data needed to populate it is already captured.
 
 ### Preflight Validation and Per-step Guard
 

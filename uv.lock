@@ -75,7 +75,7 @@ wheels = [
 
 [[package]]
 name = "braidworks-celery"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "braidworks-celery" }
 dependencies = [
     { name = "braidworks-core" },
@@ -101,7 +101,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },

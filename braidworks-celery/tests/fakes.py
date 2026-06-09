@@ -115,3 +115,55 @@ def single_step_braid(
 
 def name_sets(*names: str) -> list[StrandSet]:
     return [StrandSet.from_strands(f"e{i}", [Strand(NAME, n)]) for i, n in enumerate(names)]
+
+
+# --- branch graph (name -> taxid -> {trait, disease}) for distributed parallelism ---
+
+TRAIT = "microbe.trait.gram_stain"
+DIS = "disease.assoc"
+
+
+def _one_cap(cid: str, consume: str, produce: str) -> Capability:
+    prod = frozenset({produce})
+    return Capability(
+        id=cid,
+        consumes=frozenset({consume}),
+        produces=prod,
+        output_groups=(OutputGroup(id="g", outputs=prod),),
+        backends=("local",),
+    )
+
+
+class _Fn(BaseWeaver):
+    def __init__(self, weaver_id, cap, out_type, *, miss=False):
+        self._m = WeaverManifest(weaver_id=weaver_id, version="1.0.0", capabilities=(cap,))
+        self._out = out_type
+        self._miss = miss
+
+    @property
+    def MANIFEST(self):  # type: ignore[override]
+        return self._m
+
+    def backend_fingerprint(self, backend):
+        return "ds"
+
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+        status = WeaveStatus.NO_MATCH if self._miss else WeaveStatus.OK
+        strands = () if self._miss else (Strand(self._out, f"{self._out}:ok"),)
+        return WeaveResult(
+            capability_id=capability_id,
+            weaver_version="1.0.0",
+            backend_used=backend,
+            computed_groups=frozenset({"g"}),
+            status=status,
+            strands=strands,
+        )
+
+
+def branch_registry(*, disease_miss: bool = False) -> BraidRegistry:
+    """name->taxid (ncbi), then independent taxid->trait (bacdive) + taxid->disease (disbiome)."""
+    reg = BraidRegistry()
+    reg.register(_Fn("ncbi", _one_cap("ncbi.resolve", NAME, TAXID), TAXID))
+    reg.register(_Fn("bacdive", _one_cap("bacdive.traits", TAXID, TRAIT), TRAIT))
+    reg.register(_Fn("disbiome", _one_cap("disbiome.assoc", TAXID, DIS), DIS, miss=disease_miss))
+    return reg

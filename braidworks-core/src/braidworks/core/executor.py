@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -18,7 +19,7 @@ from braidworks.core.exceptions import (
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
-from braidworks.core.strand import MergePolicy, StrandSet
+from braidworks.core.strand import MergePolicy, StepOutcome, StrandSet
 
 
 class ReviewPolicy(Enum):
@@ -219,82 +220,129 @@ class LocalExecutor:
         merge_policy: MergePolicy,
         confidence_threshold: float,
     ) -> None:
-        active = list(chunk)
-        for step_index, invocation in enumerate(braid.steps):
-            if not active:
+        live = list(chunk)  # entities still progressing (not terminally bucketed)
+        terminal: set[int] = set()  # id(entity) already placed in errors/review_queue
+        representative: dict[int, WeaveResult] = {}  # a NO_MATCH to attach if unresolved
+        waves = braid.waves()
+
+        for wi, wave in enumerate(waves):
+            if not live:
                 break
-            weaver = self._registry.get_weaver(invocation.weaver_id)
-            cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
-            requested = invocation.output_types
-            triggered = cap.triggered_groups(requested)
-            manifest_version = weaver.MANIFEST.version
-            primary_fingerprint = weaver.backend_fingerprint(invocation.primary_backend)
-            remaining_steps = braid.steps[step_index + 1 :]
+            # Steps in a wave are independent → run them concurrently. Each job only
+            # awaits I/O and never mutates an entity, so results are merged afterwards
+            # in deterministic step order (no shared-state hazard across the gather).
+            jobs = [self._run_step_over(braid, si, live) for si in wave]
+            wave_results = await asyncio.gather(*jobs)
+            remaining_steps = tuple(
+                braid.steps[si] for later in waves[wi + 1 :] for si in later
+            )
 
-            next_active: list[StrandSet] = []
-            pending: list[tuple[StrandSet, WeaveResult]] = []  # (entity, result) to classify
-            misses: list[StrandSet] = []
-
-            # Guard 1 + cache split.
-            for ss in active:
-                if requested <= ss.available_types():
-                    next_active.append(ss)  # already satisfied; no call, no lookup
-                    continue
-                key = compute_cache_key(
-                    cap,
-                    ss,
-                    weaver_id=invocation.weaver_id,
-                    weaver_version=manifest_version,
-                    backend=invocation.primary_backend,
-                    backend_fingerprint=primary_fingerprint,
-                )
-                cached = self._cache.get(key, triggered)
-                if cached is not None:
-                    pending.append((ss, cached))
-                else:
-                    misses.append(ss)
-
-            # Resolve misses (with backend fallback), cache them, queue for classify.
-            if misses:
-                miss_results = await self._resolve_misses(cap, invocation, misses)
-                for ss, r in zip(misses, miss_results):
-                    if r.status is not WeaveStatus.ERROR:
-                        # Cache every non-error result, including NO_MATCH and AMBIGUOUS,
-                        # so a second pass is a hit. Key by the backend that produced it.
-                        self._cache.put(
-                            compute_cache_key(
-                                cap,
-                                ss,
-                                weaver_id=invocation.weaver_id,
-                                weaver_version=r.weaver_version,
-                                backend=r.backend_used,
-                                backend_fingerprint=weaver.backend_fingerprint(r.backend_used),
-                            ),
-                            r,
+            for step_index, invocation, outs in sorted(wave_results, key=lambda t: t[0]):
+                for ss, kind, payload in outs:
+                    if id(ss) in terminal:
+                        continue
+                    if kind == "skipped":
+                        ss.completion.append(
+                            StepOutcome(invocation.capability_id, "", "skipped")
                         )
-                    pending.append((ss, r))
+                        continue
+                    if kind == "satisfied":
+                        produced = tuple(
+                            sorted(invocation.output_types & ss.available_types())
+                        )
+                        ss.completion.append(
+                            StepOutcome(invocation.capability_id, "", "ok", produced)
+                        )
+                        continue
+                    self._apply_result(
+                        ss,
+                        payload,
+                        step_index,
+                        invocation,
+                        remaining_steps,
+                        result,
+                        terminal,
+                        representative,
+                        review_policy=review_policy,
+                        error_policy=error_policy,
+                        merge_policy=merge_policy,
+                        confidence_threshold=confidence_threshold,
+                    )
 
-            # Classify hits and misses identically (cache hits get no special path).
-            for ss, r in pending:
-                keep = self._classify(
-                    ss,
-                    r,
-                    step_index,
-                    invocation,
-                    remaining_steps,
-                    result,
-                    review_policy=review_policy,
-                    error_policy=error_policy,
-                    merge_policy=merge_policy,
-                    confidence_threshold=confidence_threshold,
-                )
-                if keep:
-                    next_active.append(ss)
+            if terminal:
+                live = [ss for ss in live if id(ss) not in terminal]
 
-            active = next_active
+        # Survivors: resolved if any requested target type was produced (branches are
+        # best-effort enrichment — empty branches are recorded in completion, not a
+        # failure), else unresolved.
+        for ss in live:
+            if braid.to_types & ss.available_types():
+                result.resolved.append(ss)
+            else:
+                rep = representative.get(id(ss)) or self._synth_no_match(braid)
+                result.unresolved.append((ss, rep))
 
-        # Entities that survived every step are resolved.
-        result.resolved.extend(active)
+    async def _run_step_over(
+        self, braid: Braid, step_index: int, entities: list[StrandSet]
+    ) -> tuple[int, CapabilityInvocation, list[tuple[StrandSet, str, WeaveResult | None]]]:
+        """Run one step over the entities that can take it; collect, don't mutate.
+
+        Returns ``(step_index, invocation, outs)`` where each ``out`` is
+        ``(entity, kind, payload)`` with ``kind`` in ``{"skipped", "satisfied",
+        "result"}`` (payload is the WeaveResult only for ``"result"``). An entity is
+        ``"skipped"`` when it lacks the step's input types (an upstream branch did not
+        produce them) and ``"satisfied"`` when the step's outputs are already present.
+        """
+        invocation = braid.steps[step_index]
+        weaver = self._registry.get_weaver(invocation.weaver_id)
+        cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
+        requested = invocation.output_types
+        triggered = cap.triggered_groups(requested)
+        manifest_version = weaver.MANIFEST.version
+        primary_fingerprint = weaver.backend_fingerprint(invocation.primary_backend)
+
+        outs: list[tuple[StrandSet, str, WeaveResult | None]] = []
+        misses: list[StrandSet] = []
+        for ss in entities:
+            if not invocation.input_types <= ss.available_types():
+                outs.append((ss, "skipped", None))
+                continue
+            if requested <= ss.available_types():
+                outs.append((ss, "satisfied", None))
+                continue
+            key = compute_cache_key(
+                cap,
+                ss,
+                weaver_id=invocation.weaver_id,
+                weaver_version=manifest_version,
+                backend=invocation.primary_backend,
+                backend_fingerprint=primary_fingerprint,
+            )
+            cached = self._cache.get(key, triggered)
+            if cached is not None:
+                outs.append((ss, "result", cached))
+            else:
+                misses.append(ss)
+
+        if misses:
+            miss_results = await self._resolve_misses(cap, invocation, misses)
+            for ss, r in zip(misses, miss_results):
+                if r.status is not WeaveStatus.ERROR:
+                    # Cache every non-error result (incl. NO_MATCH/AMBIGUOUS), keyed by
+                    # the backend that produced it, so a second pass is a hit.
+                    self._cache.put(
+                        compute_cache_key(
+                            cap,
+                            ss,
+                            weaver_id=invocation.weaver_id,
+                            weaver_version=r.weaver_version,
+                            backend=r.backend_used,
+                            backend_fingerprint=weaver.backend_fingerprint(r.backend_used),
+                        ),
+                        r,
+                    )
+                outs.append((ss, "result", r))
+        return (step_index, invocation, outs)
 
     async def _resolve_misses(
         self,
@@ -379,7 +427,7 @@ class LocalExecutor:
             )
         return out
 
-    def _classify(
+    def _apply_result(
         self,
         ss: StrandSet,
         r: WeaveResult,
@@ -387,22 +435,31 @@ class LocalExecutor:
         invocation: CapabilityInvocation,
         remaining_steps: tuple[CapabilityInvocation, ...],
         result: ExecutionResult,
+        terminal: set[int],
+        representative: dict[int, WeaveResult],
         *,
         review_policy: ReviewPolicy,
         error_policy: ErrorPolicy,
         merge_policy: MergePolicy,
         confidence_threshold: float,
-    ) -> bool:
-        """Route one result. Returns True if the entity stays active, else it has
-        been placed in a terminal bucket (or an exception is raised)."""
+    ) -> None:
+        """Fold one step's result into an entity and record its completion outcome.
+
+        NO_MATCH is *branch-local*: it is recorded and the entity keeps going (another
+        branch or a later wave may still produce a target). ERROR / AMBIGUOUS / review
+        are entity-terminal — the entity is added to ``terminal`` and bucketed.
+        """
+        cap_id = invocation.capability_id
+
         if r.status is WeaveStatus.NO_MATCH:
-            result.unresolved.append((ss, r))
-            return False
+            ss.completion.append(StepOutcome(cap_id, r.backend_used, "no_match"))
+            representative.setdefault(id(ss), r)
+            return
 
         if r.status is WeaveStatus.ERROR:
             if error_policy is ErrorPolicy.RAISE:
                 raise BraidworksError(
-                    f"weaver ERROR at step {step_index} ({invocation.capability_id}): "
+                    f"weaver ERROR at step {step_index} ({cap_id}): "
                     f"{'; '.join(r.errors) or 'unspecified'}"
                 )
             result.errors.append(
@@ -411,41 +468,55 @@ class LocalExecutor:
                     error_type="WeaverError",
                     message="; ".join(r.errors) or "weaver returned ERROR",
                     step_index=step_index,
-                    capability_id=invocation.capability_id,
+                    capability_id=cap_id,
                 )
             )
-            return False
+            terminal.add(id(ss))
+            return
 
         if r.status is WeaveStatus.AMBIGUOUS:
             # AMBIGUOUS always halts or raises; ALLOW_CONTINUE never applies.
             if review_policy is ReviewPolicy.RAISE:
-                raise ReviewRequired(
-                    f"ambiguous result at step {step_index} ({invocation.capability_id})"
-                )
+                raise ReviewRequired(f"ambiguous result at step {step_index} ({cap_id})")
             result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
-            return False
+            terminal.add(id(ss))
+            return
 
         # status is OK.
         needs_review = r.requires_review or self._below_threshold(r, confidence_threshold)
         if needs_review:
             if review_policy is ReviewPolicy.RAISE:
                 raise ReviewRequired(
-                    f"result requires review at step {step_index} "
-                    f"({invocation.capability_id})"
+                    f"result requires review at step {step_index} ({cap_id})"
                 )
             if review_policy is ReviewPolicy.HALT:
                 result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
-                return False
+                terminal.add(id(ss))
+                return
             # ReviewPolicy.ALLOW_CONTINUE falls through to merge and continue.
 
         ss.merge_result(r, merge_policy)
-        return True
+        ss.completion.append(
+            StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in r.strands))
+        )
 
     @staticmethod
     def _below_threshold(r: WeaveResult, threshold: float) -> bool:
         if threshold <= 0.0:
             return False  # disabled
         return any(s.confidence < threshold for s in r.strands)
+
+    @staticmethod
+    def _synth_no_match(braid: Braid) -> WeaveResult:
+        """A placeholder NO_MATCH for an entity that produced no target on any branch."""
+        cap_id = braid.steps[0].capability_id if braid.steps else ""
+        return WeaveResult(
+            capability_id=cap_id,
+            weaver_version="",
+            backend_used="",
+            computed_groups=frozenset(),
+            status=WeaveStatus.NO_MATCH,
+        )
 
     @staticmethod
     def _synth_error(
