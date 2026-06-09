@@ -56,6 +56,13 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.trait.spore_formation": "Whether it forms spores (yes/no).",
     "microbe.trait.oxygen_tolerance": "Oxygen relationship (aerobe/anaerobe/facultative/…).",
     "microbe.trait.optimum_ph": "Optimum growth pH.",
+    # microbe–disease association outputs (disbiome_weaver)
+    "microbe.disease.names": "Distinct disease names a microbe is associated with.",
+    "microbe.disease.count": "Number of disease-association experiment records for a microbe.",
+    "microbe.disease.associations": "Compact per-experiment microbe–disease rows "
+    "(disease, Elevated/Reduced direction, method, sample, host).",
+    "microbe.disease.records": "Complete joined Disbiome records — every experiment / "
+    "disease / organism / publication field, incl. study-quality metadata.",
 }
 
 
