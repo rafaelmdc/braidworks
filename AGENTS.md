@@ -44,8 +44,14 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    conformance test is wired up. It also generates two per-weaver docs:
    `IMPLEMENTATION.md` (the one-time worklist to finish the stubs) and
    `CONTRIBUTING.md` (how to *extend* the weaver later — add a trait/capability/backend;
-   fill in its "Expansion notes" with weaver-specific limitations as you build). Add
-   the new package to `members` in the root `pyproject.toml`, then `make sync`.
+   fill in its "Expansion notes" with weaver-specific limitations as you build). The
+   root `pyproject.toml` already globs `members = ["weavers/*"]`, so a scaffolded
+   weaver is picked up by `make sync` with no manual edit.
+   > **Keep the spec outside `weavers/` until you scaffold.** The `weavers/*` glob
+   > makes `uv` treat *any* directory there as a workspace member, so a half-created
+   > `weavers/<db>_weaver/` holding only the spec makes every `uv run …` fail with
+   > "missing a pyproject.toml". Put the spec in a scratch path (e.g. `/tmp` or repo
+   > root), run `new-weaver`, and the scaffold writes the spec copy into the package.
 3. **Implement.** The only edits you should need are the spots marked `# TODO`:
    each backend's `fetch` (currently `NotImplementedError`) and its `fingerprint`
    (currently a placeholder). Normalize each source result into the generated

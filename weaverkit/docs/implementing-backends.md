@@ -289,6 +289,10 @@ Parameters you can use:
   Gate expensive paths on membership in it — `if "lineage" in groups_to_compute:` —
   instead of re-deriving group semantics from `requested_outputs` yourself. This is
   the dispatcher-owns-interpretation / backend-owns-fulfillment split (decisions.md B).
+  Gating only earns its keep when a group costs an **extra** call/query/computation.
+  If a single lookup already returns the whole record (typical of a one-call API
+  row), just fill every produced value and let the mapper drop the unrequested ones —
+  branching on the group set would add complexity for no saving.
 
 Example (local SQLite, single-input capability keyed on `ncbi.taxon.id`):
 
@@ -318,6 +322,13 @@ async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_co
 Multiple consumed keys: a `query` dict carries all of them, e.g.
 `{"organism.scientific_name": "...", "ncbi.taxon.lineage": [...]}`. Use whichever
 the source needs.
+
+**Batching API calls.** When the source has a multi-id endpoint, batch to cut round
+trips — but **confirm the multi-id syntax against the live service**, because docs
+often say "up to N ids" without showing the separator. It varies: NCBI Datasets
+takes a JSON array in a POST body; BacDive's `GET /fetch/{ids}` wants
+**semicolon**-joined ids (`/fetch/12;34;56`) and 404s on comma-joined. A quick live
+probe settles it; bake the confirmed form into the backend and note it in a comment.
 
 **Resolver variant** (`kind = "resolver"`): instead of `found`, set
 `record.status` to a `MatchStatus` and, for the ambiguous case, populate
