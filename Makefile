@@ -1,8 +1,14 @@
 # Braidworks developer tasks.
 # Tests are per-package and the working directory matters (taxon_weaver tests
 # import `from tests....`), so each target cd's into the right package.
+#
+# Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
+# workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: help sync test test-core test-weaver test-kit test-example new-weaver verify-weaver index lint fmt clean
+.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index lint fmt clean
+
+# Every weaver package directory (each has its own Makefile + src/ + tests/).
+WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -11,22 +17,16 @@ help:  ## Show this help
 sync:  ## Create/refresh the workspace venv with all extras
 	uv sync --all-extras
 
-test: test-core test-weaver test-kit test-example test-bacdive  ## Run every package's test suite
+test: test-core test-kit test-weavers  ## Run every package's test suite
 
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
 
-test-weaver:  ## Run the taxon_weaver suite (delegates to weavers/taxon_weaver/Makefile)
-	$(MAKE) -C weavers/taxon_weaver test
-
 test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
 	$(MAKE) -C weaverkit test
 
-test-example:  ## Run the example_weaver reference suite (delegates to its Makefile)
-	$(MAKE) -C weavers/example_weaver test
-
-test-bacdive:  ## Run the bacdive_weaver suite (delegates to its Makefile)
-	$(MAKE) -C weavers/bacdive_weaver test
+test-weavers:  ## Run every weaver suite under weavers/* (auto-discovered)
+	@for d in $(WEAVER_DIRS); do echo "== $$d =="; $(MAKE) -C $$d test || exit $$?; done
 
 new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DEST=weavers/foo_weaver
 	$(MAKE) -C weaverkit new SPEC=$(abspath $(SPEC)) DEST=$(abspath $(DEST))
@@ -37,10 +37,11 @@ verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=foo_wea
 index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-index.md
 	uv run weaverkit index --root . --out docs/weavers-index.tsv --keys-out docs/keys-index.md
 
-# Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
-LINT_PATHS = braidworks-core/src braidworks-core/tests weavers/taxon_weaver/src weavers/taxon_weaver/tests \
-	weaverkit/src weaverkit/tests weavers/example_weaver/src weavers/example_weaver/tests \
-	weavers/bacdive_weaver/src weavers/bacdive_weaver/tests
+# Lint every package and its tests. Weaver src/tests are derived from WEAVER_DIRS,
+# so a new weaver is linted automatically.
+WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
+LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
+	$(WEAVER_LINT_PATHS)
 
 lint:  ## Lint all packages and tests with ruff
 	uvx ruff check $(LINT_PATHS)
