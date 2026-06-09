@@ -99,6 +99,33 @@ done-checklist, see
 See [docs/architecture.md](docs/architecture.md) ("Backend strategies and
 dispatch" and "Weaver assembly: the two-layer factory") for the rationale.
 
+## Versioning & backwards compatibility
+
+Each package versions and releases **independently** (`braidworks-core`,
+`weaverkit`, and every `weavers/*`). They are tagged per package, not as one repo
+version:
+
+```
+braidworks-core-v0.1.0
+taxon_weaver-v0.1.0
+bacdive_weaver-v0.1.0
+```
+
+Weavers (and `weaverkit`) depend on the core with a **floor, not a ceiling** —
+`braidworks-core>=0.1.0`, no upper bound. The contract is:
+
+- **`braidworks-core` keeps backwards compatibility by default.** A new core
+  release must not break the public surface weavers build on (`Strand`,
+  `WeaveResult`, `LookupRecord`/`ResolverRecord`, `BackendDispatchWeaver`,
+  `map_lookup`/`map_resolver`, the manifest/capability types).
+- **If a core change *must* break compatibility,** bump the floor in every weaver
+  that needs the new behaviour (`braidworks-core>=X.Y.0`) in the same change, and
+  call out the break in the core release notes. The `>=` floor is what lets us find
+  and update those weavers.
+- The `[tool.uv.sources] braidworks-core = { workspace = true }` entry only governs
+  local development; the `[project.dependencies]` floor is what a built/published
+  artifact carries.
+
 ## Data artifacts
 
 Never commit taxonomy databases or taxdump archives — they are multi-GB and
