@@ -377,12 +377,16 @@ def test_api_optional_backend_is_configured_without_key(tmp_path):
     assert "return True" in api  # optional: works without the key
 
 
-def test_api_key_none_uses_plain_stub(tmp_path):
+def test_api_key_none_uses_keyless_http_stub(tmp_path):
     backends = _generate_api(tmp_path, "none")
     api = (backends / "api.py").read_text()
-    # No api_key need -> the api backend gets the plain stub, no env read.
+    # No api_key need -> the api backend gets the keyless HTTP stub: no env read, but
+    # an injectable httpx client + _http() helper, and configured once a client is set.
     assert "API_KEY_ENV" not in api
-    assert "self._configured = False" in api
+    assert "import httpx" in api
+    assert "client: httpx.AsyncClient | None" in api
+    assert "def _http(self)" in api
+    assert "self._configured or self._client is not None" in api
 
 
 def test_api_backend_declares_httpx_dependency(tmp_path):
@@ -397,6 +401,39 @@ def test_non_api_weaver_omits_httpx(tmp_path):
     # A local-only (bulk) weaver makes no HTTP calls, so httpx is not pulled in.
     _spec, dest = _generate_bulk(tmp_path)
     assert "httpx" not in (dest / "pyproject.toml").read_text()
+
+
+def test_keyless_api_generates_fixture_and_builder(tmp_path):
+    backends = _generate_api(tmp_path, "none")
+    dest = backends.parents[2]
+    pkg = backends.parent.name  # ./src/<pkg>/backends -> <pkg>
+    # An offline MockTransport fixture + a real (uncommented) fixture builder.
+    assert (backends.parent / "fixture.py").exists()
+    factory = (backends.parent / "factory.py").read_text()
+    assert f"def build_{pkg}_fixture() -> BaseWeaver:" in factory
+    assert "mock_client" in factory
+    # The commented fixture skeleton is gone (the real one replaced it).
+    assert f"# def build_{pkg}_fixture()" not in factory
+    # A gated live-E2E + a test-live make target.
+    assert (dest / "tests" / "test_e2e_live.py").exists()
+    assert "test-live:" in (dest / "Makefile").read_text()
+
+
+def test_keyed_api_keeps_commented_fixture_skeleton(tmp_path):
+    # A keyed (required) api is unconfigured in CI, so it gets no auto fixture — just
+    # the commented skeleton — but still gets the live-E2E stub + target.
+    backends = _generate_api(tmp_path, "required")
+    dest = backends.parents[2]
+    pkg = backends.parent.name  # ./src/<pkg>/backends -> <pkg>
+    assert not (backends.parent / "fixture.py").exists()
+    assert f"# def build_{pkg}_fixture()" in (backends.parent / "factory.py").read_text()
+    assert (dest / "tests" / "test_e2e_live.py").exists()
+
+
+def test_non_api_weaver_has_no_live_e2e(tmp_path):
+    _spec, dest = _generate_bulk(tmp_path)
+    assert not (dest / "tests" / "test_e2e_live.py").exists()
+    assert "test-live:" not in (dest / "Makefile").read_text()
 
 
 _ALWAYS_SPEC = """\
