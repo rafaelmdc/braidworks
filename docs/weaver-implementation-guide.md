@@ -78,8 +78,11 @@ make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
 
 `weaverkit new` stamps the layout below, generating `vocab.py` so the manifest
 already matches the spec (conformance passes by construction) and wiring up the
-conformance test. Then add the package to `members` in the root `pyproject.toml`
-and `make sync`. The only files you edit are the `# TODO` spots in the backend
+conformance test. The root `pyproject.toml` globs `members = ["weavers/*"]`, so the
+new package is picked up by `make sync` automatically — no manual `members` edit.
+(Keep the spec **outside** `weavers/` until you scaffold: the glob makes `uv` treat
+any dir there as a member, so a spec-only `weavers/<db>_weaver/` breaks `uv run`.)
+The only files you edit are the `# TODO` spots in the backend
 stubs (§4/§6). The generated structure (see the repo-org proposal in
 weaver-roadmap.md §5 — if `weavers/*` has landed, create under `weavers/`):
 
@@ -130,8 +133,9 @@ pythonpath = ["."]
 testpaths = ["tests"]
 ```
 
-Then register the package in the **root** `pyproject.toml` `[tool.uv.workspace]
-members`, run `uv sync --all-extras`, and confirm it imports.
+The **root** `pyproject.toml` `[tool.uv.workspace] members` already globs
+`weavers/*`, so just run `uv sync --all-extras` (or `make sync`) and confirm it
+imports — no manual member entry needed.
 
 ---
 
@@ -418,7 +422,7 @@ Then plan an end-to-end chain to confirm reachability, e.g.:
 
 ## 13. The checklist (done = all checked)
 
-- [ ] DB-named package; added to workspace `members`; own `Makefile`; `uv sync` clean.
+- [ ] DB-named package under `weavers/` (auto-included by the `weavers/*` glob); own `Makefile`; `uv sync` clean.
 - [ ] `vocab.py`: type_ids + capabilities + output groups; **`consumes` a shared key**
       (roadmap §1), not raw input; interface-table row added to weaver-roadmap.md.
 - [ ] Neutral intermediate; never imported by `braidworks-core`.
