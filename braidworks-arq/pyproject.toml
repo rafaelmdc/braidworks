@@ -1,6 +1,6 @@
 [project]
 name = "braidworks-arq"
-version = "0.1.0"
+version = "0.1.1"
 description = "Distributed execution for Braidworks — run weave-steps on arq workers over Redis (async-native: durable queue, cross-machine fan-out, global rate-limiting)."
 readme = "README.md"
 requires-python = ">=3.12"

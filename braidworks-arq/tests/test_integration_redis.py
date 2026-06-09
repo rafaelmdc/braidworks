@@ -36,3 +36,11 @@ async def test_token_bucket_lua_enforces_rate(client):
         assert await bucket._try_take() < 0
     assert await bucket._try_take() > 0
     assert await bucket.acquire(timeout=0.05) is False
+
+
+async def test_weighted_take_against_real_lua(client):
+    from braidworks_arq.ratelimit import TokenBucket
+
+    bucket = TokenBucket(client, key="braidworks:test:rl:w", rate=1.0, capacity=5.0)
+    assert await bucket._try_take(5) < 0  # drains the burst in one weighted take
+    assert await bucket._try_take(1) > 0  # empty now

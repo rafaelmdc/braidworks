@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import random
+
 from arq.worker import Retry
 
 from braidworks.core.exceptions import BackendConfigurationError, BackendUnavailable
@@ -30,8 +32,23 @@ _NO_RETRY = (BackendUnavailable, BackendConfigurationError)
 MAX_TRIES = 3
 
 
-async def _throttle(ctx: dict[str, Any], weaver_id: str, backend: str) -> None:
-    """Await the cluster-wide token bucket if a rule matches this step."""
+def _retry_defer(job_try: int) -> float:
+    """Exponential backoff with full jitter, so fanned-out retries desynchronize.
+
+    Without jitter, a batch of workers that all 429 at once would retry in lockstep
+    and re-storm the upstream. Jitter spreads them across the backoff window.
+    """
+    base = 2 ** (job_try - 1)
+    return base * (0.5 + random.random())
+
+
+async def _throttle(ctx: dict[str, Any], weaver_id: str, backend: str, cost: float) -> None:
+    """Await the cluster-wide token bucket if a rule matches this step.
+
+    ``cost`` is the number of tokens this task should consume — one per expected
+    external call (≈ the batch size under the non-batchable assumption), so the bucket
+    bounds the aggregate *call* rate across the fleet, not just task dispatch.
+    """
     rate = rate_for(load_limits(), weaver_id, backend)
     if rate is None:
         return
@@ -41,7 +58,7 @@ async def _throttle(ctx: dict[str, Any], weaver_id: str, backend: str) -> None:
         rate=rate,
         capacity=max(rate, 1.0),
     )
-    await bucket.acquire()
+    await bucket.acquire(cost)
 
 
 async def weave_step(
@@ -63,7 +80,8 @@ async def weave_step(
     strand_sets = [StrandSet.from_json(d) for d in strand_sets_json]
     requested = frozenset(requested_outputs)
 
-    await _throttle(ctx, weaver_id, backend)
+    # One token per expected external call ≈ one per entity (non-batchable worst case).
+    await _throttle(ctx, weaver_id, backend, cost=max(1, len(strand_sets)))
 
     try:
         results = await weaver.execute_batch(
@@ -78,5 +96,5 @@ async def weave_step(
         tries = ctx.get("job_try", 1)
         if tries >= MAX_TRIES:
             raise
-        raise Retry(defer=2 ** (tries - 1))
+        raise Retry(defer=_retry_defer(tries))
     return [r.to_json() for r in results]
