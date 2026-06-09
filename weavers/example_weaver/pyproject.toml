@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Example reference weaver (taxid -> traits, from a tiny CSV) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core"]
+dependencies = ["braidworks-core>=0.1.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23", "weaverkit"]
