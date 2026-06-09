@@ -1,0 +1,69 @@
+# disbiome_weaver — Disbiome (Ghent University): microbe ↔ disease associations.
+#
+# A `lookup` weaver: ncbi.taxon.id -> the diseases where this microbe's abundance is
+# reported Elevated/Reduced vs healthy controls (human host; MedDRA-coded), from the
+# free, keyless Disbiome JSON API. Disbiome is tiny (~7 MB across 6 endpoints), so the
+# `local` backend builds a small SQLite once by fetching + joining all tables, then
+# serves offline (like taxon_weaver, but far lighter — no taxdump, no GB-scale DB).
+#
+# Outputs come in light→heavy slices so a caller can ask for exactly what a prompt
+# needs: `summary` (just disease names + a count), `associations` (the per-experiment
+# rows: disease + direction + method/sample/host), or `full` (the complete joined
+# blob — every experiment/disease/organism/publication field, incl. study-quality
+# metadata). Each group is independent, so requesting the light slice never pays for
+# the blob.
+[weaver]
+db_name = "disbiome"
+weaver_id = "disbiome"
+kind = "lookup"
+title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
+version = "0.1.0"
+license = "Open — cite Janssens et al., BMC Microbiology 2018 (doi:10.1186/s12866-018-1197-5); confirm reuse terms"
+source_url = "https://disbiome.ugent.be"
+fingerprint_source = "content hash (sha256) of the fetched Disbiome tables, recorded at build time — Disbiome publishes no release tag"
+backends = ["local"]
+# Real records from the keyless JSON API (port 8080). The /experiment table carries
+# the association; the local build joins it to /disease, /organism and /publication
+# by their *_id fields. Disbiome encodes missing values as the string "None".
+source_sample = """
+# GET https://disbiome.ugent.be:8080/experiment  -> [ {one of ~10,866 records} ]
+{
+  "experiment_id": "1", "qualitative_outcome": "Elevated",
+  "disease_id": "1", "disease_name": "Autism", "meddra_level": "preferred_term", "meddra_id": "10080683",
+  "organism_id": "1", "organism_name": "Lactobacillus", "organism_ncbi_id": "1591",
+  "subject_value": "None", "control_value": "None", "ratio": "None",
+  "method_name": "qPCR", "sample_name": "Faeces", "host_type": "Human",
+  "publication_id": "1", "control_name": "Healthy control",
+  "response_name": "None", "response_unit": "None"
+}
+# GET /disease/1     -> {"disease_id":"1","name":"Autism","stage":"None","meddra_id":"10080683","meddra_level":"preferred_term","abbreviations":"None"}
+# GET /organism/1    -> {"organism_id":"1","name":"Lactobacillus","scientific_name":"Lactobacillus","ncbi_id":"1591","incertae_sedis":"False","silva_accession_number_base":"AATA01000092"}
+# GET /publication/1 -> {"publication_id":"1","title":"Gastrointestinal microbiota in children with autism in Slovakia.","first_author":"Tomova A","outlet":"Physiology & Behavior","volume":"138","start_page":"179","end_page":"187","year_of_publication":"2015","pubmed_url":"https://www.ncbi.nlm.nih.gov/pubmed/25446201","doi":"None","age_of_subjects_given":"y","controls_matched_for_possible_confounding_factors":"n","measure_of_variance_reported":"yes, only in graphs"}
+"""
+
+[[capability]]
+id = "disbiome.resolve_diseases"
+consumes = ["ncbi.taxon.id"]
+
+  # Lightest slice — "what diseases is this microbe linked to, and how many records?"
+  [[capability.group]]
+  id = "summary"
+  outputs = ["microbe.disease.names", "microbe.disease.count"]
+
+  # Medium slice — one compact row per experiment (the association signal + context).
+  [[capability.group]]
+  id = "associations"
+  outputs = ["microbe.disease.associations"]
+
+  # The big blob — every joined field, for callers that want everything.
+  [[capability.group]]
+  id = "full"
+  outputs = ["microbe.disease.records"]
+
+# Golden runs against the deterministic fixture (build_disbiome_weaver_fixture: a tiny
+# SQLite built from canned records for Lactobacillus, taxid 1591) so verify --strict is
+# reproducible offline.
+[[golden]]
+capability = "disbiome.resolve_diseases"
+input = { "ncbi.taxon.id" = 1591 }
+expect = { "microbe.disease.count" = 1, "microbe.disease.names" = ["Autism"] }
