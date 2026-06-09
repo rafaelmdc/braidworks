@@ -108,3 +108,15 @@ Branch: `feat/braid-dag-parallelism`
 
 ## Status log (update as we go)
 - 2026-06-09: plan written. Decisions: Full Phase 1, entry-point discovery.
+- 2026-06-09: **PR 1 done** (#23) — `WeaveStepRunner` seam in core 0.1.2, in-process
+  default, backwards-compatible. Branch `feat/weave-step-runner-seam`.
+- 2026-06-09: **PR 2 done** (branch `feat/braidworks-celery`, stacked on PR1) —
+  full `braidworks-celery` package: Celery app (Redis, acks_late, per-weaver queues),
+  entry-point discovery (`braidworks.weavers`), `weave_step` task (control-exceptions
+  propagate for fallback; transient errors retried), `CeleryStepRunner`,
+  `build_distributed_executor`, Redis token-bucket rate-limit. Weaver entry points
+  added to taxon/bacdive/disbiome. Tests: celery 14 (+2 redis integration, opt-in via
+  `BRAIDWORKS_REDIS_TEST`); full workspace green; ruff clean.
+- **Remaining for Phase 1 close-out:** merge PR1 then PR2; tag
+  `braidworks-celery-v0.1.0` after merge. Then delete this doc + fold the keeper
+  bits into `docs/architecture.md`. Phase 2 (PR3, braid DAG parallelism) deferred.

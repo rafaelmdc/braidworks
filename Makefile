@@ -17,13 +17,16 @@ help:  ## Show this help
 sync:  ## Create/refresh the workspace venv with all extras
 	uv sync --all-extras
 
-test: test-core test-kit test-weavers  ## Run every package's test suite
+test: test-core test-kit test-celery test-weavers  ## Run every package's test suite
 
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
 
 test-kit:  ## Run the weaverkit suite (delegates to weaverkit/Makefile)
 	$(MAKE) -C weaverkit test
+
+test-celery:  ## Run the braidworks-celery suite (eager mode; no Redis needed)
+	cd braidworks-celery && uv run --extra test python -m pytest -q
 
 test-weavers:  ## Run every weaver suite under weavers/* (auto-discovered)
 	@for d in $(WEAVER_DIRS); do echo "== $$d =="; $(MAKE) -C $$d test || exit $$?; done
@@ -41,6 +44,7 @@ index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-in
 # so a new weaver is linted automatically.
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
+	braidworks-celery/src braidworks-celery/tests \
 	$(WEAVER_LINT_PATHS)
 
 lint:  ## Lint all packages and tests with ruff

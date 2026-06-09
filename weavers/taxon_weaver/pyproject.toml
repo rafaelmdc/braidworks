@@ -17,6 +17,11 @@ test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 [project.scripts]
 taxon-weaver = "taxonomy_tools.cli:main"
 
+# Discovered by braidworks-celery workers (and any registry builder) — name is the
+# weaver_id, value is a zero-arg builder returning a BaseWeaver.
+[project.entry-points."braidworks.weavers"]
+ncbi = "taxon_weaver.factory:build_taxon_weaver"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
