@@ -39,7 +39,7 @@ once, so write a draft and let it guide you. The fields:
 
 | field | required | notes |
 |---|---|---|
-| `db_name` | yes | `^[a-z][a-z0-9_]*$`; the package becomes `<db_name>weaver`. |
+| `db_name` | yes | `^[a-z][a-z0-9_]*$`; the package becomes `<db_name>_weaver`. |
 | `title`, `version`, `license`, `source_url` | yes | non-empty metadata. |
 | `fingerprint_source` | yes | what versions the data (release tag / dump date / checksum); never `"unknown"`. |
 | `source_sample` | yes | a **real** snippet of the source (anti-hallucination guard). |

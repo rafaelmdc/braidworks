@@ -57,7 +57,7 @@ deterministic path is **not** copying files by hand — use the scaffold generat
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver   # under weavers/, like weavers/taxon_weaver/
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver   # under weavers/, like weavers/taxon_weaver/
 ```
 
 This stamps a complete package from a `weaver.spec.toml`; you then implement only

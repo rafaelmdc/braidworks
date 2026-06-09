@@ -47,10 +47,15 @@ OUTPUT_KEYS: dict[str, str] = {
     "ncbi.taxon.parent_id": "Parent taxid of the resolved node (descriptive).",
     "ncbi.taxon.match_type": "How a name matched (exact/synonym/fuzzy/taxid).",
     "ncbi.taxon.review_required": "Whether the match needs human review (bool).",
-    # microbe trait outputs (example_weaver / future trait weavers)
+    # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "Gram stain (positive/negative).",
     "microbe.trait.optimum_temp": "Optimum growth temperature.",
     "microbe.trait.metabolism": "Metabolic strategy (aerobe/anaerobe/…).",
+    "microbe.trait.cell_shape": "Cell morphology / shape (rod-shaped, coccus-shaped, …).",
+    "microbe.trait.motility": "Whether the organism is motile (yes/no).",
+    "microbe.trait.spore_formation": "Whether it forms spores (yes/no).",
+    "microbe.trait.oxygen_tolerance": "Oxygen relationship (aerobe/anaerobe/facultative/…).",
+    "microbe.trait.optimum_ph": "Optimum growth pH.",
 }
 
 
