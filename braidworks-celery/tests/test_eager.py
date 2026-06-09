@@ -4,15 +4,26 @@ from __future__ import annotations
 
 import pytest
 
-from braidworks.core.braid import FallbackCondition
+from braidworks.core.braid import BackendPolicy, FallbackCondition
+from braidworks.core.planner import Braider
 
 from braidworks_celery import discovery
 from braidworks_celery.executor import build_distributed_executor
 from braidworks_celery.runner import CeleryStepRunner
 from braidworks_celery.tasks import weave_step
 
-from fakes import EchoWeaver, FlakyWeaver, name_sets, registry_with, single_step_braid
+from fakes import (
+    DIS,
+    TRAIT,
+    EchoWeaver,
+    FlakyWeaver,
+    branch_registry,
+    name_sets,
+    registry_with,
+    single_step_braid,
+)
 
+NAME = "organism.name"
 TAXID = "ncbi.taxon.id"
 
 
@@ -79,6 +90,37 @@ async def test_backend_unavailable_in_worker_triggers_orchestrator_fallback():
     res = await ex.execute(braid, name_sets("a", "b"))
     assert len(res.resolved) == 2
     assert all(ss.has(TAXID) for ss in res.resolved)
+
+
+async def test_distributed_branch_braid_dispatches_each_branch_step():
+    """A branched braid resolves through the Celery runner; each branch is its own step."""
+    reg = branch_registry()
+    discovery.set_registry(reg)
+    ex = build_distributed_executor(reg)
+    braid = Braider(reg).plan(
+        frozenset({NAME}), frozenset({TRAIT, DIS}), backend_policy=BackendPolicy.LOCAL_ONLY
+    )
+    assert len(braid.waves()) == 2  # ncbi, then the two independent branches
+    res = await ex.execute(braid, name_sets("ecoli"))
+    assert len(res.resolved) == 1
+    got = res.resolved[0]
+    assert got.has(TRAIT) and got.has(DIS)
+
+
+async def test_distributed_partial_branch_is_resolved_with_completion():
+    reg = branch_registry(disease_miss=True)
+    discovery.set_registry(reg)
+    ex = build_distributed_executor(reg)
+    braid = Braider(reg).plan(
+        frozenset({NAME}), frozenset({TRAIT, DIS}), backend_policy=BackendPolicy.LOCAL_ONLY
+    )
+    res = await ex.execute(braid, name_sets("ecoli"))
+    assert len(res.resolved) == 1 and res.unresolved == []
+    ss = res.resolved[0]
+    assert ss.has(TRAIT) and not ss.has(DIS)
+    outcomes = {o.capability_id: o.status for o in ss.completion}
+    assert outcomes["bacdive.traits"] == "ok"
+    assert outcomes["disbiome.assoc"] == "no_match"
 
 
 async def test_transient_error_is_retried_then_surfaces():

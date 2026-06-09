@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 
+from celery.result import allow_join_result
+
 from braidworks.core.result import WeaveResult
 from braidworks.core.strand import StrandSet
 
@@ -56,4 +58,9 @@ class CeleryStepRunner:
             args=[weaver_id, capability_id, backend, payload, requested],
             queue=queue_for(weaver_id),
         )
-        return async_result.get(timeout=self._result_timeout)
+        # This .get() runs in the *orchestrator*, never inside a worker task, so the
+        # "don't block on a result inside a task" guard doesn't apply. allow_join_result
+        # affirms that; it also sidesteps a false positive in Celery's eager test mode,
+        # where concurrent branch steps share a process-global "join will block" flag.
+        with allow_join_result():
+            return async_result.get(timeout=self._result_timeout)

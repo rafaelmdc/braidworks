@@ -64,6 +64,44 @@ class Strand:
 
 
 @dataclass
+class StepOutcome:
+    """What one braid step did for one entity — the completion-metadata record.
+
+    Independent braid branches can each succeed or come up empty for the same entity
+    (e.g. an organism has disease associations but no curated traits). A NO_MATCH on
+    one branch is not an entity-level failure; it is recorded here so callers can see
+    exactly which branches produced data. ``status`` is one of:
+
+    - ``"ok"`` — the step produced output (or its outputs were already present);
+    - ``"no_match"`` — the step ran but found nothing for this entity;
+    - ``"skipped"`` — the step never ran because an upstream branch did not produce
+      its required input type.
+    """
+
+    capability_id: str
+    backend: str
+    status: str
+    produced: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "capability_id": self.capability_id,
+            "backend": self.backend,
+            "status": self.status,
+            "produced": list(self.produced),
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> StepOutcome:
+        return cls(
+            capability_id=data["capability_id"],
+            backend=data.get("backend", ""),
+            status=data["status"],
+            produced=tuple(data.get("produced", ())),
+        )
+
+
+@dataclass
 class StrandSet:
     """All strands currently known for one entity. Mutable during execution.
 
@@ -77,6 +115,9 @@ class StrandSet:
     requires_review: bool = False
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    # Per-step completion metadata (one entry per braid step that touched this
+    # entity). Populated by the executor; empty for a freshly built input set.
+    completion: list[StepOutcome] = field(default_factory=list)
 
     @classmethod
     def from_strands(cls, entity_id: str, strands: list[Strand]) -> StrandSet:
@@ -126,6 +167,7 @@ class StrandSet:
             "requires_review": self.requires_review,
             "warnings": list(self.warnings),
             "errors": list(self.errors),
+            "completion": [o.to_json() for o in self.completion],
         }
 
     @classmethod
@@ -136,4 +178,5 @@ class StrandSet:
             requires_review=data.get("requires_review", False),
             warnings=list(data.get("warnings", [])),
             errors=list(data.get("errors", [])),
+            completion=[StepOutcome.from_json(o) for o in data.get("completion", [])],
         )

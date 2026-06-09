@@ -57,7 +57,7 @@ from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
-from braidworks.core.strand import MergePolicy, Strand, StrandSet
+from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet
 from braidworks.core.weaver import BackendStrategy, BaseWeaver
 
 __all__ = [
@@ -97,6 +97,7 @@ __all__ = [
     "MergePolicy",
     "Strand",
     "StrandSet",
+    "StepOutcome",
     "BaseWeaver",
     "BackendStrategy",
     "WeaverFactory",

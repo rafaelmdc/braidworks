@@ -117,6 +117,19 @@ Branch: `feat/braid-dag-parallelism`
   `build_distributed_executor`, Redis token-bucket rate-limit. Weaver entry points
   added to taxon/bacdive/disbiome. Tests: celery 14 (+2 redis integration, opt-in via
   `BRAIDWORKS_REDIS_TEST`); full workspace green; ruff clean.
-- **Remaining for Phase 1 close-out:** merge PR1 then PR2; tag
-  `braidworks-celery-v0.1.0` after merge. Then delete this doc + fold the keeper
-  bits into `docs/architecture.md`. Phase 2 (PR3, braid DAG parallelism) deferred.
+- 2026-06-09: **Phase 1 merged + tagged** — `braidworks-core-v0.1.2` (#23) and
+  `braidworks-celery-v0.1.0` (#25, rebuilt on main after a stacked-branch hiccup).
+- 2026-06-09: **Phase 2 done** (branch `feat/braid-parallelism`, off main) —
+  branch parallelism. `Braid.waves()` groups independent steps; executor rewritten
+  to run waves with same-wave steps concurrent (`asyncio.gather`); NO_MATCH is now
+  branch-local (input-gated filtering); ERROR/AMBIGUOUS/review still terminal.
+  Outcome model: **completion metadata** (`StepOutcome` list on `StrandSet`,
+  serialized), lenient resolved (≥1 target). No new `ExecutionResult` bucket — see
+  architecture.md note (a `partial` bucket can be added later if needed).
+  Distributed parallelism works for free (the executor calls the Celery runner
+  concurrently); `allow_join_result` fix for the orchestrator-side `.get()`.
+  core 0.1.2→0.1.3, braidworks-celery 0.1.0→0.1.1 (floor → core>=0.1.3). Tests:
+  core 136, celery 16; full workspace green; ruff clean.
+- **Close-out (next PR):** delete this WIP doc (its design content now lives in
+  `docs/architecture.md`). Tag `braidworks-core-v0.1.3` + `braidworks-celery-v0.1.1`
+  after the Phase 2 PR merges.
