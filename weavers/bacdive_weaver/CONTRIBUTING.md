@@ -66,13 +66,14 @@ ease and interlink, so this is meant to grow:
 - **Carry the NCBI taxid out.** Records contain `General → NCBI tax id`; emitting it
   would let bacdive link *back* to `ncbi.taxon.id` (currently we only consume names).
 
-### Known limitations / data quirks (see also docs/bacdive-build-notes.md)
+### Known limitations / data quirks
 
 - **Scan cost.** No "type strains only" filter exists, so finding the type strain
   pages the taxon ID list and `fetch`es records until the flag matches, bounded by
   `max_strains_scanned` (default 200; *E. coli* alone has ~1,884 strains). Mitigate
-  with **batch fetch** (the endpoint takes ≤100 ids/call — format unverified, see
-  build-notes #4) and a cache. If no type strain is found within the cap → NO_MATCH.
+  with **batch fetch** (the endpoint takes ≤100 ids/call — confirm the multi-id
+  separator against the live API) and a cache. If no type strain is found within
+  the cap → NO_MATCH.
 - **Subfield shape.** BacDive returns a subfield as a *dict* for one entry and a
   *list* for many; the backend normalizes via `_first` / `_as_list`. Preserve that
   when adding fields.

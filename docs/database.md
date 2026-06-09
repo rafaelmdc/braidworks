@@ -4,10 +4,26 @@ The `taxon_weaver` **`local` backend** resolves names against a local SQLite cop
 of the NCBI taxonomy. The **`api` backend** uses NCBI Datasets v2 remotely and
 needs **no database** — if you only use `api`, skip this page entirely.
 
-Braidworks never downloads the database implicitly: it is ~4 GB once built, so
-acquisition is an explicit, one-time step.
+Braidworks never downloads the database implicitly. Acquisition is an explicit,
+opt-in, one-time step — a ~60 MB download plus a ~1-minute local build (~1.2 GB on
+disk). The easiest path is `taxon-weaver ensure` (below); `build-db` is the
+fully-manual alternative.
 
-## Build it (download + build in one step)
+## Easiest: `taxon-weaver ensure`
+
+```bash
+taxon-weaver ensure              # prompt, then download + build into the user cache
+taxon-weaver ensure --yes        # non-interactive (CI/servers)
+taxon-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+```
+
+`ensure` is idempotent (a valid DB is reused instantly), lands the DB in the
+per-user cache (override with `--db` or `BRAIDWORKS_DATA_DIR`), and reports when a
+newer NCBI release exists. Afterward `build_ncbi_weaver(auto_setup=True)` finds it
+automatically. The design and decisions are in
+[local-db-setup-plan.md](local-db-setup-plan.md).
+
+## Manual: build it (download + build in one step)
 
 A console script (`taxon-weaver`) ships with the `taxon_weaver` package:
 
@@ -52,10 +68,11 @@ The database and taxdump are git-ignored (`*.sqlite`, `taxdump.tar.gz`,
 `/data/`). Keep them out of version control and out of network filesystems
 (SQLite over NFS is unsafe — copy to local disk on HPC).
 
-## Roadmap: assisted setup
+## Assisted setup (implemented)
 
-Today you build the DB explicitly, as above. Planned next: when a weaver is asked
-for the `local` backend and the database is absent, guide the user through (or, in
-a CLI context, offer to run) the download+build — while the `api` backend "just
-works" remotely and logs that it is using the network. Until that lands, the
-explicit `build-db` step above is the supported path.
+`build_ncbi_weaver(auto_setup=True)` provisions the `local` DB on demand: on an
+interactive terminal it prompts before the download + build; non-interactively it
+honors `auto_setup` / `BRAIDWORKS_AUTO_DOWNLOAD` or raises an actionable error
+naming the exact command to run. The `api` backend stays zero-setup — it works over
+the network and logs (INFO) that it is doing so. Decisions behind this:
+[local-db-setup-plan.md](local-db-setup-plan.md).

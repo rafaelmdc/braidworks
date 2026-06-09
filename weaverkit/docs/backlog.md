@@ -18,7 +18,7 @@ Status: the taxon_weaver migration goal is **met** — it conforms to its spec a
 when present, else an already-configured backend on `build_<package>()`, else fails
 with an actionable message (skip ≠ pass). `taxon_weaver` ships
 `build_taxon_weaver_fixture()` (mini *Faecalibacterium* SQLite from inline dumps in
-`weavers/taxon_weaver/fixture.py`, single source shared with the tests) and **passes
+`weavers/taxon_weaver/src/taxon_weaver/fixture.py`, single source shared with the tests) and **passes
 `verify --strict` with no 1.2 GB build**. `example_weaver` stays green via the
 bundled-data fallback. Documented in implementing-backends.md.
 

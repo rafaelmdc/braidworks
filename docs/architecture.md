@@ -611,37 +611,36 @@ Entry-point declaration in `pyproject.toml` is deferred until the plugin-configu
 
 ## Package Structure
 
-```
-braidworks-core/
-  braidworks/
-    core/
-      strand.py           Strand, StrandSet, MergePolicy
-      capability.py       OutputGroup, Capability, WeaverManifest
-      result.py           WeaveResult, WeaveStatus, CandidateResult
-      weaver.py           BaseWeaver ABC
-      braid.py            CapabilityInvocation, Braid, BackendPolicy,
-                          FallbackCondition
-      cache.py            StrandCacheKey, compute_cache_key, StrandCache protocol,
-                          InMemoryStrandCache
-      registry.py         BraidRegistry
-      planner.py          Braider
-      executor.py         LocalExecutor, ReviewPolicy, ErrorPolicy,
-                          ExecutionResult, ExecutionError, ReviewQueueItem
-      exceptions.py       BackendConfigurationError, BackendUnavailable,
-                          NoPathError, NoPlanError, UnsupportedCapability,
-                          ReviewRequired, MissingInputError, InvalidManifestError
+The full repository layout — `braidworks-core`, `weaverkit`, and `weavers/*` — is in
+[repo-structure.md](repo-structure.md). The core abstractions described above live in
+`braidworks-core/src/braidworks/core/`:
 
-taxon_weaver/                              current taxonbridge, renamed
-  taxon_weaver/
-    weaver.py             NCBITaxonWeaver  ← new
-    service.py            TaxonomyResolverService  ← unchanged
-    ...existing modules unchanged...
-  pyproject.toml
-    (entry-point declaration deferred; manual registration is the MVP path)
-
-(future)
-braidworks-celery/        CeleryExecutor — same Braid + ExecutionResult interface
 ```
+strand.py       Strand, StrandSet, MergePolicy
+capability.py   OutputGroup, Capability, WeaverManifest
+result.py       WeaveResult, WeaveStatus, CandidateResult
+weaver.py       BaseWeaver ABC, BackendStrategy
+backend.py      BackendBase            (shared backend ABC)
+records.py      LookupRecord, ResolverRecord, MatchStatus, Candidate
+mapper.py       map_lookup / map_resolver   (shared strand-shape source)
+dispatch.py     BackendDispatchWeaver       (shared dispatch runtime)
+braid.py        CapabilityInvocation, Braid, BackendPolicy, FallbackCondition
+cache.py        StrandCacheKey, compute_cache_key, StrandCache, InMemoryStrandCache
+registry.py     BraidRegistry
+planner.py      Braider
+executor.py     LocalExecutor, ReviewPolicy, ErrorPolicy, ExecutionResult,
+                ExecutionError, ReviewQueueItem
+factory.py      WeaverProvider, WeaverFactory   (Layer 1 of the weaver factory)
+localdb.py      ensure_local_db + generic bulk-DB acquisition plumbing
+exceptions.py   BackendConfigurationError, BackendUnavailable, NoPathError,
+                NoPlanError, UnsupportedCapability, ReviewRequired,
+                MissingInputError, InvalidManifestError
+```
+
+`NCBITaxonWeaver` and the migrated `TaxonomyResolverService` live in the
+`taxon_weaver` package under `weavers/`; manual registration is the supported path
+(entry-point `discover()` is deferred). A Celery/HPC executor would satisfy the same
+`Braid` + `ExecutionResult` interfaces — see "What is Explicitly Deferred" above.
 
 ---
 

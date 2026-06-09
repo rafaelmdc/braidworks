@@ -17,7 +17,7 @@ uv run weaverkit verify --spec weaver.spec.toml \
 - **The one file to copy:** [`src/example_weaver/backends/local.py`](src/example_weaver/backends/local.py)
   — a real `fetch` / `fingerprint` / `is_configured` over the bundled CSV.
 - **The data:** [`src/example_weaver/data/example_traits.csv`](src/example_weaver/data/example_traits.csv).
-- **Per-function contracts:** [weaverkit/docs/implementing-backends.md](../weaverkit/docs/implementing-backends.md).
+- **Per-function contracts:** [weaverkit/docs/implementing-backends.md](../../weaverkit/docs/implementing-backends.md).
 
 This is the *minimal* reference (a `lookup` weaver). For the *advanced* case — a
 `resolver` with fuzzy matching, two backends, and a multi-GB bulk DB — see
