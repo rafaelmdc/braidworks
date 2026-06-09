@@ -27,9 +27,9 @@ braidworks/
     src/braidworks/testing/
       contract.py             WeaverOrderContractTests, CacheFingerprintTests (shipped mixins)
     tests/
-  taxonweaver/
+  taxon_weaver/
     pyproject.toml            depends on braidworks-core (workspace); adds rapidfuzz, httpx
-    src/taxonweaver/          the Braidworks weaver layer
+    src/taxon_weaver/          the Braidworks weaver layer
       weaver.py               NCBITaxonWeaver
       dispatch.py             BackendDispatchWeaver (backend selection + mapping)
       vocab.py                strand type IDs, capabilities, manifest
@@ -53,7 +53,7 @@ braidworks/
 **Workspace root:**
 ```toml
 [tool.uv.workspace]
-members = ["braidworks-core", "taxonweaver"]
+members = ["braidworks-core", "taxon_weaver"]
 ```
 
 **`braidworks-core/pyproject.toml`:**
@@ -63,10 +63,10 @@ name = "braidworks-core"
 dependencies = ["networkx>=3.0"]
 ```
 
-**`taxonweaver/pyproject.toml`:**
+**`taxon_weaver/pyproject.toml`:**
 ```toml
 [project]
-name = "taxonweaver"
+name = "taxon_weaver"
 dependencies = ["braidworks-core", "rapidfuzz>=3.0,<4.0", "httpx>=0.27"]
 
 [project.scripts]
@@ -76,7 +76,7 @@ taxon-weaver = "taxonomy_tools.cli:main"   # `taxon-weaver build-db ...`
 braidworks-core = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/taxonweaver", "src/taxonomy_resolver", "src/taxonomy_tools"]
+packages = ["src/taxon_weaver", "src/taxonomy_resolver", "src/taxonomy_tools"]
 ```
 
 ## Release

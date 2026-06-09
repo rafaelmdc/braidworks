@@ -5,8 +5,8 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "braidworks-core",
-    "exampleweaver",
-    "taxonweaver",
+    "example_weaver",
+    "taxon_weaver",
     "weaverkit",
 ]
 
@@ -66,9 +66,9 @@ wheels = [
 ]
 
 [[package]]
-name = "exampleweaver"
+name = "example_weaver"
 version = "1.0.0"
-source = { editable = "weavers/exampleweaver" }
+source = { editable = "weavers/example_weaver" }
 dependencies = [
     { name = "braidworks-core" },
 ]
@@ -282,9 +282,9 @@ wheels = [
 ]
 
 [[package]]
-name = "taxonweaver"
+name = "taxon_weaver"
 version = "0.1.0"
-source = { editable = "weavers/taxonweaver" }
+source = { editable = "weavers/taxon_weaver" }
 dependencies = [
     { name = "braidworks-core" },
     { name = "httpx" },

@@ -1,6 +1,6 @@
 # Plan: Local taxonomy DB auto-setup
 
-**Status:** Implemented (2026-06-06). `taxonweaver/src/taxonweaver/setup.py`
+**Status:** Implemented (2026-06-06). `taxon_weaver/src/taxon_weaver/setup.py`
 (`ensure_taxonomy_db`, `check_for_update`), factory `auto_setup`, the
 `taxon-weaver ensure` CLI subcommand, the actionable local-backend error, and
 API-backend INFO logging are all in place and tested. One deviation from the
@@ -12,7 +12,7 @@ decisions behind it.
 
 ## Problem & philosophy
 
-The `taxonweaver` **local** backend needs a SQLite taxonomy database. Today the
+The `taxon_weaver` **local** backend needs a SQLite taxonomy database. Today the
 user must build it manually (`taxon-weaver build-db …`) and pass the path. That
 is friction, and friction is against the goal of making things easy.
 
@@ -112,7 +112,7 @@ terminals are handled separately — see the design: they prompt.)
 
 ### Single source of truth
 
-One function owns "make sure a valid DB exists," in `taxonweaver` (domain-specific
+One function owns "make sure a valid DB exists," in `taxon_weaver` (domain-specific
 — never in `braidworks-core`):
 
 ```
@@ -171,13 +171,13 @@ surprise stall inside batch execution or a server request.
 
 ## Implementation sketch (touch points)
 
-- `taxonweaver/setup.py` (new): `ensure_taxonomy_db(...)` + default-path resolution
+- `taxon_weaver/setup.py` (new): `ensure_taxonomy_db(...)` + default-path resolution
   (`platformdirs` dependency) + md5 verify + atomic temp→rename + lock + disk check.
-- `taxonweaver/factory.py`: add `auto_setup` / default-path handling to
+- `taxon_weaver/factory.py`: add `auto_setup` / default-path handling to
   `build_ncbi_weaver`; interactive prompt vs actionable error vs `auto_setup`.
-- `taxonweaver/backends/local.py`: actionable `BackendConfigurationError` message
+- `taxon_weaver/backends/local.py`: actionable `BackendConfigurationError` message
   (quote the command) when the DB is absent and setup wasn't requested.
-- `taxonweaver/backends/datasets_v2.py`: add `logging` (INFO) for network use.
+- `taxon_weaver/backends/datasets_v2.py`: add `logging` (INFO) for network use.
 - `taxonomy_tools/cli.py`: add an `ensure` subcommand (prompt + progress);
   `build-db` already exists for the explicit path.
 - Tests: mock the downloader/transport (no live network); cover idempotency, the

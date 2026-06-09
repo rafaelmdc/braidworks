@@ -12,12 +12,12 @@ your backend fits the rest and is the same for every weaver. Skim
 
 **Two worked references, by altitude:**
 
-- **`weavers/exampleweaver/`** — the canonical *minimal* one: a `lookup` weaver,
+- **`weavers/example_weaver/`** — the canonical *minimal* one: a `lookup` weaver,
   `ncbi.taxon.id → traits` from a ~5-row bundled CSV, ~80 lines you can read in a
   minute. It is literally `weaverkit new` + the three TODOs filled in, and it
   passes `weaverkit verify --strict`. **Copy this shape.** Start at
-  `weavers/exampleweaver/src/exampleweaver/backends/local.py`.
-- **`weavers/taxonweaver/`** — the *advanced, real-world* one you graduate to: a
+  `weavers/example_weaver/src/example_weaver/backends/local.py`.
+- **`weavers/taxon_weaver/`** — the *advanced, real-world* one you graduate to: a
   `resolver` (fuzzy matching, candidates), two backends (local SQLite + a live
   API), and a multi-GB bulk DB. Far more code; reach for it once the minimal
   pattern is clear.
@@ -40,7 +40,7 @@ The generated `factory.py` follows a two-builder convention (decisions.md C/D):
   data; lets `verify --strict` run golden against a tiny deterministic dataset
   (see [golden under `--strict`](#golden-under---strict-provide-a-fixture-the-build_package_fixture-hook)).
 
-`weaver_id` may differ from the package name (taxonweaver's is `ncbi`); verify
+`weaver_id` may differ from the package name (taxon_weaver's is `ncbi`); verify
 always targets `build_<package>()`.
 
 ## Connectivity: aim to connect, but an island is still allowed
@@ -116,7 +116,7 @@ it changes what `fetch` returns:
   record exactly (a taxid, an accession). `fetch` returns `LookupRecord`s, flat:
   `found` / `values` / `error`. Most weavers are this.
 - **`kind = "resolver"`** — fuzzy/ambiguous matching (names → ids, like
-  `taxonweaver`). `fetch` returns `ResolverRecord`s carrying a `MatchStatus`
+  `taxon_weaver`). `fetch` returns `ResolverRecord`s carrying a `MatchStatus`
   (`RESOLVED` / `FUZZY_UNIQUE` / `AMBIGUOUS` / `NO_MATCH` / `ERROR`), an optional
   `score`, a `requires_review` flag, and a list of `Candidate`s for the ambiguous
   case. `map_resolver` turns these into `OK` / `AMBIGUOUS` (with `candidates`) /
@@ -241,7 +241,7 @@ def fingerprint(self) -> str:
 ```
 
 If your local backend builds a DB from a dump, record the source version at build
-time (e.g. in a metadata table) and read it here — mirror `taxonweaver`'s
+time (e.g. in a metadata table) and read it here — mirror `taxon_weaver`'s
 `source_dump_md5` approach.
 
 ---
@@ -355,13 +355,13 @@ run against in this order:
    synthesized at call time; no download, no network). This is the preferred path
    for any weaver whose real backend needs a large or external source.
 2. otherwise, an already-configured backend on `build_<package>()` — e.g. a backend
-   that reads a small *bundled* dataset (like `exampleweaver`'s CSV).
+   that reads a small *bundled* dataset (like `example_weaver`'s CSV).
 
 If neither is runnable, `--strict` fails with an actionable message — "skipped, no
 data" is **not** a pass. Your golden inputs must be resident in whatever fixture/
-bundled data you point at. `taxonweaver` is the worked example:
-`build_taxonweaver_fixture()` builds a ~6-species SQLite from inline dumps
-(`weavers/taxonweaver/src/taxonweaver/fixture.py`), and its golden uses organisms from that
+bundled data you point at. `taxon_weaver` is the worked example:
+`build_taxon_weaver_fixture()` builds a ~6-species SQLite from inline dumps
+(`weavers/taxon_weaver/src/taxon_weaver/fixture.py`), and its golden uses organisms from that
 clade — so `verify --strict` is green with no 1.2 GB build.
 
 ---
@@ -378,7 +378,7 @@ runtime. Two blessed patterns follow:
 
 - **Bring your own dispatch/mapper/records.** A rich weaver may implement
   `BaseWeaver` directly with hand-tuned internals and still conform, as long as
-  `MANIFEST` matches the spec and golden passes. `taxonweaver` is the worked example:
+  `MANIFEST` matches the spec and golden passes. `taxon_weaver` is the worked example:
   its own `BackendDispatchWeaver`, a typed `TaxonMatch`, and a resolver-specific
   mapper — and it passes `weaverkit verify --strict`. The shared core runtime is the
   *default*, not a requirement.
@@ -411,5 +411,5 @@ delegates to it. You implement only two domain pieces in `setup.py`:
   or renaming. Record the source version (e.g. an MD5 in a metadata row) so
   `fingerprint()` can read it back.
 
-`weavers/taxonweaver/src/taxonweaver/setup.py` is the worked example (delegates to
+`weavers/taxon_weaver/src/taxon_weaver/setup.py` is the worked example (delegates to
 `ensure_local_db`, keeping only taxdump specifics).

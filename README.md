@@ -25,7 +25,7 @@ This is a [`uv`](https://docs.astral.sh/uv/) workspace monorepo:
 ```
 braidworks/
 ├── braidworks-core/     # framework: strands, capabilities, registry, braider, executor, cache, factory
-├── taxonweaver/         # first weaver: NCBI taxonomy (local SQLite + Datasets v2 API backends)
+├── taxon_weaver/         # first weaver: NCBI taxonomy (local SQLite + Datasets v2 API backends)
 ├── docs/                # architecture, usage, database setup, repo structure
 ├── Makefile             # common dev tasks (test, lint, db)
 └── pyproject.toml       # workspace root
@@ -46,7 +46,7 @@ Two backends ship for NCBI taxonomy. **The API backend needs no local data:**
 ```python
 import asyncio
 from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
-from taxonweaver import build_ncbi_weaver
+from taxon_weaver import build_ncbi_weaver
 
 async def main():
     registry = BraidRegistry()

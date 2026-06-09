@@ -25,7 +25,7 @@ Every piece of data is a typed `Strand`. A collection of strands for one entity 
 from braidworks.core import (
     BraidRegistry, Braider, LocalExecutor, BackendPolicy, Strand, StrandSet,
 )
-from taxonweaver import build_ncbi_weaver
+from taxon_weaver import build_ncbi_weaver
 
 registry = BraidRegistry()
 # API backend needs no local data; pass db_path=... to add the local backend.

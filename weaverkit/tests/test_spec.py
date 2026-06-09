@@ -66,7 +66,7 @@ def _valid_dict() -> dict:
 def test_load_valid_fixture():
     spec = load_spec(FIXTURE)
     assert spec.db_name == "madin"
-    assert spec.package == "madinweaver"
+    assert spec.package == "madin_weaver"
     assert spec.resolved_weaver_id == "madin"
     assert validate_spec(spec) == []
 

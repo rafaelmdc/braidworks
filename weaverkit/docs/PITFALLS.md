@@ -46,7 +46,7 @@ do/don't pair. Keep this list short; if it grows, the important ones get lost.
 9. **Don't commit data artifacts.**
    Databases, dumps, and archives are git-ignored. A bulk source belongs behind
    `ensure_<db>_db` (downloaded into the user cache), not in the repo. (A *tiny*
-   bundled sample like `exampleweaver`'s 5-row CSV is fine.)
+   bundled sample like `example_weaver`'s 5-row CSV is fine.)
 
 See also: [implementing-backends.md](implementing-backends.md) (per-function
 contracts) and [AGENTS.md](../../AGENTS.md) (the full boundaries).

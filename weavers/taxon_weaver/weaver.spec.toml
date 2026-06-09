@@ -1,0 +1,82 @@
+# taxon_weaver — NCBI taxonomy resolver (organism name / taxid -> taxonomy).
+# A resolver weaver: fuzzy/ambiguous name matching with candidates, two backends
+# (local SQLite built from the NCBI taxdump, and the live NCBI Datasets v2 API).
+# weaver_id is "ncbi" (the join namespace), distinct from the package "taxon_weaver".
+[weaver]
+db_name = "taxon"
+weaver_id = "ncbi"
+kind = "resolver"
+title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
+version = "1.0.0"
+license = "Public Domain (NCBI Taxonomy)"
+source_url = "https://www.ncbi.nlm.nih.gov/taxonomy"
+fingerprint_source = "taxonomy_build_version recorded at DB build (local) / API contract (api)"
+api_key = "optional"
+backends = ["local", "api"]
+source_sample = """
+# NCBI taxdump names.dmp (tab-pipe-tab delimited): tax_id | name_txt | unique_name | name_class
+562\t|\tEscherichia coli\t|\t\t|\tscientific name\t|
+562\t|\tE. coli\t|\t\t|\tcommon name\t|
+561\t|\tEscherichia\t|\t\t|\tscientific name\t|
+"""
+
+[bulk]
+backend = "local"
+archive_url = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
+filename = "ncbi_taxonomy.sqlite"
+
+# ncbi.resolve_name: free-text organism name -> taxonomy core + optional lineage.
+[[capability]]
+id = "ncbi.resolve_name"
+consumes = ["organism.name"]
+max_batch_size = 1000
+# The resolver always resolves the name -> taxid ("core") first, even if only
+# lineage was requested, so core is always part of the computed cache key.
+always_computed_groups = ["core"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = [
+    "ncbi.taxon.id",
+    "organism.scientific_name",
+    "ncbi.taxon.rank",
+    "ncbi.taxon.parent_id",
+    "ncbi.taxon.match_type",
+    "ncbi.taxon.review_required",
+  ]
+
+  [[capability.group]]
+  id = "lineage"
+  outputs = ["ncbi.taxon.lineage"]
+
+# ncbi.resolve_taxid: a known taxid -> taxonomy core + optional lineage.
+# Consumes the taxid, so it does not re-produce ncbi.taxon.id.
+[[capability]]
+id = "ncbi.resolve_taxid"
+consumes = ["ncbi.taxon.id"]
+max_batch_size = 1000
+always_computed_groups = ["core"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = [
+    "organism.scientific_name",
+    "ncbi.taxon.rank",
+    "ncbi.taxon.parent_id",
+  ]
+
+  [[capability.group]]
+  id = "lineage"
+  outputs = ["ncbi.taxon.lineage"]
+
+# Golden inputs are resident in the deterministic fixture DB (taxon_weaver.fixture,
+# the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.
+[[golden]]
+capability = "ncbi.resolve_name"
+input = { "organism.name" = "Faecalibacterium prausnitzii" }
+expect = { "ncbi.taxon.id" = 853, "organism.scientific_name" = "Faecalibacterium prausnitzii" }
+
+[[golden]]
+capability = "ncbi.resolve_taxid"
+input = { "ncbi.taxon.id" = 853 }
+expect = { "organism.scientific_name" = "Faecalibacterium prausnitzii" }

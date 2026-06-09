@@ -33,9 +33,9 @@ def test_scaffold_writes_expected_files(tmp_path):
     names = {p.relative_to(dest).as_posix() for p in written}
     assert "pyproject.toml" in names
     assert "weaver.spec.toml" in names
-    assert "src/madinweaver/vocab.py" in names
-    assert "src/madinweaver/weaver.py" in names
-    assert "src/madinweaver/backends/local.py" in names
+    assert "src/madin_weaver/vocab.py" in names
+    assert "src/madin_weaver/weaver.py" in names
+    assert "src/madin_weaver/backends/local.py" in names
     assert "tests/test_conformance.py" in names
 
 
@@ -79,21 +79,21 @@ def _import_generated(dest: Path, pkg: str):
 def test_generated_package_imports(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     mod = _import_generated(dest, spec.package)
-    assert hasattr(mod, "build_madinweaver")
+    assert hasattr(mod, "build_madin_weaver")
 
 
 def test_generated_manifest_matches_spec(tmp_path):
     """The round-trip: scaffold → build → conformance passes with zero edits."""
     spec, dest, _ = _generate(tmp_path)
     mod = _import_generated(dest, spec.package)
-    weaver = mod.build_madinweaver()
+    weaver = mod.build_madin_weaver()
     assert check_manifest(weaver.MANIFEST, spec) == []
 
 
 def test_generated_fingerprints_are_not_unknown(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     mod = _import_generated(dest, spec.package)
-    weaver = mod.build_madinweaver()
+    weaver = mod.build_madin_weaver()
     # Placeholder fingerprints are TODO but must already be valid (not '' / 'unknown').
     assert check_fingerprints(weaver, list(spec.backends)) == []
 
@@ -144,7 +144,7 @@ def test_implementation_worklist_adapts_to_bulk(tmp_path):
     text = (dest / "IMPLEMENTATION.md").read_text()
     assert "Wire the bulk local DB" in text
     assert "setup.py" in text
-    assert "bulkdemoweaver-ensure" in text
+    assert "bulkdemo_weaver-ensure" in text
 
 
 def test_lookup_scaffold_has_no_setup(tmp_path):
@@ -176,8 +176,8 @@ def test_bulk_pyproject_wires_core_and_script(tmp_path):
     pyproject = (dest / "pyproject.toml").read_text()
     # Local-DB plumbing (and platformdirs) come from braidworks-core now.
     assert "braidworks-core" in pyproject
-    assert "bulkdemoweaver-ensure" in pyproject
-    assert "uv run bulkdemoweaver-ensure" in (dest / "Makefile").read_text()
+    assert "bulkdemo_weaver-ensure" in pyproject
+    assert "uv run bulkdemo_weaver-ensure" in (dest / "Makefile").read_text()
 
 
 def test_bulk_setup_delegates_to_core_localdb(tmp_path):
@@ -443,7 +443,7 @@ def test_generated_weaver_wires_core_dispatch(tmp_path):
     sys.path.insert(0, src)
     try:
         importlib.invalidate_caches()
-        weaver_mod = importlib.import_module("resolverdemoweaver.weaver")
+        weaver_mod = importlib.import_module("resolverdemo_weaver.weaver")
 
         captured: dict[str, frozenset[str]] = {}
 
@@ -475,5 +475,5 @@ def test_generated_weaver_wires_core_dispatch(tmp_path):
     finally:
         sys.path.remove(src)
         for name in list(sys.modules):
-            if name == "resolverdemoweaver" or name.startswith("resolverdemoweaver."):
+            if name == "resolverdemo_weaver" or name.startswith("resolverdemo_weaver."):
                 del sys.modules[name]

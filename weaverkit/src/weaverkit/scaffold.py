@@ -279,7 +279,7 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         "",
         "Per-function contracts: [../../weaverkit/docs/implementing-backends.md](../../weaverkit/docs/implementing-backends.md).  ",
         "Common mistakes: [../../weaverkit/docs/PITFALLS.md](../../weaverkit/docs/PITFALLS.md).  ",
-        "Worked example to copy: `../exampleweaver/src/exampleweaver/backends/local.py`.",
+        "Worked example to copy: `../example_weaver/src/example_weaver/backends/local.py`.",
         "",
         "## 1. Implement the backend(s)",
         "",
@@ -306,7 +306,7 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
             f"- [ ] build it locally: `uv run {pkg}-ensure`",
             f"- [ ] add `build_{pkg}_fixture()` in `factory.py` returning a weaver on a "
             "*tiny deterministic* dataset, so `--strict` can run golden without the full "
-            "download (see implementing-backends.md; taxonweaver's `fixture.py` is the model)",
+            "download (see implementing-backends.md; taxon_weaver's `fixture.py` is the model)",
             "",
         ]
 
@@ -540,7 +540,7 @@ else (manifest, dispatch, mapper) is generated and wired. Implement the three
 contract and an example.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/example_weaver/src/example_weaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -605,7 +605,7 @@ cache path. Fill in ``fingerprint`` (read the version recorded at build time) an
 ``fetch`` (query the DB), normalizing each result into a ``{{RECORD_CLASS}}``.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/example_weaver/src/example_weaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -661,7 +661,7 @@ else (manifest, dispatch, mapper) is generated and wired. Implement the three
 ``# TODO`` spots below; each links to the section of the guide with the full contract.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example (copy this shape): weavers/exampleweaver/src/exampleweaver/backends/local.py
+Worked example (copy this shape): weavers/example_weaver/src/example_weaver/backends/local.py
 """
 
 from __future__ import annotations
@@ -725,7 +725,7 @@ It is multi-GB and must not be committed; ``ensure_{{DB}}_db`` downloads and bui
 it into the per-user cache on first use. The generic plumbing — consent gate,
 download, MD5 check, disk precheck, cross-process lock, and atomic publish — lives
 in ``braidworks.core.localdb``; you implement only the two domain TODOs below
-(``db_is_valid`` and ``_build``). Model on taxonweaver's ``setup.py``.
+(``db_is_valid`` and ``_build``). Model on taxon_weaver's ``setup.py``.
 
 See: weaverkit/docs/implementing-backends.md#bulk-file-sources-setuppy
 """
@@ -862,7 +862,7 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
   It never raises for missing data.
 - a CONFIGURED builder (you write it, usually domain-named) — takes real config
   (db paths, API keys, injected clients) and may raise if nothing is usable. See
-  ``taxonweaver``'s ``build_ncbi_weaver`` for a worked example; a commented
+  ``taxon_weaver``'s ``build_ncbi_weaver`` for a worked example; a commented
   skeleton is at the bottom of this file.
 """
 
@@ -903,7 +903,7 @@ def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
 #
 # A FIXTURE builder — only if no backend reads bundled/committed data; lets
 # `weaverkit verify --strict` run golden against a tiny deterministic dataset
-# (see decisions.md E and taxonweaver's build_{{DBWEAVER}}_fixture):
+# (see decisions.md E and taxon_weaver's build_{{DBWEAVER}}_fixture):
 #
 # def build_{{DBWEAVER}}_fixture() -> BaseWeaver:
 #     ...  # return a weaver wired against a small synthesized/committed dataset

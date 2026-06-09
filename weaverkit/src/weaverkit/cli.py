@@ -1,7 +1,7 @@
 """The ``weaverkit`` command line: ``new`` (scaffold) and ``verify`` (conform).
 
-    weaverkit new    --spec weaver.spec.toml --dest weavers/madinweaver
-    weaverkit verify --spec weaver.spec.toml [--package madinweaver]
+    weaverkit new    --spec weaver.spec.toml --dest weavers/madin_weaver
+    weaverkit verify --spec weaver.spec.toml [--package madin_weaver]
     weaverkit index  [--root .] [--out weavers-index.tsv] [--keys-out keys-index.md]
 
 ``new`` validates the spec, then stamps a package. ``verify`` validates the spec

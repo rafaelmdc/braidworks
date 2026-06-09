@@ -162,8 +162,8 @@ class WeaverSpec:
 
     @property
     def package(self) -> str:
-        """The Python package / workspace member name, e.g. ``madinweaver``."""
-        return f"{self.db_name}weaver"
+        """The Python package / workspace member name, e.g. ``madin_weaver``."""
+        return f"{self.db_name}_weaver"
 
     @property
     def resolved_weaver_id(self) -> str:
@@ -236,7 +236,7 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
     if not _DB_NAME_RE.match(spec.db_name):
         problems.append(
             f"db_name {spec.db_name!r} must match ^[a-z][a-z0-9_]*$ "
-            "(lowercase, starts with a letter; the package becomes <db_name>weaver)"
+            "(lowercase, starts with a letter; the package becomes <db_name>_weaver)"
         )
     if spec.weaver_id and not _DB_NAME_RE.match(spec.weaver_id):
         problems.append(f"weaver_id {spec.weaver_id!r} must match ^[a-z][a-z0-9_]*$")

@@ -11,21 +11,21 @@ uv sync --all-extras
 
 ## Testing
 
-Tests are **per package**, and the working directory matters: `taxonweaver`'s
+Tests are **per package**, and the working directory matters: `taxon_weaver`'s
 suite imports fixtures via `from tests....`, which only resolves when pytest runs
-from inside `weavers/taxonweaver/`. Use the Makefile and you won't have to think about it:
+from inside `weavers/taxon_weaver/`. Use the Makefile and you won't have to think about it:
 
 ```bash
 make test          # both suites
 make test-core     # braidworks-core only
-make test-weaver   # taxonweaver only
+make test-weaver   # taxon_weaver only
 ```
 
 Equivalent raw commands:
 
 ```bash
 cd braidworks-core && uv run --extra test python -m pytest -q
-cd taxonweaver    && uv run --extra test python -m pytest -q
+cd taxon_weaver    && uv run --extra test python -m pytest -q
 ```
 
 A bare `pytest` (or `uv run pytest`) from the repo root will pick up the root
@@ -57,7 +57,7 @@ deterministic path is **not** copying files by hand — use the scaffold generat
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver   # under weavers/, like weavers/taxonweaver/
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>weaver   # under weavers/, like weavers/taxon_weaver/
 ```
 
 This stamps a complete package from a `weaver.spec.toml`; you then implement only
@@ -69,11 +69,11 @@ done-checklist, see
 *which* databases to build next and the reachability model, see
 [docs/weaver-roadmap.md](docs/weaver-roadmap.md). The manual shape, for reference:
 
-1. **Create a workspace member** `myweaver/` with its own `pyproject.toml`
+1. **Create a workspace member** `my_weaver/` with its own `pyproject.toml`
    (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`)
    and add it to `members` in the root `pyproject.toml`.
 2. **Define a neutral intermediate** — a small dataclass your backends normalize
-   their native responses into (taxonweaver's is `TaxonMatch`). Keep it in your
+   their native responses into (taxon_weaver's is `TaxonMatch`). Keep it in your
    package; never leak it into core.
 3. **Write one mapper** `intermediate -> WeaveResult`. A single mapper is what
    guarantees every backend emits identical strand shapes.
@@ -87,7 +87,7 @@ done-checklist, see
    construct its backends), following the **two-builder convention**:
    - `build_<package>()` — a zero-config *introspection* builder (backends present,
      possibly unconfigured) that `weaverkit verify` calls;
-   - a domain-named *configured* builder (e.g. `build_myweaver(...)`) for real use,
+   - a domain-named *configured* builder (e.g. `build_my_weaver(...)`) for real use,
      which may raise if nothing is usable;
    - a `WeaverProvider` (`weaver_id`, `build(config)`) wrapping it (Layer 1
      conformance), so it can be registered in a `WeaverFactory`.
