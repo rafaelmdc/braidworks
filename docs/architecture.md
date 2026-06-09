@@ -525,6 +525,64 @@ Every step that touched an entity leaves a `StepOutcome` in `StrandSet.completio
 
 **Two parallelism axes — don't conflate them.** *Branch parallelism* (above) is a core concern: it runs independent steps of one braid concurrently, multiplying concurrency by the small, graph-fixed branch factor. It is a per-entity *latency* mechanism and does **not** scale with batch size. *Entity-level fan-out* — splitting one step's large batch across many workers — is a *throughput* mechanism that scales with the fleet, and it lives entirely in the distributed runner (`braidworks-arq`), not core. Fan-out's safety gate is a **rate budget, not a cache**: the cluster-wide token bucket bounds aggregate external call rate regardless of how wide a step fans out (excess workers block on tokens), and fanning out a rate-limited backend with no declared budget is refused outright. A cache reduces total call *volume*; the token bucket bounds the *rate* — orthogonal concerns. See `braidworks-arq/README.md`.
 
+### Deferred design: per-call rate granularity (Phase B)
+
+> **Status: documented, not built.** This section records the design and the trigger
+> conditions so the future build is known work, not a re-derivation. **Do not
+> implement until a trigger below fires.**
+
+**The gap.** Today's rate limiting is charged at the **task boundary**: `weave_step`
+acquires `cost = len(batch)` tokens *before* calling the weaver, then the weaver makes
+its external calls. This bounds the *average* call rate (the bucket throttles when the
+next task may start) but not the **burst within a task** (after acquiring its tokens, a
+weaver can fire all its calls back-to-back), and the cost is an *estimate* — it assumes
+~1 external call per entity. Two regimes break that estimate: a **batchable** weaver
+(1 API call for N entities → we over-charge N× and needlessly throttle) and a **chatty**
+weaver (k calls per entity → we under-charge and exceed the budget). Only the weaver
+knows its true call pattern.
+
+**The fix.** Move token acquisition **inside the weaver backend, around each external
+call** (`await gate.acquire()` immediately before each request). Then bursts are spaced
+to the sustained rate and the cost is exact regardless of batching/chattiness.
+
+**Why it's deferred, not done.** It is the first change that touches the weaver-facing
+contract (every external-call weaver must cooperate), and we currently have **no weaver
+that multi-calls per entity** — so the benefit is unexercised and the *policy* would be
+designed blind. Note that Phase A already approximates the fix for the common case:
+fanning a budgeted backend out at `chunk = 1` makes the per-task acquisition per-entity,
+≈ per-call when calls ≈ entities.
+
+**Settled interface (low risk — build this verbatim when triggered).**
+- Core defines a transport-neutral `RateGate` Protocol: `async def acquire(cost: float = 1.0) -> None`, with a no-op default. Richness (per-endpoint sub-budgets, priorities, adaptive limits) lives in the *implementation* (arq), never in this surface.
+- Expose it via a **contextvar accessor** (`current_rate_gate()`), **not** a new
+  `execute_batch` parameter — a kwarg would force a signature migration across every
+  weaver and break overrides without `**kwargs`. The distributed runner sets the
+  contextvar around the call; weaver backends read it. Zero signature churn, no risk to
+  existing weavers (default is no-op).
+- `braidworks-arq` backs the gate with the existing token bucket, keyed per
+  `weaver:backend`, enabled per backend.
+- **weaverkit** scaffolds the `api`-backend template to call `await
+  current_rate_gate().acquire()` before each request, so future weavers are gate-ready
+  by construction. (Caveat: the template *includes* the call; conformance cannot verify
+  it is placed around every request without a real throttled run — hand-written backends
+  still need manual wiring.)
+
+**The one real design knot — resolve it at build time.** Per-call gating and Phase A's
+per-task `cost = len(batch)` charge would **double-count**. A backend must declare which
+layer owns throttling: when a backend opts into the per-call gate, the task-level
+`_throttle` stands down for it (`cost = 0`). This "who owns the budget per backend" flag
+is the only non-mechanical decision; everything else is plumbing.
+
+**Triggers (act when any fires — prefer the design-time ones over waiting for an
+incident):**
+1. The first weaver that makes **more than one external call per entity** (the cost
+   estimate stops matching reality) — visible at authoring time.
+2. Onboarding a weaver against an API with a **strict short-window limit** (e.g. "10
+   req/sec" enforced per second, which rejects bursts even under your average) — visible
+   at authoring time.
+3. Observed **429s/throttling under load** despite being under the average budget — the
+   last-resort signal.
+
 ### Preflight Validation and Per-step Guard
 
 **Preflight — Missing inputs (runs once before any steps):** for each entity, check `braid.from_types ⊆ entity.available_types()`. Any entity that fails this check goes to `errors` with `MissingInputError` before execution begins. This handles the common case of heterogeneous batches where some entities lack the required starting strand types. Running this once upfront is simpler and cheaper than checking at every step.
