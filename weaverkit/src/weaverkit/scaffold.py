@@ -321,6 +321,24 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         ]
         next_n += 1
 
+    keyless_api = "api" in spec.backends and spec.api_key == "none"
+    if keyless_api:
+        lines += [
+            f"## {next_n}. Keep the api tests offline (the fixture)",
+            "",
+            f"- [ ] fill `src/{pkg}/fixture.py` `_handler` with canned responses your "
+            "`fetch` parses (an `httpx.MockTransport`, no network).",
+            "- [ ] a keyless API is *always configured*, so once your `fetch` works the "
+            "generated golden/order tests stop skipping and would hit the live service. "
+            f"Point `tests/test_conformance.py`'s `build_weaver` and "
+            f"`tests/test_contract.py`'s `make_weaver` at `build_{pkg}_fixture()` so they "
+            "run offline (the manifest/fingerprint are identical to the live build).",
+            "- [ ] fill `tests/test_e2e_live.py` with a known-truth example; run it with "
+            "`make test-live` (`BRAIDWORKS_RUN_LIVE=1`) after api-touching changes.",
+            "",
+        ]
+        next_n += 1
+
     lines += [
         f"## {next_n}. Verify (definition of done)",
         "",
@@ -477,7 +495,7 @@ help:
 
 test:
 \tuv run --extra test python -m pytest -q
-
+{{LIVE_TARGET}}
 verify:
 \tuv run --extra test weaverkit verify --spec weaver.spec.toml --package {{DBWEAVER}}
 {{ENSURE_TARGET}}
@@ -717,6 +735,155 @@ class {{BACKEND_CLASS}}(BackendBase):
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
 
+_BACKEND_STUB_API_KEYLESS = '''\
+"""The {{BACKEND}} backend for {{DBWEAVER}} — a keyless remote HTTP API. IMPLEMENT ME.
+
+The API needs no key (api_key = "none"), so the backend is usable as-is. The HTTP
+client is **injectable** (``client=``) so tests drive it with an ``httpx.MockTransport``
+offline — see ``fixture.py`` / ``build_{{DBWEAVER}}_fixture``. Implement the three
+``# TODO`` spots; everything else (manifest, dispatch, mapper) is generated.
+
+> A keyless API is *always configured*, so once you flip ``_configured`` to True the
+> generated golden/order tests stop skipping and would hit the live network. Point
+> them at ``build_{{DBWEAVER}}_fixture()`` (see IMPLEMENTATION.md) to keep them offline.
+
+Guide: weaverkit/docs/implementing-backends.md
+Worked example: weavers/taxon_weaver/src/taxon_weaver/backends/datasets_v2.py
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from braidworks.core import BackendBase
+{{RECORD_IMPORT}}
+
+# Base URL of the {{BACKEND}} service.
+BASE_URL = "{{SOURCE_URL}}"
+
+
+class {{BACKEND_CLASS}}(BackendBase):
+    """{{BACKEND}} backend — calls a keyless remote HTTP API."""
+
+    name = "{{BACKEND}}"
+
+    def __init__(
+        self, *, base_url: str = BASE_URL, client: httpx.AsyncClient | None = None
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._client = client
+        # TODO(configured): a keyless API is usable as-is — return True for the real
+        # backend. Left False so a fresh scaffold's golden/order tests SKIP until you
+        # implement fetch; an injected client (the fixture) already counts as configured.
+        self._configured = False
+
+    def is_configured(self) -> bool:
+        return self._configured or self._client is not None
+
+    def _http(self) -> httpx.AsyncClient:
+        """The HTTP client, lazily created if none was injected."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
+        return self._client
+
+    def fingerprint(self) -> str:
+        # TODO(fingerprint): a STABLE id for this API's contract/version, e.g.
+        # "{{DBWEAVER}}-{{BACKEND}}-v1". NEVER "" or "unknown" (conformance rejects it).
+        # Spec's declared source of truth for the version: {{FINGERPRINT_SOURCE}}.
+        # See: weaverkit/docs/implementing-backends.md#fingerprint
+        return "{{DBWEAVER}}-{{BACKEND}}-TODO"
+
+    async def fetch(
+        self,
+        capability_id: str,
+        queries: list[dict[str, Any]],
+        *,
+        requested_outputs: frozenset[str],
+        groups_to_compute: frozenset[str],
+    ) -> list[{{RECORD_CLASS}}]:
+        # TODO(fetch): call ``self._http()`` for each input and return one
+        # {{RECORD_CLASS}} PER input query, IN THE SAME ORDER (the dispatch relies on
+        # positional alignment — never drop, reorder, or merge).
+{{FETCH_HINT}}
+        # See: weaverkit/docs/implementing-backends.md#fetch
+        raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
+'''
+
+_FIXTURE_API = '''\
+"""A tiny, deterministic stand-in for the api backend — for offline tests.
+
+A keyless API backend is *always configured*, so golden/order tests would hit the
+live service. This module serves canned responses via ``httpx.MockTransport`` so
+``build_{{DBWEAVER}}_fixture()`` (in factory.py) yields a weaver you can run offline
+and reproducibly (the substrate for ``weaverkit verify --strict`` golden).
+
+Fill ``_handler`` with the real request → canned-response shapes your fetch expects.
+"""
+
+from __future__ import annotations
+
+import json
+
+import httpx
+
+
+def _handler(request: httpx.Request) -> httpx.Response:
+    # TODO: match request.url.path and return canned JSON your fetch parses, e.g.
+    #   if request.url.path.endswith("/lookup/ABC"):
+    #       return httpx.Response(200, content=json.dumps({"...": "..."}))
+    return httpx.Response(404, content=json.dumps({"detail": "not found"}))
+
+
+def mock_client() -> httpx.AsyncClient:
+    """An ``httpx.AsyncClient`` serving the canned responses (no network)."""
+    return httpx.AsyncClient(
+        base_url="https://{{DB}}.test", transport=httpx.MockTransport(_handler)
+    )
+'''
+
+_TEST_E2E_API = '''\
+"""Live end-to-end test for {{DBWEAVER}} against the real {{FIRST_BACKEND}} API.
+
+Opt-in: set ``BRAIDWORKS_RUN_LIVE=1`` to enable (makes real network calls). Run it
+after changes that touch the api backend's request/parse code, to confirm the live
+schema still matches what the offline tests assume. Replace the TODO input/asserts
+with a known-truth example from the real source.
+"""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+from braidworks.core import Strand, StrandSet, WeaveStatus
+
+from {{DBWEAVER}} import build_{{DBWEAVER}}
+
+RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
+pytestmark = pytest.mark.skipif(
+    not RUN_LIVE, reason="live E2E disabled; set BRAIDWORKS_RUN_LIVE=1 (real network calls)"
+)
+
+
+async def test_live_known_example():
+    weaver = build_{{DBWEAVER}}()
+    # TODO: a real consumed input that resolves against the live API.
+    ss = StrandSet.from_strands("e1", [Strand({{CONSUMED_REPR}}, "TODO-real-input")])
+    result = (
+        await weaver.execute_batch(
+            {{FIRST_CAP_REPR}},
+            [ss],
+            requested_outputs=frozenset({{{MINIMAL_OUTPUT_REPR}}}),
+            backend={{FIRST_BACKEND_REPR}},
+        )
+    )[0]
+    # TODO: assert known-truth outputs (or NO_MATCH for a deliberately-absent input).
+    assert result.status in (WeaveStatus.OK, WeaveStatus.NO_MATCH)
+'''
+
 _SETUP = '''\
 """Local DB setup for {{DBWEAVER}} — fetch/build the bulk source into the user cache.
 
@@ -887,7 +1054,7 @@ def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
     }
     return {{CLASS}}Weaver(backends)
 
-
+{{FIXTURE_BUILDER}}
 # --- Optional builders (uncomment + fill in for real use) -----------------------
 #
 # A CONFIGURED builder — takes real config and raises if nothing is usable:
@@ -900,14 +1067,7 @@ def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
 #     if not backends:
 #         raise BackendConfigurationError("configure at least one backend")
 #     return {{CLASS}}Weaver(backends)
-#
-# A FIXTURE builder — only if no backend reads bundled/committed data; lets
-# `weaverkit verify --strict` run golden against a tiny deterministic dataset
-# (see decisions.md E and taxon_weaver's build_{{DBWEAVER}}_fixture):
-#
-# def build_{{DBWEAVER}}_fixture() -> BaseWeaver:
-#     ...  # return a weaver wired against a small synthesized/committed dataset
-'''
+{{FIXTURE_SKELETON}}'''
 
 _PROVIDER = '''\
 """{{CLASS}}WeaverProvider — the Layer 1 conformance wrapper, plus registration.
@@ -1050,10 +1210,17 @@ def scaffold(
     # Dependencies: always braidworks-core; an api backend's fetch will make HTTP
     # calls, so declare httpx up front (the workspace already uses it) rather than
     # making every api-weaver author add it by hand.
+    has_api = "api" in spec.backends
     deps = ['"braidworks-core"']
-    if "api" in spec.backends:
+    if has_api:
         deps.append('"httpx>=0.27"')
     tokens["DEPS"] = ", ".join(deps)
+
+    # A keyless HTTP API backend (named "api", api_key="none") is always configured,
+    # so it gets an http-aware injectable stub + an offline fixture so tests don't hit
+    # the live service. Keyed APIs (optional/required) skip in CI when unconfigured.
+    bulk_is_api = spec.bulk is not None and spec.bulk.backend == "api"
+    keyless_api = has_api and not _backend_needs_key(spec, "api") and not bulk_is_api
 
     # Bulk-source tokens: a local DB built from a download (setup.py + ensure CLI).
     bulk = spec.bulk
@@ -1067,14 +1234,56 @@ def scaffold(
         tokens["SCRIPTS_BLOCK"] = ""
         tokens["ENSURE_TARGET"] = ""
 
+    # Live-E2E Makefile target — only when there's an api backend to test live.
+    tokens["LIVE_TARGET"] = (
+        "\ntest-live:\n"
+        "\tBRAIDWORKS_RUN_LIVE=1 uv run --extra test python -m pytest tests/test_e2e_live.py -v\n"
+        if has_api
+        else ""
+    )
+    # Tokens for the generated live-E2E stub (first capability's shapes).
+    _e2e_cap = spec.capabilities[0]
+    tokens["CONSUMED_REPR"] = repr(sorted(_e2e_cap.consumes)[0])
+    tokens["FIRST_CAP_REPR"] = repr(_e2e_cap.id)
+    tokens["MINIMAL_OUTPUT_REPR"] = repr(sorted(_e2e_cap.produces)[0])
+    tokens["FIRST_BACKEND_REPR"] = repr(first_backend)
+
     backend_imports = "\n".join(
         f"from {pkg}.backends.{b} import {cls}{_camel(b)}Backend" for b in spec.backends
     )
     backend_wiring = "\n".join(f'        "{b}": {cls}{_camel(b)}Backend(),' for b in spec.backends)
+    # For a keyless api weaver, emit a real (uncommented) fixture builder wired to the
+    # MockTransport client from fixture.py — the offline substrate for --strict golden.
+    # Otherwise leave a commented skeleton so the author can add one (e.g. a bulk DB).
+    if keyless_api:
+        fixture_builder = (
+            f"def build_{pkg}_fixture() -> BaseWeaver:\n"
+            f'    """Fixture-backed weaver for ``verify --strict`` — canned API, no network.\n\n'
+            f"    The keyless api backend is always configured, so without this golden would\n"
+            f"    hit the live service. Wires the api backend to an ``httpx.MockTransport``\n"
+            f"    (see ``fixture.py`` — fill in its canned responses).\n"
+            f'    """\n'
+            f"    from {pkg}.fixture import mock_client\n\n"
+            f'    return {cls}Weaver({{"api": {cls}ApiBackend(client=mock_client())}})\n'
+        )
+        fixture_skeleton = ""
+    else:
+        fixture_builder = ""
+        fixture_skeleton = (
+            "#\n"
+            "# A FIXTURE builder — only if no backend reads bundled/committed data; lets\n"
+            "# `weaverkit verify --strict` run golden against a tiny deterministic dataset\n"
+            f"# (see decisions.md E and taxon_weaver's build_{pkg}_fixture):\n"
+            "#\n"
+            f"# def build_{pkg}_fixture() -> BaseWeaver:\n"
+            "#     ...  # return a weaver wired against a small synthesized/committed dataset\n"
+        )
     factory_tokens = {
         **tokens,
         "BACKEND_IMPORTS": backend_imports,
         "BACKEND_WIRING": backend_wiring,
+        "FIXTURE_BUILDER": fixture_builder,
+        "FIXTURE_SKELETON": fixture_skeleton,
     }
 
     src = dest / "src" / pkg
@@ -1095,6 +1304,13 @@ def scaffold(
         dest / "tests" / "test_contract.py": _contract_test_source(spec),
     }
 
+    # api weavers get a gated live-E2E stub; keyless api weavers also get an offline
+    # MockTransport fixture (build_<pkg>_fixture wires it in factory.py).
+    if has_api:
+        files[dest / "tests" / "test_e2e_live.py"] = _render(_TEST_E2E_API, tokens)
+    if keyless_api:
+        files[src / "fixture.py"] = _render(_FIXTURE_API, tokens)
+
     if bulk is not None:
         files[src / "setup.py"] = _render(_SETUP, tokens)
         files[src / "ensure.py"] = _render(_ENSURE_CLI, tokens)
@@ -1113,6 +1329,10 @@ def scaffold(
         elif _backend_needs_key(spec, b):
             stub = _BACKEND_STUB_API
             bt.update(_api_key_tokens(spec.api_key, api_key_env))
+        elif b == "api":
+            # Keyless HTTP API ("api" backend, api_key="none"): an http-aware,
+            # injectable stub (so the offline fixture can drive it).
+            stub = _BACKEND_STUB_API_KEYLESS
         else:
             stub = _BACKEND_STUB
         files[src / "backends" / f"{b}.py"] = _render(stub, bt)
