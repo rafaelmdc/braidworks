@@ -24,7 +24,7 @@ Registered bridge keys — what links weavers together.
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
 | `go.term` | Gene Ontology term id. | — | — |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
-| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name` | `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
+| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name` | `disbiome:disbiome.resolve_diseases`, `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
@@ -42,6 +42,10 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
+| `microbe.disease.associations` | Compact per-experiment microbe–disease rows (disease, Elevated/Reduced direction, method, sample, host). | `disbiome:disbiome.resolve_diseases` | — |
+| `microbe.disease.count` | Number of disease-association experiment records for a microbe. | `disbiome:disbiome.resolve_diseases` | — |
+| `microbe.disease.names` | Distinct disease names a microbe is associated with. | `disbiome:disbiome.resolve_diseases` | — |
+| `microbe.disease.records` | Complete joined Disbiome records — every experiment / disease / organism / publication field, incl. study-quality metadata. | `disbiome:disbiome.resolve_diseases` | — |
 | `microbe.trait.cell_shape` | Cell morphology / shape (rod-shaped, coccus-shaped, …). | `bacdive:resolve_traits` | — |
 | `microbe.trait.gram_stain` | Gram stain (positive/negative). | `bacdive:resolve_traits`, `example:resolve_traits` | — |
 | `microbe.trait.metabolism` | Metabolic strategy (aerobe/anaerobe/…). | — | — |
