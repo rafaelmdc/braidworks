@@ -14,42 +14,46 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from braidworks.core import BaseWeaver
 
 from disbiome_weaver.backends.local import DisbiomeLocalBackend
+from disbiome_weaver.setup import ensure_disbiome_db
 from disbiome_weaver.weaver import DisbiomeWeaver
 
 
 def build_disbiome_weaver(**_config: Any) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
-    Wires every declared backend present-but-possibly-unconfigured. For real use,
-    add a configured builder (see the module docstring / the commented skeletons).
+    Wires the local backend present-but-possibly-unconfigured (it reports
+    ``is_configured() == False`` until the DB is built). For real use call
+    ``build_disbiome_weaver_configured``.
     """
-    backends = {
-        "local": DisbiomeLocalBackend(),
-    }
-    return DisbiomeWeaver(backends)
+    return DisbiomeWeaver({"local": DisbiomeLocalBackend()})
 
 
-# --- Optional builders (uncomment + fill in for real use) -----------------------
-#
-# A CONFIGURED builder — takes real config and raises if nothing is usable:
-#
-# from braidworks.core import BackendConfigurationError
-#
-# def build_disbiome_weaver_configured(**config: Any) -> BaseWeaver:
-#     backends = {}
-#     # ... wire backends from real config (paths / keys / clients) ...
-#     if not backends:
-#         raise BackendConfigurationError("configure at least one backend")
-#     return DisbiomeWeaver(backends)
-#
-# A FIXTURE builder — only if no backend reads bundled/committed data; lets
-# `weaverkit verify --strict` run golden against a tiny deterministic dataset
-# (see decisions.md E and taxon_weaver's build_disbiome_weaver_fixture):
-#
-# def build_disbiome_weaver_fixture() -> BaseWeaver:
-#     ...  # return a weaver wired against a small synthesized/committed dataset
+def build_disbiome_weaver_configured(
+    *,
+    db_path: str | Path | None = None,
+    auto_setup: bool = False,
+    refresh: bool = False,
+    **_config: Any,
+) -> BaseWeaver:
+    """Configured builder for real use: ensures the local DB, then wires the backend.
+
+    With ``auto_setup=True`` (or ``BRAIDWORKS_AUTO_DOWNLOAD=1``) the ~7 MB DB is
+    built from the Disbiome API on first use; otherwise an explicit ``db_path`` must
+    already point at a built DB, or an actionable error is raised. ``refresh=True``
+    rebuilds from the current API.
+    """
+    path = ensure_disbiome_db(db_path, auto=auto_setup, refresh=refresh)
+    return DisbiomeWeaver({"local": DisbiomeLocalBackend(path)})
+
+
+def build_disbiome_weaver_fixture() -> BaseWeaver:
+    """Fixture-backed weaver for ``verify --strict`` / tests — canned data, no network."""
+    from disbiome_weaver.fixture import fixture_db_path
+
+    return DisbiomeWeaver({"local": DisbiomeLocalBackend(fixture_db_path())})

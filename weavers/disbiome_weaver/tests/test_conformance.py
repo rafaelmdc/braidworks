@@ -11,7 +11,7 @@ from pathlib import Path
 
 from weaverkit import WeaverConformanceTests
 
-from disbiome_weaver.factory import build_disbiome_weaver
+from disbiome_weaver.factory import build_disbiome_weaver_fixture
 
 SPEC = str(Path(__file__).resolve().parent.parent / "weaver.spec.toml")
 
@@ -21,4 +21,7 @@ class TestConformance(WeaverConformanceTests):
     golden_backend = "local"
 
     def build_weaver(self):
-        return build_disbiome_weaver()
+        # The real local backend builds from the network; the fixture wires the
+        # same backend against a tiny canned SQLite, so golden runs deterministically
+        # offline (matching `weaverkit verify --strict`).
+        return build_disbiome_weaver_fixture()
