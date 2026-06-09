@@ -1,4 +1,4 @@
-"""Minimal in-repo fakes so the Celery tests need neither Redis nor real weavers."""
+"""In-repo fakes so the arq tests need neither Redis nor real weavers."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from braidworks.core.weaver import BaseWeaver
 NAME = "organism.name"
 TAXID = "ncbi.taxon.id"
 CAP = "fake.resolve"
+TRAIT = "microbe.trait.gram_stain"
+DIS = "disease.assoc"
 
 
 def _capability(backends: tuple[str, ...] = ("local",)) -> Capability:
@@ -65,11 +67,7 @@ class EchoWeaver(BaseWeaver):
 
 
 class FlakyWeaver(EchoWeaver):
-    """Raises BackendUnavailable on ``unavailable_backend``; resolves on any other.
-
-    Used to prove a backend control-exception raised *inside a worker* propagates
-    back to the orchestrator, which then falls back to the next backend.
-    """
+    """Raises BackendUnavailable on ``unavailable_backend``; resolves on any other."""
 
     def __init__(self, *, unavailable_backend: str, **kw) -> None:
         super().__init__(**kw)
@@ -119,9 +117,6 @@ def name_sets(*names: str) -> list[StrandSet]:
 
 # --- branch graph (name -> taxid -> {trait, disease}) for distributed parallelism ---
 
-TRAIT = "microbe.trait.gram_stain"
-DIS = "disease.assoc"
-
 
 def _one_cap(cid: str, consume: str, produce: str) -> Capability:
     prod = frozenset({produce})
@@ -167,3 +162,28 @@ def branch_registry(*, disease_miss: bool = False) -> BraidRegistry:
     reg.register(_Fn("bacdive", _one_cap("bacdive.traits", TAXID, TRAIT), TRAIT))
     reg.register(_Fn("disbiome", _one_cap("disbiome.assoc", TAXID, DIS), DIS, miss=disease_miss))
     return reg
+
+
+# --- inline arq pool double (runs weave_step in-process, no Redis) ---
+
+
+class InlineJob:
+    def __init__(self, fn, args, redis) -> None:
+        self._fn = fn
+        self._args = args
+        self._redis = redis
+
+    async def result(self, timeout=None):
+        ctx = {"job_try": 1, "redis": self._redis}
+        return await self._fn(ctx, *self._args)
+
+
+class InlinePool:
+    """Mimics ``ArqRedis.enqueue_job`` by running the task coroutine inline."""
+
+    def __init__(self, fn, *, redis=None) -> None:
+        self._fn = fn
+        self._redis = redis
+
+    async def enqueue_job(self, name, *args, _queue_name=None, **kw):
+        return InlineJob(self._fn, args, self._redis)
