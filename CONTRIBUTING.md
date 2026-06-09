@@ -106,13 +106,13 @@ Each package versions and releases **independently** (`braidworks-core`,
 version:
 
 ```
-braidworks-core-v0.1.0
-taxon_weaver-v0.1.0
-bacdive_weaver-v0.1.0
+braidworks-core-v0.1.1
+taxon_weaver-v0.1.1
+bacdive_weaver-v0.1.1
 ```
 
 Weavers (and `weaverkit`) depend on the core with a **floor, not a ceiling** —
-`braidworks-core>=0.1.0`, no upper bound. The contract is:
+`braidworks-core>=0.1.1`, no upper bound. The contract is:
 
 - **`braidworks-core` keeps backwards compatibility by default.** A new core
   release must not break the public surface weavers build on (`Strand`,

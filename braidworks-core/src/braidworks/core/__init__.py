@@ -14,6 +14,7 @@ from braidworks.core.cache import (
 )
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
 from braidworks.core.factory import WeaverFactory, WeaverProvider
+from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
     BackendConfigurationError,
     BackendUnavailable,
@@ -70,6 +71,8 @@ __all__ = [
     "Capability",
     "OutputGroup",
     "WeaverManifest",
+    "CANONICAL_TYPES",
+    "canonicalize",
     "BackendConfigurationError",
     "BackendUnavailable",
     "BraidworksError",

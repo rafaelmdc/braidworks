@@ -193,10 +193,17 @@ def _contract_test_source(spec: WeaverSpec) -> str:
         "from braidworks.core import Strand, StrandSet",
         "from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests",
         "",
-        f"from {pkg} import vocab",
-        f"from {pkg}.factory import build_{pkg}",
+        f"from {pkg} import factory, vocab",
         "",
         f"_MANIFEST = vocab.build_manifest(backends={backends_repr})",
+        "",
+        "",
+        "def _build_weaver():",
+        "    # Prefer the offline fixture builder once you add it, so these run",
+        "    # deterministically; until then fall back to the introspection builder",
+        "    # (the order test then skips while the backend is unconfigured).",
+        f"    builder = getattr(factory, 'build_{pkg}_fixture', None) or factory.build_{pkg}",
+        "    return builder()",
         "",
     ]
 
@@ -210,7 +217,7 @@ def _contract_test_source(spec: WeaverSpec) -> str:
             f"    backend = {b!r}",
             "",
             "    def make_weaver(self):",
-            f"        weaver = build_{pkg}()",
+            "        weaver = _build_weaver()",
             "        strat = weaver._backends.get(self.backend)",
             "        if strat is None or not strat.is_configured():",
             "            pytest.skip(f'backend {self.backend!r} not configured')",
@@ -1115,7 +1122,7 @@ from pathlib import Path
 
 from weaverkit import WeaverConformanceTests
 
-from {{DBWEAVER}}.factory import build_{{DBWEAVER}}
+from {{DBWEAVER}} import factory
 
 SPEC = str(Path(__file__).resolve().parent.parent / "weaver.spec.toml")
 
@@ -1125,7 +1132,10 @@ class TestConformance(WeaverConformanceTests):
     golden_backend = "{{FIRST_BACKEND}}"
 
     def build_weaver(self):
-        return build_{{DBWEAVER}}()
+        # Prefer the offline fixture builder so golden examples run in CI; fall
+        # back to the zero-config introspection builder when no fixture exists.
+        builder = getattr(factory, "build_{{DBWEAVER}}_fixture", None) or factory.build_{{DBWEAVER}}
+        return builder()
 '''
 
 

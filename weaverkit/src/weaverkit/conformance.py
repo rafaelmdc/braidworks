@@ -32,6 +32,18 @@ from weaverkit.spec import GoldenSpec, WeaverSpec, load_spec, validate_spec
 _BAD_FINGERPRINTS = {"", "unknown"}
 
 
+def _is_configured_fingerprint(fp: object) -> bool:
+    """Whether a backend fingerprint indicates a configured, runnable backend.
+
+    Mirrors the dispatch gate: ``BackendDispatchWeaver.backend_fingerprint`` returns
+    the sentinel ``"unconfigured:<backend>"`` when ``is_configured()`` is False, so a
+    fingerprint that is empty/``"unknown"`` *or* an ``"unconfigured:"`` sentinel means
+    the golden examples must skip (not run and crash on ``BackendUnavailable``).
+    """
+    text = str(fp).strip()
+    return text.lower() not in _BAD_FINGERPRINTS and not text.startswith("unconfigured:")
+
+
 def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
     """Check a weaver's declared manifest against its spec. Empty == conformant."""
     problems: list[str] = []
@@ -226,7 +238,7 @@ class WeaverConformanceTests:
         weaver = self.build_weaver()
         backend = self.golden_backend
         try:
-            configured = weaver.backend_fingerprint(backend) not in _BAD_FINGERPRINTS
+            configured = _is_configured_fingerprint(weaver.backend_fingerprint(backend))
         except Exception:  # noqa: BLE001
             configured = False
         if not configured:
