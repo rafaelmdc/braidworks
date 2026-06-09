@@ -3,14 +3,13 @@
 Each weaver package advertises a zero-arg builder under the ``braidworks.weavers``
 entry-point group (name = weaver_id, value = ``module:build_callable``). A worker
 builds its :class:`~braidworks.core.registry.BraidRegistry` by loading those entry
-points and registering whatever they return. This matches the existing
-provider/factory pattern and means a freshly ``pip install``-ed weaver is servable
-with no code change here.
+points and registering whatever they return. A freshly ``pip install``-ed weaver is
+servable with no code change here.
 
 The per-process registry is cached (a worker builds it once at startup). Tests — and
 workers that should serve only a subset — can override it with :func:`set_registry`
 (e.g. to register a fake weaver, or to load only the weavers whose data this worker
-actually has locally).
+actually holds locally).
 """
 
 from __future__ import annotations

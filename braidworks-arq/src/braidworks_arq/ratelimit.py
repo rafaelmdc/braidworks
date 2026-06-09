@@ -1,28 +1,26 @@
-"""Global token-bucket rate limiting against shared upstreams (e.g. NCBI).
+"""Global (cluster-wide) token-bucket rate limiting against shared upstreams.
 
-Celery's built-in ``rate_limit`` is *per worker*; a fleet of 10 workers each
-allowed "3/s" hits an upstream at 30/s. This is a **cluster-wide** limiter backed by
-Redis, so N workers share one budget — the thing you actually need to stay under an
-API's published limit.
+A fleet of N workers must share one budget to stay under an API's published limit, so
+the bucket lives in Redis (a small atomic Lua script: refill-then-take). It is async
+to fit arq's event-loop worker — ``acquire`` awaits, sleeping with ``asyncio.sleep``
+rather than blocking the loop, and reuses the worker's own async Redis connection.
 
-Configuration is environment-driven and opt-in (off by default). Set
-``BRAIDWORKS_RATE_LIMITS`` to a comma list of ``weaver_id[:backend]=rate_per_sec``,
-e.g. ``ncbi:api=3,uniprot=10``. A step matching a rule must acquire a token before
-it runs (see ``tasks.weave_step``); steps with no rule are never throttled.
-
-The bucket is a small atomic Lua script (refill-then-take) so concurrent workers
-can't race past the budget. ``acquire`` blocks (sleeping) until a token is free.
+Opt-in and off by default: set ``BRAIDWORKS_RATE_LIMITS`` to a comma list of
+``weaver[:backend]=rate_per_sec`` (e.g. ``ncbi:api=3,uniprot=10``). A step matching a
+rule must acquire a token before it runs (see ``tasks.weave_step``); unmatched steps
+are never throttled.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
-# Refill the bucket by elapsed*rate (capped at capacity), then take one token if
-# available. Returns 1 on success, else the seconds to wait before retrying.
+# Refill by elapsed*rate (capped at capacity), then take one token if available.
+# Returns "-1" on success, else the seconds to wait before retrying (as a string).
 _LUA = """
 local key = KEYS[1]
 local rate = tonumber(ARGV[1])
@@ -34,48 +32,53 @@ local ts = tonumber(state[2])
 if tokens == nil then tokens = capacity; ts = now end
 local elapsed = math.max(0, now - ts)
 tokens = math.min(capacity, tokens + elapsed * rate)
+local ttl = math.ceil(capacity / rate) + 1
 if tokens >= 1 then
   tokens = tokens - 1
   redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
-  redis.call('EXPIRE', key, math.ceil(capacity / rate) + 1)
+  redis.call('EXPIRE', key, ttl)
   return "-1"
 else
   redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
-  redis.call('EXPIRE', key, math.ceil(capacity / rate) + 1)
+  redis.call('EXPIRE', key, ttl)
   return tostring((1 - tokens) / rate)
 end
 """
 
 
-class RedisLike(Protocol):
-    """The slice of the redis client this module uses (eval-based)."""
+class AsyncRedisLike(Protocol):
+    """The slice of an async redis client this module uses."""
 
-    def eval(self, script: str, numkeys: int, *keys_and_args): ...  # noqa: A003
+    async def eval(self, script: str, numkeys: int, *keys_and_args): ...  # noqa: A003
+
+
+def _as_float(raw: object) -> float:
+    return float(raw.decode() if isinstance(raw, bytes) else raw)
 
 
 @dataclass
 class TokenBucket:
-    """A cluster-wide token bucket. ``rate`` tokens/sec, burst up to ``capacity``."""
+    """A cluster-wide async token bucket. ``rate`` tokens/sec, burst up to ``capacity``."""
 
-    redis: RedisLike
+    redis: AsyncRedisLike
     key: str
     rate: float
     capacity: float
 
-    def acquire(self, *, timeout: float | None = None) -> bool:
-        """Take one token, sleeping until one is free. False if ``timeout`` elapses."""
+    async def acquire(self, *, timeout: float | None = None) -> bool:
+        """Take one token, awaiting until one is free. False if ``timeout`` elapses."""
         deadline = None if timeout is None else time.monotonic() + timeout
         while True:
-            wait = self._try_take()
+            wait = await self._try_take()
             if wait < 0:
                 return True
             if deadline is not None and time.monotonic() + wait > deadline:
                 return False
-            time.sleep(min(wait, 0.5))
+            await asyncio.sleep(min(wait, 0.5))
 
-    def _try_take(self) -> float:
-        raw = self.redis.eval(_LUA, 1, self.key, self.rate, self.capacity, time.time())
-        return float(raw)
+    async def _try_take(self) -> float:
+        raw = await self.redis.eval(_LUA, 1, self.key, self.rate, self.capacity, time.time())
+        return _as_float(raw)
 
 
 def parse_rate_limits(spec: str | None) -> dict[str, float]:
@@ -99,9 +102,7 @@ def parse_rate_limits(spec: str | None) -> dict[str, float]:
     return limits
 
 
-def rate_for(
-    limits: dict[str, float], weaver_id: str, backend: str
-) -> float | None:
+def rate_for(limits: dict[str, float], weaver_id: str, backend: str) -> float | None:
     """Most-specific match: ``weaver:backend`` beats bare ``weaver``."""
     return limits.get(f"{weaver_id}:{backend}", limits.get(weaver_id))
 

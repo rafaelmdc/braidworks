@@ -366,9 +366,9 @@ taxon_weaver (renamed from taxonbridge)
   ├── braidworks-core
   └── existing deps (rapidfuzz, etc.)
 
-(future) braidworks-celery
+braidworks-arq
   ├── braidworks-core
-  └── celery, redis
+  └── arq, redis
 
 (future) uniprot-weaver
   └── braidworks-core
