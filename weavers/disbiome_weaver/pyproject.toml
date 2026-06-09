@@ -9,6 +9,10 @@ dependencies = ["braidworks-core"]
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23", "weaverkit"]
 
+# Discovered by braidworks-celery workers — name is the weaver_id, value a zero-arg builder.
+[project.entry-points."braidworks.weavers"]
+disbiome = "disbiome_weaver.factory:build_disbiome_weaver"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
