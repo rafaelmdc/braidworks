@@ -92,7 +92,7 @@ bulk download + taxid/lineage key = cheap and high-value).
 
 | Tier | Weaver (source) | Function spectrum | Join key | Access | License | Why this rank |
 |---|---|---|---|---|---|---|
-| **P0** | `disbiome_weaver` — [Disbiome](https://disbiome.ugent.be/) | **Microbe ↔ disease** associations: per disease, abundance Elevated/Reduced vs healthy controls (human host; MedDRA-coded). **Must expose the full record** — quantitative values, method/sample/host, disease detail, organism detail, and the complete publication + study-quality metadata (see §4) | **NCBI taxid** (`organism_ncbi_id`) | Keyless JSON API (`disbiome.ugent.be:8080`); ~10.9k records returned whole, so fetch-all + join | Open, cite [BMC Microbiol 2018](https://bmcmicrobiol.biomedcentral.com/articles/10.1186/s12866-018-1197-5) (confirm terms) | **Top priority.** taxid-keyed → reachable straight from `taxon_weaver` (same pattern as BacDive); keyless; small. Adds the host-health dimension to "what does this organism do." |
+| **P0** | `disbiome_weaver` — [Disbiome](https://disbiome.ugent.be/) | **Microbe ↔ disease** associations: per disease, abundance Elevated/Reduced vs healthy controls (human host; MedDRA-coded). **Must expose the full record** — quantitative values, method/sample/host, disease detail, organism detail, and the complete publication + study-quality metadata (see §4) | **NCBI taxid** (`organism_ncbi_id`) | Keyless JSON API (`disbiome.ugent.be:8080`); whole-table GETs (~7 MB total) = de-facto dump → build a small **local** SQLite (no separate dump file) | Open, cite [BMC Microbiol 2018](https://bmcmicrobiol.biomedcentral.com/articles/10.1186/s12866-018-1197-5) (confirm terms) | **Top priority.** taxid-keyed → reachable straight from `taxon_weaver` (same pattern as BacDive); keyless; small. Adds the host-health dimension to "what does this organism do." |
 | **P0** | `faprotax_weaver` — [FAPROTAX](https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/lib/php/index.php) | ~90 ecological/metabolic **functional groups** (methanotrophy, N-fixation, sulfate respiration, fermentation, phototrophy…) | **lineage names** | Small bundled text DB + rules | Academic, cite | Most direct "organism → ecological function" signal — *exactly* ORDINA. Tiny data; ship in-package. |
 | **P1** | `gtdb_weaver` — [GTDB](https://gtdb.ecogenomic.org/) | Genome-based, rank-normalized **taxonomy bridge** | taxid ↔ GTDB id | Bulk taxdump-format ([gtdb-taxdump](https://github.com/shenwei356/gtdb-taxdump)) | CC BY-SA | Near-free: ships **taxdump-format** files → reuse `build_taxonomy_database` directly. Better lineages → better FAPROTAX hits. |
 | ✅ shipped | `bacdive_weaver` — [BacDive (DSMZ)](https://bacdive.dsmz.de/) | Richest curated metabolic/physiological/ecological strain profiles | **scientific name** (type strain) | REST API v2 (free, **no key**) | CC BY 4.0, cite | Deepest curation; shipped 0.1.0 (type-strain MVP). Also an intermediate (→ ChEBI, BRENDA, ENA) once those xrefs are emitted. |
@@ -171,13 +171,20 @@ cache stores partial computation.
     `controls_matched_for_possible_confounding_factors`,
     `measure_of_variance_reported`, …) — keep all of them.
 
-  Implementation note: the API is keyless and small (~10.9k experiments, plus the
-  `/disease`, `/organism`, `/publication`, `/sample`, `/method` tables), so fetch
-  each table **whole once**, build in-memory id→record maps, and join — don't
-  per-record round-trip. A `local`-style cached snapshot fits well; `api` works too.
-  Organisms are often genus-level, and one taxid has many experiments → collection
-  output. Consider a grouped capability (`core` = direction + disease; `provenance`
-  = publication + study-quality flags) so callers can request the lighter slice.
+  Implementation note — **prefer a `local` backend** (like taxon_weaver). There is
+  no separate dump *file* (the site's "Export" is a client-side json→csv of the
+  current view), but the API serves each table **whole in one GET**, and the entire
+  dataset is tiny — **~7 MB** total (`/experiment` ~5.8 MB / 10.9k rows, `/publication`
+  ~1.2 MB, `/organism` ~241 KB, `/disease` ~60 KB, `/sample`+`/method` ~7 KB). So the
+  build step is "fetch the 6 endpoints once," join them, and write a small SQLite via
+  `braidworks.core.localdb.ensure_local_db` (the callback-shaped plumbing taxon_weaver
+  uses — far lighter here: ~7 MB of JSON, not a 70 MB taxdump → 1.2 GB DB). Disbiome
+  exposes no release tag, so derive `fingerprint()` from a **content hash** of the
+  fetched tables (never `"unknown"`). An `api` backend (live fetch-all + in-memory
+  join) is a fine alternative/fallback. Organisms are often genus-level and one taxid
+  has many experiments → collection output. Consider grouped capabilities (`core` =
+  direction + disease; `provenance` = publication + study-quality flags) so callers
+  can request the lighter slice.
 - **Molecular keys (hubs):** `protein.uniprot.accession`, `gene.ncbi.id`,
   `gene.ensembl.id`, `go.term`, `enzyme.ec`, `pathway.kegg.id`,
   `pathway.reactome.id`, `reaction.rhea.id`, `chem.chebi.id`,
