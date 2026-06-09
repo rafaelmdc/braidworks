@@ -2,7 +2,7 @@
 
     weaverkit new    --spec weaver.spec.toml --dest weavers/madinweaver
     weaverkit verify --spec weaver.spec.toml [--package madinweaver]
-    weaverkit index  [--root .] [--out weavers-index.tsv]
+    weaverkit index  [--root .] [--out weavers-index.tsv] [--keys-out keys-index.md]
 
 ``new`` validates the spec, then stamps a package. ``verify`` validates the spec
 and — if the built package is importable — checks its manifest, reachability, and
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
-from weaverkit.index import uncatalogued_outputs, write_index
+from weaverkit.index import uncatalogued_outputs, write_index, write_key_index
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
 
@@ -212,9 +212,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 def cmd_index(args: argparse.Namespace) -> int:
     rows = write_index(args.root, args.out)
+    write_key_index(args.root, args.keys_out)
     weavers = sorted({r.weaver for r in rows})
     unmet = sum(1 for r in rows if r.unmet_inputs)
-    print(f"indexed {len(rows)} capabilities across {len(weavers)} weaver(s) -> {args.out}")
+    print(
+        f"indexed {len(rows)} capabilities across {len(weavers)} weaver(s) "
+        f"-> {args.out} + key catalog -> {args.keys_out}"
+    )
     if unmet:
         print(
             f"note: {unmet} capability row(s) have unmet inputs (no other weaver "
@@ -260,6 +264,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_index.add_argument("--root", default=".", help="workspace root to scan (default: .)")
     p_index.add_argument(
         "--out", default="weavers-index.tsv", help="output file (.tsv or .csv; default .tsv)"
+    )
+    p_index.add_argument(
+        "--keys-out",
+        default="keys-index.md",
+        help="human-readable key map (Markdown; default keys-index.md)",
     )
     p_index.set_defaults(func=cmd_index)
 

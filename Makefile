@@ -31,8 +31,8 @@ new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DE
 verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=fooweaver
 	$(MAKE) -C weaverkit verify SPEC=$(abspath $(SPEC)) PACKAGE=$(PACKAGE)
 
-index:  ## Build the cross-weaver key index -> docs/weavers-index.tsv
-	uv run weaverkit index --root . --out docs/weavers-index.tsv
+index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-index.md
+	uv run weaverkit index --root . --out docs/weavers-index.tsv --keys-out docs/keys-index.md
 
 # Lint every package (incl. the migrated taxonomy_resolver/taxonomy_tools) and tests.
 LINT_PATHS = braidworks-core/src braidworks-core/tests weavers/taxonweaver/src weavers/taxonweaver/tests \
