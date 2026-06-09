@@ -1,20 +1,23 @@
 """DatasetsV2Backend — NCBI Datasets v2 REST taxonomy backend.
 
 Strategy:
-  * exact: one batched POST to ``taxonomy/dataset_report`` (<=1000 taxons) maps
-    each query to a taxonomy node (tax_id, organism_name, rank, lineage taxids).
+  * exact: one batched POST to ``taxonomy/dataset_report`` (<=1000 taxons). Each
+    ``reports[]`` entry echoes its ``query`` and carries a ``taxonomy`` node
+    (tax_id, current_scientific_name.name, rank, parents taxids).
   * fuzzy: queries with no exact node fall back to per-name
     ``taxonomy/taxon_suggest`` (exact_match=false) for suggestions.
-  * lineage: Datasets returns lineage as taxids only; a second batched
+  * lineage: Datasets returns ancestry as taxids only; a second batched
     ``dataset_report`` over the deduped union of ancestor taxids resolves their
     names/ranks so the lineage strand matches the local backend's shape.
   * confidence: Datasets gives no numeric score, so matches are re-scored with
     RapidFuzz (query vs. matched name) for parity with the local backend.
 
 The HTTP client is injectable (``client=``) so tests drive it with an
-``httpx.MockTransport``. The JSON shapes parsed here follow the Datasets v2
-``v2TaxonomyMatch`` / ``v2SciNameAndIds`` schemas; validate against the live API
-before production use.
+``httpx.MockTransport``. Node parsing goes through ``_node_name`` / ``_node_parents``
+/ ``_node_rank``, which tolerate both the current schema (``reports`` +
+``current_scientific_name`` + ``parents``) and the older one (``taxonomy_nodes`` +
+``organism_name`` + ``lineage``). Confirm shapes with the live E2E
+(``BRAIDWORKS_RUN_LIVE=1``) after API-touching changes.
 """
 
 from __future__ import annotations
@@ -32,6 +35,35 @@ logger = logging.getLogger("taxon_weaver.api")
 
 DEFAULT_BASE_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2"
 _PAGE_LIMIT = 1000
+
+
+def _node_name(node: dict[str, Any]) -> str | None:
+    """Scientific name of a taxonomy node, tolerant of both Datasets v2 shapes.
+
+    Current schema nests it under ``current_scientific_name.name``; older responses
+    exposed a flat ``organism_name``.
+    """
+    csn = node.get("current_scientific_name")
+    if isinstance(csn, dict):
+        return csn.get("name")
+    return node.get("organism_name")
+
+
+def _node_parents(node: dict[str, Any]) -> list[int]:
+    """Ancestor taxids (root → immediate parent), tolerant of both shapes.
+
+    Current schema calls this ``parents``; older responses used ``lineage``.
+    """
+    raw = node.get("parents")
+    if raw is None:
+        raw = node.get("lineage")
+    return [int(t) for t in raw or []]
+
+
+def _node_rank(node: dict[str, Any]) -> str | None:
+    """Rank, lowercased for parity with the local backend (the API now upper-cases)."""
+    rank = node.get("rank")
+    return rank.lower() if isinstance(rank, str) else rank
 
 
 def _rescore(query: str, name: str | None) -> float:
@@ -121,7 +153,9 @@ class DatasetsV2Backend:
                 continue
             resp = await self._http().post("/taxonomy/dataset_report", json={"taxons": chunk})
             resp.raise_for_status()
-            for entry in resp.json().get("taxonomy_nodes", []):
+            payload = resp.json()
+            # Datasets v2 now returns "reports"; older responses used "taxonomy_nodes".
+            for entry in payload.get("reports") or payload.get("taxonomy_nodes") or []:
                 node = entry.get("taxonomy")
                 if not node:
                     continue
@@ -190,8 +224,8 @@ class DatasetsV2Backend:
             entries = [
                 LineageEntry(
                     taxid=tid,
-                    rank=(by_taxid.get(tid, {}).get("rank") or ""),
-                    name=(by_taxid.get(tid, {}).get("organism_name") or ""),
+                    rank=(_node_rank(by_taxid.get(tid, {})) or ""),
+                    name=(_node_name(by_taxid.get(tid, {})) or ""),
                 )
                 for tid in m.lineage_taxids
             ]
@@ -202,15 +236,15 @@ class DatasetsV2Backend:
 
     def _node_match(self, query: str, node: dict[str, Any], *, match_type: str) -> TaxonMatch:
         taxid = int(node["tax_id"]) if node.get("tax_id") is not None else None
-        name = node.get("organism_name")
-        lineage_taxids = [int(t) for t in node.get("lineage", []) or []]
+        name = _node_name(node)
+        lineage_taxids = _node_parents(node)
         parent = lineage_taxids[-1] if lineage_taxids else None
         match = TaxonMatch(
             query=query,
             status=TaxonMatchStatus.RESOLVED,
             taxid=taxid,
             scientific_name=name,
-            rank=node.get("rank"),
+            rank=_node_rank(node),
             parent_taxid=parent,
             match_type=match_type,
             score=None if match_type == "exact" else _rescore(query, name),

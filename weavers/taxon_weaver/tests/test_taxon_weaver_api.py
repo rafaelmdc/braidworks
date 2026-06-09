@@ -11,17 +11,30 @@ from braidworks.core import Strand, StrandSet, WeaveStatus
 
 from taxon_weaver import build_ncbi_weaver, vocab
 
+# Mirrors the live Datasets v2 schema: "reports" entries, current_scientific_name,
+# parents (ancestor taxids), upper-cased rank. The backend lower-cases rank and
+# tolerates the legacy shape too (see _node_name / _node_parents / _node_rank).
 EXACT = {
     "Homo sapiens": {
         "tax_id": 9606,
-        "organism_name": "Homo sapiens",
-        "rank": "species",
-        "lineage": [131567, 9605],
+        "current_scientific_name": {"name": "Homo sapiens"},
+        "rank": "SPECIES",
+        "parents": [131567, 9605],
     },
 }
 ANCESTORS = {
-    "131567": {"tax_id": 131567, "organism_name": "cellular organisms", "rank": "no rank", "lineage": []},
-    "9605": {"tax_id": 9605, "organism_name": "Homo", "rank": "genus", "lineage": [131567]},
+    "131567": {
+        "tax_id": 131567,
+        "current_scientific_name": {"name": "cellular organisms"},
+        "rank": "NO_RANK",
+        "parents": [],
+    },
+    "9605": {
+        "tax_id": 9605,
+        "current_scientific_name": {"name": "Homo"},
+        "rank": "GENUS",
+        "parents": [131567],
+    },
 }
 SUGGEST = {
     "Homo sapeins": [{"sci_name": "Homo sapiens", "tax_id": "9606", "rank": "species"}],
@@ -41,7 +54,7 @@ def _handler(request: httpx.Request) -> httpx.Response:
             node = EXACT.get(t) or ANCESTORS.get(str(t))
             if node is not None:
                 nodes.append({"query": [t], "taxonomy": node})
-        return httpx.Response(200, json={"taxonomy_nodes": nodes})
+        return httpx.Response(200, json={"reports": nodes})
     if request.method == "GET" and "/taxonomy/taxon_suggest/" in path:
         name = unquote(path.split("/taxonomy/taxon_suggest/", 1)[1])
         return httpx.Response(200, json={"sci_name_and_ids": SUGGEST.get(name, [])})
