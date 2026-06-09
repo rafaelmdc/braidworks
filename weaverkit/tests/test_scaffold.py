@@ -385,6 +385,20 @@ def test_api_key_none_uses_plain_stub(tmp_path):
     assert "self._configured = False" in api
 
 
+def test_api_backend_declares_httpx_dependency(tmp_path):
+    # An api backend's fetch makes HTTP calls, so httpx is added automatically.
+    backends = _generate_api(tmp_path, "none")
+    dest = backends.parents[2]  # .../out/src/<pkg>/backends -> .../out
+    pyproject = (dest / "pyproject.toml").read_text()
+    assert "httpx" in pyproject
+
+
+def test_non_api_weaver_omits_httpx(tmp_path):
+    # A local-only (bulk) weaver makes no HTTP calls, so httpx is not pulled in.
+    _spec, dest = _generate_bulk(tmp_path)
+    assert "httpx" not in (dest / "pyproject.toml").read_text()
+
+
 _ALWAYS_SPEC = """\
 [weaver]
 db_name = "acgdemo"

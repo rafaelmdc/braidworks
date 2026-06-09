@@ -1047,18 +1047,23 @@ def scaffold(
         else "from braidworks.core import LookupRecord"
     )
 
+    # Dependencies: always braidworks-core; an api backend's fetch will make HTTP
+    # calls, so declare httpx up front (the workspace already uses it) rather than
+    # making every api-weaver author add it by hand.
+    deps = ['"braidworks-core"']
+    if "api" in spec.backends:
+        deps.append('"httpx>=0.27"')
+    tokens["DEPS"] = ", ".join(deps)
+
     # Bulk-source tokens: a local DB built from a download (setup.py + ensure CLI).
     bulk = spec.bulk
     if bulk is not None:
-        # The local-DB plumbing (incl. platformdirs) now lives in braidworks-core.
-        tokens["DEPS"] = '"braidworks-core"'
         tokens["SCRIPTS_BLOCK"] = f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
         tokens["ENSURE_TARGET"] = "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
         tokens["ARCHIVE_URL"] = bulk.archive_url
         tokens["BULK_FILENAME"] = bulk.filename
         tokens["BULK_BACKEND"] = bulk.backend
     else:
-        tokens["DEPS"] = '"braidworks-core"'
         tokens["SCRIPTS_BLOCK"] = ""
         tokens["ENSURE_TARGET"] = ""
 
