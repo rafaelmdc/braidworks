@@ -11,21 +11,22 @@ uv sync --all-extras
 
 ## Testing
 
-Tests are **per package**, and the working directory matters: `taxon_weaver`'s
-suite imports fixtures via `from tests....`, which only resolves when pytest runs
-from inside `weavers/taxon_weaver/`. Use the Makefile and you won't have to think about it:
+Tests are **per package**, and the working directory matters: a weaver's suite
+imports fixtures via `from tests....`, which only resolves when pytest runs from
+inside the package dir. Use the Makefile and you won't have to think about it:
 
 ```bash
-make test          # both suites
+make test          # every package's suite (core + weaverkit + every weaver)
 make test-core     # braidworks-core only
-make test-weaver   # taxon_weaver only
+make test-kit      # weaverkit only
+make test-weavers  # every weaver under weavers/* (auto-discovered)
 ```
 
-Equivalent raw commands:
+Equivalent raw command (per package):
 
 ```bash
-cd braidworks-core && uv run --extra test python -m pytest -q
-cd taxon_weaver    && uv run --extra test python -m pytest -q
+cd braidworks-core      && uv run --extra test python -m pytest -q
+cd weavers/taxon_weaver && uv run --extra test python -m pytest -q
 ```
 
 A bare `pytest` (or `uv run pytest`) from the repo root will pick up the root
@@ -69,9 +70,10 @@ done-checklist, see
 *which* databases to build next and the reachability model, see
 [docs/weaver-roadmap.md](docs/weaver-roadmap.md). The manual shape, for reference:
 
-1. **Create a workspace member** `my_weaver/` with its own `pyproject.toml`
-   (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`)
-   and add it to `members` in the root `pyproject.toml`.
+1. **Create the package** at `weavers/<db>_weaver/` with its own `pyproject.toml`
+   (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`).
+   The root `members = ["braidworks-core", "weaverkit", "weavers/*"]` glob picks it up
+   automatically — no root edit needed.
 2. **Define a neutral intermediate** — a small dataclass your backends normalize
    their native responses into (taxon_weaver's is `TaxonMatch`). Keep it in your
    package; never leak it into core.

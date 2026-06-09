@@ -25,9 +25,13 @@ This is a [`uv`](https://docs.astral.sh/uv/) workspace monorepo:
 ```
 braidworks/
 ├── braidworks-core/     # framework: strands, capabilities, registry, braider, executor, cache, factory
-├── taxon_weaver/         # first weaver: NCBI taxonomy (local SQLite + Datasets v2 API backends)
-├── docs/                # architecture, usage, database setup, repo structure
-├── Makefile             # common dev tasks (test, lint, db)
+├── weaverkit/           # toolkit to add a weaver deterministically (spec → scaffold → verify)
+├── weavers/             # the weavers (auto-discovered by the workspace glob)
+│   ├── taxon_weaver/    #   advanced reference: NCBI taxonomy (local SQLite + Datasets v2 API)
+│   ├── example_weaver/  #   minimal reference: lookup over a bundled CSV
+│   └── bacdive_weaver/  #   BacDive type-strain phenotypes
+├── docs/                # architecture, usage, database setup, roadmap, guides
+├── Makefile             # common dev tasks (test, lint, new-weaver, verify-weaver, index)
 └── pyproject.toml       # workspace root
 ```
 
@@ -90,4 +94,9 @@ repo root.
 | [docs/architecture.md](docs/architecture.md) | Core abstractions, contracts, design decisions |
 | [docs/repo-structure.md](docs/repo-structure.md) | Full repository layout |
 | [docs/implementation-plan.md](docs/implementation-plan.md) | Build order, deliverables, definition of done |
+| [docs/weaver-roadmap.md](docs/weaver-roadmap.md) | Which weavers to build next + the reachability model |
+| [docs/weaver-implementation-guide.md](docs/weaver-implementation-guide.md) | Step-by-step manual for building a weaver |
+| [docs/keys-index.md](docs/keys-index.md) | Catalog of keys that flow between weavers (generated) |
+| [AGENTS.md](AGENTS.md) | Contributor boundaries + the Spec→Scaffold→Implement→Verify loop |
+| [weaverkit/README.md](weaverkit/README.md) | The spec/scaffold/conformance toolkit |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, testing, and how to add a new weaver |

@@ -1,6 +1,6 @@
 # Plan: Local taxonomy DB auto-setup
 
-**Status:** Implemented (2026-06-06). `taxon_weaver/src/taxon_weaver/setup.py`
+**Status:** Implemented (2026-06-06). `weavers/taxon_weaver/src/taxon_weaver/setup.py`
 (`ensure_taxonomy_db`, `check_for_update`), factory `auto_setup`, the
 `taxon-weaver ensure` CLI subcommand, the actionable local-backend error, and
 API-backend INFO logging are all in place and tested. One deviation from the

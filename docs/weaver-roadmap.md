@@ -135,7 +135,7 @@ accessions + xref ids).
 
 ## 4. Proposed vocabulary (strand type IDs)
 
-Each weaver owns its `vocab.py` (see `taxon_weaver/src/taxon_weaver/vocab.py`). Keep
+Each weaver owns its `vocab.py` (see `weavers/taxon_weaver/src/taxon_weaver/vocab.py`). Keep
 core domain-neutral. Group outputs (like taxon_weaver's `core`/`lineage`) so the
 cache stores partial computation.
 
@@ -158,34 +158,30 @@ silent assertion — consistent with the framework contract.
 
 ---
 
-## 5. Repository organization (proposal — not yet done)
+## 5. Repository organization (done)
 
-Today both packages sit at the repo root (`members = ["braidworks-core",
-"taxon_weaver"]`). With ~5–15 weavers ahead, the root would become a wall of
-`*weaver/` directories. **Recommendation: group weavers under `weavers/`** and use
-a glob member:
+Weavers live under `weavers/` and are picked up by a glob member, so the root stays
+legible and a new weaver needs no root edit:
 
 ```
 braidworks/
   braidworks-core/
+  weaverkit/
   weavers/
     taxon_weaver/
-    madin_weaver/
-    faprotax_weaver/
+    example_weaver/
+    bacdive_weaver/
     …
   docs/  Makefile  pyproject.toml
 ```
 ```toml
 [tool.uv.workspace]
-members = ["braidworks-core", "weavers/*"]
+members = ["braidworks-core", "weaverkit", "weavers/*"]
 ```
 
-Benefits: the root stays legible; new weavers need no root edit (the glob picks
-them up); the root `Makefile` can iterate `weavers/*/Makefile`. Migration cost is
-moderate and mechanical — move `taxon_weaver/`, update the root `Makefile`
-(`-C weavers/taxon_weaver`), CI paths, `LINT_PATHS`, and the docs that cite paths
-(repo-structure.md, database.md). **Do this before the second weaver lands**, so
-only one package has to move. (Not done yet — confirm and it's a quick PR.)
+The root `Makefile` auto-discovers `weavers/*/Makefile` (test, lint), so a scaffolded
+weaver is built with no manual wiring. See [repo-structure.md](repo-structure.md)
+for the full current layout.
 
 ---
 
@@ -198,7 +194,7 @@ standardized and the ecology-weaver specifics.
 **Reuse what taxon_weaver proved out:**
 
 - **Local DB acquisition.** Bulk-file sources: copy
-  `taxon_weaver/src/taxon_weaver/setup.py` — `ensure_<db>_db(path, auto=, refresh=)`
+  `weavers/taxon_weaver/src/taxon_weaver/setup.py` — `ensure_<db>_db(path, auto=, refresh=)`
   with default-path resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache),
   consent gate (`auto=` / `BRAIDWORKS_AUTO_DOWNLOAD`), checksum verify, atomic
   build→rename, lock, disk precheck, and a `<tool> ensure` CLI subcommand. For
