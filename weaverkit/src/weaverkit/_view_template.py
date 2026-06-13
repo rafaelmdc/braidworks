@@ -23,6 +23,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     --panel-edge: rgba(120, 145, 200, 0.16);
     --type-in: #6f8bb8;     /* input endpoint — muted cool */
     --type-out: #5aa6a0;    /* output endpoint — muted teal */
+    --type-mix: #9488bd;    /* both consumed & produced — muted violet */
     --accent: #5ad0e0;
   }
   * { box-sizing: border-box; }
@@ -47,7 +48,10 @@ HTML_TEMPLATE = r"""<!doctype html>
   .brand h1 {
     margin: 0; font-size: 15px; letter-spacing: 6px; font-weight: 700; color: var(--ink);
   }
-  .brand p { margin: 3px 0 0; font-size: 11px; color: var(--ink-dim); letter-spacing: 1.2px; }
+  .brand p {
+    margin: 3px 0 0; font-size: 11px; color: var(--ink-dim); letter-spacing: 1.2px;
+    max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 
   .nav { display: flex; align-items: center; gap: 10px; pointer-events: auto; position: relative; }
   .pill {
@@ -75,7 +79,9 @@ HTML_TEMPLATE = r"""<!doctype html>
   }
   .menu-item:hover { background: rgba(255,255,255,0.05); color: var(--ink); }
   .menu-item.sel { color: var(--ink); }
-  .menu-item .tick { width: 12px; color: var(--accent); }
+  .menu-item .tick { width: 12px; flex: none; color: var(--accent); }
+  .menu-item .mlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .menu { max-width: 320px; }
 
   .panel {
     position: fixed; top: 80px; right: 18px; z-index: 10; width: 286px;
@@ -164,7 +170,11 @@ HTML_TEMPLATE = r"""<!doctype html>
 const DATA = __BRAIDWORKS_DATA__;
 
 // ---- palette ---------------------------------------------------------------
-const TYPE_IN = "#6f8bb8", TYPE_OUT = "#5aa6a0";
+const TYPE_IN = "#6f8bb8", TYPE_OUT = "#5aa6a0", TYPE_MIX = "#9488bd";
+const TYPE_COLOR = { in: TYPE_IN, out: TYPE_OUT, mixed: TYPE_MIX };
+const TYPE_LABEL = {
+  in: "Input endpoint", out: "Output endpoint", mixed: "Mixed (in & out)",
+};
 // Stable, restrained hue per weaver — the only saturated color in the scene.
 function weaverHue(id) {
   let h = 0;
@@ -190,16 +200,21 @@ function computeLayout(graph) {
   const nodes = new Map(graph.nodes.map((n) => [n.id, { ...n }]));
   const outAdj = new Map(), inAdj = new Map(), indeg = new Map();
   for (const n of nodes.keys()) { outAdj.set(n, []); inAdj.set(n, []); indeg.set(n, 0); }
-  const incoming = new Set();
+  const incoming = new Set(), outgoing = new Set();
   for (const e of graph.edges) {
     if (!nodes.has(e.source) || !nodes.has(e.target) || e.source === e.target) continue;
     outAdj.get(e.source).push(e.target);
     inAdj.get(e.target).push(e.source);
     indeg.set(e.target, indeg.get(e.target) + 1);
-    incoming.add(e.target);
+    incoming.add(e.target); outgoing.add(e.source);
   }
-  // input vs output: an endpoint with no incoming edge is an input/source.
-  for (const n of nodes.values()) if (n.kind === "type") n.io = incoming.has(n.id) ? "out" : "in";
+  // A type that is produced (has incoming) is a weaver output; one that is consumed
+  // (has outgoing) is a weaver input; one that is both is mixed.
+  for (const n of nodes.values()) {
+    if (n.kind !== "type") continue;
+    const produced = incoming.has(n.id), consumed = outgoing.has(n.id);
+    n.io = produced && consumed ? "mixed" : produced ? "out" : "in";
+  }
 
   // Longest-path layering via Kahn topological order.
   const level = new Map([...nodes.keys()].map((k) => [k, 0]));
@@ -312,16 +327,20 @@ function roundRect(x, y, w, h, r) {
   ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
-// Subtle two-jointed "legs" on weaver nodes — top and bottom, non-intrusive.
+// A contained, top-down "spider": the node body wears 8 short two-jointed legs
+// (4 per side), splayed off-center so the edge still exits cleanly from the middle.
+// Reach is small (~15px world) so legs never touch neighbouring nodes.
+const LEG_YS = [-0.42, -0.18, 0.18, 0.42];   // 4 attach points per side, off-center
 function drawLegs(sx, sy, w, h, color, sc, lit) {
-  const half = h / 2, span = w * 0.32;
   ctx.strokeStyle = color; ctx.lineWidth = 1 * Math.max(sc, 0.5);
-  ctx.globalAlpha = lit ? 0.30 : 0.12; ctx.lineCap = "round";
-  for (const dir of [-1, 1]) {           // top / bottom
-    for (const off of [-span, 0, span]) {
-      const bx = sx + off, by = sy + dir * half;
-      const kx = bx + (off >= 0 ? 1 : -1) * 14 * sc, ky = by + dir * 15 * sc;
-      const fx = kx + (off >= 0 ? 1 : -1) * 11 * sc, fy = ky + dir * 7 * sc;
+  ctx.globalAlpha = lit ? 0.26 : 0.10; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const side of [-1, 1]) {              // left / right body edge
+    const bx = sx + side * (w / 2);
+    for (const ry of LEG_YS) {
+      const by = sy + ry * h;
+      const splay = ry < 0 ? -1 : 1;         // upper legs angle up, lower legs down
+      const kx = bx + side * 9 * sc, ky = by + splay * 6 * sc;     // knee
+      const fx = kx + side * 7 * sc, fy = ky + splay * 9 * sc;     // foot
       ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
     }
   }
@@ -390,7 +409,7 @@ function frame(now) {
     const w = n.w * cam.scale, h = n.h * cam.scale;
     const lit = !focus || focusNodes.has(n.id);
     const isOp = n.kind === "op";
-    const base = isOp ? weaverColor(n.weaver, 60) : (n.io === "in" ? TYPE_IN : TYPE_OUT);
+    const base = isOp ? weaverColor(n.weaver, 60) : (TYPE_COLOR[n.io] || TYPE_IN);
     ctx.globalAlpha = lit ? 1 : 0.26;
 
     if (isOp) {
@@ -488,8 +507,10 @@ function renderNav() {
   const menu = el("div", "menu"); menuEl = menu;
   paths.forEach((p, idx) => {
     const i = idx + 1;
+    const short = "→ " + p.path.to_types.join(", ");
     const item = el("div", "menu-item" + (current === i ? " sel" : ""),
-      `<span class="tick">${current === i ? "✓" : ""}</span>${p.label}`);
+      `<span class="tick">${current === i ? "✓" : ""}</span><span class="mlabel">${short}</span>`);
+    item.title = p.path.title;
     item.onclick = (ev) => { ev.stopPropagation(); selectView(i); };
     menu.appendChild(item);
   });
@@ -520,8 +541,9 @@ function renderPanels() {
     stats.appendChild(el("div", "stat", `<b>${val}</b><span>${k}</span>`)));
 
   const leg = document.getElementById("legend"); leg.innerHTML = "";
-  [["Input endpoint", TYPE_IN], ["Output endpoint", TYPE_OUT]].forEach(([t, c]) =>
-    leg.appendChild(el("div", "legend-row", `<span class="dot" style="background:${c}"></span>${t}`)));
+  ["in", "out", "mixed"].forEach((io) =>
+    leg.appendChild(el("div", "legend-row",
+      `<span class="dot" style="background:${TYPE_COLOR[io]}"></span>${TYPE_LABEL[io]}`)));
 
   const box = document.getElementById("weavers"); box.innerHTML = "";
   DATA.network.weavers.forEach((w) =>
@@ -552,8 +574,8 @@ function showDetail(n) {
     const L = layouts[current], uniq = (a) => [...new Set(a)];
     const prod = L.edges.filter((e)=>e.target===n.id && e.weaver).map((e)=>e.weaver);
     const cons = L.edges.filter((e)=>e.source===n.id && e.weaver).map((e)=>e.weaver);
-    const io = n.io === "in" ? "Input endpoint" : "Output endpoint";
-    const ioColor = n.io === "in" ? TYPE_IN : TYPE_OUT;
+    const io = TYPE_LABEL[n.io] || "Endpoint";
+    const ioColor = TYPE_COLOR[n.io] || TYPE_IN;
     body.innerHTML =
       `<div class="detail-key">${n.key || n.id}</div>` +
       `<div class="kv"><span class="chip" style="border-color:${ioColor}">${io}</span></div>` +
