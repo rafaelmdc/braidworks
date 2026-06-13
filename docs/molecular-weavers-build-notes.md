@@ -177,9 +177,31 @@ Tag legend: **[scaffold]** generated-code gap · **[framework]** core/weaverkit 
     `weaverkit/src/weaverkit/cli.py`; a new "fetch patterns" section in
     `weaverkit/docs/implementing-backends.md`; optional shared helpers in core/weaverkit.
 
+## Cross-cutting (release process)
+
+21. **[process] New packages / version bumps shipped without git tags.** All six molecular
+    weavers (`*_weaver-v0.1.0`), plus `braidworks-core-v0.1.4` and `weaverkit-v0.1.2`, were
+    merged with **no per-package release tags** — caught only when the user noticed. The
+    versioning policy requires `<pkg>-v<version>` tags ([[versioning-policy]]), but nothing
+    in the build/PR flow creates or enforces them, so it's silently skippable. Tags were
+    added retroactively at the merge commits; `reactome_weaver-v0.1.0` is still pending PR
+    #37's merge.
+    → where / fix (needs file changes, not just discipline):
+    - add a **`make tag PKG=<pkg> VERSION=<v>`** (or `make release`) target to the root
+      `Makefile` that creates+pushes `git tag -a <pkg>-v<VERSION>` — one command, hard to
+      get wrong;
+    - add a **release/tag step to the weaver checklist** (the scaffold's "next steps" output
+      in `weaverkit/src/weaverkit/scaffold.py` ~L343 already lists post-build TODOs — add
+      "tag `<pkg>-v<version>` after merge" there) and/or `AGENTS.md`;
+    - optional guard: have **`weaverkit verify`** (or a CI check) warn when a package's
+      current version has no matching `<pkg>-v<version>` tag, so an untagged release is
+      visible (`weaverkit/src/weaverkit/cli.py`).
+
 ## Triage summary (for the weaverkit-improvement pass)
 
 - **Generate the entry-point block** (#1/#6/#10/#14) — `_PYPROJECT`, scaffold.py.
+- **Automate release tagging** (#21) — `make tag`/`make release` target + a checklist
+  step + optional `verify` warning for an untagged current version.
 - **Don't let placeholder live-tests pass silently** (#2) — seed from golden, or scan
   `tests/` in `_completeness_problems` (cli.py).
 - **Ease entry-key registration** (#3) — exempt entry keys from canonical-type parity, or a
