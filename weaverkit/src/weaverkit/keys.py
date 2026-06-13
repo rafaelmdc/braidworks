@@ -82,6 +82,10 @@ OUTPUT_KEYS: dict[str, str] = {
     "go.cellular_component": "GO cellular-component term names annotated to a protein.",
     "go.count": "Number of distinct GO terms annotated to a protein.",
     "go.records": "Full distinct GO annotations - GO id, name, and aspect.",
+    # experimental-structure outputs (pdbe_weaver)
+    "structure.pdb.ids": "PDB ids of experimental structures covering a protein (best first).",
+    "structure.pdb.count": "Number of distinct PDB structures covering a protein.",
+    "structure.pdb.records": "Distinct PDB structures - id, method, resolution, coverage.",
 }
 
 
