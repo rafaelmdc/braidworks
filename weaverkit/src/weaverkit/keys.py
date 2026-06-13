@@ -71,6 +71,11 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.function": "Curated function summary (UniProt FUNCTION comment).",
     "protein.length": "Sequence length in amino acids.",
     "protein.reviewed": "Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL).",
+    # protein-protein interaction outputs (string_weaver)
+    "protein.interaction.partners": "Names of a protein's interaction partners (STRING).",
+    "protein.interaction.count": "Number of interaction partners returned (STRING).",
+    "protein.interaction.records": "Full STRING interaction edges - partner, combined "
+    "score, and per-evidence-channel subscores.",
 }
 
 
