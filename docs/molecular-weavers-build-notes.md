@@ -137,3 +137,28 @@ Tag legend: **[scaffold]** generated-code gap · **[framework]** core/weaverkit 
     the #4/#11 representative + #12 pagination helpers).
     → where: `_extract`/`_pick` in the api backends of `weavers/{string,quickgo,pdbe}_weaver`;
     propose codifying in `weaverkit/docs/implementing-backends.md` (+ optional shared helper).
+
+## From `alphafold_weaver` (5th molecular weaver)
+
+17. **[design] "Not found" maps to *different* HTTP codes per API — escalating evidence
+    for the #8 helper.** Tally so far: STRING `404`, PDBe `404`, **AlphaFold `400`** (for a
+    malformed accession; a well-formed one almost always has a model, since coverage is
+    near-universal — so `X0X0X0` is a *real* low-confidence model, not a miss). Each weaver
+    had to pick which non-2xx codes mean NO_MATCH. A shared classifier (`404/400 → not
+    found, 5xx/network → error`) would have covered all three.
+    → where: `_resolve_one` `except httpx.HTTPStatusError` branches in
+    `weavers/{string,pdbe,alphafold}_weaver/src/.../backends/api.py`; fix site is a helper +
+    note in `weaverkit/docs/implementing-backends.md#fetch` (see #8).
+
+18. **[design] Picking a *canonical* member from a multi-entry response — another
+    representative-selection shape (cf. #4).** AlphaFold returns the canonical model plus
+    isoform models; the pick is "the entry whose id matches a canonical template, else a
+    deterministic fallback". Same family as UniProt's best-ortholog and BacDive's type
+    strain — reinforces that representative selection deserves first-class guidance.
+    → where: `_pick` in `weavers/alphafold_weaver/src/alphafold_weaver/backends/api.py`.
+
+19. **[good] The "dedup→rank→cap / canonical-pick" + "404/400=NO_MATCH" patterns are now
+    muscle memory.** PDBe and AlphaFold both went green on the first live run for the happy
+    path because the earlier findings were applied up front; only the *exact* not-found code
+    (400 vs 404) needed a one-line live-test correction. The findings log is paying for
+    itself within the same series — strong signal these should graduate into weaverkit.

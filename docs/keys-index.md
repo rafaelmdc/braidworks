@@ -34,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `string:resolve_interactions` |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:resolve_model`, `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `string:resolve_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -72,6 +72,12 @@ Descriptive payload fields; nothing joins on them.
 | `protein.name` | Recommended protein name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.organism` | Source organism scientific name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.reviewed` | Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL). | `uniprot:resolve_protein` | — |
+| `structure.alphafold.entry_id` | AlphaFold DB entry id for a protein's predicted model. | `alphafold:resolve_model` | — |
+| `structure.alphafold.mean_plddt` | Mean pLDDT confidence (0-100) of the AlphaFold model. | `alphafold:resolve_model` | — |
+| `structure.alphafold.model_url` | URL of the AlphaFold predicted model file (PDB). | `alphafold:resolve_model` | — |
+| `structure.alphafold.pae_image_url` | URL of the AlphaFold predicted-aligned-error plot. | `alphafold:resolve_model` | — |
+| `structure.alphafold.records` | Full AlphaFold model metadata - id, confidence breakdown, URLs. | `alphafold:resolve_model` | — |
+| `structure.alphafold.version` | AlphaFold DB model version. | `alphafold:resolve_model` | — |
 | `structure.pdb.count` | Number of distinct PDB structures covering a protein. | `pdbe:resolve_structures` | — |
 | `structure.pdb.ids` | PDB ids of experimental structures covering a protein (best first). | `pdbe:resolve_structures` | — |
 | `structure.pdb.records` | Distinct PDB structures - id, method, resolution, coverage. | `pdbe:resolve_structures` | — |
