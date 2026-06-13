@@ -1,0 +1,39 @@
+"""Capabilities and manifest for the weaver — generated from weaver.spec.toml.
+
+The manifest is the machine-readable mirror of the spec; keep them in sync
+(``weaverkit verify`` checks this). Edit the spec and regenerate rather than
+hand-editing capabilities here.
+"""
+
+from __future__ import annotations
+
+from braidworks.core import Capability, OutputGroup, WeaverManifest
+
+WEAVER_ID = "pdbe"
+WEAVER_VERSION = "0.1.0"
+
+
+def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
+    """Declare every capability for the wired-in backends."""
+    return WeaverManifest(
+        weaver_id=WEAVER_ID,
+        version=WEAVER_VERSION,
+        capabilities=(
+            Capability(
+                id="resolve_structures",
+                consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {"structure.pdb.count", "structure.pdb.ids", "structure.pdb.records"}
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="summary",
+                        outputs=frozenset({"structure.pdb.count", "structure.pdb.ids"}),
+                    ),
+                    OutputGroup(id="full", outputs=frozenset({"structure.pdb.records"})),
+                ),
+                backends=backends,
+                max_batch_size=25,
+            ),
+        ),
+    )
