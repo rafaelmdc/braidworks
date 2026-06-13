@@ -12,6 +12,7 @@ members = [
     "example-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
+    "reactome-weaver",
     "string-weaver",
     "taxon-weaver",
     "uniprot-weaver",
@@ -540,6 +541,32 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/0f/9aafc63f9661222b819b391c187eed29fc90ad5935f9690e5ecc2d2047a4/rapidfuzz-3.14.5-cp314-cp314t-win_amd64.whl", hash = "sha256:7d5ca9c7832e6879a707296d1463685f7c243a27846227044504741640caec66", size = 1632357, upload-time = "2026-04-07T11:16:13.1Z" },
     { url = "https://files.pythonhosted.org/packages/70/a6/51fc1b0e61e3326e1c68a61cfd0c6b3c34c843681c4b1eefbf0596f59162/rapidfuzz-3.14.5-cp314-cp314t-win_arm64.whl", hash = "sha256:3e91dcd2549b8f8d843f98ba03a17e01f3d8b72ce942adbbb6761bc58ffce813", size = 855409, upload-time = "2026-04-07T11:16:15.787Z" },
 ]
+
+[[package]]
+name = "reactome-weaver"
+version = "0.1.0"
+source = { editable = "weavers/reactome_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "redis"

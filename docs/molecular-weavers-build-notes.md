@@ -162,3 +162,29 @@ Tag legend: **[scaffold]** generated-code gap · **[framework]** core/weaverkit 
     path because the earlier findings were applied up front; only the *exact* not-found code
     (400 vs 404) needed a one-line live-test correction. The findings log is paying for
     itself within the same series — strong signal these should graduate into weaverkit.
+
+## From `reactome_weaver` (6th molecular weaver)
+
+20. **[good] A fully template-driven weaver with zero new lessons — the process has
+    converged.** Reactome reused every established pattern verbatim: single-input off the
+    hub, dedup→order→cap with a true count, `400/404 → NO_MATCH`, fixture with a duplicate
+    row, structural live assertions. Built green first try (offline + live). The recurring
+    findings (#1 entry-point, #4/#18 representative/dedup, #8/#17 status mapping, #11
+    aggregation, #12 pagination) are now a stable, finite backlog — the right moment to fold
+    them into weaverkit and retire this scratch doc. → where (the triage targets, recap):
+    `_PYPROJECT` + `_BACKEND_STUB_API_KEYLESS` + `_TEST_E2E_API` in
+    `weaverkit/src/weaverkit/scaffold.py`; `_completeness_problems` in
+    `weaverkit/src/weaverkit/cli.py`; a new "fetch patterns" section in
+    `weaverkit/docs/implementing-backends.md`; optional shared helpers in core/weaverkit.
+
+## Triage summary (for the weaverkit-improvement pass)
+
+- **Generate the entry-point block** (#1/#6/#10/#14) — `_PYPROJECT`, scaffold.py.
+- **Don't let placeholder live-tests pass silently** (#2) — seed from golden, or scan
+  `tests/` in `_completeness_problems` (cli.py).
+- **Ease entry-key registration** (#3) — exempt entry keys from canonical-type parity, or a
+  `weaverkit register-key` helper.
+- **Bless the fetch patterns in implementing-backends.md** (#4/#8/#11/#12/#16/#17/#18):
+  deterministic representative/canonical selection; dedup→order→cap with a true count;
+  bounded pagination with logged truncation; HTTP status → WeaveStatus classifier
+  (`404/400 → NO_MATCH`, `5xx/network → error`); + optional shared helpers.
