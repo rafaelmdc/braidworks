@@ -34,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `quickgo:resolve_go_terms`, `string:resolve_interactions` |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `string:resolve_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -72,3 +72,6 @@ Descriptive payload fields; nothing joins on them.
 | `protein.name` | Recommended protein name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.organism` | Source organism scientific name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.reviewed` | Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL). | `uniprot:resolve_protein` | — |
+| `structure.pdb.count` | Number of distinct PDB structures covering a protein. | `pdbe:resolve_structures` | — |
+| `structure.pdb.ids` | PDB ids of experimental structures covering a protein (best first). | `pdbe:resolve_structures` | — |
+| `structure.pdb.records` | Distinct PDB structures - id, method, resolution, coverage. | `pdbe:resolve_structures` | — |

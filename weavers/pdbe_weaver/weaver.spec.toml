@@ -1,0 +1,59 @@
+# pdbe_weaver — experimental 3D structures via EBI PDBe.
+#
+# A protein's UniProt accession -> the PDB experimental structures covering it, via
+# PDBe's curated "best_structures" mapping (ranked by coverage + resolution). A terminal
+# weaver off the protein hub: single-input on `protein.uniprot.accession`. PDBe returns
+# one row per (structure, chain), so the backend dedups to distinct PDB entries and
+# orders them best-first, deterministically. Free, keyless EBI PDBe API.
+[weaver]
+db_name = "pdbe"
+weaver_id = "pdbe"
+kind = "lookup"
+title = "PDB experimental structures via PDBe (accession -> structures)"
+version = "0.1.0"
+license = "CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)"
+source_url = "https://www.ebi.ac.uk/pdbe"
+fingerprint_source = "PDBe REST API contract (ebi.ac.uk/pdbe/api/mappings/best_structures)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://www.ebi.ac.uk/pdbe/api/mappings/best_structures/P04637
+source_sample = """
+{
+  "P04637": [
+    {
+      "pdb_id": "9r2q",
+      "chain_id": "K",
+      "experimental_method": "Electron Microscopy",
+      "resolution": 3.2,
+      "tax_id": 9606,
+      "unp_start": 1,
+      "unp_end": 393,
+      "coverage": 1.0
+    }
+  ]
+}
+"""
+
+# One accession -> one best_structures call. PDBe has no batch endpoint that preserves
+# per-query grouping, so batches fan out per accession.
+[[capability]]
+id = "resolve_structures"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["structure.pdb.ids", "structure.pdb.count"]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["structure.pdb.records"]
+
+# Golden runs against the deterministic fixture (pdbe_weaver.fixture, an
+# httpx.MockTransport serving a canned best_structures response for P04637, with two
+# chains of one structure so the dedup path is exercised) so `weaverkit verify --strict`
+# is reproducible offline.
+[[golden]]
+capability = "resolve_structures"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "structure.pdb.count" = 2 }
