@@ -80,3 +80,27 @@ Tag legend: **[scaffold]** generated-code gap · **[framework]** core/weaverkit 
 9. **[good] The live E2E caught a real semantic bug** (the 404 mis-classification) that
    offline mock tests had no reason to surface — vindicates writing a real (opt-in) live
    test per weaver, not just mocks. Reinforces [[live-api-schema-drift-gap]].
+
+## From `quickgo_weaver` (third molecular weaver)
+
+10. **[scaffold] Entry-point block missing — again (finding #1, 3rd time).** This is now
+    a certainty across all weavers; scaffold should just generate it.
+
+11. **[design] "Many rows → distinct entities" aggregation is a recurring shape with no
+    helper.** QuickGO returns one row per annotation *evidence* (≈1000 for p53) → dedup to
+    distinct GO terms; Disbiome had many experiments per taxid; BacDive scanned many
+    strains. Three weavers, three hand-rolled dedup/aggregate loops. A small shared
+    "aggregate rows → distinct keyed records, sorted" helper (or guidance) would cut
+    repetition. Pairs with the pagination shape below.
+
+12. **[design][guidance] Paginated APIs need a bounded-fetch pattern.** QuickGO is the
+    first weaver to paginate (page/limit up to a page cap, with `log()` on truncation). No
+    scaffold support or guidance for "page until total or cap, accumulate". Candidate for
+    an `implementing-backends.md` snippet + maybe a helper, since most large REST sources
+    paginate. The cap is a deliberate completeness/latency trade-off and must be logged,
+    not silent (ties to the "no silent caps" principle).
+
+13. **[good] Empty-results = NO_MATCH worked out of the box here.** Unlike STRING (404 for
+    an unmapped id, finding #8), QuickGO returns `200 results:[]` for an unknown accession,
+    which the generated `found=False` path already handles — no special-casing. Confirms
+    finding #8 is specifically about non-2xx "not found" responses; a per-weaver decision.

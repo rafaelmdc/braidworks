@@ -1,0 +1,69 @@
+# quickgo_weaver — Gene Ontology annotations via EBI QuickGO.
+#
+# A protein's UniProt accession -> the GO terms annotated to it, grouped by the three
+# GO aspects (molecular function / biological process / cellular component). A terminal
+# weaver off the protein hub: single-input on `protein.uniprot.accession`. QuickGO
+# returns one row per annotation evidence (a protein has hundreds), so the backend
+# dedups to distinct GO terms and orders them deterministically. Free, keyless EBI API.
+[weaver]
+db_name = "quickgo"
+weaver_id = "quickgo"
+kind = "lookup"
+title = "Gene Ontology annotations (accession -> GO terms by aspect)"
+version = "0.1.0"
+license = "CC BY 4.0 (Gene Ontology / EBI QuickGO; cite https://doi.org/10.1093/bioinformatics/btp536)"
+source_url = "https://www.ebi.ac.uk/QuickGO"
+fingerprint_source = "QuickGO REST API contract (ebi.ac.uk/QuickGO/services, annotation/search)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET .../QuickGO/services/annotation/search?geneProductId=P04637
+#   &limit=3&includeFields=goName
+source_sample = """
+{
+  "numberOfHits": 1036,
+  "pageInfo": { "resultsPerPage": 3, "current": 1, "total": 346 },
+  "results": [
+    {
+      "geneProductId": "UniProtKB:P04637",
+      "goId": "GO:0008285",
+      "goName": "negative regulation of cell population proliferation",
+      "goAspect": "biological_process",
+      "goEvidence": "ISS",
+      "qualifier": "acts_upstream_of",
+      "taxonId": 9606,
+      "symbol": "TP53"
+    }
+  ]
+}
+"""
+
+# One accession -> paginated annotation/search, deduped to distinct GO terms. QuickGO
+# has no batch-by-accession endpoint, so batches fan out per accession.
+[[capability]]
+id = "resolve_go_terms"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 10
+
+  [[capability.group]]
+  id = "aspects"
+  outputs = [
+    "go.molecular_function",
+    "go.biological_process",
+    "go.cellular_component",
+  ]
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["go.count"]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["go.records"]
+
+# Golden runs against the deterministic fixture (quickgo_weaver.fixture, an
+# httpx.MockTransport serving a canned 3-term annotation page for P04637) so
+# `weaverkit verify --strict` is reproducible offline.
+[[golden]]
+capability = "resolve_go_terms"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "go.count" = 3 }

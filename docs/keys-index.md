@@ -34,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `string:resolve_interactions` |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `quickgo:resolve_go_terms`, `string:resolve_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -43,6 +43,11 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
+| `go.biological_process` | GO biological-process term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
+| `go.cellular_component` | GO cellular-component term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
+| `go.count` | Number of distinct GO terms annotated to a protein. | `quickgo:resolve_go_terms` | — |
+| `go.molecular_function` | GO molecular-function term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
+| `go.records` | Full distinct GO annotations - GO id, name, and aspect. | `quickgo:resolve_go_terms` | — |
 | `microbe.disease.associations` | Compact per-experiment microbe–disease rows (disease, Elevated/Reduced direction, method, sample, host). | `disbiome:disbiome.resolve_diseases` | — |
 | `microbe.disease.count` | Number of disease-association experiment records for a microbe. | `disbiome:disbiome.resolve_diseases` | — |
 | `microbe.disease.names` | Distinct disease names a microbe is associated with. | `disbiome:disbiome.resolve_diseases` | — |
