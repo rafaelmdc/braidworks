@@ -1,0 +1,66 @@
+# alphafold_weaver — AlphaFold predicted 3D structure models via EBI AlphaFold DB.
+#
+# A protein's UniProt accession -> its AlphaFold predicted model: the model file URL,
+# the mean pLDDT confidence, the PAE plot, version. A terminal weaver off the protein
+# hub: single-input on `protein.uniprot.accession`. The "what does it look like
+# (predicted)" panel — the companion to pdbe_weaver's experimental structures, and the
+# answer when no experimental structure exists. Free, keyless EBI AlphaFold DB API.
+[weaver]
+db_name = "alphafold"
+weaver_id = "alphafold"
+kind = "lookup"
+title = "AlphaFold predicted structure (accession -> model + confidence)"
+version = "0.1.0"
+license = "CC BY 4.0 (AlphaFold DB / DeepMind & EBI; cite https://doi.org/10.1093/nar/gkab1061)"
+source_url = "https://alphafold.ebi.ac.uk"
+fingerprint_source = "AlphaFold DB REST API contract (alphafold.ebi.ac.uk/api/prediction)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://alphafold.ebi.ac.uk/api/prediction/P04637 (one entry).
+source_sample = """
+[
+  {
+    "entryId": "AF-P04637-F1",
+    "uniprotAccession": "P04637",
+    "organismScientificName": "Homo sapiens",
+    "latestVersion": 6,
+    "globalMetricValue": 75.06,
+    "fractionPlddtVeryHigh": 0.34,
+    "fractionPlddtConfident": 0.18,
+    "fractionPlddtLow": 0.14,
+    "fractionPlddtVeryLow": 0.34,
+    "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb",
+    "cifUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.cif",
+    "paeImageUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-predicted_aligned_error_v6.png"
+  }
+]
+"""
+
+# One accession -> one prediction call. The endpoint may return several models (the
+# canonical isoform plus alternative isoforms); the backend picks the canonical one.
+[[capability]]
+id = "resolve_model"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "model"
+  outputs = [
+    "structure.alphafold.entry_id",
+    "structure.alphafold.mean_plddt",
+    "structure.alphafold.model_url",
+    "structure.alphafold.pae_image_url",
+    "structure.alphafold.version",
+  ]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["structure.alphafold.records"]
+
+# Golden runs against the deterministic fixture (alphafold_weaver.fixture, an
+# httpx.MockTransport serving a canonical + one isoform entry for P04637, so the
+# canonical-pick path is exercised) so `weaverkit verify --strict` is reproducible offline.
+[[golden]]
+capability = "resolve_model"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "structure.alphafold.entry_id" = "AF-P04637-F1" }

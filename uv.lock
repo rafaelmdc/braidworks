@@ -4,6 +4,7 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
+    "alphafold-weaver",
     "bacdive-weaver",
     "braidworks-arq",
     "braidworks-core",
@@ -16,6 +17,32 @@ members = [
     "uniprot-weaver",
     "weaverkit",
 ]
+
+[[package]]
+name = "alphafold-weaver"
+version = "0.1.0"
+source = { editable = "weavers/alphafold_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "anyio"
