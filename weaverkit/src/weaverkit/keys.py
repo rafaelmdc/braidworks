@@ -93,6 +93,10 @@ OUTPUT_KEYS: dict[str, str] = {
     "structure.alphafold.pae_image_url": "URL of the AlphaFold predicted-aligned-error plot.",
     "structure.alphafold.version": "AlphaFold DB model version.",
     "structure.alphafold.records": "Full AlphaFold model metadata - id, confidence breakdown, URLs.",
+    # biological-pathway outputs (reactome_weaver)
+    "pathway.reactome.names": "Names of Reactome pathways a protein participates in.",
+    "pathway.reactome.count": "Number of distinct Reactome pathways for a protein.",
+    "pathway.reactome.records": "Distinct Reactome pathways - stable id, name, in-disease flag.",
 }
 
 
