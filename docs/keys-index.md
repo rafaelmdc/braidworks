@@ -11,6 +11,7 @@ Supplied by the user at the start of a braid.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `organism.name` | Free-text organism name — the user-supplied entry input. | — | `ncbi:ncbi.resolve_name` |
+| `protein.query` | Free-text organism name — the user-supplied entry input. | — | `uniprot:resolve_protein` |
 
 ## Shared join keys
 
@@ -24,7 +25,7 @@ Registered bridge keys — what links weavers together.
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
 | `go.term` | Gene Ontology term id. | — | — |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
-| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name` | `disbiome:disbiome.resolve_diseases`, `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
+| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.resolve_diseases`, `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
@@ -33,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | — | — |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | — |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -57,3 +58,9 @@ Descriptive payload fields; nothing joins on them.
 | `ncbi.taxon.match_type` | How a name matched (exact/synonym/fuzzy/taxid). | `ncbi:ncbi.resolve_name` | — |
 | `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
+| `protein.function` | Curated function summary (UniProt FUNCTION comment). | `uniprot:resolve_protein` | — |
+| `protein.gene` | Primary gene symbol (UniProt). | `uniprot:resolve_protein` | — |
+| `protein.length` | Sequence length in amino acids. | `uniprot:resolve_protein` | — |
+| `protein.name` | Recommended protein name (UniProt). | `uniprot:resolve_protein` | — |
+| `protein.organism` | Source organism scientific name (UniProt). | `uniprot:resolve_protein` | — |
+| `protein.reviewed` | Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL). | `uniprot:resolve_protein` | — |
