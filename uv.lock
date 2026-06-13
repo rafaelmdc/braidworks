@@ -9,6 +9,7 @@ members = [
     "braidworks-core",
     "disbiome-weaver",
     "example-weaver",
+    "quickgo-weaver",
     "string-weaver",
     "taxon-weaver",
     "uniprot-weaver",
@@ -396,6 +397,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf429
 wheels = [
     { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
 ]
+
+[[package]]
+name = "quickgo-weaver"
+version = "0.1.0"
+source = { editable = "weavers/quickgo_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "rapidfuzz"

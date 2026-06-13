@@ -76,6 +76,12 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.interaction.count": "Number of interaction partners returned (STRING).",
     "protein.interaction.records": "Full STRING interaction edges - partner, combined "
     "score, and per-evidence-channel subscores.",
+    # Gene Ontology annotation outputs (quickgo_weaver), grouped by GO aspect
+    "go.molecular_function": "GO molecular-function term names annotated to a protein.",
+    "go.biological_process": "GO biological-process term names annotated to a protein.",
+    "go.cellular_component": "GO cellular-component term names annotated to a protein.",
+    "go.count": "Number of distinct GO terms annotated to a protein.",
+    "go.records": "Full distinct GO annotations - GO id, name, and aspect.",
 }
 
 
