@@ -56,3 +56,27 @@ Tag legend: **[scaffold]** generated-code gap · **[framework]** core/weaverkit 
    on first try once the fixture + backend were filled. The injectable `client=` seam made
    both the unit test and the offline golden trivial. No changes needed to the generated
    `weaver.py` / `provider.py` / dispatch.
+
+## From `string_weaver` (second molecular weaver)
+
+6. **[scaffold] Entry-point block still missing** (finding #1, again) — added by hand.
+   Now hit on every weaver; this should really be generated.
+
+7. **[good] Single-input off a shared hub key just works.** Consuming
+   `protein.uniprot.accession` (produced by uniprot) made STRING reachable with zero
+   ceremony — conformance passed, and in the merged graph `uniprot → accession → string`
+   is a real braid edge. The "consume a registered shared key" rule paid off exactly as
+   intended. (Confirmed `protein.uniprot.accession` was already a shared key, so no
+   core/keys edit was needed — only the leaf-output names in `OUTPUT_KEYS`.)
+
+8. **[design][guidance] HTTP status → WeaveStatus mapping is per-weaver guesswork.**
+   STRING returns **404 for an unmappable identifier** — semantically a `NO_MATCH`, not an
+   error. The generated backend's default `except httpx.HTTPError` lumps it into
+   `record.error` (→ ERROR), so the live "unknown input → NO_MATCH" test failed until I
+   special-cased 400/404. Worth a guidance note (and maybe a tiny helper) on classifying
+   HTTP responses: 404/400-as-not-found vs 5xx/network-as-error, since any REST weaver
+   faces this and the scaffold's blanket catch quietly gets it wrong.
+
+9. **[good] The live E2E caught a real semantic bug** (the 404 mis-classification) that
+   offline mock tests had no reason to surface — vindicates writing a real (opt-in) live
+   test per weaver, not just mocks. Reinforces [[live-api-schema-drift-gap]].

@@ -1,0 +1,57 @@
+# string_weaver — STRING protein–protein interaction networks.
+#
+# A protein's UniProt accession -> its interaction partners with confidence scores.
+# STRING resolves a bare accession to its protein + species itself, so this is a
+# single-input weaver keyed on `protein.uniprot.accession` (produced by uniprot_weaver),
+# making it reachable directly off the protein hub. A terminal weaver: it emits
+# descriptive interaction leaves (partner names, count, full scored edges), not new
+# join keys. Over the free, keyless STRING REST API (string-db.org/api).
+[weaver]
+db_name = "string"
+weaver_id = "string"
+kind = "lookup"
+title = "STRING protein-protein interactions (accession -> partners + scores)"
+version = "0.1.0"
+license = "CC BY 4.0 (STRING; Szklarczyk et al., cite https://doi.org/10.1093/nar/gkac1000)"
+source_url = "https://string-db.org"
+fingerprint_source = "STRING REST API contract (string-db.org/api, v12)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://string-db.org/api/json/interaction_partners?identifiers=P04637&limit=3
+source_sample = """
+[
+  {
+    "stringId_A": "9606.ENSP00000269305",
+    "stringId_B": "9606.ENSP00000340989",
+    "preferredName_A": "TP53",
+    "preferredName_B": "SFN",
+    "ncbiTaxonId": 9606,
+    "score": 0.999,
+    "nscore": 0, "fscore": 0, "pscore": 0, "ascore": 0,
+    "escore": 0.981, "dscore": 0.75, "tscore": 0.859
+  }
+]
+"""
+
+# One accession -> one interaction_partners call. STRING has no batch-by-accession
+# endpoint that preserves per-query grouping, so batches fan out per accession.
+[[capability]]
+id = "resolve_interactions"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["protein.interaction.partners", "protein.interaction.count"]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["protein.interaction.records"]
+
+# Golden runs against the deterministic fixture (string_weaver.fixture, an
+# httpx.MockTransport serving a canned 2-partner response for P04637) so
+# `weaverkit verify --strict` is reproducible offline.
+[[golden]]
+capability = "resolve_interactions"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "protein.interaction.count" = 2 }

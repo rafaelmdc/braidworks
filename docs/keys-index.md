@@ -34,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | — |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `string:resolve_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -60,6 +60,9 @@ Descriptive payload fields; nothing joins on them.
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
 | `protein.function` | Curated function summary (UniProt FUNCTION comment). | `uniprot:resolve_protein` | — |
 | `protein.gene` | Primary gene symbol (UniProt). | `uniprot:resolve_protein` | — |
+| `protein.interaction.count` | Number of interaction partners returned (STRING). | `string:resolve_interactions` | — |
+| `protein.interaction.partners` | Names of a protein's interaction partners (STRING). | `string:resolve_interactions` | — |
+| `protein.interaction.records` | Full STRING interaction edges - partner, combined score, and per-evidence-channel subscores. | `string:resolve_interactions` | — |
 | `protein.length` | Sequence length in amino acids. | `uniprot:resolve_protein` | — |
 | `protein.name` | Recommended protein name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.organism` | Source organism scientific name (UniProt). | `uniprot:resolve_protein` | — |
