@@ -1,0 +1,81 @@
+# uniprot_weaver — UniProt, the molecular hinge of Braidworks.
+#
+# A free-text gene/protein query -> the protein's UniProt identity card, plus its
+# NCBI taxid. That taxid is the *bridge*: it lets a protein hit cross back into the
+# organism layer (taxon_weaver lineage, BacDive traits, Disbiome disease), and it
+# makes UniProt the hub every downstream molecular weaver (STRING, GO, PDB,
+# AlphaFold, Reactome) hangs off via `protein.uniprot.accession`.
+#
+# A lookup weaver over the free, keyless UniProtKB REST API (rest.uniprot.org).
+# MVP picks the top reviewed (Swiss-Prot) hit as the representative protein,
+# mirroring BacDive's type-strain-as-representative choice. See CONTRIBUTING.md for
+# the planned organism->proteins direction (consume ncbi.taxon.id -> accessions).
+[weaver]
+db_name = "uniprot"
+weaver_id = "uniprot"
+kind = "lookup"
+title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
+version = "0.1.0"
+license = "CC BY 4.0 (UniProt Consortium; cite https://doi.org/10.1093/nar/gkac1052)"
+source_url = "https://www.uniprot.org"
+fingerprint_source = "UniProtKB REST API contract (rest.uniprot.org, JSON)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://rest.uniprot.org/uniprotkb/search?query=gene:TP53
+# +AND+organism_id:9606+AND+reviewed:true&fields=accession,protein_name,gene_names,
+# organism_name,organism_id,length,cc_function,reviewed&format=json&size=1
+source_sample = """
+{
+  "results": [
+    {
+      "entryType": "UniProtKB reviewed (Swiss-Prot)",
+      "primaryAccession": "P04637",
+      "uniProtkbId": "P53_HUMAN",
+      "organism": { "scientificName": "Homo sapiens", "taxonId": 9606 },
+      "proteinDescription": {
+        "recommendedName": { "fullName": { "value": "Cellular tumor antigen p53" } }
+      },
+      "genes": [ { "geneName": { "value": "TP53" } } ],
+      "comments": [
+        { "commentType": "FUNCTION",
+          "texts": [ { "value": "Multifunctional transcription factor that induces cell cycle arrest, DNA repair or apoptosis." } ] }
+      ],
+      "sequence": { "length": 393 }
+    }
+  ]
+}
+"""
+
+# One query -> one UniProtKB search -> the top reviewed hit. The REST API has no
+# multi-query batch endpoint, so batches fan out into per-query searches.
+[[capability]]
+id = "resolve_protein"
+consumes = ["protein.query"]
+max_batch_size = 25
+always_computed_groups = ["identity"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = [
+    "protein.uniprot.accession",
+    "protein.name",
+    "protein.gene",
+    "protein.organism",
+    "protein.reviewed",
+  ]
+
+  [[capability.group]]
+  id = "taxonomy"
+  outputs = ["ncbi.taxon.id"]
+
+  [[capability.group]]
+  id = "function"
+  outputs = ["protein.function", "protein.length"]
+
+# Golden runs against the deterministic fixture (uniprot_weaver.fixture, an
+# httpx.MockTransport serving a canned TP53 search response) so
+# `weaverkit verify --strict` is reproducible offline.
+[[golden]]
+capability = "resolve_protein"
+input = { "protein.query" = "TP53" }
+expect = { "protein.uniprot.accession" = "P04637", "protein.gene" = "TP53" }
