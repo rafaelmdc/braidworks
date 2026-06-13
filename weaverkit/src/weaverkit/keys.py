@@ -20,6 +20,7 @@ SHARED_KEYS: dict[str, str] = {
     "ncbi.taxon.rank": "Taxonomic rank (species, genus, …).",
     "gtdb.taxon.id": "GTDB genome-based taxonomy id.",
     # Molecular layer (uniprot_weaver hinge + hubs)
+    "protein.query": "Free-text gene symbol / protein name / accession — the molecular entry input.",
     "protein.uniprot.accession": "UniProt accession — the primary protein join key.",
     "gene.ncbi.id": "NCBI Gene id.",
     "gene.ensembl.id": "Ensembl gene id.",
@@ -63,6 +64,13 @@ OUTPUT_KEYS: dict[str, str] = {
     "(disease, Elevated/Reduced direction, method, sample, host).",
     "microbe.disease.records": "Complete joined Disbiome records — every experiment / "
     "disease / organism / publication field, incl. study-quality metadata.",
+    # uniprot_weaver leaf outputs (descriptive protein-entry fields)
+    "protein.name": "Recommended protein name (UniProt).",
+    "protein.gene": "Primary gene symbol (UniProt).",
+    "protein.organism": "Source organism scientific name (UniProt).",
+    "protein.function": "Curated function summary (UniProt FUNCTION comment).",
+    "protein.length": "Sequence length in amino acids.",
+    "protein.reviewed": "Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL).",
 }
 
 

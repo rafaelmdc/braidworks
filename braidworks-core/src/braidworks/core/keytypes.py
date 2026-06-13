@@ -32,6 +32,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "ncbi.taxon.lineage": list,
     "ncbi.taxon.rank": str,
     "gtdb.taxon.id": str,
+    "protein.query": str,
     "protein.uniprot.accession": str,
     "gene.ncbi.id": int,
     "gene.ensembl.id": str,
