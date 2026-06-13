@@ -17,6 +17,11 @@ weaver reliably instead of vibe-coding it. Three pieces:
   delimited map (`weaver`, `capability`, `kind`, `api_key`, `backends`, `consumes`,
   `produces`, `unmet_inputs`) so you can see what join keys already exist and pick a
   new weaver's inputs to connect. An `unmet_inputs` entry is a hint, not an error.
+- **view** (`weaverkit view`) — discovers the installed weavers (the
+  `braidworks.weavers` entry points) and renders a single self-contained,
+  interactive HTML file: the whole weaver network as a `type → weaver → type`
+  graph, plus an optional braid path for a `--from … --to …` query (the real
+  `Braider` plan, laid out by dependency wave). No CDN, opens offline.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
 the `--strict` regimes, dispatcher/backend split) live in

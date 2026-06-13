@@ -1,0 +1,576 @@
+"""The self-contained HTML/CSS/JS template for ``weaverkit view``.
+
+One module-level string, ``HTML_TEMPLATE``, with a single ``__BRAIDWORKS_DATA__``
+placeholder that :mod:`weaverkit.view` replaces with the JSON payload. Kept apart
+from the data-extraction logic so the (large) front-end lives in one place and the
+Python stays readable. No external assets or CDNs — the rendered file opens offline.
+"""
+
+from __future__ import annotations
+
+HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Braidworks · weaver network</title>
+<style>
+  :root {
+    --bg0: #060810;
+    --ink: #e7ecf6;
+    --ink-dim: #8893ad;
+    --panel: rgba(15, 20, 33, 0.78);
+    --panel-edge: rgba(120, 145, 200, 0.16);
+    --type-in: #6f8bb8;     /* input endpoint — muted cool */
+    --type-out: #5aa6a0;    /* output endpoint — muted teal */
+    --accent: #5ad0e0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg0); color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 24px;
+    padding: 16px 22px;
+    background: linear-gradient(180deg, rgba(6,8,16,0.94) 0%, rgba(6,8,16,0) 100%);
+    pointer-events: none;
+  }
+  .brand { pointer-events: auto; }
+  .brand h1 {
+    margin: 0; font-size: 15px; letter-spacing: 6px; font-weight: 700; color: var(--ink);
+  }
+  .brand p { margin: 3px 0 0; font-size: 11px; color: var(--ink-dim); letter-spacing: 1.2px; }
+
+  .nav { display: flex; align-items: center; gap: 10px; pointer-events: auto; position: relative; }
+  .pill {
+    font: inherit; font-size: 12px; letter-spacing: 0.4px;
+    color: var(--ink-dim); background: rgba(255,255,255,0.03);
+    border: 1px solid var(--panel-edge); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; transition: all .16s ease; white-space: nowrap;
+  }
+  .pill:hover { color: var(--ink); border-color: rgba(120,150,220,0.34); }
+  .pill.active {
+    color: var(--ink); background: rgba(90,208,224,0.10);
+    border-color: rgba(90,208,224,0.55);
+  }
+  .pill .caret { opacity: 0.6; margin-left: 6px; font-size: 10px; }
+  .menu {
+    position: absolute; top: 44px; left: 0; min-width: 240px; z-index: 20;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-edge); border-radius: 12px; padding: 6px;
+    box-shadow: 0 22px 50px rgba(0,0,0,0.5); display: none;
+  }
+  .menu.open { display: block; }
+  .menu-item {
+    padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
+    color: var(--ink-dim); display: flex; align-items: center; gap: 9px;
+  }
+  .menu-item:hover { background: rgba(255,255,255,0.05); color: var(--ink); }
+  .menu-item.sel { color: var(--ink); }
+  .menu-item .tick { width: 12px; color: var(--accent); }
+
+  .panel {
+    position: fixed; top: 80px; right: 18px; z-index: 10; width: 286px;
+    max-height: calc(100vh - 112px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-edge); border-radius: 14px;
+    padding: 16px 16px 18px; font-size: 12.5px;
+    box-shadow: 0 22px 54px rgba(0,0,0,0.42);
+  }
+  .panel h2 {
+    margin: 0 0 10px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 600;
+  }
+  .panel section { margin-bottom: 18px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: rgba(255,255,255,0.03); border-radius: 9px; padding: 9px 11px; }
+  .stat b { display: block; font-size: 19px; font-weight: 700; line-height: 1; }
+  .stat span { font-size: 10px; color: var(--ink-dim); letter-spacing: 0.4px; }
+  .legend-row, .weaver-row { display: flex; align-items: center; gap: 9px; margin: 6px 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .weaver-row .meta { color: var(--ink-dim); font-size: 10.5px; margin-left: auto; text-align: right; }
+  .weaver-row code { color: var(--ink); font-size: 11px; }
+  .note { color: var(--ink-dim); font-size: 10.5px; margin-top: 8px; line-height: 1.4; }
+
+  #detail { display: none; }
+  #detail.show { display: block; }
+  .detail-key { font-size: 14px; font-weight: 600; word-break: break-all; }
+  .chip {
+    display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 6px;
+    margin: 3px 4px 0 0; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-edge);
+  }
+  .kv { margin: 7px 0 0; color: var(--ink-dim); }
+  .kv b { color: var(--ink); font-weight: 600; }
+
+  .hint {
+    position: fixed; bottom: 14px; left: 18px; z-index: 10;
+    font-size: 11px; color: var(--ink-dim); letter-spacing: 0.3px;
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 8px; padding: 7px 13px; backdrop-filter: blur(8px);
+  }
+  .hint b { color: var(--ink); }
+  .banner {
+    position: fixed; bottom: 14px; right: 18px; z-index: 10; max-width: 320px;
+    font-size: 11px; color: #ffd7a8;
+    background: rgba(50,28,10,0.7); border: 1px solid rgba(230,165,90,0.28);
+    border-radius: 10px; padding: 9px 13px; backdrop-filter: blur(8px);
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>BRAIDWORKS</h1>
+    <p id="subtitle">weaver network</p>
+  </div>
+  <div class="nav" id="nav"></div>
+</div>
+
+<div class="panel">
+  <section>
+    <h2>Overview</h2>
+    <div class="stat-grid" id="stats"></div>
+  </section>
+  <section id="legend-wrap">
+    <h2>Endpoints</h2>
+    <div id="legend"></div>
+    <div class="note">Color marks the <b>weaver</b>; type endpoints are neutral.</div>
+  </section>
+  <section id="weavers-wrap">
+    <h2>Weavers</h2>
+    <div id="weavers"></div>
+  </section>
+  <section id="detail">
+    <h2>Selected</h2>
+    <div id="detail-body"></div>
+  </section>
+</div>
+
+<div class="hint">scroll <b>zoom</b> · drag <b>pan</b> · hover to trace · click to pin</div>
+<div class="banner" id="banner" style="display:none"></div>
+
+<script>
+const DATA = __BRAIDWORKS_DATA__;
+
+// ---- palette ---------------------------------------------------------------
+const TYPE_IN = "#6f8bb8", TYPE_OUT = "#5aa6a0";
+// Stable, restrained hue per weaver — the only saturated color in the scene.
+function weaverHue(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360;
+  return h;
+}
+function weaverColor(id, l = 64, s = 52) {
+  return `hsl(${weaverHue(id)}, ${s}%, ${l}%)`;
+}
+
+// ---- views -----------------------------------------------------------------
+const VIEWS = [{ key: "network", label: "Network", graph: DATA.network }];
+DATA.paths.forEach((p, i) =>
+  VIEWS.push({ key: "path" + i, label: p.title, graph: p, path: p })
+);
+let current = 0;
+
+// ---- layout (standardized node sizing) -------------------------------------
+const COL_GAP = 264, ROW_GAP = 86;
+const TYPE_H = 30, TYPE_MIN_W = 96, OP_H = 52, OP_MIN_W = 158;
+
+function computeLayout(graph) {
+  const nodes = new Map(graph.nodes.map((n) => [n.id, { ...n }]));
+  const outAdj = new Map(), inAdj = new Map(), indeg = new Map();
+  for (const n of nodes.keys()) { outAdj.set(n, []); inAdj.set(n, []); indeg.set(n, 0); }
+  const incoming = new Set();
+  for (const e of graph.edges) {
+    if (!nodes.has(e.source) || !nodes.has(e.target) || e.source === e.target) continue;
+    outAdj.get(e.source).push(e.target);
+    inAdj.get(e.target).push(e.source);
+    indeg.set(e.target, indeg.get(e.target) + 1);
+    incoming.add(e.target);
+  }
+  // input vs output: an endpoint with no incoming edge is an input/source.
+  for (const n of nodes.values()) if (n.kind === "type") n.io = incoming.has(n.id) ? "out" : "in";
+
+  // Longest-path layering via Kahn topological order.
+  const level = new Map([...nodes.keys()].map((k) => [k, 0]));
+  const deg = new Map(indeg);
+  const queue = [...nodes.keys()].filter((k) => deg.get(k) === 0);
+  const seen = new Set();
+  while (queue.length) {
+    const u = queue.shift();
+    if (seen.has(u)) continue;
+    seen.add(u);
+    for (const v of outAdj.get(u)) {
+      level.set(v, Math.max(level.get(v), level.get(u) + 1));
+      deg.set(v, deg.get(v) - 1);
+      if (deg.get(v) === 0) queue.push(v);
+    }
+  }
+  for (const k of nodes.keys()) {
+    if (!seen.has(k)) {
+      const parents = inAdj.get(k).map((p) => level.get(p));
+      level.set(k, parents.length ? Math.max(...parents) + 1 : 0);
+    }
+  }
+  const cols = new Map();
+  for (const [k, lv] of level) { if (!cols.has(lv)) cols.set(lv, []); cols.get(lv).push(k); }
+  const levels = [...cols.keys()].sort((a, b) => a - b);
+
+  // Barycenter sweeps to reduce crossings.
+  const order = new Map();
+  levels.forEach((lv) => cols.get(lv).forEach((k, i) => order.set(k, i)));
+  const bary = (k, adj) => {
+    const ns = adj.get(k);
+    return ns.length ? ns.reduce((s, n) => s + order.get(n), 0) / ns.length : order.get(k);
+  };
+  for (let pass = 0; pass < 6; pass++) {
+    const seq = pass % 2 ? [...levels].reverse() : levels;
+    const adj = pass % 2 ? outAdj : inAdj;
+    for (const lv of seq) {
+      cols.get(lv).sort((a, b) => bary(a, adj) - bary(b, adj));
+      cols.get(lv).forEach((k, i) => order.set(k, i));
+    }
+  }
+
+  const mctx = document.createElement("canvas").getContext("2d");
+  let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
+  for (const lv of levels) {
+    const arr = cols.get(lv);
+    const totalH = arr.length * ROW_GAP;
+    arr.forEach((k, i) => {
+      const n = nodes.get(k);
+      const isOp = n.kind === "op";
+      const lines = (n.label || k).split("\n");
+      mctx.font = (isOp ? "600 13" : "500 12.5") + "px Inter, sans-serif";
+      const tw = Math.max(...lines.map((t) => mctx.measureText(t).width));
+      n.w = Math.max(tw + (isOp ? 36 : 26), isOp ? OP_MIN_W : TYPE_MIN_W);
+      n.h = isOp ? OP_H : TYPE_H;
+      n.x = lv * COL_GAP;
+      n.y = i * ROW_GAP - totalH / 2 + ROW_GAP / 2;
+      n.level = lv;
+      minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2);
+      minY = Math.min(minY, n.y - n.h); maxY = Math.max(maxY, n.y + n.h);
+    });
+  }
+  return { nodes, edges: graph.edges, bbox: { minX, maxX, minY, maxY } };
+}
+
+const layouts = VIEWS.map((v) => computeLayout(v.graph));
+const particles = layouts.map((L) =>
+  L.edges.map(() => Array.from({ length: 3 }, (_, i) => i / 3 + Math.random() * 0.04))
+);
+
+// ---- canvas + camera -------------------------------------------------------
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+const cam = { x: 0, y: 0, scale: 1 };
+let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = innerWidth * DPR; canvas.height = innerHeight * DPR;
+}
+function fitView() {
+  const b = layouts[current].bbox;
+  if (!isFinite(b.minX)) { cam.x = innerWidth / 2; cam.y = innerHeight / 2; cam.scale = 1; return; }
+  const pad = 130;
+  const gw = (b.maxX - b.minX) || 1, gh = (b.maxY - b.minY) || 1;
+  cam.scale = Math.min((innerWidth - 360 - pad) / gw, (innerHeight - 170 - pad) / gh, 1.35);
+  cam.scale = Math.max(cam.scale, 0.12);
+  cam.x = (innerWidth - 300) / 2 - ((b.minX + b.maxX) / 2) * cam.scale;
+  cam.y = innerHeight / 2 - ((b.minY + b.maxY) / 2) * cam.scale;
+}
+const toScreen = (x, y) => [x * cam.scale + cam.x, y * cam.scale + cam.y];
+const toWorld = (sx, sy) => [(sx - cam.x) / cam.scale, (sy - cam.y) / cam.scale];
+
+function edgeAnchors(s, t) {
+  const x0 = s.x + s.w / 2, y0 = s.y, x3 = t.x - t.w / 2, y3 = t.y;
+  const dx = Math.max(58, (x3 - x0) * 0.5);
+  return [x0, y0, x0 + dx, y0, x3 - dx, y3, x3, y3];
+}
+function bezier(a, p) {
+  const [x0, y0, x1, y1, x2, y2, x3, y3] = a, m = 1 - p;
+  return [
+    m*m*m*x0 + 3*m*m*p*x1 + 3*m*p*p*x2 + p*p*p*x3,
+    m*m*m*y0 + 3*m*m*p*y1 + 3*m*p*p*y2 + p*p*p*y3,
+  ];
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+// Subtle two-jointed "legs" on weaver nodes — top and bottom, non-intrusive.
+function drawLegs(sx, sy, w, h, color, sc, lit) {
+  const half = h / 2, span = w * 0.32;
+  ctx.strokeStyle = color; ctx.lineWidth = 1 * Math.max(sc, 0.5);
+  ctx.globalAlpha = lit ? 0.30 : 0.12; ctx.lineCap = "round";
+  for (const dir of [-1, 1]) {           // top / bottom
+    for (const off of [-span, 0, span]) {
+      const bx = sx + off, by = sy + dir * half;
+      const kx = bx + (off >= 0 ? 1 : -1) * 14 * sc, ky = by + dir * 15 * sc;
+      const fx = kx + (off >= 0 ? 1 : -1) * 11 * sc, fy = ky + dir * 7 * sc;
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
+  const L = layouts[current], parts = particles[current];
+  const focus = hover || pinned;
+  const focusEdges = new Set();
+  const focusNodes = new Set();
+  if (focus) {
+    focusNodes.add(focus);
+    L.edges.forEach((e, i) => {
+      if (e.source === focus || e.target === focus) {
+        focusEdges.add(i); focusNodes.add(e.source); focusNodes.add(e.target);
+      }
+    });
+  }
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = ctx.createRadialGradient(innerWidth*0.6, innerHeight*0.42, 60,
+    innerWidth*0.6, innerHeight*0.42, Math.max(innerWidth, innerHeight));
+  g.addColorStop(0, "#0a0f1f"); g.addColorStop(1, "#060810");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+  // edges
+  ctx.lineCap = "round";
+  L.edges.forEach((e, i) => {
+    const s = L.nodes.get(e.source), t = L.nodes.get(e.target);
+    if (!s || !t) return;
+    const a = edgeAnchors(s, t);
+    const lit = !focus || focusEdges.has(i);
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(a[0], a[1]));
+    const c1 = toScreen(a[2], a[3]), c2 = toScreen(a[4], a[5]), p3 = toScreen(a[6], a[7]);
+    ctx.bezierCurveTo(c1[0], c1[1], c2[0], c2[1], p3[0], p3[1]);
+    ctx.strokeStyle = weaverColor(e.weaver || "core", lit ? 58 : 40, lit ? 46 : 22);
+    ctx.globalAlpha = lit ? 0.42 : 0.08;
+    ctx.lineWidth = Math.max(0.9, 1.3 * cam.scale);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // flowing particles
+    ctx.globalCompositeOperation = "lighter";
+    const speed = (focus && !focusEdges.has(i)) ? 0 : (lit ? 0.30 : 0.14);
+    parts[i].forEach((ph, k) => {
+      ph = (ph + speed * dt) % 1; parts[i][k] = ph;
+      const [wx, wy] = bezier(a, ph);
+      const [px, py] = toScreen(wx, wy);
+      const r = (lit ? 2.4 : 1.6) * Math.max(cam.scale, 0.5);
+      const rg = ctx.createRadialGradient(px, py, 0, px, py, r * 3);
+      rg.addColorStop(0, weaverColor(e.weaver || "core", 78, 60));
+      rg.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = rg; ctx.globalAlpha = lit ? 0.85 : 0.25;
+      ctx.beginPath(); ctx.arc(px, py, r * 3, 0, 7); ctx.fill();
+    });
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  });
+
+  // nodes
+  L.nodes.forEach((n) => {
+    const [sx, sy] = toScreen(n.x, n.y);
+    const w = n.w * cam.scale, h = n.h * cam.scale;
+    const lit = !focus || focusNodes.has(n.id);
+    const isOp = n.kind === "op";
+    const base = isOp ? weaverColor(n.weaver, 60) : (n.io === "in" ? TYPE_IN : TYPE_OUT);
+    ctx.globalAlpha = lit ? 1 : 0.26;
+
+    if (isOp) {
+      drawLegs(sx, sy, w, h, weaverColor(n.weaver, 60), cam.scale, lit);
+      ctx.shadowColor = base; ctx.shadowBlur = (n.id === focus ? 16 : 8) * Math.max(cam.scale, 0.4);
+      roundRect(sx - w/2, sy - h/2, w, h, 10);
+      ctx.fillStyle = "rgba(13,18,32,0.97)"; ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = (n.id === focus ? 2 : 1.4); ctx.strokeStyle = base; ctx.stroke();
+    } else {
+      ctx.shadowBlur = 0;
+      roundRect(sx - w/2, sy - h/2, w, h, h/2);
+      ctx.fillStyle = "rgba(11,15,26,0.95)"; ctx.fill();
+      ctx.lineWidth = (n.id === focus ? 1.8 : 1.2); ctx.strokeStyle = base;
+      ctx.globalAlpha = (lit ? 1 : 0.26) * 0.8; ctx.stroke(); ctx.globalAlpha = lit ? 1 : 0.26;
+      ctx.beginPath(); ctx.arc(sx - w/2 + 11*cam.scale, sy, 3*Math.max(cam.scale,0.5), 0, 7);
+      ctx.fillStyle = base; ctx.fill();
+    }
+
+    if (cam.scale > 0.32 || n.id === focus) {
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const lines = (n.label || n.id).split("\n");
+      const fs = (isOp ? 13 : 12) * Math.min(cam.scale, 1.2);
+      lines.forEach((ln, li) => {
+        ctx.font = (isOp && li === 0 ? "700 " : isOp ? "500 " : "500 ") + fs + "px Inter, sans-serif";
+        ctx.fillStyle = isOp ? (li === 0 ? "#eef2fb" : "#9aa8ca") : "#c6d1ec";
+        ctx.fillText(ln, sx + (isOp ? 0 : 6*cam.scale),
+          sy + (lines.length > 1 ? (li - 0.5) * fs * 1.3 : 0));
+      });
+    }
+    ctx.globalAlpha = 1;
+  });
+  ctx.shadowBlur = 0;
+  requestAnimationFrame(frame);
+}
+
+// ---- hit testing + interaction ---------------------------------------------
+function nodeAt(sx, sy) {
+  const [wx, wy] = toWorld(sx, sy);
+  for (const n of layouts[current].nodes.values()) {
+    if (Math.abs(wx - n.x) <= n.w/2 + 4 && Math.abs(wy - n.y) <= n.h/2 + 4) return n;
+  }
+  return null;
+}
+canvas.addEventListener("mousemove", (e) => {
+  if (dragging) {
+    cam.x += e.clientX - lastX; cam.y += e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY; moved = true; return;
+  }
+  const n = nodeAt(e.clientX, e.clientY);
+  hover = n ? n.id : null;
+  canvas.style.cursor = n ? "pointer" : "grab";
+});
+canvas.addEventListener("mousedown", (e) => {
+  dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add("dragging");
+});
+addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("dragging"); });
+canvas.addEventListener("click", (e) => {
+  if (moved) return;
+  const n = nodeAt(e.clientX, e.clientY);
+  pinned = n ? n.id : null; showDetail(n);
+});
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  const f = Math.exp(-e.deltaY * 0.0015);
+  cam.scale = Math.min(Math.max(cam.scale * f, 0.08), 3);
+  cam.x = e.clientX - wx * cam.scale; cam.y = e.clientY - wy * cam.scale;
+}, { passive: false });
+addEventListener("resize", resize);
+
+// ---- nav (Network pill + Paths dropdown) -----------------------------------
+function el(tag, cls, html) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n;
+}
+function selectView(i) {
+  current = i; pinned = null; showDetail(null); closeMenu(); renderNav(); renderPanels(); fitView();
+}
+let menuEl = null;
+function closeMenu() { if (menuEl) menuEl.classList.remove("open"); }
+function renderNav() {
+  const nav = document.getElementById("nav"); nav.innerHTML = ""; menuEl = null;
+  const net = el("button", "pill" + (current === 0 ? " active" : ""), "◇ Network");
+  net.onclick = () => selectView(0);
+  nav.appendChild(net);
+
+  const paths = VIEWS.slice(1);
+  if (!paths.length) return;
+  const onPath = current > 0;
+  const label = onPath ? "Path" : "Paths";
+  const trigger = el("button", "pill" + (onPath ? " active" : ""),
+    label + ' <span class="caret">▾</span>');
+  const menu = el("div", "menu"); menuEl = menu;
+  paths.forEach((p, idx) => {
+    const i = idx + 1;
+    const item = el("div", "menu-item" + (current === i ? " sel" : ""),
+      `<span class="tick">${current === i ? "✓" : ""}</span>${p.label}`);
+    item.onclick = (ev) => { ev.stopPropagation(); selectView(i); };
+    menu.appendChild(item);
+  });
+  trigger.onclick = (ev) => { ev.stopPropagation(); menu.classList.toggle("open"); };
+  const wrap = el("div", null); wrap.style.position = "relative";
+  wrap.appendChild(trigger); wrap.appendChild(menu);
+  nav.appendChild(wrap);
+}
+addEventListener("click", closeMenu);
+
+// ---- panels ----------------------------------------------------------------
+function renderPanels() {
+  const v = VIEWS[current];
+  document.getElementById("subtitle").textContent =
+    v.path ? v.path.title + "  ·  " + v.path.policy : "weaver network";
+
+  const stats = document.getElementById("stats"); stats.innerHTML = "";
+  let entries;
+  if (v.path) {
+    entries = [["steps", v.path.step_count], ["waves", v.path.waves.length],
+      ["inputs", v.path.from_types.length], ["outputs", v.path.to_types.length]];
+  } else {
+    const s = v.graph.stats;
+    entries = [["weavers", s.weavers], ["join keys", s.types],
+      ["capabilities", s.capabilities], ["links", s.edges]];
+  }
+  entries.forEach(([k, val]) =>
+    stats.appendChild(el("div", "stat", `<b>${val}</b><span>${k}</span>`)));
+
+  const leg = document.getElementById("legend"); leg.innerHTML = "";
+  [["Input endpoint", TYPE_IN], ["Output endpoint", TYPE_OUT]].forEach(([t, c]) =>
+    leg.appendChild(el("div", "legend-row", `<span class="dot" style="background:${c}"></span>${t}`)));
+
+  const box = document.getElementById("weavers"); box.innerHTML = "";
+  DATA.network.weavers.forEach((w) =>
+    box.appendChild(el("div", "weaver-row",
+      `<span class="swatch" style="background:${weaverColor(w.id)}"></span>` +
+      `<code>${w.id}</code><span class="meta">v${w.version}<br>${w.backends.join(" · ")}</span>`)));
+}
+function showDetail(n) {
+  const box = document.getElementById("detail");
+  const body = document.getElementById("detail-body");
+  if (!n) { box.classList.remove("show"); return; }
+  box.classList.add("show");
+  if (n.kind === "op") {
+    let h = `<div class="detail-key">${n.weaver}</div><div class="kv"><b>${n.capability}</b></div>`;
+    if (n.primary_backend) {
+      const fb = n.fallback_backends.length ? n.fallback_backends.join(", ") : "none";
+      h += `<div class="kv">primary backend: <b>${n.primary_backend}</b></div>`;
+      h += `<div class="kv">fallback: <b>${fb}</b></div>`;
+      if (n.fallback_on && n.fallback_on.length)
+        h += `<div class="kv">falls back on: ${n.fallback_on.join(", ")}</div>`;
+    } else if (n.backends) {
+      h += `<div class="kv">backends: <b>${n.backends.join(", ")}</b></div>`;
+    }
+    h += `<div class="kv">consumes</div>${n.input_types.map((t)=>`<span class="chip">${t}</span>`).join("")}`;
+    h += `<div class="kv">produces</div>${n.output_types.map((t)=>`<span class="chip">${t}</span>`).join("")}`;
+    body.innerHTML = h;
+  } else {
+    const L = layouts[current], uniq = (a) => [...new Set(a)];
+    const prod = L.edges.filter((e)=>e.target===n.id && e.weaver).map((e)=>e.weaver);
+    const cons = L.edges.filter((e)=>e.source===n.id && e.weaver).map((e)=>e.weaver);
+    const io = n.io === "in" ? "Input endpoint" : "Output endpoint";
+    const ioColor = n.io === "in" ? TYPE_IN : TYPE_OUT;
+    body.innerHTML =
+      `<div class="detail-key">${n.key || n.id}</div>` +
+      `<div class="kv"><span class="chip" style="border-color:${ioColor}">${io}</span></div>` +
+      (n.description ? `<div class="kv">${n.description}</div>` : "") +
+      (prod.length ? `<div class="kv">produced by</div>${uniq(prod).map((t)=>`<span class="chip">${t}</span>`).join("")}` : "") +
+      (cons.length ? `<div class="kv">consumed by</div>${uniq(cons).map((t)=>`<span class="chip">${t}</span>`).join("")}` : "");
+  }
+}
+
+// ---- boot ------------------------------------------------------------------
+if (DATA.meta.problems && DATA.meta.problems.length) {
+  const b = document.getElementById("banner");
+  b.style.display = "block";
+  b.innerHTML = "<b>note</b><br>" + DATA.meta.problems.join("<br>");
+}
+resize(); renderNav(); renderPanels(); fitView(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
+"""

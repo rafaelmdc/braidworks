@@ -3,6 +3,7 @@
     weaverkit new    --spec weaver.spec.toml --dest weavers/madin_weaver
     weaverkit verify --spec weaver.spec.toml [--package madin_weaver]
     weaverkit index  [--root .] [--out weavers-index.tsv] [--keys-out keys-index.md]
+    weaverkit view   [--out braidworks-view.html] [--from K --to K] [--policy local_first]
 
 ``new`` validates the spec, then stamps a package. ``verify`` validates the spec
 and — if the built package is importable — checks its manifest, reachability, and
@@ -234,6 +235,36 @@ def cmd_index(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_view(args: argparse.Namespace) -> int:
+    from weaverkit.view import parse_policy, write_view
+
+    from_types = frozenset(args.from_type or ())
+    to_types = frozenset(args.to_type or ())
+    if bool(from_types) ^ bool(to_types):
+        print("--from and --to must be given together (or neither)", file=sys.stderr)
+        return 1
+    try:
+        policy = parse_policy(args.policy)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    data = write_view(
+        args.out,
+        from_types=from_types or None,
+        to_types=to_types or None,
+        policy=policy,
+    )
+    net = data["network"]["stats"]
+    print(
+        f"wrote {args.out} — {net['weavers']} weaver(s), {net['types']} join key(s), "
+        f"{net['edges']} link(s)" + (f", {len(data['paths'])} path view" if data["paths"] else "")
+    )
+    for problem in data["meta"]["problems"]:
+        print(f"  note: {problem}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="weaverkit", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -271,6 +302,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="human-readable key map (Markdown; default keys-index.md)",
     )
     p_index.set_defaults(func=cmd_index)
+
+    p_view = sub.add_parser(
+        "view", help="render an interactive HTML view of the weaver network (+ a braid path)"
+    )
+    p_view.add_argument(
+        "--out", default="braidworks-view.html", help="output HTML file (default: braidworks-view.html)"
+    )
+    p_view.add_argument(
+        "--from", dest="from_type", action="append", metavar="KEY",
+        help="a starting/available type for the braid path (repeatable)",
+    )
+    p_view.add_argument(
+        "--to", dest="to_type", action="append", metavar="KEY",
+        help="a target type for the braid path (repeatable)",
+    )
+    p_view.add_argument(
+        "--policy", default="local_first",
+        help="backend policy for the path: local_first|api_first|local_only|api_only",
+    )
+    p_view.set_defaults(func=cmd_view)
 
     return parser
 
