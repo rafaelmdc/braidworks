@@ -86,6 +86,13 @@ OUTPUT_KEYS: dict[str, str] = {
     "structure.pdb.ids": "PDB ids of experimental structures covering a protein (best first).",
     "structure.pdb.count": "Number of distinct PDB structures covering a protein.",
     "structure.pdb.records": "Distinct PDB structures - id, method, resolution, coverage.",
+    # predicted-structure outputs (alphafold_weaver)
+    "structure.alphafold.entry_id": "AlphaFold DB entry id for a protein's predicted model.",
+    "structure.alphafold.mean_plddt": "Mean pLDDT confidence (0-100) of the AlphaFold model.",
+    "structure.alphafold.model_url": "URL of the AlphaFold predicted model file (PDB).",
+    "structure.alphafold.pae_image_url": "URL of the AlphaFold predicted-aligned-error plot.",
+    "structure.alphafold.version": "AlphaFold DB model version.",
+    "structure.alphafold.records": "Full AlphaFold model metadata - id, confidence breakdown, URLs.",
 }
 
 
