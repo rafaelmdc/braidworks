@@ -34,7 +34,7 @@ Registered bridge keys — what links weavers together.
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:resolve_model`, `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `string:resolve_interactions` |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:resolve_model`, `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `reactome:resolve_pathways`, `string:resolve_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -63,6 +63,9 @@ Descriptive payload fields; nothing joins on them.
 | `ncbi.taxon.match_type` | How a name matched (exact/synonym/fuzzy/taxid). | `ncbi:ncbi.resolve_name` | — |
 | `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
+| `pathway.reactome.count` | Number of distinct Reactome pathways for a protein. | `reactome:resolve_pathways` | — |
+| `pathway.reactome.names` | Names of Reactome pathways a protein participates in. | `reactome:resolve_pathways` | — |
+| `pathway.reactome.records` | Distinct Reactome pathways - stable id, name, in-disease flag. | `reactome:resolve_pathways` | — |
 | `protein.function` | Curated function summary (UniProt FUNCTION comment). | `uniprot:resolve_protein` | — |
 | `protein.gene` | Primary gene symbol (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.interaction.count` | Number of interaction partners returned (STRING). | `string:resolve_interactions` | — |

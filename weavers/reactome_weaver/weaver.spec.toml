@@ -1,0 +1,52 @@
+# reactome_weaver — curated biological pathways via Reactome.
+#
+# A protein's UniProt accession -> the Reactome pathways it participates in (the
+# systems-level "what process is it part of" panel). A terminal weaver off the protein
+# hub: single-input on `protein.uniprot.accession`. Reactome maps the accession to its
+# pathways itself; the backend dedups to distinct pathways and orders them
+# deterministically. Free, keyless Reactome ContentService API (CC0 data).
+[weaver]
+db_name = "reactome"
+weaver_id = "reactome"
+kind = "lookup"
+title = "Reactome pathways (accession -> pathways)"
+version = "0.1.0"
+license = "CC0 (Reactome; cite https://doi.org/10.1093/nar/gkab1028)"
+source_url = "https://reactome.org"
+fingerprint_source = "Reactome ContentService API contract (reactome.org/ContentService)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of GET https://reactome.org/ContentService/data/mapping/UniProt/P04637/pathways
+source_sample = """
+[
+  {
+    "stId": "R-HSA-111448",
+    "displayName": "Activation of NOXA and translocation to mitochondria",
+    "schemaClass": "Pathway",
+    "isInDisease": false
+  }
+]
+"""
+
+# One accession -> one mapping/pathways call. Reactome has no batch endpoint that
+# preserves per-query grouping, so batches fan out per accession.
+[[capability]]
+id = "resolve_pathways"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["pathway.reactome.names", "pathway.reactome.count"]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["pathway.reactome.records"]
+
+# Golden runs against the deterministic fixture (reactome_weaver.fixture, an
+# httpx.MockTransport serving a canned 2-pathway response for P04637, with a duplicate
+# stId so the dedup path is exercised) so `weaverkit verify --strict` is reproducible.
+[[golden]]
+capability = "resolve_pathways"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "pathway.reactome.count" = 2 }
