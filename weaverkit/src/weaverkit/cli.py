@@ -21,6 +21,8 @@ import importlib
 import sys
 from pathlib import Path
 
+from braidworks.core import ATTRIBUTION_REQUIRED, citation_requirement, is_known_license
+
 from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
 from weaverkit.index import uncatalogued_outputs, write_index, write_key_index
 from weaverkit.scaffold import ScaffoldError, scaffold
@@ -44,6 +46,29 @@ def _print_problems(header: str, problems: list[str]) -> None:
     print(header, file=sys.stderr)
     for p in problems:
         print(f"  - {p}", file=sys.stderr)
+
+
+def _provenance_warnings(spec: WeaverSpec) -> list[str]:
+    """Advisory checks on a spec's reference metadata (issue #1). Non-fatal.
+
+    Surfaces gaps that would weaken automatic references: an unrecognized license id
+    (classifies as 'restricted'), or a missing citation under a license that requires
+    attribution. These warn rather than fail so existing weavers keep verifying while
+    the metadata is brought up to standard.
+    """
+    warnings: list[str] = []
+    if not is_known_license(spec.license):
+        warnings.append(
+            f"license {spec.license!r} is not a known identifier (weaverkit treats it as "
+            "'restricted'); prefer an SPDX id like 'CC-BY-4.0' / 'CC0-1.0' so references "
+            "render correctly"
+        )
+    elif citation_requirement(spec.license) == ATTRIBUTION_REQUIRED and not spec.citation.strip():
+        warnings.append(
+            f"license {spec.license!r} requires attribution but [weaver].citation is empty "
+            "— add the DOI / reference so a braid can credit this source"
+        )
+    return warnings
 
 
 def cmd_new(args: argparse.Namespace) -> int:
@@ -198,6 +223,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if conformance:
         _print_problems(f"{package} does not conform to {args.spec}:", conformance)
         return 1
+
+    for w in _provenance_warnings(spec):
+        print(f"warning: {w}", file=sys.stderr)
 
     if args.strict:
         incomplete = _strict_problems(package, spec, weaver)

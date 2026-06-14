@@ -10,9 +10,36 @@ import importlib
 import sys
 from pathlib import Path
 
-from weaverkit.cli import _build_fixture_weaver, _first_runnable_backend, main
+from weaverkit.cli import (
+    _build_fixture_weaver,
+    _first_runnable_backend,
+    _provenance_warnings,
+    main,
+)
+from weaverkit.spec import load_spec
 
 FIXTURE = Path(__file__).parent / "fixtures" / "valid.weaver.spec.toml"
+
+
+def _spec(**overrides):
+    spec = load_spec(FIXTURE)
+    return spec.__class__(**{**spec.__dict__, **overrides})
+
+
+def test_provenance_warning_unknown_license():
+    warnings = _provenance_warnings(_spec(license="Proprietary-EULA"))
+    assert any("not a known identifier" in w for w in warnings)
+
+
+def test_provenance_warning_attribution_license_missing_citation():
+    warnings = _provenance_warnings(_spec(license="CC-BY-4.0", citation=""))
+    assert any("requires attribution" in w for w in warnings)
+
+
+def test_provenance_no_warning_when_complete():
+    spec = _spec(license="CC-BY-4.0", citation="https://doi.org/10.1093/nar/xyz")
+    assert _provenance_warnings(spec) == []
+    assert _provenance_warnings(_spec(license="CC0-1.0", citation="")) == []
 
 
 class _FakeWeaver:

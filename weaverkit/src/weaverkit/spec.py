@@ -157,6 +157,12 @@ class WeaverSpec:
     weaver_id: str = ""
     kind: str = "lookup"
     api_key: str = "none"
+    # Structured provenance for automatic references (issue #1). ``license`` should be
+    # a known identifier (ideally SPDX, e.g. ``CC-BY-4.0`` / ``CC0-1.0``); ``citation``
+    # is the DOI or reference text; ``attribution`` names the provider to credit. These
+    # flow into the runtime WeaverManifest.provenance so a braid can cite its sources.
+    citation: str = ""
+    attribution: str = ""
     bulk: BulkSpec | None = None
     golden: tuple[GoldenSpec, ...] = field(default_factory=tuple)
 
@@ -195,6 +201,8 @@ class WeaverSpec:
                 weaver_id=str(weaver.get("weaver_id", "")),
                 kind=str(weaver.get("kind", "lookup")),
                 api_key=str(weaver.get("api_key", "none")),
+                citation=str(weaver.get("citation", "")),
+                attribution=str(weaver.get("attribution", "")),
                 bulk=bulk,
                 capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
