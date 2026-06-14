@@ -195,3 +195,32 @@ async def test_live_list_children_genus_to_species():
     assert sm[vocab.CHILDREN_COUNT] == len(ids)
     assert all(c["rank"] == "species" for c in sm[vocab.CHILDREN_RECORDS])
     assert ids == sorted(set(ids))  # deduped + deterministic (ascending)
+
+
+async def test_live_list_genomes_and_describe():
+    """API-only drift check: E. coli (562) -> reference genome -> its detail."""
+    weaver = build_ncbi_weaver(enable_api=True)
+    lst = await weaver.execute_batch(
+        vocab.LIST_GENOMES,
+        [StrandSet.from_strands("e", [Strand(vocab.TAXON_ID, "562")])],
+        requested_outputs=vocab.LIST_GENOMES_OUTPUTS,
+        backend="api",
+        params={"reference_only": True},
+    )
+    r = lst[0]
+    assert r.status is WeaveStatus.OK
+    sm = {s.type_id: s.value for s in r.strands}
+    accs = sm[vocab.GENOME_ACCESSION]
+    assert "GCF_000005845.2" in accs  # the E. coli K-12 reference assembly
+    assert sm[vocab.ASSEMBLY_COUNT] == len(accs)
+
+    desc = await weaver.execute_batch(
+        vocab.DESCRIBE_GENOME,
+        [StrandSet.from_strands("g", [Strand(vocab.GENOME_ACCESSION, "GCF_000005845.2")])],
+        requested_outputs=vocab.ASSEMBLY_GROUP | vocab.SEQUENCES_GROUP,
+        backend="api",
+    )
+    d = {s.type_id: s.value for s in desc[0].strands}
+    assert d[vocab.ASSEMBLY_LEVEL] == "Complete Genome"
+    assert "Escherichia coli" in d[vocab.ASSEMBLY_ORGANISM]
+    assert any(s["refseq_accession"] == "NC_000913.3" for s in d[vocab.SEQUENCE_RECORDS])

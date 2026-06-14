@@ -18,16 +18,21 @@ backends emit identical shapes even though their matching differs.
 | `ncbi.resolve_name` | `organism.name` | **core:** `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.match_type`, `ncbi.taxon.review_required` · **lineage:** `ncbi.taxon.lineage` |
 | `ncbi.describe_taxon` | `ncbi.taxon.id` | **core:** `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id` · **lineage:** `ncbi.taxon.lineage` |
 | `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **api-only** |
+| `ncbi.list_genomes` ⤜ | `ncbi.taxon.id` | **`genome.accession`** (⤜ fan: each assembly), `genome.assembly.count`, `genome.assembly.records` — params `reference_only`, `annotated_only`, `assembly_level` · **api-only** |
+| `ncbi.describe_genome` | `genome.accession` | **assembly:** `genome.assembly.title`, `genome.assembly.level`, `genome.assembly.organism`, `genome.assembly.detail` · **sequences:** `genome.sequence.records` · **api-only** |
 
 This is a **resolver**: a fuzzy/ambiguous name match can come back flagged
 (`ncbi.taxon.review_required`) for human confirmation rather than guessing silently.
-`list_children` emits `ncbi.taxon.id` as a **set output** (the fan dimension), so a
-caller can fan a genus out into each of its species:
+The `list_*` capabilities emit a **set output** (the fan dimension) — `list_children`
+fans a genus into its species, `list_genomes` fans an organism into its genome
+assemblies (the new `genome.accession` join key bridges organism → genome):
 
 ```bash
-braidworks weave --have organism.name="Faecalibacterium" \
-    --want ncbi.taxon.children_count
 braidworks run ncbi ncbi.list_children --have ncbi.taxon.id=216851 --param rank=species
+braidworks run ncbi ncbi.list_genomes --have ncbi.taxon.id=562 --param reference_only=true
+# organism -> each reference genome -> its assembly detail:
+braidworks weave --have organism.name="Escherichia coli" \
+    --want genome.assembly.level --param reference_only=true --expand all
 ```
 
 ## Choosing a backend
