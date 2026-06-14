@@ -30,7 +30,7 @@ Registered bridge keys — what links weavers together.
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
 | `pathway.kegg.id` | KEGG pathway id. | — | — |
-| `pathway.reactome.id` | Reactome pathway id. | — | — |
+| `pathway.reactome.id` | Reactome pathway id. | `reactome:resolve_pathways` | — |
 | `pdb.id` | PDB / PDBe structure id. | — | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
