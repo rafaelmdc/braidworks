@@ -11,7 +11,7 @@ Supplied by the user at the start of a braid.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `organism.name` | Free-text organism name — the user-supplied entry input. | — | `ncbi:ncbi.resolve_name` |
-| `protein.query` | Free-text organism name — the user-supplied entry input. | — | `uniprot:resolve_protein` |
+| `protein.query` | Free-text organism name — the user-supplied entry input. | `string:resolve_interactions` | `uniprot:resolve_protein` |
 
 ## Shared join keys
 
@@ -23,7 +23,7 @@ Registered bridge keys — what links weavers together.
 | `enzyme.ec` | Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id. | — | — |
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
-| `go.term` | Gene Ontology term id. | — | — |
+| `go.term` | Gene Ontology term id. | `quickgo:resolve_go_terms` | — |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
 | `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.resolve_diseases`, `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
@@ -31,7 +31,7 @@ Registered bridge keys — what links weavers together.
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
 | `pathway.kegg.id` | KEGG pathway id. | — | — |
 | `pathway.reactome.id` | Reactome pathway id. | `reactome:resolve_pathways` | — |
-| `pdb.id` | PDB / PDBe structure id. | — | — |
+| `pdb.id` | PDB / PDBe structure id. | `pdbe:resolve_structures` | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
 | `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:resolve_model`, `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `reactome:resolve_pathways`, `string:resolve_interactions` |

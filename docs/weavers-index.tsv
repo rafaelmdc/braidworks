@@ -5,8 +5,8 @@ disbiome	disbiome.resolve_diseases	lookup	none	local	ncbi.taxon.id	microbe.disea
 example	resolve_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage	
 ncbi	ncbi.resolve_taxid	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage	
-pdbe	resolve_structures	lookup	none	api	protein.uniprot.accession	structure.pdb.ids;structure.pdb.count;structure.pdb.records	
-quickgo	resolve_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.count;go.records	
+pdbe	resolve_structures	lookup	none	api	protein.uniprot.accession	pdb.id;structure.pdb.ids;structure.pdb.count;structure.pdb.records	
+quickgo	resolve_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.term;go.count;go.records	
 reactome	resolve_pathways	lookup	none	api	protein.uniprot.accession	pathway.reactome.id;pathway.reactome.names;pathway.reactome.count;pathway.reactome.records	
-string	resolve_interactions	lookup	none	api	protein.uniprot.accession	protein.interaction.partners;protein.interaction.count;protein.interaction.records	
+string	resolve_interactions	lookup	none	api	protein.uniprot.accession	protein.query;protein.interaction.partners;protein.interaction.count;protein.interaction.records	
 uniprot	resolve_protein	lookup	none	api	protein.query	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length	
