@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.2"
+version = "0.1.3"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -36,10 +36,14 @@ source_sample = """
 id = "resolve_pathways"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
+# pathway.reactome.id is one→many: the weaver emits every distinct pathway stId, so a
+# caller can fan out (ExpandPolicy) one child per pathway — "protein -> all pathways,
+# each drillable". names/count/records stay the top-N display + true total.
+set_outputs = ["pathway.reactome.id"]
 
   [[capability.group]]
   id = "summary"
-  outputs = ["pathway.reactome.names", "pathway.reactome.count"]
+  outputs = ["pathway.reactome.id", "pathway.reactome.names", "pathway.reactome.count"]
 
   [[capability.group]]
   id = "full"

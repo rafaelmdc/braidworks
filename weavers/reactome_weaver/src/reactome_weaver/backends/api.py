@@ -4,7 +4,8 @@ Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 ``GET /data/mapping/UniProt/{accession}/pathways``. Reactome resolves the accession to
 its protein + species itself and returns the pathways it participates in. The backend
 dedups to **distinct pathways** (by Reactome stable id), orders them by stable id, and
-emits ``pathway.reactome.names`` (top ``limit``), ``pathway.reactome.count`` (true total),
+emits ``pathway.reactome.id`` (every distinct stId — the one→many fan dimension),
+``pathway.reactome.names`` (top ``limit``), ``pathway.reactome.count`` (true total),
 and ``pathway.reactome.records`` (``{st_id, name, in_disease}``).
 
 **Determinism:** the fixed sort means the same accession always yields the same list.
@@ -45,6 +46,10 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     records = sorted(by_id.values(), key=lambda p: p["st_id"])
     top = records[:limit]
     return {
+        # The fan dimension (set_outputs): every distinct pathway stId, so a caller can
+        # fan out one child per pathway. Uncapped — names/records below are the top-N
+        # display; the executor's max_expansion bounds any runaway.
+        "pathway.reactome.id": [r["st_id"] for r in records],
         "pathway.reactome.names": [r["name"] for r in top if r["name"]],
         "pathway.reactome.count": len(by_id),  # true total distinct; names/records are top N
         "pathway.reactome.records": top,

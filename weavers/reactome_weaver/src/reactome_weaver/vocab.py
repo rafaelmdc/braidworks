@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.1.3"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -34,15 +34,27 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 id="resolve_pathways",
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
-                    {"pathway.reactome.count", "pathway.reactome.names", "pathway.reactome.records"}
+                    {
+                        "pathway.reactome.id",
+                        "pathway.reactome.count",
+                        "pathway.reactome.names",
+                        "pathway.reactome.records",
+                    }
                 ),
                 output_groups=(
                     OutputGroup(
                         id="summary",
-                        outputs=frozenset({"pathway.reactome.count", "pathway.reactome.names"}),
+                        outputs=frozenset(
+                            {
+                                "pathway.reactome.id",
+                                "pathway.reactome.count",
+                                "pathway.reactome.names",
+                            }
+                        ),
                     ),
                     OutputGroup(id="full", outputs=frozenset({"pathway.reactome.records"})),
                 ),
+                set_outputs=frozenset({"pathway.reactome.id"}),
                 backends=backends,
                 max_batch_size=25,
             ),

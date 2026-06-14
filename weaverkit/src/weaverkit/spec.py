@@ -65,6 +65,10 @@ class CapabilitySpec:
     # "core" before it can fetch lineage). These are unioned into the mapper's
     # ``computed_groups`` (the cache key) so it isn't under-reported.
     always_computed_groups: tuple[str, ...] = ()
+    # Produced join keys that are intrinsically one→many (cardinality fan-out): the
+    # weaver emits a *list* and the executor may fork one child per value (per
+    # ExpandPolicy). Must be a subset of ``produces``. Maps to Capability.set_outputs.
+    set_outputs: tuple[str, ...] = ()
 
     @property
     def produces(self) -> tuple[str, ...]:
@@ -87,6 +91,7 @@ class CapabilitySpec:
                 max_batch_size=data.get("max_batch_size"),
                 cost=float(data.get("cost", 1.0)),
                 always_computed_groups=tuple(data.get("always_computed_groups", ())),
+                set_outputs=tuple(data.get("set_outputs", ())),
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -343,6 +348,14 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                 problems.append(
                     f"{where}: always_computed_groups references {gid!r}, which is not "
                     f"a declared output group of this capability ({sorted(group_ids)})"
+                )
+
+        produced = set(cap.produces)
+        for key in cap.set_outputs:
+            if key not in produced:
+                problems.append(
+                    f"{where}: set_outputs lists {key!r}, which this capability does not "
+                    f"produce ({sorted(produced)}) — set_outputs must be a subset of produces"
                 )
 
     # --- bulk source ---------------------------------------------------------

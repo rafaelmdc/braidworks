@@ -118,6 +118,47 @@ def test_generated_fingerprints_are_not_unknown(tmp_path):
     assert check_fingerprints(weaver, list(spec.backends)) == []
 
 
+_SET_OUTPUT_SPEC = '''
+[weaver]
+db_name = "fanoutdemo"
+weaver_id = "fanoutdemo"
+title = "Fan-out demo"
+version = "0.1.0"
+license = "CC0-1.0"
+source_url = "https://example.org/demo"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = """
+accession,pathways
+P12345,R-1;R-2
+"""
+
+[[capability]]
+id = "demo.pathways"
+consumes = ["protein.uniprot.accession"]
+backends = ["local"]
+set_outputs = ["pathway.reactome.id"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["pathway.reactome.id", "pathway.reactome.names"]
+'''
+
+
+def test_scaffold_round_trips_set_outputs(tmp_path):
+    """A set_outputs declaration survives scaffold → manifest, and conformance agrees."""
+    spec_path = tmp_path / "fanout.weaver.spec.toml"
+    spec_path.write_text(_SET_OUTPUT_SPEC)
+    spec = load_spec(spec_path)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=_SET_OUTPUT_SPEC)
+    mod = _import_generated(dest, spec.package)
+    weaver = mod.build_fanoutdemo_weaver()
+    cap = weaver.MANIFEST.capabilities[0]
+    assert cap.set_outputs == frozenset({"pathway.reactome.id"})
+    assert check_manifest(weaver.MANIFEST, spec) == []
+
+
 def test_generated_register_wires_into_factory(tmp_path):
     from braidworks.core import WeaverFactory
 

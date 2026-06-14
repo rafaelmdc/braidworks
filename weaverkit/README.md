@@ -55,8 +55,11 @@ once, so write a draft and let it guide you. The fields:
 
 **`[[capability]]`** (one or more) — `id`, `consumes` (registered shared keys),
 optional `backends` / `max_batch_size` / `cost`, optional `always_computed_groups`
-(group ids always computed internally, e.g. `["core"]`), and one or more
-`[[capability.group]]` (`id` + `outputs`, disjoint across groups).
+(group ids always computed internally, e.g. `["core"]`), optional `set_outputs`
+(produced join keys that are one→many — the weaver emits a *list* and the executor
+may fan out one child per value under `ExpandPolicy`; must be a subset of `produces`,
+e.g. `["pathway.reactome.id"]`), and one or more `[[capability.group]]`
+(`id` + `outputs`, disjoint across groups).
 
 **`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
 `filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB
