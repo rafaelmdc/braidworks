@@ -194,6 +194,116 @@ def test_path_projects_the_real_braid(registry):
     assert path["waves"] == [[0], [1]]
 
 
+# --- run lineage (cardinality fan-out trace) ---------------------------------
+
+
+def _leaf(entity_id, parent_id, strands, completion):
+    return {
+        "entity_id": entity_id,
+        "parent_id": parent_id,
+        "strands": {t: {"value": v} for t, v in strands.items()},
+        "completion": completion,
+        "requires_review": False,
+        "warnings": [],
+        "errors": [],
+    }
+
+
+def _ok_step(cap, produced):
+    return {"capability_id": cap, "backend": "local", "status": "ok", "produced": produced}
+
+
+ACC = "protein.uniprot.accession"
+PW = "pathway.reactome.id"
+
+
+def test_run_view_single_level_fan():
+    from weaverkit.view import build_run_views
+
+    pathways = [_ok_step("reactome.pathways", [PW])]
+    result = {
+        "resolved": [
+            _leaf("e0#0", "e0", {ACC: "P1", PW: "R-1"}, pathways),
+            _leaf("e0#1", "e0", {ACC: "P1", PW: "R-2"}, pathways),
+            _leaf("e0#2", "e0", {ACC: "P1", PW: "R-3"}, pathways),
+        ]
+    }
+    views, dropped = build_run_views(result, BraidRegistry())
+    assert dropped == 0 and len(views) == 1
+    v = views[0]
+    assert v["leaves"] == 3
+    in_node = next(n for n in v["nodes"] if n["id"] == "run:e0:in")
+    assert in_node["role"] == "entry" and "P1" in in_node["label"]
+    # the fork fans into one value node per leaf
+    fan_edges = [e for e in v["edges"] if e.get("fan")]
+    assert len(fan_edges) == 3
+    leaf_res = {n["id"] for n in v["nodes"] if n["id"].startswith("run:e0#")}
+    assert leaf_res == {"run:e0#0:res:0", "run:e0#1:res:0", "run:e0#2:res:0"}
+
+
+def test_run_view_enrichment_after_fork_is_per_leaf():
+    from weaverkit.view import build_run_views
+
+    comp = [_ok_step("reactome.pathways", [PW]), _ok_step("reactome.detail", ["pathway.reactome.names"])]
+    result = {
+        "resolved": [
+            _leaf("e0#0", "e0", {ACC: "P1", PW: "R-1", "pathway.reactome.names": "Alpha"}, comp),
+            _leaf("e0#1", "e0", {ACC: "P1", PW: "R-2", "pathway.reactome.names": "Beta"}, comp),
+        ]
+    }
+    views, _ = build_run_views(result, BraidRegistry())
+    v = views[0]
+    # the post-fork enrichment op is materialized per leaf (one branch each)
+    detail_ops = [n for n in v["nodes"] if n["kind"] == "op" and n["capability"] == "reactome.detail"]
+    assert len(detail_ops) == 2
+    assert {n["id"] for n in detail_ops} == {"run:e0#0:op:1", "run:e0#1:op:1"}
+
+
+def test_run_view_groups_by_originating_input():
+    from weaverkit.view import build_run_views
+
+    pw = [_ok_step("reactome.pathways", [PW])]
+    result = {
+        "resolved": [
+            _leaf("e0#0", "e0", {ACC: "P1", PW: "R-1"}, pw),
+            _leaf("e0#1", "e0", {ACC: "P1", PW: "R-2"}, pw),
+            _leaf("e1#0", "e1", {ACC: "P2", PW: "R-9"}, pw),
+        ]
+    }
+    views, dropped = build_run_views(result, BraidRegistry())
+    assert dropped == 0 and len(views) == 2  # one view per input
+
+
+def test_run_view_caps_roots_and_reports_dropped():
+    from weaverkit.view import build_run_views
+
+    pw = [_ok_step("reactome.pathways", [PW])]
+    result = {"resolved": [_leaf(f"e{i}", f"e{i}", {ACC: f"P{i}", PW: "R"}, pw) for i in range(5)]}
+    views, dropped = build_run_views(result, BraidRegistry(), max_roots=2)
+    assert len(views) == 2 and dropped == 3
+
+
+def test_run_view_no_fan_single_leaf():
+    from weaverkit.view import build_run_views
+
+    # a non-fanned run: one leaf, no parent — a linear trace, no fan edges.
+    result = {"resolved": [_leaf("e0", None, {ACC: "P1", PW: "R-1"}, [_ok_step("reactome.pathways", [PW])])]}
+    views, _ = build_run_views(result, BraidRegistry())
+    assert len(views) == 1 and views[0]["leaves"] == 1
+    assert not any(e.get("fan") for e in views[0]["edges"])
+
+
+def test_run_views_embed_in_payload_and_render():
+    from weaverkit.view import build_run_views, render_html
+
+    pw = [_ok_step("reactome.pathways", [PW])]
+    result = {"resolved": [_leaf("e0#0", "e0", {ACC: "P1", PW: "R-1"}, pw)]}
+    runs, _ = build_run_views(result, BraidRegistry())
+    data = {"meta": {"problems": []}, "network": {"weavers": []}, "paths": [], "runs": runs}
+    html = render_html(data)
+    assert "__BRAIDWORKS_DATA__" not in html and '"runs"' in html
+
+
 # --- policy + render ---------------------------------------------------------
 
 

@@ -21,7 +21,11 @@ weaver reliably instead of vibe-coding it. Three pieces:
   `braidworks.weavers` entry points) and renders a single self-contained,
   interactive HTML file: the whole weaver network as a `type → weaver → type`
   graph, plus an optional braid path for a `--from … --to …` query (the real
-  `Braider` plan, laid out by dependency wave). No CDN, opens offline.
+  `Braider` plan, laid out by dependency wave). Set-valued (one→many) produced
+  keys are badged `⤜ fan`. Pass `--run result.json` (a serialized
+  `ExecutionResult.to_json()`) to add a **run-lineage view** per originating
+  input — the cardinality fan-out trace, `input → fork ⤜ one leaf per value`.
+  No CDN, opens offline.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
 the `--strict` regimes, dispatcher/backend split) live in
