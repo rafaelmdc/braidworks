@@ -587,7 +587,7 @@ hiredis = [
 
 [[package]]
 name = "string-weaver"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "weavers/string_weaver" }
 dependencies = [
     { name = "braidworks-core" },
