@@ -105,3 +105,56 @@ async def test_http_error_becomes_per_entity_error():
 def test_fingerprint_is_stable_and_real():
     fp = QuickgoApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+# --- describe_go_term (one id -> detail) --------------------------------------
+
+_TERM = {
+    "id": "GO:0006915", "name": "apoptotic process", "aspect": "biological_process",
+    "definition": {"text": "A programmed cell death process..."}, "isObsolete": False,
+}
+
+
+def _term_backend(term=None, *, status=200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if status != 200:
+            return httpx.Response(status, content=b"{}")
+        if "/ontology/go/terms/" in request.url.path:
+            return httpx.Response(200, content=json.dumps({"results": [term] if term else []}))
+        return httpx.Response(404, content=b"{}")
+
+    client = httpx.AsyncClient(base_url="https://q/services",
+                              transport=httpx.MockTransport(handler))
+    return QuickgoApiBackend(client=client)
+
+
+async def _describe(backend, term_id):
+    records = await backend.fetch(
+        "describe_go_term", [{"go.term": term_id}],
+        requested_outputs=frozenset(
+            {"go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"}
+        ),
+        groups_to_compute=frozenset(),
+    )
+    assert len(records) == 1
+    return records[0]
+
+
+async def test_describe_go_term_maps_detail():
+    rec = await _describe(_term_backend(_TERM), "GO:0006915")
+    assert rec.found is True
+    v = rec.values
+    assert v["go.term.name"] == "apoptotic process"
+    assert v["go.term.aspect"] == "biological_process"
+    assert v["go.term.definition"].startswith("A programmed cell death")
+    assert v["go.term.detail"]["is_obsolete"] is False
+
+
+async def test_describe_go_term_blank_and_empty_are_misses():
+    assert (await _describe(_term_backend(_TERM), "  ")).found is False
+    assert (await _describe(_term_backend(None), "GO:9999999")).found is False
+
+
+async def test_describe_go_term_server_error_is_per_entity_error():
+    rec = await _describe(_term_backend(status=500), "GO:0006915")
+    assert rec.found is False and rec.error is not None and "QuickGO" in rec.error

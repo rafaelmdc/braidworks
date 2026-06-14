@@ -62,3 +62,23 @@ async def test_live_unknown_accession_is_no_match():
     weaver = build_quickgo_weaver()
     result = await _go(weaver, "X0X0X0")
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_describe_go_term():
+    """Drift detector for the consumer side: one GO id -> its detail (/ontology/go/terms)."""
+    weaver = build_quickgo_weaver()
+    ss = StrandSet.from_strands("t1", [Strand("go.term", "GO:0006915")])
+    result = (
+        await weaver.execute_batch(
+            "describe_go_term", [ss],
+            requested_outputs=frozenset(
+                {"go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"}
+            ),
+            backend="api",
+        )
+    )[0]
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    assert produced["go.term.name"] == "apoptotic process"
+    assert produced["go.term.aspect"] == "biological_process"
+    assert produced["go.term.detail"]["id"] == "GO:0006915"

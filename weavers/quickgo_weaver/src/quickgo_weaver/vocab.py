@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.4"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -58,6 +58,35 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(id="full", outputs=frozenset({"go.records"})),
                 ),
                 set_outputs=frozenset({"go.term"}),
+                backends=backends,
+                max_batch_size=10,
+            ),
+            # The consumer side: one GO id -> that term's detail. Consumes the set key
+            # list_go_terms produces, so a fanned term is drillable.
+            Capability(
+                id="describe_go_term",
+                consumes=frozenset({"go.term"}),
+                produces=frozenset(
+                    {
+                        "go.term.name",
+                        "go.term.aspect",
+                        "go.term.definition",
+                        "go.term.detail",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="detail",
+                        outputs=frozenset(
+                            {
+                                "go.term.name",
+                                "go.term.aspect",
+                                "go.term.definition",
+                                "go.term.detail",
+                            }
+                        ),
+                    ),
+                ),
                 backends=backends,
                 max_batch_size=10,
             ),

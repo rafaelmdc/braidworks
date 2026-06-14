@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.3"
+version = "0.1.4"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -34,6 +34,18 @@ source_sample = """
       "qualifier": "acts_upstream_of",
       "taxonId": 9606,
       "symbol": "TP53"
+    }
+  ]
+}
+# GET .../ontology/go/terms/GO:0006915 (describe_go_term)
+{
+  "results": [
+    {
+      "id": "GO:0006915",
+      "name": "apoptotic process",
+      "aspect": "biological_process",
+      "definition": { "text": "A programmed cell death process which begins when a cell receives an internal or external signal..." },
+      "isObsolete": false
     }
   ]
 }
@@ -66,10 +78,28 @@ set_outputs = ["go.term"]
   id = "full"
   outputs = ["go.records"]
 
+# The consumer of the fan dimension: one GO id -> that term's detail (QuickGO
+# /ontology/go/terms/{id}). Consumes go.term (what list_go_terms produces), so a
+# fanned term is drillable: protein -> list_go_terms -> fan -> describe_go_term.
+[[capability]]
+id = "describe_go_term"
+consumes = ["go.term"]
+max_batch_size = 10
+
+  [[capability.group]]
+  id = "detail"
+  outputs = ["go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"]
+
 # Golden runs against the deterministic fixture (quickgo_weaver.fixture, an
-# httpx.MockTransport serving a canned 3-term annotation page for P04637) so
-# `weaverkit verify --strict` is reproducible offline.
+# httpx.MockTransport serving a canned 3-term annotation page for P04637 plus a
+# /ontology/go/terms/{id} detail object for GO:0006915) so `weaverkit verify
+# --strict` is reproducible offline.
 [[golden]]
 capability = "list_go_terms"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "go.count" = 3 }
+
+[[golden]]
+capability = "describe_go_term"
+input = { "go.term" = "GO:0006915" }
+expect = { "go.term.name" = "apoptotic process" }
