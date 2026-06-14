@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, is_not_found_status
 
 logger = logging.getLogger("alphafold_weaver.api")
 
@@ -112,7 +112,7 @@ class AlphafoldApiBackend(BackendBase):
             # AlphaFold returns 400 for a malformed/unmappable accession and 404 for none —
             # both are "no model", a NO_MATCH, not an error. (Coverage is near-universal, so
             # a well-formed accession almost always has a model.)
-            if exc.response.status_code in (400, 404):
+            if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("AlphaFold lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"AlphaFold API error: {exc}")

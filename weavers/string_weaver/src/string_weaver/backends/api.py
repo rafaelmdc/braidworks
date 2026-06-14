@@ -26,7 +26,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, is_not_found_status
 
 logger = logging.getLogger("string_weaver.api")
 
@@ -131,7 +131,7 @@ class StringApiBackend(BackendBase):
         except httpx.HTTPStatusError as exc:
             # STRING returns 400/404 for an identifier it can't map — that's a normal
             # data outcome (NO_MATCH), not a system error.
-            if exc.response.status_code in (400, 404):
+            if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("STRING lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"STRING API error: {exc}")
