@@ -362,6 +362,8 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         f"- [ ] `weaverkit verify --spec weaver.spec.toml --package {pkg} --strict` "
         "— no placeholders left, golden runs",
         "- [ ] register the weaver where the app assembles its `WeaverFactory` (see README)",
+        f"- [ ] after merge, tag the release `{pkg}-v{spec.version}` — `make tags` does this "
+        "for every bumped package (CI also auto-tags on merge to main)",
         "",
     ]
     return "\n".join(lines)
@@ -447,6 +449,11 @@ dependencies = [{{DEPS}}]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23", "weaverkit"]
+
+# Registers this weaver for entry-point discovery (weaverkit view / references,
+# arq workers, any registry-from-entry-points loader).
+[project.entry-points."braidworks.weavers"]
+{{WEAVER_ID}} = "{{DBWEAVER}}.factory:build_{{DBWEAVER}}"
 {{SCRIPTS_BLOCK}}
 [build-system]
 requires = ["hatchling"]

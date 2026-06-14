@@ -179,6 +179,26 @@ def _with_generated_on_path(dest, package):
     return _ctx()
 
 
+def test_completeness_flags_live_e2e_placeholder(tmp_path):
+    """An un-filled live-E2E (still carrying TODO-real-input) is a --strict problem."""
+    from weaverkit.cli import _E2E_PLACEHOLDER, _completeness_problems
+
+    dest = tmp_path / "madin_weaver"
+    assert main(["new", "--spec", str(FIXTURE), "--dest", str(dest)]) == 0
+    e2e = dest / "tests" / "test_e2e_live.py"
+    e2e.parent.mkdir(exist_ok=True)
+    e2e.write_text(f'placeholder = "{_E2E_PLACEHOLDER}"\n')
+    with _with_generated_on_path(dest, "madin_weaver"):
+        problems = _completeness_problems("madin_weaver")
+    assert any("test_e2e_live.py" in p and _E2E_PLACEHOLDER in p for p in problems)
+
+    # once filled in, the e2e no longer trips the check
+    e2e.write_text("placeholder = 'P04637'\n")
+    with _with_generated_on_path(dest, "madin_weaver"):
+        problems = _completeness_problems("madin_weaver")
+    assert not any("test_e2e_live.py" in p for p in problems)
+
+
 def test_verify_strict_fails_on_fresh_scaffold(tmp_path, capsys):
     """A fresh scaffold conforms but is NOT done — --strict must reject it."""
     dest = tmp_path / "madin_weaver"

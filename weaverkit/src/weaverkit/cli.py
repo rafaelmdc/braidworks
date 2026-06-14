@@ -32,6 +32,8 @@ from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
 # Substrings the scaffold leaves at unimplemented spots; --strict fails while any
 # remain. '# TODO(' / '-TODO"' are scaffold-specific (won't flag generic TODOs).
 _INCOMPLETE_MARKERS = ("NotImplementedError", '-TODO"', "# TODO(")
+# Unique placeholder input the scaffolded live-E2E ships with (see scaffold _TEST_E2E_API).
+_E2E_PLACEHOLDER = "TODO-real-input"
 
 
 def _load_validated(spec_path: str) -> tuple[WeaverSpec | None, list[str]]:
@@ -137,7 +139,12 @@ def _build_weaver(package: str):
 
 
 def _completeness_problems(package: str) -> list[str]:
-    """Source files still carrying scaffold placeholders (NotImplemented / TODO)."""
+    """Source files still carrying scaffold placeholders (NotImplemented / TODO).
+
+    Scans the package ``src/`` plus the sibling ``tests/test_e2e_live.py`` — the live
+    drift test ships with a ``"TODO-real-input"`` placeholder that is skipped without
+    ``BRAIDWORKS_RUN_LIVE=1``, so it could otherwise pass ``--strict`` un-filled.
+    """
     module = importlib.import_module(package)
     if not getattr(module, "__file__", None):
         return []
@@ -149,6 +156,15 @@ def _completeness_problems(package: str) -> list[str]:
         if hit is not None:
             rel = py.relative_to(pkg_dir.parent)
             problems.append(f"{rel}: still a scaffold placeholder ({hit!r}) — implement it")
+
+    # The live-E2E test lives outside src/ (weaver_root/tests/), so the rglob above
+    # never sees it. Check it explicitly when present (editable/source checkout).
+    e2e = pkg_dir.parent.parent / "tests" / "test_e2e_live.py"
+    if e2e.is_file() and _E2E_PLACEHOLDER in e2e.read_text():
+        problems.append(
+            f"tests/test_e2e_live.py: still a scaffold placeholder "
+            f"({_E2E_PLACEHOLDER!r}) — replace with a real known-truth example"
+        )
     return problems
 
 

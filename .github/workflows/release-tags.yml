@@ -1,0 +1,31 @@
+name: Release tags
+
+# Auto-tags each package at the commit that releases its current version, so the
+# manual "tag the bump after merge" step can't be forgotten (build-notes #21).
+# Runs after a merge to main: derives <name>-v<version> from every package's
+# pyproject and creates + pushes any tag that doesn't yet exist (idempotent).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Create missing release tags
+        run: python tools/release_tags.py create
