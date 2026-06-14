@@ -1,6 +1,6 @@
 [project]
 name = "example_weaver"
-version = "1.0.0"
+version = "1.0.1"
 description = "Example reference weaver (taxid -> traits, from a tiny CSV) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

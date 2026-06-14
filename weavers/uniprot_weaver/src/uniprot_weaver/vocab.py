@@ -10,7 +10,8 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.1"
+WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
@@ -26,6 +27,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
+        title=WEAVER_TITLE,
         provenance=PROVENANCE,
         capabilities=(
             Capability(
