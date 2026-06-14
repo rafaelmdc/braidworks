@@ -56,6 +56,8 @@ class ArqStepRunner:
         backend: str,
         strand_sets: list[StrandSet],
         requested_outputs: frozenset[str],
+        *,
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         pool = await self._get_pool()
         requested = list(requested_outputs)
@@ -63,7 +65,9 @@ class ArqStepRunner:
 
         # Fast path: no fan-out (one task for the whole batch) — the default.
         if plan.width <= 1 or len(strand_sets) <= plan.chunk:
-            return await self._dispatch(pool, weaver_id, capability_id, backend, strand_sets, requested)
+            return await self._dispatch(
+                pool, weaver_id, capability_id, backend, strand_sets, requested, params
+            )
 
         # Fan-out: contiguous chunks → concurrent jobs, at most `width` in flight.
         chunks = [
@@ -73,7 +77,9 @@ class ArqStepRunner:
 
         async def _run(sub: list[StrandSet]) -> list[WeaveResult]:
             async with sem:
-                return await self._dispatch(pool, weaver_id, capability_id, backend, sub, requested)
+                return await self._dispatch(
+                    pool, weaver_id, capability_id, backend, sub, requested, params
+                )
 
         gathered = await asyncio.gather(*(_run(c) for c in chunks))
         # Chunks are contiguous and gather preserves order → original input order.
@@ -87,6 +93,7 @@ class ArqStepRunner:
         backend: str,
         strand_sets: list[StrandSet],
         requested: list[str],
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         payload = [ss.to_json() for ss in strand_sets]
         job = await pool.enqueue_job(
@@ -96,6 +103,7 @@ class ArqStepRunner:
             backend,
             payload,
             requested,
+            params or {},
             _queue_name=queue_for(weaver_id),
         )
         if job is None:  # pragma: no cover - only on a job-id collision we never set

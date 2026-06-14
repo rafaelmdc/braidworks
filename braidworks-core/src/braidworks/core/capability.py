@@ -27,6 +27,88 @@ class OutputGroup:
         return cls(id=data["id"], outputs=frozenset(data["outputs"]))
 
 
+PARAM_TYPES = frozenset({"string", "int", "float", "bool"})
+
+
+@dataclass(frozen=True)
+class Parameter:
+    """A per-query knob a capability accepts beyond its input strands.
+
+    Parameters are *refinements* (filters, sort, page size, thresholds), not
+    identifiers — the planner never routes on them. A caller may pass values per
+    run; an unset parameter falls back to ``default`` (so omitting every parameter
+    reproduces the historical behaviour exactly). ``enum`` (when non-empty)
+    restricts the accepted values. ``type`` is one of :data:`PARAM_TYPES` and drives
+    coercion of string inputs (e.g. from the CLI).
+    """
+
+    name: str
+    type: str = "string"
+    enum: tuple[Any, ...] = ()
+    default: Any = None
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        if self.type not in PARAM_TYPES:
+            raise ValueError(
+                f"parameter {self.name!r}: unknown type {self.type!r} "
+                f"(expected one of {sorted(PARAM_TYPES)})"
+            )
+        if self.enum and self.default is not None and self.default not in self.enum:
+            raise ValueError(
+                f"parameter {self.name!r}: default {self.default!r} not in enum "
+                f"{list(self.enum)}"
+            )
+
+    def coerce(self, value: Any) -> Any:
+        """Coerce a raw (possibly string, e.g. CLI) value to this parameter's type."""
+        if value is None:
+            return None
+        try:
+            if self.type == "int":
+                return int(value)
+            if self.type == "float":
+                return float(value)
+            if self.type == "bool":
+                if isinstance(value, bool):
+                    return value
+                return str(value).strip().lower() in ("1", "true", "yes", "on")
+            return str(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"parameter {self.name!r}: cannot coerce {value!r} to {self.type}"
+            ) from exc
+
+    def validate(self, value: Any) -> Any:
+        """Coerce ``value`` and check it against ``enum``; return the effective value."""
+        coerced = self.coerce(value)
+        if self.enum and coerced not in self.enum:
+            raise ValueError(
+                f"parameter {self.name!r}: {coerced!r} not in allowed values "
+                f"{list(self.enum)}"
+            )
+        return coerced
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "type": self.type,
+            "enum": list(self.enum),
+            "default": self.default,
+            "description": self.description,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Parameter:
+        return cls(
+            name=data["name"],
+            type=data.get("type", "string"),
+            enum=tuple(data.get("enum", ())),
+            default=data.get("default"),
+            description=data.get("description", ""),
+        )
+
+
 @dataclass(frozen=True)
 class Capability:
     """One declared operation: consumes input types, produces output types."""
@@ -49,6 +131,10 @@ class Capability:
     # subset of ``produces``. Empty (the default) means every output is scalar — the
     # historical behaviour, so nothing forks unless a weaver opts a key in.
     set_outputs: frozenset[str] = frozenset()
+    # Per-query knobs this capability accepts (filters, sort, page size, thresholds).
+    # Declarative, validated, and defaulted; the planner never routes on them. Empty
+    # (the default) means the capability takes no parameters.
+    parameters: tuple[Parameter, ...] = ()
 
     def __post_init__(self) -> None:
         extra = self.set_outputs - self.produces
@@ -56,6 +142,35 @@ class Capability:
             raise ValueError(
                 f"set_outputs must be a subset of produces; unknown: {sorted(extra)}"
             )
+        names = [p.name for p in self.parameters]
+        dupes = {n for n in names if names.count(n) > 1}
+        if dupes:
+            raise ValueError(
+                f"capability {self.id!r}: duplicate parameter names: {sorted(dupes)}"
+            )
+
+    def resolve_params(self, given: dict[str, Any] | None) -> dict[str, Any]:
+        """Validate caller params against the declaration and overlay defaults.
+
+        Returns the *effective* params (declared defaults, with caller values
+        validated/coerced on top). Raises ``ValueError`` on an unknown parameter
+        name or a value outside an ``enum``. With no declared parameters and no
+        caller values, returns ``{}`` — identical to the historical behaviour.
+        """
+        given = given or {}
+        by_name = {p.name: p for p in self.parameters}
+        unknown = set(given) - set(by_name)
+        if unknown:
+            raise ValueError(
+                f"capability {self.id!r}: unknown parameter(s) {sorted(unknown)}; "
+                f"accepted: {sorted(by_name)}"
+            )
+        effective: dict[str, Any] = {
+            p.name: p.default for p in self.parameters if p.default is not None
+        }
+        for name, value in given.items():
+            effective[name] = by_name[name].validate(value)
+        return effective
 
     def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
         """Group ids containing at least one of the requested outputs."""
@@ -87,6 +202,7 @@ class Capability:
             "cost": self.cost,
             "always_computed_groups": sorted(self.always_computed_groups),
             "set_outputs": sorted(self.set_outputs),
+            "parameters": [p.to_json() for p in self.parameters],
         }
 
     @classmethod
@@ -101,6 +217,7 @@ class Capability:
             cost=data.get("cost", 1.0),
             always_computed_groups=frozenset(data.get("always_computed_groups", ())),
             set_outputs=frozenset(data.get("set_outputs", ())),
+            parameters=tuple(Parameter.from_json(p) for p in data.get("parameters", ())),
         )
 
 

@@ -34,11 +34,14 @@ class BackendBase(ABC):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[Any]:
         """Resolve consumed inputs into records — exactly one per input, in order.
 
         Returns :class:`~braidworks.core.records.LookupRecord` or ``ResolverRecord``
         objects (matching the weaver's mapper). ``groups_to_compute`` is the resolved
         set of triggered output-group ids (the dispatch computed it from
-        ``requested_outputs``); gate expensive paths on membership in it.
+        ``requested_outputs``); gate expensive paths on membership in it. ``params`` is
+        the effective per-query parameter map (validated + defaulted by the capability);
+        ``None``/empty means no options were given — behave exactly as before.
         """

@@ -12,7 +12,7 @@ directly (decisions.md "thin contract, free implementation").
 
 from __future__ import annotations
 
-from typing import Callable, ClassVar
+from typing import Any, Callable, ClassVar
 
 from braidworks.core.backend import BackendBase
 from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
@@ -53,15 +53,17 @@ class BackendDispatchWeaver(BaseWeaver):
         return strat.fingerprint()
 
     async def execute(
-        self, capability_id, strand_set, *, requested_outputs, backend
+        self, capability_id, strand_set, *, requested_outputs, backend, params=None
     ) -> WeaveResult:
         results = await self.execute_batch(
-            capability_id, [strand_set], requested_outputs=requested_outputs, backend=backend
+            capability_id, [strand_set], requested_outputs=requested_outputs,
+            backend=backend, params=params,
         )
         return results[0]
 
     async def execute_batch(
-        self, capability_id, strand_sets, *, requested_outputs, backend
+        self, capability_id, strand_sets, *, requested_outputs, backend,
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         cap = self.MANIFEST.capability(capability_id)
         if cap is None:
@@ -69,6 +71,10 @@ class BackendDispatchWeaver(BaseWeaver):
                 f"{self.MANIFEST.weaver_id!r} has no capability {capability_id!r}"
             )
         strategy = self._strategy(backend)  # raises BackendUnavailable
+        # Resolve params against the declaration (defaults + validation). The executor
+        # normally does this, but a direct execute_batch caller (e.g. the CLI's `run`)
+        # relies on it here too; resolving twice is idempotent.
+        effective_params = cap.resolve_params(params)
         consumed = tuple(sorted(cap.consumes))
         queries = [
             {t: (ss.get(t).value if ss.get(t) is not None else None) for t in consumed}
@@ -82,6 +88,7 @@ class BackendDispatchWeaver(BaseWeaver):
             queries,
             requested_outputs=requested_outputs,
             groups_to_compute=groups_to_compute,
+            params=effective_params,
         )
         mapper = type(self).MAPPER
         return [

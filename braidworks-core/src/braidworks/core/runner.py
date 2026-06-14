@@ -19,7 +19,7 @@ ships the in-process implementation; no broker dependency leaks into core.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from braidworks.core.registry import BraidRegistry
@@ -45,6 +45,8 @@ class WeaveStepRunner(Protocol):
         backend: str,
         strand_sets: list[StrandSet],
         requested_outputs: frozenset[str],
+        *,
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]: ...
 
 
@@ -67,6 +69,8 @@ class InProcessStepRunner:
         backend: str,
         strand_sets: list[StrandSet],
         requested_outputs: frozenset[str],
+        *,
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         weaver = self._registry.get_weaver(weaver_id)
         return await weaver.execute_batch(
@@ -74,4 +78,5 @@ class InProcessStepRunner:
             strand_sets,
             requested_outputs=requested_outputs,
             backend=backend,
+            params=params,
         )

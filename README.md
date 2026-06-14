@@ -195,7 +195,8 @@ braidworks references                                    # source citations
 
 Inputs from flags, a file (`--in-file`, one value per line with `--in-type`, or a
 CSV/TSV with type-id columns), or stdin (`--in-file -`). Output `--format
-human|json|jsonl|tsv|csv`; `--expand all|top:K` to fan one→many.
+human|json|jsonl|tsv|csv`; `--expand all|top:K` to fan one→many; `--param name=value`
+to pass a capability's filters/options (see `braidworks weavers` for what each accepts).
 
 `weaverkit` (a separate CLI) is the *build/inspect* toolkit:
 

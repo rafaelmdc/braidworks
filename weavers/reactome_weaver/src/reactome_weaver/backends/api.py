@@ -111,6 +111,7 @@ class ReactomeApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # describe_pathway drills one pathway id; list_pathways lists a protein's pathways.
         if capability_id == "describe_pathway":

@@ -67,7 +67,7 @@ class FnWeaver(BaseWeaver):
     def backend_fingerprint(self, backend: str) -> str:
         return "ds"
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         self.calls += 1
         return await self._fn(strand_set, backend)
 

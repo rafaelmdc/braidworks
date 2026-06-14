@@ -86,7 +86,7 @@ class FakeWeaver(BaseWeaver):
     def backend_fingerprint(self, backend: str) -> str:
         return self._dataset
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         return WeaveResult(
             capability_id=capability_id,
             weaver_version=self._manifest.version,
@@ -142,10 +142,10 @@ class ScriptedWeaver(BaseWeaver):
     def backend_fingerprint(self, backend: str) -> str:
         return self._dataset
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         return self._resolver(strand_set, backend, requested_outputs)
 
-    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
         self.batch_calls += 1
         self.batch_sizes.append(len(strand_sets))
         return [self._resolver(ss, backend, requested_outputs) for ss in strand_sets]

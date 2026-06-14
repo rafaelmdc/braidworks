@@ -63,6 +63,7 @@ class ExampleLocalBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # This lookup has no expensive path, so groups_to_compute is unused here;
         # the mapper still filters to the requested outputs.

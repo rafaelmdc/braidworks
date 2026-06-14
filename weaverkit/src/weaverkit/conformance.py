@@ -112,6 +112,18 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                 f"!= spec set_outputs {sorted(spec_cap.set_outputs)} — {regen}"
             )
 
+        man_params = {
+            p.name: (p.type, tuple(p.enum), p.default) for p in man_cap.parameters
+        }
+        spec_params = {
+            p.name: (p.type, tuple(p.enum), p.default) for p in spec_cap.parameters
+        }
+        if man_params != spec_params:
+            problems.append(
+                f"capability {cap_id!r}: manifest parameters {sorted(man_params)} "
+                f"!= spec parameters {sorted(spec_params)} — {regen}"
+            )
+
         for b in man_cap.backends:
             if b not in spec.backends:
                 problems.append(

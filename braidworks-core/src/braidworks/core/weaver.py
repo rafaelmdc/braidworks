@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, ClassVar, Hashable, Protocol, TypeVar, runtime_checkable
+from typing import Any, Callable, ClassVar, Hashable, Protocol, TypeVar, runtime_checkable
 
 from braidworks.core.capability import WeaverManifest
 from braidworks.core.result import WeaveResult
@@ -61,8 +61,14 @@ class BaseWeaver(ABC):
         *,
         requested_outputs: frozenset[str],
         backend: str,
+        params: dict[str, Any] | None = None,
     ) -> WeaveResult:
-        """Run one capability for one StrandSet. ``backend`` is always concrete."""
+        """Run one capability for one StrandSet. ``backend`` is always concrete.
+
+        ``params`` is the effective per-query parameter map (already validated and
+        defaulted by the executor against the capability's declared ``parameters``);
+        ``None``/empty means the historical no-options behaviour.
+        """
 
     async def execute_batch(
         self,
@@ -71,6 +77,7 @@ class BaseWeaver(ABC):
         *,
         requested_outputs: frozenset[str],
         backend: str,
+        params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         """Run a capability over many StrandSets.
 
@@ -85,6 +92,7 @@ class BaseWeaver(ABC):
                     strand_set,
                     requested_outputs=requested_outputs,
                     backend=backend,
+                    params=params,
                 )
             )
         return results

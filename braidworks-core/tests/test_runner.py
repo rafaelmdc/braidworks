@@ -30,11 +30,11 @@ class RecordingRunner:
         self.calls: list[tuple[str, str, str, int]] = []
 
     async def run_step(
-        self, weaver_id, capability_id, backend, strand_sets, requested_outputs
+        self, weaver_id, capability_id, backend, strand_sets, requested_outputs, **kw
     ) -> list[WeaveResult]:
         self.calls.append((weaver_id, capability_id, backend, len(strand_sets)))
         return await self._inner.run_step(
-            weaver_id, capability_id, backend, strand_sets, requested_outputs
+            weaver_id, capability_id, backend, strand_sets, requested_outputs, **kw
         )
 
 
@@ -65,7 +65,7 @@ async def test_runner_results_flow_through_without_touching_a_weaver():
 
     class StubRunner:
         async def run_step(
-            self, weaver_id, capability_id, backend, strand_sets, requested_outputs
+            self, weaver_id, capability_id, backend, strand_sets, requested_outputs, **kw
         ):
             return [
                 ok_result(requested_outputs, Strand(ID, 999), backend=backend)

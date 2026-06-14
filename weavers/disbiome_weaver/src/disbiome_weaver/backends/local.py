@@ -99,6 +99,7 @@ class DisbiomeLocalBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         return await asyncio.to_thread(self._lookup_all, queries)
 

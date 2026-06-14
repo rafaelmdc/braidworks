@@ -568,7 +568,7 @@ def test_generated_weaver_wires_core_dispatch(tmp_path):
             def fingerprint(self):
                 return "capture-v1"
 
-            async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
+            async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None):
                 captured["groups"] = groups_to_compute
                 return [ResolverRecord(query=q) for q in queries]
 

@@ -94,6 +94,7 @@ class AlphafoldApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         records: list[LookupRecord] = []
         for query in queries:

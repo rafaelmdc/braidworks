@@ -94,7 +94,13 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "",
         "from __future__ import annotations",
         "",
-        "from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest",
+        "from braidworks.core import (",
+        "    Capability,",
+        "    OutputGroup,",
+        "    Parameter,",
+        "    Provenance,",
+        "    WeaverManifest,",
+        ")",
         "",
         f"WEAVER_ID = {spec.resolved_weaver_id!r}",
         f"WEAVER_VERSION = {spec.version!r}",
@@ -156,6 +162,16 @@ def _vocab_source(spec: WeaverSpec) -> str:
             lines.append(
                 f"                set_outputs={_frozenset_literal(cap.set_outputs)},"
             )
+        # Per-query knobs (filters/sort/thresholds) the caller may pass at run time.
+        if cap.parameters:
+            lines.append("                parameters=(")
+            for p in cap.parameters:
+                enum_lit = "(" + "".join(f"{e!r}, " for e in p.enum) + ")" if p.enum else "()"
+                lines.append(
+                    f"                    Parameter(name={p.name!r}, type={p.type!r}, "
+                    f"enum={enum_lit}, default={p.default!r}, description={p.description!r}),"
+                )
+            lines.append("                ),")
         lines.append("            ),")
     lines += [
         "        ),",

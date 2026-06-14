@@ -159,6 +159,7 @@ class UniprotApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # One search per query; the whole entry arrives at once, so we compute every
         # field and let the shared mapper filter to requested_outputs.
