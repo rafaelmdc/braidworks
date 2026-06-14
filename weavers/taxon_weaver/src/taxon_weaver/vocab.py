@@ -31,7 +31,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "1.0.0"
+WEAVER_VERSION = "0.1.2"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(

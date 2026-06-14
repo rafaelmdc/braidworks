@@ -73,7 +73,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -179,7 +179,7 @@ wheels = [
 
 [[package]]
 name = "disbiome-weaver"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "weavers/disbiome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -613,7 +613,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "taxon-weaver"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "weavers/taxon_weaver" }
 dependencies = [
     { name = "braidworks-core" },
