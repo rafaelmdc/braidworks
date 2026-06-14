@@ -25,7 +25,12 @@ def build_distributed_executor(
     pool: Any | None = None,
     result_timeout: float | None = 300.0,
 ) -> LocalExecutor:
-    """A ``LocalExecutor`` that dispatches each weave-step to an arq worker."""
+    """A ``LocalExecutor`` that dispatches each weave-step to an arq worker.
+
+    Cardinality fan-out (``execute(..., expand_policy=, expand_by_type=)``) is honored
+    unchanged here: the one→many expansion happens in the executor's orchestration, not
+    in the step runner, so it composes with this module's batch-across-workers fan-out.
+    """
     return LocalExecutor(
         registry,
         cache=cache,

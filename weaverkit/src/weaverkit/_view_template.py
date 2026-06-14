@@ -470,6 +470,23 @@ function frame(now) {
       ctx.beginPath(); ctx.arc(px, py, r * 3, 0, 7); ctx.fill();
     });
     ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+
+    // one→many fan dimension: badge the producer→key edge so set-valued outputs read
+    // as "this link fans out" without opening the card.
+    if (e.fan) {
+      const [mx, my] = toScreen(...bezier(a, 0.5));
+      const label = "⤜ fan";
+      ctx.font = `${Math.max(9, 9.5 * cam.scale)}px Inter, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      ctx.globalAlpha = lit ? 0.96 : 0.3;
+      ctx.fillStyle = "rgba(8,12,26,0.88)";
+      roundRect(mx - tw / 2 - 5, my - 8, tw + 10, 16, 5); ctx.fill();
+      ctx.fillStyle = weaverColor(e.weaver || "core", 82, 68);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(label, mx, my);
+      ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+      ctx.globalAlpha = 1;
+    }
   });
 
   // nodes
@@ -661,6 +678,8 @@ function opCardHTML(n) {
   }
   h += `<div class="kv">consumes</div>${chips(n.input_types)}`;
   h += `<div class="kv">produces (join keys)</div>${chips(n.output_types)}`;
+  if (n.set_outputs && n.set_outputs.length)
+    h += `<div class="kv">fans out (one→many)</div>${chips(n.set_outputs)}`;
   if (n.output_leaves && n.output_leaves.length)
     h += `<details class="fold"><summary>outputs (${n.output_leaves.length})</summary>${chips(n.output_leaves)}</details>`;
   const p = w.provenance;

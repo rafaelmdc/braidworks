@@ -128,6 +128,8 @@ def build_network(registry: BraidRegistry) -> dict:
             shared_out = sorted(k for k in cap.produces if k in SHARED_KEYS)
             leaf_out = sorted(k for k in cap.produces if k not in SHARED_KEYS)
             weaver_leaves.update(leaf_out)
+            # Cardinality fan-out: produced join keys the executor can expand one→many.
+            set_outputs = sorted(getattr(cap, "set_outputs", frozenset()))
             op_id = f"op:{manifest.weaver_id}:{cap.id}"
             nodes[op_id] = {
                 "id": op_id,
@@ -139,6 +141,7 @@ def build_network(registry: BraidRegistry) -> dict:
                 "input_types": sorted(cap.consumes),
                 "output_types": shared_out,  # only shared keys are graph nodes
                 "output_leaves": leaf_out,  # descriptive payload (card only)
+                "set_outputs": set_outputs,  # one→many fan dimensions (card + edge badge)
             }
             for source in sorted(cap.consumes):
                 ensure_type(source)
@@ -148,7 +151,12 @@ def build_network(registry: BraidRegistry) -> dict:
             for target in shared_out:
                 ensure_type(target)
                 edges.append(
-                    {"source": op_id, "target": f"type:{target}", "weaver": manifest.weaver_id}
+                    {
+                        "source": op_id,
+                        "target": f"type:{target}",
+                        "weaver": manifest.weaver_id,
+                        "fan": target in cap.set_outputs,  # one→many produced join key
+                    }
                 )
             caps_detail.append(
                 {
@@ -156,6 +164,7 @@ def build_network(registry: BraidRegistry) -> dict:
                     "consumes": sorted(cap.consumes),
                     "produces": sorted(cap.produces),
                     "backends": sorted(cap.backends),
+                    "set_outputs": set_outputs,
                 }
             )
         prov = manifest.provenance
@@ -224,6 +233,11 @@ def build_path(
 
     for i, step in enumerate(braid.steps):
         op_id = f"op:{i}"
+        try:
+            step_cap = registry.get_capability(step.weaver_id, step.capability_id)
+            set_outputs = frozenset(getattr(step_cap, "set_outputs", frozenset()))
+        except Exception:  # noqa: BLE001 - a missing cap shouldn't sink the path view
+            set_outputs = frozenset()
         nodes[op_id] = {
             "id": op_id,
             "kind": "op",
@@ -235,6 +249,7 @@ def build_path(
             "fallback_on": sorted(c.value for c in step.fallback_on),
             "input_types": sorted(step.input_types),
             "output_types": sorted(step.output_types),
+            "set_outputs": sorted(set_outputs),
         }
         for source in sorted(step.input_types):
             ensure_type(source)
@@ -244,7 +259,12 @@ def build_path(
         for target in sorted(step.output_types):
             ensure_type(target)
             edges.append(
-                {"source": op_id, "target": f"type:{target}", "weaver": step.weaver_id}
+                {
+                    "source": op_id,
+                    "target": f"type:{target}",
+                    "weaver": step.weaver_id,
+                    "fan": target in set_outputs,
+                }
             )
 
     title = f"{', '.join(sorted(from_types))}  →  {', '.join(sorted(to_types))}"

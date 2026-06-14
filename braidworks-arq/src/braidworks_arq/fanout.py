@@ -1,5 +1,13 @@
 """Entity-level fan-out planning: split a step's batch across workers, safely.
 
+**Not to be confused with cardinality fan-out.** This module splits a *batch of N
+inputs* across workers for throughput — it never turns one input into many. Core's
+*cardinality* fan-out (``ExpandPolicy`` / a capability's ``set_outputs``) is the one→many
+expansion, and it lives entirely in ``LocalExecutor``'s orchestration — which
+``build_distributed_executor`` reuses verbatim — so it works unchanged when steps run on
+workers. The two **compose**: batch-parallelism (here) × cardinality-expansion (core).
+See ``braidworks-arq/tests/test_fanout.py::test_cardinality_fanout_through_distributed_executor``.
+
 Fan-out is **opt-in per ``weaver:backend``** and **gated on a rate budget**, so it can
 never cause an uncontrolled API rate-storm. The dangerous case — fanning a rate-limited
 external backend out across many workers with no budget — is refused loudly with

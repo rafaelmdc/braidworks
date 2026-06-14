@@ -126,3 +126,97 @@ async def test_executor_fanout_without_budget_raises(monkeypatch):
     ex = build_distributed_executor(reg, pool=CountingPool(weave_step))
     with pytest.raises(FanoutConfigError):
         await ex.execute(single_step_braid(), name_sets(*[f"o{i}" for i in range(8)]))
+
+
+# --- cardinality fan-out composes with the distributed executor ---------------
+# This is the *other* fan-out: core's one→many entity expansion (ExpandPolicy /
+# set_outputs), distinct from this module's batch-across-workers fan-out. It lives
+# in LocalExecutor's orchestration, which build_distributed_executor reuses verbatim,
+# so it must work unchanged when steps run on workers. (They compose: batch-parallelism
+# × cardinality-expansion.) This is the regression guard for that claim.
+
+from braidworks.core.braid import Braid, CapabilityInvocation  # noqa: E402
+from braidworks.core.capability import Capability, OutputGroup, WeaverManifest  # noqa: E402
+from braidworks.core.executor import ExpandPolicy  # noqa: E402
+from braidworks.core.result import WeaveResult, WeaveStatus  # noqa: E402
+from braidworks.core.strand import Strand, StrandSet  # noqa: E402
+from braidworks.core.weaver import BaseWeaver  # noqa: E402
+
+from fakes import InlinePool  # noqa: E402
+
+ACCESSION = "protein.uniprot.accession"
+PATHWAY = "pathway.reactome.id"
+
+
+class _PathwaysWeaver(BaseWeaver):
+    """accession → a *set* of pathway ids (set_outputs) — the one→many fan dimension."""
+
+    def __init__(self) -> None:
+        produces = frozenset({PATHWAY})
+        cap = Capability(
+            id="reactome.pathways",
+            consumes=frozenset({ACCESSION}),
+            produces=produces,
+            output_groups=(OutputGroup(id="g", outputs=produces),),
+            backends=("local",),
+            set_outputs=produces,
+        )
+        self._m = WeaverManifest(weaver_id="reactome", version="1.0.0", capabilities=(cap,))
+
+    @property
+    def MANIFEST(self):  # type: ignore[override]
+        return self._m
+
+    def backend_fingerprint(self, backend):
+        return "ds"
+
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+        acc = strand_set.get(ACCESSION).value
+        return WeaveResult(
+            capability_id=capability_id,
+            weaver_version="1.0.0",
+            backend_used=backend,
+            computed_groups=frozenset({"g"}),
+            status=WeaveStatus.OK,
+            strands=(Strand(PATHWAY, [f"R-{acc}-1", f"R-{acc}-2", f"R-{acc}-3"]),),
+        )
+
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+        return [
+            await self.execute(capability_id, ss, requested_outputs=requested_outputs, backend=backend)
+            for ss in strand_sets
+        ]
+
+
+def _pathways_braid() -> Braid:
+    inv = CapabilityInvocation(
+        weaver_id="reactome",
+        capability_id="reactome.pathways",
+        input_types=frozenset({ACCESSION}),
+        output_types=frozenset({PATHWAY}),
+        primary_backend="local",
+    )
+    return Braid(steps=(inv,), from_types=frozenset({ACCESSION}), to_types=frozenset({PATHWAY}))
+
+
+async def test_cardinality_fanout_through_distributed_executor():
+    reg = registry_with(_PathwaysWeaver())
+    discovery.set_registry(reg)
+    ex = build_distributed_executor(reg, pool=InlinePool(weave_step))
+    inputs = [StrandSet.from_strands("e0", [Strand(ACCESSION, "P1")])]
+    res = await ex.execute(_pathways_braid(), inputs, expand_policy=ExpandPolicy.all())
+    # one protein in → one resolved leaf per pathway, even though the step ran "on a worker".
+    assert len(res.resolved) == 3
+    assert sorted(leaf.get(PATHWAY).value for leaf in res.resolved) == ["R-P1-1", "R-P1-2", "R-P1-3"]
+    assert all(leaf.parent_id == "e0" for leaf in res.resolved)
+    assert sorted(leaf.entity_id for leaf in res.resolved) == ["e0#0", "e0#1", "e0#2"]
+
+
+async def test_cardinality_top_collapses_through_distributed_executor():
+    reg = registry_with(_PathwaysWeaver())
+    discovery.set_registry(reg)
+    ex = build_distributed_executor(reg, pool=InlinePool(weave_step))
+    inputs = [StrandSet.from_strands("e0", [Strand(ACCESSION, "P1")])]
+    res = await ex.execute(_pathways_braid(), inputs)  # default ExpandPolicy.TOP
+    assert len(res.resolved) == 1
+    assert res.resolved[0].get(PATHWAY).value == "R-P1-1"  # representative, collapsed in place

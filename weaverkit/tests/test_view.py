@@ -26,7 +26,7 @@ from weaverkit.view import (
 )
 
 
-def _weaver(weaver_id, cap_id, consumes, produces, backends):
+def _weaver(weaver_id, cap_id, consumes, produces, backends, set_outputs=()):
     manifest = WeaverManifest(
         weaver_id=weaver_id,
         version="0.1.0",
@@ -37,6 +37,7 @@ def _weaver(weaver_id, cap_id, consumes, produces, backends):
                 produces=frozenset(produces),
                 output_groups=(OutputGroup(id="g", outputs=frozenset(produces)),),
                 backends=tuple(backends),
+                set_outputs=frozenset(set_outputs),
             ),
         ),
     )
@@ -109,6 +110,28 @@ def test_network_weaver_card_data(registry):
     beta_op = next(n for n in net["nodes"] if n["id"] == "op:beta:b1")
     assert beta_op["output_leaves"] == ["microbe.trait.x"]
     assert beta_op["output_types"] == []  # no shared outputs (terminal)
+
+
+def test_network_marks_set_output_fan_edges():
+    """A set-valued produced join key marks its producer→key edge as a fan dimension."""
+    reg = BraidRegistry()
+    reg.register(
+        _weaver(
+            "fanw", "f1",
+            {"protein.uniprot.accession"}, {"pathway.reactome.id"}, ("api",),
+            set_outputs={"pathway.reactome.id"},
+        )
+    )
+    net = build_network(reg)
+    op = next(n for n in net["nodes"] if n["id"] == "op:fanw:f1")
+    assert op["set_outputs"] == ["pathway.reactome.id"]
+    # the produce edge is flagged fan; the consume edge is not
+    produce = next(e for e in net["edges"] if e["source"] == "op:fanw:f1")
+    assert produce["fan"] is True and produce["target"] == "type:pathway.reactome.id"
+    consume = next(e for e in net["edges"] if e["target"] == "op:fanw:f1")
+    assert "fan" not in consume
+    cap = next(w for w in net["weavers"] if w["id"] == "fanw")["capabilities"][0]
+    assert cap["set_outputs"] == ["pathway.reactome.id"]
 
 
 def test_network_weaver_carries_title_and_reference():
