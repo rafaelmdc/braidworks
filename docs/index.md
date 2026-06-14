@@ -1,6 +1,8 @@
 # Braidworks
 
-Braidworks is the framework that turns TaxonWeaver into one node in a composable network of biological data resolvers. Each resolver is a **Weaver**. You describe what you have and what you want; Braidworks finds the path between them and runs it.
+Braidworks is a framework for composing biological databases into one network of data resolvers. Each data source is a **Weaver** (UniProt, PDBe, Reactome, QuickGO, STRING, AlphaFold, NCBI taxonomy, BacDive, Disbiome…). You describe what you have and what you want; Braidworks finds the path between them — across all installed weavers — and runs it. Most weavers are keyless public APIs and need no setup.
+
+New here? Start with the [README](../README.md) (biologist-friendly quickstart) or [usage.md](usage.md).
 
 ## Documents
 
@@ -23,41 +25,34 @@ Every piece of data is a typed `Strand`. A collection of strands for one entity 
 
 ## Quick Example
 
+Cross two keyless databases — UniProt → PDBe — to get a protein's structures:
+
 ```python
-from braidworks.core import (
-    BraidRegistry, Braider, LocalExecutor, BackendPolicy, Strand, StrandSet,
-)
-from taxon_weaver import build_ncbi_weaver
+from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
+from uniprot_weaver import build_uniprot_weaver
+from pdbe_weaver import build_pdbe_weaver
 
 registry = BraidRegistry()
-# API backend needs no local data; pass db_path=... to add the local backend.
-registry.register(build_ncbi_weaver(enable_api=True))
+registry.register(build_uniprot_weaver())
+registry.register(build_pdbe_weaver())
 
-braider = Braider(registry)
-executor = LocalExecutor(registry)
-
-strand_sets = [
-    StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")]),
-    StrandSet.from_strands("e2", [Strand("organism.name", "Mus musculus")]),
-]
-
-braid = braider.plan(
-    available_types=frozenset({"organism.name"}),
-    target_types=frozenset({"ncbi.taxon.id", "ncbi.taxon.lineage"}),
-    backend_policy=BackendPolicy.LOCAL_FIRST,
+braid = Braider(registry).plan(
+    available_types=frozenset({"protein.query"}),
+    target_types=frozenset({"protein.name", "structure.pdb.ids"}),
 )
 
-result = await executor.execute(braid, strand_sets)
+strand_sets = [StrandSet.from_strands("p53", [Strand("protein.query", "P04637")])]
+result = await LocalExecutor(registry).execute(braid, strand_sets)
 
 for ss in result.resolved:
-    taxid = ss.get("ncbi.taxon.id")
-    lineage = ss.get("ncbi.taxon.lineage")
+    print(ss.get("protein.name").value)       # Cellular tumor antigen p53
+    print(ss.get("structure.pdb.ids").value)  # ['9r2q', '9r2m', '8r1f', ...]
 
 for ss, weave_result in result.unresolved:
     print(f"{ss.entity_id}: no match found")
 ```
 
-See [usage.md](usage.md) for the full runnable example and backend options.
+See [usage.md](usage.md) for more examples (organism/taxonomy, fan-out, backends).
 
 ## Result Buckets
 

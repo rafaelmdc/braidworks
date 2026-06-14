@@ -6,7 +6,10 @@ example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage	
 ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage	
 pdbe	list_structures	lookup	none	api	protein.uniprot.accession	pdb.id;structure.pdb.ids;structure.pdb.count;structure.pdb.records	
+pdbe	describe_structure	lookup	none	api	pdb.id	structure.pdb.title;structure.pdb.method;structure.pdb.release_date;structure.pdb.detail	
 quickgo	list_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.term;go.count;go.records	
+quickgo	describe_go_term	lookup	none	api	go.term	go.term.name;go.term.aspect;go.term.definition;go.term.detail	
 reactome	list_pathways	lookup	none	api	protein.uniprot.accession	pathway.reactome.id;pathway.reactome.names;pathway.reactome.count;pathway.reactome.records	
+reactome	describe_pathway	lookup	none	api	pathway.reactome.id	pathway.reactome.display_name;pathway.reactome.species;pathway.reactome.in_disease;pathway.reactome.detail	
 string	list_interactions	lookup	none	api	protein.uniprot.accession	protein.query;protein.interaction.partners;protein.interaction.count;protein.interaction.records	
 uniprot	resolve_protein	lookup	none	api	protein.query	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length	

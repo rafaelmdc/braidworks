@@ -94,6 +94,37 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    > `BRAIDWORKS_RUN_LIVE=1 make -C weavers/<db>_weaver test-live` (real network). When a
    > backend misbehaves, `curl` the endpoint and diff its shape against your mock first.
 
+## Capability naming: resolve / list / describe
+
+Name every capability by the **shape of its lookup**, so callers can predict its
+output from the verb (the network view and `keys-index` group by it):
+
+- **`resolve_<thing>`** — fuzzy/ambiguous input → an identifier. The `resolver` kind:
+  emits `candidates` + a `MatchStatus`; may need review. (e.g. messy name → accession.)
+- **`list_<things>`** — one identifier → a **set** of related identifiers/records
+  (e.g. a protein → all its PDB ids / GO terms / pathways). Plural.
+- **`describe_<thing>`** — one identifier → **that one entity's** attributes
+  (e.g. one PDB id → its title/method/date). Singular.
+
+A `list_*` and its matching `describe_*` form a pair: `list_*` produces a set key,
+`describe_*` *consumes* that same key — so a fanned member is drillable.
+
+## Cardinality & fan-out (`set_outputs`)
+
+A capability that produces a **set** identifier (many values for one input) declares
+it in the spec's `set_outputs` (a subset of `produces`). At runtime the executor can
+**fan out** along that key — fork one input into an independent child per member and
+continue the braid per child — under an `ExpandPolicy` (`TOP` default keeps the best
+one; `TOP_K`/`ALL` expand). Children carry `parent_id` back to the originating input.
+
+When you add a `set_outputs` key:
+- It must be a registered **shared key** (something can consume it), not a leaf —
+  fan-out only matters if a `describe_*`/downstream weaver consumes it.
+- Backends still **dedup → sort → cap** the display list and report the true total;
+  the set key is the *full* distinct ordered set (the fan dimension), uncapped.
+- Bump the weaver and raise its floor to `braidworks-core>=0.2.1` (where
+  `Capability.set_outputs` landed). See `docs/fanout-roadmap.md`.
+
 ## Versioning, tags & releasing
 
 - **Each package versions independently** (`braidworks-core`, `weaverkit`, every

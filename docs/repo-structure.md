@@ -50,8 +50,19 @@ braidworks/
   weavers/                    every weaver package (auto-discovered by the members glob)
     taxon_weaver/             advanced reference: resolver, local SQLite + NCBI API, bulk DB
     example_weaver/           minimal reference: lookup over a ~5-row bundled CSV
-    bacdive_weaver/           BacDive type-strain phenotypes (scaffolded)
+    uniprot_weaver/           the hinge: protein query -> UniProt entry (+ ncbi.taxon.id)
+    pdbe_weaver/              protein -> experimental PDB structures (+ describe one)
+    alphafold_weaver/         protein -> predicted-structure model metadata
+    quickgo_weaver/           protein -> GO terms by aspect (+ describe one)
+    reactome_weaver/          protein -> pathways participated in (+ describe one)
+    string_weaver/            protein -> interaction partners (STRING network)
+    bacdive_weaver/           organism -> BacDive type-strain phenotypes
+    disbiome_weaver/          organism (taxid) -> microbe-disease associations
+  braidworks-arq/             optional: distributed execution over arq/Redis
 ```
+
+(Run `make index` for the always-current map: `docs/weavers-index.tsv` +
+`docs/keys-index.md`.)
 
 Each weaver package has the same shape:
 

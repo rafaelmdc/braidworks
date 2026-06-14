@@ -1,6 +1,8 @@
 # Usage
 
-Install → choose a backend → plan → run.
+Install → register weavers → plan → run. Most weavers are keyless public APIs and
+need no setup; the taxonomy weaver additionally offers a local DB backend (covered
+last).
 
 ## Install
 
@@ -8,7 +10,94 @@ Install → choose a backend → plan → run.
 uv sync --all-extras
 ```
 
-## 1. Choose and build a weaver
+## 1. Register weavers, plan, run (the common path)
+
+You register the weavers you want available, say what you *have* and what you *want*,
+and run. Braidworks finds the route across all registered weavers. This example
+crosses two keyless databases (UniProt → PDBe):
+
+```python
+import asyncio
+from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
+from uniprot_weaver import build_uniprot_weaver
+from pdbe_weaver import build_pdbe_weaver
+
+async def main():
+    registry = BraidRegistry()
+    registry.register(build_uniprot_weaver())
+    registry.register(build_pdbe_weaver())
+
+    braid = Braider(registry).plan(
+        available_types=frozenset({"protein.query"}),
+        target_types=frozenset({"protein.name", "structure.pdb.ids"}),
+    )
+
+    inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "P04637")])]
+    result = await LocalExecutor(registry).execute(braid, inputs)
+
+    for ss in result.resolved:
+        print(ss.get("protein.name").value, ss.get("structure.pdb.ids").value)
+
+asyncio.run(main())
+```
+
+Pass a list of many `StrandSet`s to process a whole batch in one call. See
+[keys-index.md](keys-index.md) for every input/target type and which weaver produces it.
+
+## 2. Read the results
+
+Every input lands in exactly one bucket of `ExecutionResult`:
+
+| Bucket | Meaning |
+|---|---|
+| `resolved` | Target strands produced; the braid ran to completion |
+| `unresolved` | Braid ran but ended in `NO_MATCH` — a valid biological outcome |
+| `review_queue` | Ambiguous or review-flagged; a human decision is needed |
+| `errors` | Structural failure — missing inputs, no route, backend exhausted |
+
+`len(resolved) + len(unresolved) + len(review_queue) + len(errors)` always equals
+the number of inputs.
+
+## 3. Calling one weaver's capability directly
+
+If you don't need routing, call a capability on a single weaver. (Specify `backend`
+when the weaver has more than one.)
+
+```python
+weaver = build_pdbe_weaver()
+results = await weaver.execute_batch(
+    "describe_structure",
+    [StrandSet.from_strands("e1", [Strand("pdb.id", "1tup")])],
+    requested_outputs=frozenset({"structure.pdb.title", "structure.pdb.method"}),
+    backend="api",
+)
+print(results[0].status, {s.type_id: s.value for s in results[0].strands})
+```
+
+## 4. Fan-out: one input → many results
+
+`list_*` capabilities that emit a *set* identifier (e.g. `pdb.id`, `go.term`,
+`pathway.reactome.id`) can **fan out**: fork one input into an independent child per
+result and continue the braid per child (e.g. drill each structure with
+`describe_structure`). The default keeps only the single best one.
+
+```python
+from braidworks.core import ExpandPolicy
+
+result = await LocalExecutor(registry).execute(
+    braid, inputs,
+    expand_policy=ExpandPolicy.all(),       # one child per set member
+    # ExpandPolicy.top_k(5)  -> keep the best five
+    # expand_by_type={"pdb.id": ExpandPolicy.all()}  -> per-type control
+    max_expansion=10_000,                   # safety cap on total children
+)
+```
+
+Each child carries `parent_id` (the originating input's entity id), so you can
+regroup fanned leaves by the question that produced them. See
+[fanout-roadmap.md](fanout-roadmap.md).
+
+## 5. Example: NCBI taxonomy (and choosing a backend)
 
 `taxon_weaver` exposes NCBI taxonomy with two interchangeable backends. Build a
 weaver with the factory:
@@ -49,53 +138,23 @@ already present, reports whether a newer NCBI release is available. The DB lands
 in the per-user cache by default (override with `--db` or `BRAIDWORKS_DATA_DIR`),
 so `build_ncbi_weaver(auto_setup=True)` finds it automatically afterward.
 
-## 2. Register, plan, run
+Then resolve organism names to taxids exactly as in §1 — register the taxon weaver,
+plan from `organism.name` to `ncbi.taxon.id` / `ncbi.taxon.lineage`, and run. The
+optional `backend_policy=BackendPolicy.LOCAL_FIRST` prefers the local DB and falls
+back to the API:
 
 ```python
-import asyncio
-from braidworks.core import (
-    BraidRegistry, Braider, LocalExecutor, BackendPolicy, Strand, StrandSet,
+braid = Braider(registry).plan(
+    available_types=frozenset({"organism.name"}),
+    target_types=frozenset({"ncbi.taxon.id", "ncbi.taxon.lineage"}),
+    backend_policy=BackendPolicy.LOCAL_FIRST,   # optional; needs BackendPolicy import
 )
-from taxon_weaver import build_ncbi_weaver
-
-async def main():
-    registry = BraidRegistry()
-    registry.register(build_ncbi_weaver(enable_api=True))
-
-    braid = Braider(registry).plan(
-        available_types=frozenset({"organism.name"}),
-        target_types=frozenset({"ncbi.taxon.id", "ncbi.taxon.lineage"}),
-        backend_policy=BackendPolicy.LOCAL_FIRST,
-    )
-
-    sets = [
-        StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")]),
-        StrandSet.from_strands("e2", [Strand("organism.name", "Mus musculus")]),
-    ]
-
-    result = await LocalExecutor(registry).execute(braid, sets)
-
-    for ss in result.resolved:
-        print(ss.entity_id, ss.get("ncbi.taxon.id").value)
-    for ss, _ in result.unresolved:
-        print(ss.entity_id, "no match")
-
-asyncio.run(main())
+sets = [StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])]
+result = await LocalExecutor(registry).execute(braid, sets)
 ```
 
-## 3. Read the results
-
-Every input lands in exactly one bucket of `ExecutionResult`:
-
-| Bucket | Meaning |
-|---|---|
-| `resolved` | Target strands produced; the braid ran to completion |
-| `unresolved` | Braid ran but ended in `NO_MATCH` — a valid biological outcome |
-| `review_queue` | Ambiguous or review-flagged; a human decision is needed |
-| `errors` | Structural failure — missing inputs, backend exhausted |
-
-`len(resolved) + len(unresolved) + len(review_queue) + len(errors)` always equals
-the number of inputs.
+Because `uniprot_weaver` also produces `ncbi.taxon.id`, a protein query can cross
+into the organism hub and on to taxonomy/phenotype weavers in a single braid.
 
 ## Strand types produced by `taxon_weaver`
 
