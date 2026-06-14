@@ -75,7 +75,10 @@ def test_network_is_bipartite_with_weaver_op_nodes(registry):
         assert (e["source"] in op_ids) ^ (e["target"] in op_ids)
     assert net["stats"]["weavers"] == 2
     assert net["stats"]["capabilities"] == 2
-    assert net["stats"]["types"] == 3  # organism.name, ncbi.taxon.id, microbe.trait.x
+    # Only shared keys are nodes: organism.name + ncbi.taxon.id. The leaf
+    # microbe.trait.x is payload, not a node (it lives on beta's card).
+    assert net["stats"]["types"] == 2
+    assert not any(n.get("key") == "microbe.trait.x" for n in net["nodes"])
 
 
 def test_network_type_nodes_carry_role_and_label(registry):
@@ -92,6 +95,59 @@ def test_network_weaver_list_has_versions_and_backends(registry):
     beta = next(w for w in net["weavers"] if w["id"] == "beta")
     assert beta["version"] == "0.1.0"
     assert beta["backends"] == ["api", "local"]
+
+
+def test_network_weaver_card_data(registry):
+    """Each weaver carries the card payload: leaf outputs + detailed capabilities."""
+    net = build_network(registry)
+    beta = next(w for w in net["weavers"] if w["id"] == "beta")
+    assert beta["outputs"] == ["microbe.trait.x"]  # leaf, off-graph
+    assert beta["capabilities"][0]["id"] == "b1"
+    assert beta["capabilities"][0]["consumes"] == ["ncbi.taxon.id"]
+    assert beta["capabilities"][0]["produces"] == ["microbe.trait.x"]
+    # the op node also carries its leaf outputs for the on-click card
+    beta_op = next(n for n in net["nodes"] if n["id"] == "op:beta:b1")
+    assert beta_op["output_leaves"] == ["microbe.trait.x"]
+    assert beta_op["output_types"] == []  # no shared outputs (terminal)
+
+
+def test_network_weaver_carries_title_and_reference():
+    reg = BraidRegistry()
+    from braidworks.core.capability import Provenance
+
+    manifest = WeaverManifest(
+        weaver_id="src",
+        version="0.1.0",
+        title="A demo source",
+        provenance=Provenance(
+            source_url="https://x.org", license="CC-BY-4.0", citation="https://doi/x",
+            attribution="X Group",
+        ),
+        capabilities=(
+            Capability(
+                id="c",
+                consumes=frozenset({"organism.name"}),
+                produces=frozenset({"ncbi.taxon.id"}),
+                output_groups=(OutputGroup(id="g", outputs=frozenset({"ncbi.taxon.id"})),),
+                backends=("api",),
+            ),
+        ),
+    )
+
+    class _W(BaseWeaver):
+        MANIFEST = manifest
+
+        def backend_fingerprint(self, backend):
+            return "src-api-v1"
+
+        async def execute(self, *a, **k):
+            return WeaveResult(status=WeaveStatus.NO_MATCH, strand_set=StrandSet(strands=()))
+
+    reg.register(_W())
+    w = build_network(reg)["weavers"][0]
+    assert w["title"] == "A demo source"
+    assert w["provenance"]["license"] == "CC-BY-4.0"
+    assert "attribution required" in w["reference"]
 
 
 # --- path --------------------------------------------------------------------
