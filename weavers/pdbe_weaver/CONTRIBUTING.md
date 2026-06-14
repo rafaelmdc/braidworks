@@ -1,6 +1,6 @@
 # Contributing to pdbe_weaver
 
-PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)). Kind: `lookup`. Capabilities: `resolve_structures`.
+PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)). Kind: `lookup`. Capabilities: `list_structures`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

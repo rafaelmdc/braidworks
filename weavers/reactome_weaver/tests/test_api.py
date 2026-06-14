@@ -13,7 +13,7 @@ import httpx
 
 from reactome_weaver.backends.api import ReactomeApiBackend
 
-CAP = "resolve_pathways"
+CAP = "list_pathways"
 ALL = frozenset(
     {
         "pathway.reactome.id",

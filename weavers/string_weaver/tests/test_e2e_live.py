@@ -26,7 +26,7 @@ async def _interactions(weaver, accession):
     ss = StrandSet.from_strands("e1", [Strand("protein.uniprot.accession", accession)])
     return (
         await weaver.execute_batch(
-            "resolve_interactions",
+            "list_interactions",
             [ss],
             requested_outputs=frozenset(
                 {"protein.query", "protein.interaction.partners", "protein.interaction.count",

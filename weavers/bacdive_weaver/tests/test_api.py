@@ -13,7 +13,7 @@ import httpx
 
 from bacdive_weaver.backends.api import BacdiveApiBackend
 
-CAP = "resolve_traits"
+CAP = "describe_traits"
 ALL_OUTPUTS = frozenset(
     {
         "microbe.trait.gram_stain",

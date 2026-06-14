@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.4"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -31,7 +31,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="resolve_interactions",
+                id="list_interactions",
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
                     {

@@ -6,7 +6,7 @@ db_name = "example"
 weaver_id = "example"
 kind = "lookup"
 title = "Example reference weaver (taxid -> traits, from a tiny CSV)"
-version = "1.0.1"
+version = "1.0.2"
 license = "CC0-1.0"
 citation = ""
 attribution = "Braidworks bundled sample data"
@@ -20,7 +20,7 @@ tax_id,gram_stain,optimum_temp
 """
 
 [[capability]]
-id = "resolve_traits"
+id = "describe_traits"
 consumes = ["ncbi.taxon.id"]
 
   [[capability.group]]
@@ -32,11 +32,11 @@ consumes = ["ncbi.taxon.id"]
   outputs = ["microbe.trait.optimum_temp"]
 
 [[golden]]
-capability = "resolve_traits"
+capability = "describe_traits"
 input = { "ncbi.taxon.id" = "562" }
 expect = { "microbe.trait.gram_stain" = "negative", "microbe.trait.optimum_temp" = "37" }
 
 [[golden]]
-capability = "resolve_traits"
+capability = "describe_traits"
 input = { "ncbi.taxon.id" = "1423" }
 expect = { "microbe.trait.gram_stain" = "positive" }

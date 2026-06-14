@@ -1,6 +1,6 @@
 # Contributing to disbiome_weaver
 
-Disbiome microbe–disease associations (taxid -> diseases + direction). Source: https://disbiome.ugent.be (Open — cite Janssens et al., BMC Microbiology 2018 (doi:10.1186/s12866-018-1197-5); confirm reuse terms). Kind: `lookup`. Capabilities: `disbiome.resolve_diseases`.
+Disbiome microbe–disease associations (taxid -> diseases + direction). Source: https://disbiome.ugent.be (Open — cite Janssens et al., BMC Microbiology 2018 (doi:10.1186/s12866-018-1197-5); confirm reuse terms). Kind: `lookup`. Capabilities: `disbiome.list_diseases`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

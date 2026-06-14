@@ -10,7 +10,7 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.2"
+version = "0.1.3"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
@@ -41,7 +41,7 @@ source_sample = """
 # One accession -> one prediction call. The endpoint may return several models (the
 # canonical isoform plus alternative isoforms); the backend picks the canonical one.
 [[capability]]
-id = "resolve_model"
+id = "describe_model"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 
@@ -63,6 +63,6 @@ max_batch_size = 25
 # httpx.MockTransport serving a canonical + one isoform entry for P04637, so the
 # canonical-pick path is exercised) so `weaverkit verify --strict` is reproducible offline.
 [[golden]]
-capability = "resolve_model"
+capability = "describe_model"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "structure.alphafold.entry_id" = "AF-P04637-F1" }

@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 async def _resolve(weaver, name: str):
     ss = StrandSet.from_strands("e1", [Strand("organism.scientific_name", name)])
     results = await weaver.execute_batch(
-        "resolve_traits",
+        "describe_traits",
         [ss],
         requested_outputs=frozenset({"microbe.trait.gram_stain", "microbe.trait.cell_shape"}),
         backend="api",

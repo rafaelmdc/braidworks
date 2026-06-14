@@ -1,6 +1,6 @@
 # Contributing to quickgo_weaver
 
-Gene Ontology annotations (accession -> GO terms by aspect). Source: https://www.ebi.ac.uk/QuickGO (CC BY 4.0 (Gene Ontology / EBI QuickGO; cite https://doi.org/10.1093/bioinformatics/btp536)). Kind: `lookup`. Capabilities: `resolve_go_terms`.
+Gene Ontology annotations (accession -> GO terms by aspect). Source: https://www.ebi.ac.uk/QuickGO (CC BY 4.0 (Gene Ontology / EBI QuickGO; cite https://doi.org/10.1093/bioinformatics/btp536)). Kind: `lookup`. Capabilities: `list_go_terms`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

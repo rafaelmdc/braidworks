@@ -1,6 +1,6 @@
 # Contributing to bacdive_weaver
 
-BacDive type-strain phenotypes (scientific name -> microbe traits). Source: https://bacdive.dsmz.de (CC BY 4.0 (BacDive / DSMZ; cite https://doi.org/10.1093/nar/gkab961)). Kind: `lookup`. Capabilities: `resolve_traits`.
+BacDive type-strain phenotypes (scientific name -> microbe traits). Source: https://bacdive.dsmz.de (CC BY 4.0 (BacDive / DSMZ; cite https://doi.org/10.1093/nar/gkab961)). Kind: `lookup`. Capabilities: `describe_traits`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

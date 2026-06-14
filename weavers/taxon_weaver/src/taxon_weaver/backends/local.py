@@ -90,7 +90,7 @@ class LocalTaxonomyBackend:
             req = BatchResolveRequest(items=[ResolveRequest(original_name=str(q)) for q in queries])
             results = svc.resolve_batch(req).results
             return [self._name_match(q, r, need_lineage, svc) for q, r in zip(queries, results)]
-        if capability_id == vocab.RESOLVE_TAXID:
+        if capability_id == vocab.DESCRIBE_TAXON:
             return [self._taxid_match(q, need_lineage, svc) for q in queries]
         raise ValueError(f"unsupported capability {capability_id!r}")
 

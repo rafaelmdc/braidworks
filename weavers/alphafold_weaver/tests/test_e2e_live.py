@@ -26,7 +26,7 @@ async def _model(weaver, accession):
     ss = StrandSet.from_strands("e1", [Strand("protein.uniprot.accession", accession)])
     return (
         await weaver.execute_batch(
-            "resolve_model",
+            "describe_model",
             [ss],
             requested_outputs=frozenset(
                 {"structure.alphafold.entry_id", "structure.alphafold.mean_plddt",

@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.2"
+version = "0.1.3"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -42,7 +42,7 @@ source_sample = """
 # One accession -> paginated annotation/search, deduped to distinct GO terms. QuickGO
 # has no batch-by-accession endpoint, so batches fan out per accession.
 [[capability]]
-id = "resolve_go_terms"
+id = "list_go_terms"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 10
 # go.term is one→many: the weaver emits every distinct GO id, so a caller can fan out
@@ -70,6 +70,6 @@ set_outputs = ["go.term"]
 # httpx.MockTransport serving a canned 3-term annotation page for P04637) so
 # `weaverkit verify --strict` is reproducible offline.
 [[golden]]
-capability = "resolve_go_terms"
+capability = "list_go_terms"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "go.count" = 3 }

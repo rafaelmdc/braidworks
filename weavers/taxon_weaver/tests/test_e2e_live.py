@@ -141,11 +141,11 @@ async def test_e2e_known_lineage_homo_sapiens(real_db_path):
     assert lineage_ids[-1] == 9606  # the taxon itself is last
 
 
-async def test_e2e_resolve_taxid_known(real_db_path):
+async def test_e2e_describe_taxon_known(real_db_path):
     weaver = build_ncbi_weaver(db_path=real_db_path)
     ss = StrandSet.from_strands("h", [Strand(vocab.TAXON_ID, 9606)])
     out = await weaver.execute_batch(
-        vocab.RESOLVE_TAXID,
+        vocab.DESCRIBE_TAXON,
         [ss],
         requested_outputs=frozenset({vocab.SCIENTIFIC_NAME, vocab.TAXON_RANK}),
         backend="local",

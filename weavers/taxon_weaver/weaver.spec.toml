@@ -7,7 +7,7 @@ db_name = "taxon"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.1.3"
+version = "0.1.4"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -51,10 +51,10 @@ always_computed_groups = ["core"]
   id = "lineage"
   outputs = ["ncbi.taxon.lineage"]
 
-# ncbi.resolve_taxid: a known taxid -> taxonomy core + optional lineage.
+# ncbi.describe_taxon: a known taxid -> taxonomy core + optional lineage.
 # Consumes the taxid, so it does not re-produce ncbi.taxon.id.
 [[capability]]
-id = "ncbi.resolve_taxid"
+id = "ncbi.describe_taxon"
 consumes = ["ncbi.taxon.id"]
 max_batch_size = 1000
 always_computed_groups = ["core"]
@@ -79,6 +79,6 @@ input = { "organism.name" = "Faecalibacterium prausnitzii" }
 expect = { "ncbi.taxon.id" = 853, "organism.scientific_name" = "Faecalibacterium prausnitzii" }
 
 [[golden]]
-capability = "ncbi.resolve_taxid"
+capability = "ncbi.describe_taxon"
 input = { "ncbi.taxon.id" = 853 }
 expect = { "organism.scientific_name" = "Faecalibacterium prausnitzii" }

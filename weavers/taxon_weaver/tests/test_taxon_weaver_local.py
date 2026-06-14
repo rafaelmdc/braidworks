@@ -84,11 +84,11 @@ async def test_batch_order_and_length(mini_db_path):
     assert _strand_map(out[-1])[vocab.SCIENTIFIC_NAME] == "Bacteria"
 
 
-async def test_resolve_taxid_capability(mini_db_path):
+async def test_describe_taxon_capability(mini_db_path):
     w = build_ncbi_weaver(db_path=mini_db_path)
     ss = StrandSet.from_strands("e", [Strand(vocab.TAXON_ID, 853)])
     out = await w.execute_batch(
-        vocab.RESOLVE_TAXID,
+        vocab.DESCRIBE_TAXON,
         [ss],
         requested_outputs=frozenset({vocab.SCIENTIFIC_NAME, vocab.LINEAGE}),
         backend="local",

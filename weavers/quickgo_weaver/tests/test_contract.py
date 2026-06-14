@@ -27,7 +27,7 @@ def _build_weaver():
 
 
 class TestApiOrder(WeaverOrderContractTests):
-    capability_id = "resolve_go_terms"
+    capability_id = "list_go_terms"
     minimal_outputs = frozenset({"go.biological_process"})
     backend = "api"
 
@@ -54,7 +54,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 
 class TestResolveGoTermsCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_go_terms")
+    capability = _MANIFEST.capability("list_go_terms")
     consumed_values_a = {"protein.uniprot.accession": "P04637"}
     consumed_values_b = {"protein.uniprot.accession": "sample-b-protein.uniprot.accession"}
     group_subset = "aspects"

@@ -13,7 +13,7 @@ import httpx
 
 from alphafold_weaver.backends.api import AlphafoldApiBackend
 
-CAP = "resolve_model"
+CAP = "describe_model"
 ALL = frozenset(
     {"structure.alphafold.entry_id", "structure.alphafold.mean_plddt",
      "structure.alphafold.model_url", "structure.alphafold.pae_image_url",

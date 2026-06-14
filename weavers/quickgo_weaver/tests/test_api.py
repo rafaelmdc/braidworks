@@ -13,7 +13,7 @@ import httpx
 
 from quickgo_weaver.backends.api import QuickgoApiBackend
 
-CAP = "resolve_go_terms"
+CAP = "list_go_terms"
 ALL = frozenset(
     {"go.term", "go.molecular_function", "go.biological_process", "go.cellular_component",
      "go.count", "go.records"}

@@ -14,7 +14,7 @@ import httpx
 
 from pdbe_weaver.backends.api import PdbeApiBackend
 
-CAP = "resolve_structures"
+CAP = "list_structures"
 ALL = frozenset(
     {"pdb.id", "structure.pdb.ids", "structure.pdb.count", "structure.pdb.records"}
 )
