@@ -316,6 +316,55 @@ def cmd_view(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_references(args: argparse.Namespace) -> int:
+    """Print the citations for discovered weavers: all, a chosen set, or a braid path."""
+    import json as _json
+
+    from braidworks.core import format_references, references_for, references_for_braid
+    from braidworks.core.exceptions import NoPathError, NoPlanError
+    from braidworks.core.planner import Braider
+
+    from weaverkit.view import discover_registry, parse_policy
+
+    discovery = discover_registry()
+    registry = discovery.registry
+
+    from_types = frozenset(args.from_type or ())
+    to_types = frozenset(args.to_type or ())
+    if bool(from_types) ^ bool(to_types):
+        print("--from and --to must be given together (or neither)", file=sys.stderr)
+        return 1
+
+    if from_types:
+        try:
+            policy = parse_policy(args.policy)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        try:
+            braid = Braider(registry).plan(from_types, to_types, backend_policy=policy)
+        except (NoPathError, NoPlanError) as exc:
+            print(
+                f"no braid for {sorted(from_types)} -> {sorted(to_types)}: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        refs = references_for_braid(braid, registry)
+    elif args.weaver:
+        refs = references_for(args.weaver, registry)
+    else:
+        refs = references_for([m.weaver_id for m in registry.manifests()], registry)
+
+    if args.json:
+        print(_json.dumps([r.to_json() for r in refs], indent=2))
+    else:
+        text = format_references(refs)
+        print(text if text else "(no references — no source provenance found)")
+    for problem in discovery.problems:
+        print(f"note: {problem}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="weaverkit", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -373,6 +422,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="backend policy for the path: local_first|api_first|local_only|api_only",
     )
     p_view.set_defaults(func=cmd_view)
+
+    p_refs = sub.add_parser(
+        "references",
+        help="print source citations for weavers (all, a chosen set, or a braid path)",
+    )
+    p_refs.add_argument(
+        "--weaver", action="append", metavar="ID",
+        help="restrict to this weaver id (repeatable; default: all discovered weavers)",
+    )
+    p_refs.add_argument(
+        "--from", dest="from_type", action="append", metavar="KEY",
+        help="cite only sources on the braid path from this type (repeatable; needs --to)",
+    )
+    p_refs.add_argument(
+        "--to", dest="to_type", action="append", metavar="KEY",
+        help="target type for the braid path (repeatable; needs --from)",
+    )
+    p_refs.add_argument(
+        "--policy", default="local_first",
+        help="backend policy for the path: local_first|api_first|local_only|api_only",
+    )
+    p_refs.add_argument("--json", action="store_true", help="emit JSON instead of text")
+    p_refs.set_defaults(func=cmd_references)
 
     return parser
 
