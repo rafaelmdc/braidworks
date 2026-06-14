@@ -17,9 +17,18 @@ backends emit identical shapes even though their matching differs.
 |---|---|---|
 | `ncbi.resolve_name` | `organism.name` | **core:** `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.match_type`, `ncbi.taxon.review_required` · **lineage:** `ncbi.taxon.lineage` |
 | `ncbi.describe_taxon` | `ncbi.taxon.id` | **core:** `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id` · **lineage:** `ncbi.taxon.lineage` |
+| `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **api-only** |
 
 This is a **resolver**: a fuzzy/ambiguous name match can come back flagged
 (`ncbi.taxon.review_required`) for human confirmation rather than guessing silently.
+`list_children` emits `ncbi.taxon.id` as a **set output** (the fan dimension), so a
+caller can fan a genus out into each of its species:
+
+```bash
+braidworks weave --have organism.name="Faecalibacterium" \
+    --want ncbi.taxon.children_count
+braidworks run ncbi ncbi.list_children --have ncbi.taxon.id=216851 --param rank=species
+```
 
 ## Choosing a backend
 

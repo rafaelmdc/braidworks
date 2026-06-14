@@ -81,6 +81,21 @@ async def test_top_collapses_set_output_in_place():
     assert any("auto-selected 1 of 3" in w for w in leaf.warnings)
 
 
+async def test_set_output_same_as_consumed_key_forks_on_produced_list():
+    # A capability that consumes AND produces the same key (e.g. taxid -> child taxids):
+    # the produced list must win over the input scalar so it can fan (regression). The
+    # target is a *different* output ("n") so the step isn't skipped as already-satisfied.
+    cap = _set_cap({INPUT, "n"}, {INPUT}, consumes=(INPUT,))
+    reg, ex = _setup(
+        lambda ss, b, r: _ok(Strand(INPUT, ["c1", "c2", "c3"]), Strand("n", 3)), cap
+    )
+    res = await ex.execute(_one_step({INPUT, "n"}), _inputs("parent"),
+                           expand_policy=ExpandPolicy.all())
+    assert len(res.resolved) == 3
+    assert {leaf.get(INPUT).value for leaf in res.resolved} == {"c1", "c2", "c3"}
+    assert all(leaf.parent_id == "e0" for leaf in res.resolved)
+
+
 # --- ALL / TOP_K: fork per value -----------------------------------------------
 
 async def test_all_forks_one_child_per_value():

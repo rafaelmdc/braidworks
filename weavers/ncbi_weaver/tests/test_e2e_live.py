@@ -175,3 +175,23 @@ class TestLocalContractLive(WeaverOrderContractTests):
             StrandSet.from_strands(str(i), [Strand(vocab.ORGANISM_NAME, name)])
             for i, name in enumerate(self._names)
         ]
+
+
+async def test_live_list_children_genus_to_species():
+    """API-only drift check: a real genus -> its species taxids (no DB build)."""
+    weaver = build_ncbi_weaver(enable_api=True)
+    # Faecalibacterium (216851) -> its species (the fan dimension).
+    out = await weaver.execute_batch(
+        vocab.LIST_CHILDREN,
+        [StrandSet.from_strands("g", [Strand(vocab.TAXON_ID, "216851")])],
+        requested_outputs=vocab.CHILDREN_OUTPUTS,
+        backend="api",
+    )
+    r = out[0]
+    assert r.status is WeaveStatus.OK
+    sm = {s.type_id: s.value for s in r.strands}
+    ids = sm[vocab.TAXON_ID]
+    assert isinstance(ids, list) and 853 in ids  # F. prausnitzii is a species child
+    assert sm[vocab.CHILDREN_COUNT] == len(ids)
+    assert all(c["rank"] == "species" for c in sm[vocab.CHILDREN_RECORDS])
+    assert ids == sorted(set(ids))  # deduped + deterministic (ascending)

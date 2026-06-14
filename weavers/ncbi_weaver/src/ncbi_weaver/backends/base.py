@@ -9,6 +9,9 @@ this; core never does.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
+
+from braidworks.core import LookupRecord, UnsupportedCapability
 
 from ..intermediate import TaxonMatch
 
@@ -34,3 +37,15 @@ class ResolutionBackend(ABC):
 
         Returns exactly one ``TaxonMatch`` per input, in input order.
         """
+
+    async def list_children(
+        self, queries: list[dict[str, Any]], *, rank: str
+    ) -> list[LookupRecord]:
+        """List each input taxid's descendant taxids of ``rank`` (one record per input).
+
+        Only the API backend implements this (it walks the live taxonomy subtree); the
+        capability is declared API-only, so a non-API backend is never asked.
+        """
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support list_children"
+        )

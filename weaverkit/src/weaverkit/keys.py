@@ -48,6 +48,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "ncbi.taxon.parent_id": "Parent taxid of the resolved node (descriptive).",
     "ncbi.taxon.match_type": "How a name matched (exact/synonym/fuzzy/taxid).",
     "ncbi.taxon.review_required": "Whether the match needs human review (bool).",
+    "ncbi.taxon.children_count": "Number of descendant taxa of the requested rank (list_children).",
+    "ncbi.taxon.children_records": "Descendant taxa of the requested rank — {taxid, name, rank}.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "Gram stain (positive/negative).",
     "microbe.trait.optimum_temp": "Optimum growth temperature.",

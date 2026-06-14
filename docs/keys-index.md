@@ -25,7 +25,7 @@ Registered bridge keys — what links weavers together.
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
 | `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
-| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon` |
+| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits` |
@@ -64,6 +64,8 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.trait.optimum_temp` | Optimum growth temperature. | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.oxygen_tolerance` | Oxygen relationship (aerobe/anaerobe/facultative/…). | `bacdive:describe_traits` | — |
 | `microbe.trait.spore_formation` | Whether it forms spores (yes/no). | `bacdive:describe_traits` | — |
+| `ncbi.taxon.children_count` | Number of descendant taxa of the requested rank (list_children). | `ncbi:ncbi.list_children` | — |
+| `ncbi.taxon.children_records` | Descendant taxa of the requested rank — {taxid, name, rank}. | `ncbi:ncbi.list_children` | — |
 | `ncbi.taxon.match_type` | How a name matched (exact/synonym/fuzzy/taxid). | `ncbi:ncbi.resolve_name` | — |
 | `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
