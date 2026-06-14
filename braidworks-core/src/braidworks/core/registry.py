@@ -100,6 +100,9 @@ class BraidRegistry:
     def manifests(self) -> tuple[WeaverManifest, ...]:
         return tuple(self._manifests.values())
 
+    def get_manifest(self, weaver_id: str) -> WeaverManifest | None:
+        return self._manifests.get(weaver_id)
+
     def get_capability(self, weaver_id: str, capability_id: str) -> Capability:
         cap = self._manifests[weaver_id].capability(capability_id)
         if cap is None:

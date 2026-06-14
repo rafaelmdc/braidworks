@@ -16,6 +16,7 @@ from braidworks.core.exceptions import (
     BraidworksError,
     ReviewRequired,
 )
+from braidworks.core.references import Reference, references_for_braid
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
@@ -105,6 +106,9 @@ class ExecutionResult:
     unresolved: list[tuple[StrandSet, WeaveResult]] = field(default_factory=list)
     review_queue: list[ReviewQueueItem] = field(default_factory=list)
     errors: list[ExecutionError] = field(default_factory=list)
+    # Citations for the sources this run drew on, ordered by weaver_id (issue #1).
+    # Derived from the executed braid's weavers; empty when none carry provenance.
+    references: list[Reference] = field(default_factory=list)
 
     def total(self) -> int:
         return (
@@ -122,6 +126,7 @@ class ExecutionResult:
             ],
             "review_queue": [item.to_json() for item in self.review_queue],
             "errors": [e.to_json() for e in self.errors],
+            "references": [r.to_json() for r in self.references],
         }
 
     @classmethod
@@ -136,6 +141,7 @@ class ExecutionResult:
                 ReviewQueueItem.from_json(item) for item in data.get("review_queue", [])
             ],
             errors=[ExecutionError.from_json(e) for e in data.get("errors", [])],
+            references=[Reference.from_json(r) for r in data.get("references", [])],
         )
 
 
@@ -177,6 +183,9 @@ class LocalExecutor:
         chunk_size: int = 10_000,
     ) -> ExecutionResult:
         result = ExecutionResult()
+        # Citations for every source this braid draws on (issue #1). Computed from the
+        # plan up front so the result carries its references regardless of outcome.
+        result.references = list(references_for_braid(braid, self._registry))
 
         # Preflight (once): entities missing the braid's starting types fail here.
         survivors: list[StrandSet] = []

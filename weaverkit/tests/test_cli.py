@@ -249,3 +249,114 @@ def test_verify_conforming_generated_package(tmp_path, capsys):
                 del sys.modules[name]
     assert rc == 0
     assert "conforms" in capsys.readouterr().out
+
+
+# --- references command -------------------------------------------------------
+
+import json as _json  # noqa: E402
+
+import weaverkit.view as view_mod  # noqa: E402
+from braidworks.core import (  # noqa: E402
+    Capability,
+    OutputGroup,
+    Provenance,
+    WeaverManifest,
+)
+from braidworks.core.registry import BraidRegistry  # noqa: E402
+from braidworks.core.weaver import BaseWeaver  # noqa: E402
+from weaverkit.view import Discovery  # noqa: E402
+
+
+class _ProvWeaver(BaseWeaver):
+    def __init__(self, manifest):
+        self._m = manifest
+
+    @property
+    def MANIFEST(self):  # type: ignore[override]
+        return self._m
+
+    def backend_fingerprint(self, backend):
+        return "fp"
+
+    async def execute(self, *a, **k):  # pragma: no cover - never executed here
+        raise NotImplementedError
+
+
+def _refs_registry():
+    reg = BraidRegistry()
+    reg.register(
+        _ProvWeaver(
+            WeaverManifest(
+                weaver_id="uniprot",
+                version="0.1.1",
+                capabilities=(
+                    Capability(
+                        id="c",
+                        consumes=frozenset({"protein.query"}),
+                        produces=frozenset({"protein.uniprot.accession"}),
+                        output_groups=(OutputGroup(id="g", outputs=frozenset({"protein.uniprot.accession"})),),
+                        backends=("api",),
+                    ),
+                ),
+                provenance=Provenance(
+                    source_url="https://www.uniprot.org",
+                    license="CC-BY-4.0",
+                    citation="https://doi.org/x",
+                    attribution="UniProt Consortium",
+                ),
+            )
+        )
+    )
+    reg.register(
+        _ProvWeaver(
+            WeaverManifest(
+                weaver_id="bare",
+                version="1.0.0",
+                capabilities=(
+                    Capability(
+                        id="c",
+                        consumes=frozenset({"a"}),
+                        produces=frozenset({"b"}),
+                        output_groups=(OutputGroup(id="g", outputs=frozenset({"b"})),),
+                        backends=("api",),
+                    ),
+                ),
+            )
+        )
+    )
+    return reg
+
+
+def _patch_discovery(monkeypatch):
+    monkeypatch.setattr(
+        view_mod, "discover_registry", lambda: Discovery(registry=_refs_registry(), problems=[])
+    )
+
+
+def test_references_all(monkeypatch, capsys):
+    _patch_discovery(monkeypatch)
+    assert main(["references"]) == 0
+    out = capsys.readouterr().out
+    assert "UniProt Consortium" in out
+    assert "attribution required" in out
+
+
+def test_references_weaver_filter(monkeypatch, capsys):
+    _patch_discovery(monkeypatch)
+    assert main(["references", "--weaver", "bare"]) == 0
+    out = capsys.readouterr().out
+    assert "no references" in out  # bare has no provenance
+
+
+def test_references_json(monkeypatch, capsys):
+    _patch_discovery(monkeypatch)
+    assert main(["references", "--weaver", "uniprot", "--json"]) == 0
+    payload = _json.loads(capsys.readouterr().out)
+    assert payload[0]["weaver_id"] == "uniprot"
+    assert payload[0]["requirement"] == "attribution_required"
+
+
+def test_references_from_without_to_errors(monkeypatch, capsys):
+    _patch_discovery(monkeypatch)
+    assert main(["references", "--from", "protein.query"]) == 1
+    assert "must be given together" in capsys.readouterr().err

@@ -46,6 +46,39 @@ def _taxid_for(ss: StrandSet) -> int:
     return abs(hash(ss.get("organism.name").value)) % 100_000
 
 
+async def test_execution_result_carries_references():
+    """An executed run exposes citations for the sources its braid drew on."""
+    from braidworks.core import Provenance, WeaverManifest
+    from braidworks.core.executor import ExecutionResult
+
+    weaver = ScriptedWeaver(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    m = weaver.MANIFEST
+    weaver._manifest = WeaverManifest(
+        weaver_id=m.weaver_id,
+        version=m.version,
+        capabilities=m.capabilities,
+        provenance=Provenance(
+            source_url="https://ncbi", license="Public Domain", attribution="NCBI"
+        ),
+    )
+    reg = BraidRegistry()
+    reg.register(weaver)
+    ex = LocalExecutor(reg)
+
+    res = await ex.execute(single_step_braid({ID}), name_strand_sets("a"))
+    assert [r.weaver_id for r in res.references] == ["ncbi"]
+    assert res.references[0].attribution == "NCBI"
+    # references survive the serialization boundary
+    data = json.loads(json.dumps(res.to_json()))
+    assert ExecutionResult.from_json(data).references == res.references
+
+
+async def test_execution_result_no_references_without_provenance():
+    reg, _weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    res = await ex.execute(single_step_braid({ID}), name_strand_sets("a"))
+    assert res.references == []
+
+
 # --- happy path + caching ------------------------------------------------------
 
 async def test_all_misses_resolve():
