@@ -29,7 +29,7 @@ async def _interactions(weaver, accession):
             "resolve_interactions",
             [ss],
             requested_outputs=frozenset(
-                {"protein.interaction.partners", "protein.interaction.count",
+                {"protein.query", "protein.interaction.partners", "protein.interaction.count",
                  "protein.interaction.records"}
             ),
             backend="api",
@@ -53,6 +53,9 @@ async def test_live_tp53_has_interaction_partners():
     assert produced["protein.interaction.count"] == len(partners) == len(records)
     assert all(0.0 <= r["score"] <= 1.0 for r in records)
     assert "MDM2" in partners
+    # the fan dimension: distinct partner names as protein.query (chains into uniprot)
+    queries = produced["protein.query"]
+    assert "MDM2" in queries and len(queries) == len(set(queries))
 
 
 async def test_live_unknown_accession_is_no_match():

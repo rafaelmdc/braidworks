@@ -11,7 +11,7 @@ db_name = "string"
 weaver_id = "string"
 kind = "lookup"
 title = "STRING protein-protein interactions (accession -> partners + scores)"
-version = "0.1.2"
+version = "0.1.3"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1000"
 attribution = "STRING (Szklarczyk et al.)"
@@ -41,10 +41,15 @@ source_sample = """
 id = "resolve_interactions"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
+# protein.query is one→many: each partner's name is a query you can fan out (ExpandPolicy)
+# one child per partner. uniprot.resolve_protein consumes protein.query, so this chains
+# "protein -> all interaction partners -> each resolved protein" end-to-end. The
+# interaction.partners/count/records stay the descriptive edge list + scores.
+set_outputs = ["protein.query"]
 
   [[capability.group]]
   id = "summary"
-  outputs = ["protein.interaction.partners", "protein.interaction.count"]
+  outputs = ["protein.query", "protein.interaction.partners", "protein.interaction.count"]
 
   [[capability.group]]
   id = "full"

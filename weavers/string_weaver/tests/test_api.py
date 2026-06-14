@@ -15,7 +15,8 @@ from string_weaver.backends.api import StringApiBackend
 
 CAP = "resolve_interactions"
 ALL = frozenset(
-    {"protein.interaction.partners", "protein.interaction.count", "protein.interaction.records"}
+    {"protein.query", "protein.interaction.partners", "protein.interaction.count",
+     "protein.interaction.records"}
 )
 
 
@@ -55,6 +56,8 @@ async def test_extracts_partners_count_records():
     assert v["protein.interaction.count"] == 2
     assert v["protein.interaction.records"][0]["partner"] == "MDM2"
     assert v["protein.interaction.records"][0]["channels"] == {"experimental": 0.9}
+    # the fan dimension: each partner name as a protein.query (chains into uniprot)
+    assert v["protein.query"] == ["MDM2", "SFN"]
 
 
 async def test_ordering_is_deterministic_score_then_name():

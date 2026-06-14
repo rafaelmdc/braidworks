@@ -62,7 +62,18 @@ def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
     """Map STRING's edge list to produced type_ids, in a deterministic order."""
     rows = [e for e in (_edge(r) for r in payload) if e is not None]
     rows.sort(key=lambda r: (-(r["score"] or 0.0), r["partner"]))
+    # The fan dimension (set_outputs): each partner's name as a protein.query, so a caller
+    # can fan out one child per partner. uniprot.resolve_protein consumes protein.query, so
+    # "protein -> all interaction partners -> each resolved protein" chains end-to-end.
+    # De-duped, order preserved (best-first).
+    queries: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        if r["partner"] not in seen:
+            seen.add(r["partner"])
+            queries.append(r["partner"])
     return {
+        "protein.query": queries,
         "protein.interaction.partners": [r["partner"] for r in rows],
         "protein.interaction.count": len(rows),
         "protein.interaction.records": rows,
