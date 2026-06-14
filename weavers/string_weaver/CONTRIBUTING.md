@@ -1,6 +1,6 @@
 # Contributing to string_weaver
 
-STRING protein-protein interactions (accession -> partners + scores). Source: https://string-db.org (CC BY 4.0 (STRING; Szklarczyk et al., cite https://doi.org/10.1093/nar/gkac1000)). Kind: `lookup`. Capabilities: `resolve_interactions`.
+STRING protein-protein interactions (accession -> partners + scores). Source: https://string-db.org (CC BY 4.0 (STRING; Szklarczyk et al., cite https://doi.org/10.1093/nar/gkac1000)). Kind: `lookup`. Capabilities: `list_interactions`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

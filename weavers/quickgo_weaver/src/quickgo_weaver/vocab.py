@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.1.3"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -31,7 +31,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="resolve_go_terms",
+                id="list_go_terms",
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
                     {

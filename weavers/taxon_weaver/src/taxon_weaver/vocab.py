@@ -27,11 +27,11 @@ NAME_CORE_OUTPUTS = frozenset(
 )
 LINEAGE_OUTPUTS = frozenset({LINEAGE})
 
-# resolve_taxid consumes the taxid, so it does not re-produce ncbi.taxon.id.
+# describe_taxon consumes the taxid, so it does not re-produce ncbi.taxon.id.
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.4"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -43,7 +43,7 @@ PROVENANCE = Provenance(
 )
 
 RESOLVE_NAME = "ncbi.resolve_name"
-RESOLVE_TAXID = "ncbi.resolve_taxid"
+DESCRIBE_TAXON = "ncbi.describe_taxon"
 
 # NCBI Datasets v2 caps batch requests at 1000 taxons; the local backend handles
 # any size, so the stricter API limit governs the shared capability.
@@ -65,10 +65,10 @@ def resolve_name_capability(*, backends: tuple[str, ...]) -> Capability:
     )
 
 
-def resolve_taxid_capability(*, backends: tuple[str, ...]) -> Capability:
-    """The ``ncbi.resolve_taxid`` capability (tax id -> core + lineage)."""
+def describe_taxon_capability(*, backends: tuple[str, ...]) -> Capability:
+    """The ``ncbi.describe_taxon`` capability (tax id -> core + lineage)."""
     return Capability(
-        id=RESOLVE_TAXID,
+        id=DESCRIBE_TAXON,
         consumes=frozenset({TAXON_ID}),
         produces=TAXID_CORE_OUTPUTS | LINEAGE_OUTPUTS,
         output_groups=(
@@ -89,6 +89,6 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             resolve_name_capability(backends=backends),
-            resolve_taxid_capability(backends=backends),
+            describe_taxon_capability(backends=backends),
         ),
     )

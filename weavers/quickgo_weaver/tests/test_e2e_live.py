@@ -26,7 +26,7 @@ async def _go(weaver, accession):
     ss = StrandSet.from_strands("e1", [Strand("protein.uniprot.accession", accession)])
     return (
         await weaver.execute_batch(
-            "resolve_go_terms",
+            "list_go_terms",
             [ss],
             requested_outputs=frozenset(
                 {"go.term", "go.molecular_function", "go.biological_process",

@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "example"
-WEAVER_VERSION = "1.0.1"
+WEAVER_VERSION = "1.0.2"
 WEAVER_TITLE = "Example reference weaver (taxid -> traits, from a tiny CSV)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -31,7 +31,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="resolve_traits",
+                id="describe_traits",
                 consumes=frozenset({"ncbi.taxon.id"}),
                 produces=frozenset({"microbe.trait.gram_stain", "microbe.trait.optimum_temp"}),
                 output_groups=(

@@ -111,7 +111,7 @@ class DatasetsV2Backend:
         self, capability_id: str, queries: list, *, need_lineage: bool
     ) -> list[TaxonMatch]:
         """Resolve a batch: exact via dataset_report, fuzzy via taxon_suggest."""
-        if capability_id not in (vocab.RESOLVE_NAME, vocab.RESOLVE_TAXID):
+        if capability_id not in (vocab.RESOLVE_NAME, vocab.DESCRIBE_TAXON):
             raise ValueError(f"unsupported capability {capability_id!r}")
         queries = [str(q) for q in queries]
         logger.info(

@@ -1,6 +1,6 @@
 # Contributing to alphafold_weaver
 
-AlphaFold predicted structure (accession -> model + confidence). Source: https://alphafold.ebi.ac.uk (CC BY 4.0 (AlphaFold DB / DeepMind & EBI; cite https://doi.org/10.1093/nar/gkab1061)). Kind: `lookup`. Capabilities: `resolve_model`.
+AlphaFold predicted structure (accession -> model + confidence). Source: https://alphafold.ebi.ac.uk (CC BY 4.0 (AlphaFold DB / DeepMind & EBI; cite https://doi.org/10.1093/nar/gkab1061)). Kind: `lookup`. Capabilities: `describe_model`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

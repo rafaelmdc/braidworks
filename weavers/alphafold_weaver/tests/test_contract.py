@@ -29,7 +29,7 @@ def _build_weaver():
 
 
 class TestApiOrder(WeaverOrderContractTests):
-    capability_id = "resolve_model"
+    capability_id = "describe_model"
     minimal_outputs = frozenset({"structure.alphafold.entry_id"})
     backend = "api"
 
@@ -56,7 +56,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 
 class TestResolveModelCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_model")
+    capability = _MANIFEST.capability("describe_model")
     consumed_values_a = {"protein.uniprot.accession": "P04637"}
     consumed_values_b = {"protein.uniprot.accession": "sample-b-protein.uniprot.accession"}
     group_subset = "model"

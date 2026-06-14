@@ -10,7 +10,7 @@ db_name = "pdbe"
 weaver_id = "pdbe"
 kind = "lookup"
 title = "PDB experimental structures via PDBe (accession -> structures)"
-version = "0.1.3"
+version = "0.1.4"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkz990"
 attribution = "wwPDB / EMBL-EBI PDBe"
@@ -39,7 +39,7 @@ source_sample = """
 # One accession -> one best_structures call. PDBe has no batch endpoint that preserves
 # per-query grouping, so batches fan out per accession.
 [[capability]]
-id = "resolve_structures"
+id = "list_structures"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 # pdb.id is one→many: the weaver emits every distinct PDB id, so a caller can fan out
@@ -60,6 +60,6 @@ set_outputs = ["pdb.id"]
 # chains of one structure so the dedup path is exercised) so `weaverkit verify --strict`
 # is reproducible offline.
 [[golden]]
-capability = "resolve_structures"
+capability = "list_structures"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "structure.pdb.count" = 2 }

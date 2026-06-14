@@ -11,7 +11,7 @@ reported **Elevated/Reduced** vs healthy controls (human host, MedDRA-coded).
 
 ## Output slices (light → heavy)
 
-One capability, `disbiome.resolve_diseases`, with three output groups so a caller
+One capability, `disbiome.list_diseases`, with three output groups so a caller
 asks for exactly what a prompt needs (the mapper emits only the requested slice):
 
 | Group | Output | What you get |

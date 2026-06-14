@@ -26,7 +26,7 @@ async def _pathways(weaver, accession):
     ss = StrandSet.from_strands("e1", [Strand("protein.uniprot.accession", accession)])
     return (
         await weaver.execute_batch(
-            "resolve_pathways",
+            "list_pathways",
             [ss],
             requested_outputs=frozenset(
                 {

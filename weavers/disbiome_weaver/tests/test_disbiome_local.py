@@ -6,7 +6,7 @@ from braidworks.core import Strand, StrandSet, WeaveStatus
 
 from disbiome_weaver.factory import build_disbiome_weaver_fixture
 
-CAP = "disbiome.resolve_diseases"
+CAP = "disbiome.list_diseases"
 NAMES = "microbe.disease.names"
 COUNT = "microbe.disease.count"
 ASSOCIATIONS = "microbe.disease.associations"

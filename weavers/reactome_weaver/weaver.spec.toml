@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.3"
+version = "0.1.4"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -33,7 +33,7 @@ source_sample = """
 # One accession -> one mapping/pathways call. Reactome has no batch endpoint that
 # preserves per-query grouping, so batches fan out per accession.
 [[capability]]
-id = "resolve_pathways"
+id = "list_pathways"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 # pathway.reactome.id is one→many: the weaver emits every distinct pathway stId, so a
@@ -53,6 +53,6 @@ set_outputs = ["pathway.reactome.id"]
 # httpx.MockTransport serving a canned 2-pathway response for P04637, with a duplicate
 # stId so the dedup path is exercised) so `weaverkit verify --strict` is reproducible.
 [[golden]]
-capability = "resolve_pathways"
+capability = "list_pathways"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "pathway.reactome.count" = 2 }

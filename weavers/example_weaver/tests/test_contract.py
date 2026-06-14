@@ -20,7 +20,7 @@ _MANIFEST = vocab.build_manifest(backends=("local",))
 
 
 class TestLocalOrder(WeaverOrderContractTests):
-    capability_id = "resolve_traits"
+    capability_id = "describe_traits"
     minimal_outputs = frozenset({"microbe.trait.gram_stain"})
     backend = "local"
 
@@ -47,7 +47,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 
 class TestResolveTraitsCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_traits")
+    capability = _MANIFEST.capability("describe_traits")
     consumed_values_a = {"ncbi.taxon.id": "562"}
     consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "traits.core"

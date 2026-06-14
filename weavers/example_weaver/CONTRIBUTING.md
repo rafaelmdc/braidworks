@@ -1,6 +1,6 @@
 # Contributing to example_weaver
 
-Example reference weaver (taxid -> traits, from a tiny CSV). Source: https://github.com/rafaelcorreia/braidworks (bundled sample data) (CC0-1.0). Kind: `lookup`. Capabilities: `resolve_traits`.
+Example reference weaver (taxid -> traits, from a tiny CSV). Source: https://github.com/rafaelcorreia/braidworks (bundled sample data) (CC0-1.0). Kind: `lookup`. Capabilities: `describe_traits`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop

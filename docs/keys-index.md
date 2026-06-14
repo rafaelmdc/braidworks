@@ -11,7 +11,7 @@ Supplied by the user at the start of a braid.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `organism.name` | Free-text organism name — the user-supplied entry input. | — | `ncbi:ncbi.resolve_name` |
-| `protein.query` | Free-text organism name — the user-supplied entry input. | — | `uniprot:resolve_protein` |
+| `protein.query` | Free-text organism name — the user-supplied entry input. | `string:list_interactions` | `uniprot:resolve_protein` |
 
 ## Shared join keys
 
@@ -23,18 +23,18 @@ Registered bridge keys — what links weavers together.
 | `enzyme.ec` | Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id. | — | — |
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
-| `go.term` | Gene Ontology term id. | — | — |
+| `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | — |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
-| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.resolve_diseases`, `example:resolve_traits`, `ncbi:ncbi.resolve_taxid` |
-| `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
-| `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
-| `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | `bacdive:resolve_traits` |
+| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon` |
+| `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
+| `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
+| `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits` |
 | `pathway.kegg.id` | KEGG pathway id. | — | — |
-| `pathway.reactome.id` | Reactome pathway id. | `reactome:resolve_pathways` | — |
-| `pdb.id` | PDB / PDBe structure id. | — | — |
+| `pathway.reactome.id` | Reactome pathway id. | `reactome:list_pathways` | — |
+| `pdb.id` | PDB / PDBe structure id. | `pdbe:list_structures` | — |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:resolve_model`, `pdbe:resolve_structures`, `quickgo:resolve_go_terms`, `reactome:resolve_pathways`, `string:resolve_interactions` |
+| `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions` |
 | `reaction.rhea.id` | Rhea reaction id. | — | — |
 
 ## Leaf outputs
@@ -43,44 +43,44 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
-| `go.biological_process` | GO biological-process term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
-| `go.cellular_component` | GO cellular-component term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
-| `go.count` | Number of distinct GO terms annotated to a protein. | `quickgo:resolve_go_terms` | — |
-| `go.molecular_function` | GO molecular-function term names annotated to a protein. | `quickgo:resolve_go_terms` | — |
-| `go.records` | Full distinct GO annotations - GO id, name, and aspect. | `quickgo:resolve_go_terms` | — |
-| `microbe.disease.associations` | Compact per-experiment microbe–disease rows (disease, Elevated/Reduced direction, method, sample, host). | `disbiome:disbiome.resolve_diseases` | — |
-| `microbe.disease.count` | Number of disease-association experiment records for a microbe. | `disbiome:disbiome.resolve_diseases` | — |
-| `microbe.disease.names` | Distinct disease names a microbe is associated with. | `disbiome:disbiome.resolve_diseases` | — |
-| `microbe.disease.records` | Complete joined Disbiome records — every experiment / disease / organism / publication field, incl. study-quality metadata. | `disbiome:disbiome.resolve_diseases` | — |
-| `microbe.trait.cell_shape` | Cell morphology / shape (rod-shaped, coccus-shaped, …). | `bacdive:resolve_traits` | — |
-| `microbe.trait.gram_stain` | Gram stain (positive/negative). | `bacdive:resolve_traits`, `example:resolve_traits` | — |
+| `go.biological_process` | GO biological-process term names annotated to a protein. | `quickgo:list_go_terms` | — |
+| `go.cellular_component` | GO cellular-component term names annotated to a protein. | `quickgo:list_go_terms` | — |
+| `go.count` | Number of distinct GO terms annotated to a protein. | `quickgo:list_go_terms` | — |
+| `go.molecular_function` | GO molecular-function term names annotated to a protein. | `quickgo:list_go_terms` | — |
+| `go.records` | Full distinct GO annotations - GO id, name, and aspect. | `quickgo:list_go_terms` | — |
+| `microbe.disease.associations` | Compact per-experiment microbe–disease rows (disease, Elevated/Reduced direction, method, sample, host). | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.count` | Number of disease-association experiment records for a microbe. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.names` | Distinct disease names a microbe is associated with. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.records` | Complete joined Disbiome records — every experiment / disease / organism / publication field, incl. study-quality metadata. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.trait.cell_shape` | Cell morphology / shape (rod-shaped, coccus-shaped, …). | `bacdive:describe_traits` | — |
+| `microbe.trait.gram_stain` | Gram stain (positive/negative). | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.metabolism` | Metabolic strategy (aerobe/anaerobe/…). | — | — |
-| `microbe.trait.motility` | Whether the organism is motile (yes/no). | `bacdive:resolve_traits` | — |
-| `microbe.trait.optimum_ph` | Optimum growth pH. | `bacdive:resolve_traits` | — |
-| `microbe.trait.optimum_temp` | Optimum growth temperature. | `bacdive:resolve_traits`, `example:resolve_traits` | — |
-| `microbe.trait.oxygen_tolerance` | Oxygen relationship (aerobe/anaerobe/facultative/…). | `bacdive:resolve_traits` | — |
-| `microbe.trait.spore_formation` | Whether it forms spores (yes/no). | `bacdive:resolve_traits` | — |
+| `microbe.trait.motility` | Whether the organism is motile (yes/no). | `bacdive:describe_traits` | — |
+| `microbe.trait.optimum_ph` | Optimum growth pH. | `bacdive:describe_traits` | — |
+| `microbe.trait.optimum_temp` | Optimum growth temperature. | `bacdive:describe_traits`, `example:describe_traits` | — |
+| `microbe.trait.oxygen_tolerance` | Oxygen relationship (aerobe/anaerobe/facultative/…). | `bacdive:describe_traits` | — |
+| `microbe.trait.spore_formation` | Whether it forms spores (yes/no). | `bacdive:describe_traits` | — |
 | `ncbi.taxon.match_type` | How a name matched (exact/synonym/fuzzy/taxid). | `ncbi:ncbi.resolve_name` | — |
-| `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.resolve_taxid` | — |
+| `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
-| `pathway.reactome.count` | Number of distinct Reactome pathways for a protein. | `reactome:resolve_pathways` | — |
-| `pathway.reactome.names` | Names of Reactome pathways a protein participates in. | `reactome:resolve_pathways` | — |
-| `pathway.reactome.records` | Distinct Reactome pathways - stable id, name, in-disease flag. | `reactome:resolve_pathways` | — |
+| `pathway.reactome.count` | Number of distinct Reactome pathways for a protein. | `reactome:list_pathways` | — |
+| `pathway.reactome.names` | Names of Reactome pathways a protein participates in. | `reactome:list_pathways` | — |
+| `pathway.reactome.records` | Distinct Reactome pathways - stable id, name, in-disease flag. | `reactome:list_pathways` | — |
 | `protein.function` | Curated function summary (UniProt FUNCTION comment). | `uniprot:resolve_protein` | — |
 | `protein.gene` | Primary gene symbol (UniProt). | `uniprot:resolve_protein` | — |
-| `protein.interaction.count` | Number of interaction partners returned (STRING). | `string:resolve_interactions` | — |
-| `protein.interaction.partners` | Names of a protein's interaction partners (STRING). | `string:resolve_interactions` | — |
-| `protein.interaction.records` | Full STRING interaction edges - partner, combined score, and per-evidence-channel subscores. | `string:resolve_interactions` | — |
+| `protein.interaction.count` | Number of interaction partners returned (STRING). | `string:list_interactions` | — |
+| `protein.interaction.partners` | Names of a protein's interaction partners (STRING). | `string:list_interactions` | — |
+| `protein.interaction.records` | Full STRING interaction edges - partner, combined score, and per-evidence-channel subscores. | `string:list_interactions` | — |
 | `protein.length` | Sequence length in amino acids. | `uniprot:resolve_protein` | — |
 | `protein.name` | Recommended protein name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.organism` | Source organism scientific name (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.reviewed` | Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL). | `uniprot:resolve_protein` | — |
-| `structure.alphafold.entry_id` | AlphaFold DB entry id for a protein's predicted model. | `alphafold:resolve_model` | — |
-| `structure.alphafold.mean_plddt` | Mean pLDDT confidence (0-100) of the AlphaFold model. | `alphafold:resolve_model` | — |
-| `structure.alphafold.model_url` | URL of the AlphaFold predicted model file (PDB). | `alphafold:resolve_model` | — |
-| `structure.alphafold.pae_image_url` | URL of the AlphaFold predicted-aligned-error plot. | `alphafold:resolve_model` | — |
-| `structure.alphafold.records` | Full AlphaFold model metadata - id, confidence breakdown, URLs. | `alphafold:resolve_model` | — |
-| `structure.alphafold.version` | AlphaFold DB model version. | `alphafold:resolve_model` | — |
-| `structure.pdb.count` | Number of distinct PDB structures covering a protein. | `pdbe:resolve_structures` | — |
-| `structure.pdb.ids` | PDB ids of experimental structures covering a protein (best first). | `pdbe:resolve_structures` | — |
-| `structure.pdb.records` | Distinct PDB structures - id, method, resolution, coverage. | `pdbe:resolve_structures` | — |
+| `structure.alphafold.entry_id` | AlphaFold DB entry id for a protein's predicted model. | `alphafold:describe_model` | — |
+| `structure.alphafold.mean_plddt` | Mean pLDDT confidence (0-100) of the AlphaFold model. | `alphafold:describe_model` | — |
+| `structure.alphafold.model_url` | URL of the AlphaFold predicted model file (PDB). | `alphafold:describe_model` | — |
+| `structure.alphafold.pae_image_url` | URL of the AlphaFold predicted-aligned-error plot. | `alphafold:describe_model` | — |
+| `structure.alphafold.records` | Full AlphaFold model metadata - id, confidence breakdown, URLs. | `alphafold:describe_model` | — |
+| `structure.alphafold.version` | AlphaFold DB model version. | `alphafold:describe_model` | — |
+| `structure.pdb.count` | Number of distinct PDB structures covering a protein. | `pdbe:list_structures` | — |
+| `structure.pdb.ids` | PDB ids of experimental structures covering a protein (best first). | `pdbe:list_structures` | — |
+| `structure.pdb.records` | Distinct PDB structures - id, method, resolution, coverage. | `pdbe:list_structures` | — |

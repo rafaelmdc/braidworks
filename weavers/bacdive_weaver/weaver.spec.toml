@@ -9,7 +9,7 @@ db_name = "bacdive"
 weaver_id = "bacdive"
 kind = "lookup"
 title = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
-version = "0.1.3"
+version = "0.1.4"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab961"
 attribution = "BacDive (DSMZ)"
@@ -48,7 +48,7 @@ source_sample = """
 # One name -> one taxon query -> fetch the matching type strain. The API has no
 # multi-name batch endpoint, so batches fan out into per-name taxon lookups.
 [[capability]]
-id = "resolve_traits"
+id = "describe_traits"
 consumes = ["organism.scientific_name"]
 max_batch_size = 50
 
@@ -73,6 +73,6 @@ max_batch_size = 50
 # httpx.MockTransport serving canned taxon + fetch responses for the type strain
 # of Escherichia coli) so `weaverkit verify --strict` is reproducible offline.
 [[golden]]
-capability = "resolve_traits"
+capability = "describe_traits"
 input = { "organism.scientific_name" = "Escherichia coli" }
 expect = { "microbe.trait.gram_stain" = "negative", "microbe.trait.cell_shape" = "rod-shaped" }

@@ -30,7 +30,7 @@ class ResolutionBackend(ABC):
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
     ) -> list[TaxonMatch]:
-        """Resolve consumed values (names for resolve_name, taxids for resolve_taxid).
+        """Resolve consumed values (names for resolve_name, taxids for describe_taxon).
 
         Returns exactly one ``TaxonMatch`` per input, in input order.
         """

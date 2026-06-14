@@ -13,7 +13,7 @@ import httpx
 
 from string_weaver.backends.api import StringApiBackend
 
-CAP = "resolve_interactions"
+CAP = "list_interactions"
 ALL = frozenset(
     {"protein.query", "protein.interaction.partners", "protein.interaction.count",
      "protein.interaction.records"}

@@ -27,7 +27,7 @@ def _build_weaver():
 
 
 class TestApiOrder(WeaverOrderContractTests):
-    capability_id = "resolve_structures"
+    capability_id = "list_structures"
     minimal_outputs = frozenset({"structure.pdb.count"})
     backend = "api"
 
@@ -54,7 +54,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 
 class TestResolveStructuresCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_structures")
+    capability = _MANIFEST.capability("list_structures")
     consumed_values_a = {"protein.uniprot.accession": "P04637"}
     consumed_values_b = {"protein.uniprot.accession": "sample-b-protein.uniprot.accession"}
     group_subset = "summary"

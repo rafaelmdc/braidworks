@@ -18,7 +18,7 @@ _MANIFEST = vocab.build_manifest(backends=("api",))
 
 
 class TestApiOrder(WeaverOrderContractTests):
-    capability_id = "resolve_traits"
+    capability_id = "describe_traits"
     minimal_outputs = frozenset({"microbe.trait.cell_shape"})
     backend = "api"
 
@@ -44,7 +44,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 
 class TestResolveTraitsCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_traits")
+    capability = _MANIFEST.capability("describe_traits")
     consumed_values_a = {"organism.scientific_name": "Escherichia coli"}
     consumed_values_b = {"organism.scientific_name": "sample-b-organism.scientific_name"}
     group_subset = "morphology"

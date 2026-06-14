@@ -29,7 +29,7 @@ def _build_weaver():
 
 
 class TestApiOrder(WeaverOrderContractTests):
-    capability_id = "resolve_pathways"
+    capability_id = "list_pathways"
     minimal_outputs = frozenset({"pathway.reactome.count"})
     backend = "api"
 
@@ -56,7 +56,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 
 class TestResolvePathwaysCacheFingerprint(CacheFingerprintTests):
-    capability = _MANIFEST.capability("resolve_pathways")
+    capability = _MANIFEST.capability("list_pathways")
     consumed_values_a = {"protein.uniprot.accession": "P04637"}
     consumed_values_b = {"protein.uniprot.accession": "sample-b-protein.uniprot.accession"}
     group_subset = "summary"

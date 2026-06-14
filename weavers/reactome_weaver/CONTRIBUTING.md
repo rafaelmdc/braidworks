@@ -1,6 +1,6 @@
 # Contributing to reactome_weaver
 
-Reactome pathways (accession -> pathways). Source: https://reactome.org (CC0 (Reactome; cite https://doi.org/10.1093/nar/gkab1028)). Kind: `lookup`. Capabilities: `resolve_pathways`.
+Reactome pathways (accession -> pathways). Source: https://reactome.org (CC0 (Reactome; cite https://doi.org/10.1093/nar/gkab1028)). Kind: `lookup`. Capabilities: `list_pathways`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
