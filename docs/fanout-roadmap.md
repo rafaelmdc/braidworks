@@ -132,9 +132,16 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
      `set_outputs`. Covers "protein → all pathways, each drillable" (producer side; no
      consumer weaver yet — island producer). Remaining satellites (`pdb.id`, etc.) are
      the cross-cutting "update all relevant weavers" pass after Phases 3–4.
-3. **Surface the mechanism (non-visual).** `ExpandPolicy` in the `weaverkit view` path
-   query + CLI knobs; align with `braidworks-arq` so expansion children distribute across
-   workers; optionally annotate `set`-valued (fan-able) keys in the static network view.
+3. **Surface the mechanism (non-visual).** ✅ **Done** (weaverkit 0.1.11, arq 0.1.2).
+   - Static network view annotates fan dimensions: a producer→key edge whose key is a
+     `set_output` is badged `⤜ fan`, and the weaver card lists "fans out (one→many)".
+   - `braidworks-arq`: cardinality fan-out composes with the distributed executor
+     unchanged (it lives in `LocalExecutor` orchestration, which `build_distributed_executor`
+     reuses) — locked by a regression test and a doc note distinguishing it from arq's
+     unrelated batch-across-workers `fanout.py`.
+   - *CLI knobs: N/A — there is no braid-execution CLI (the CLIs plan/verify/visualize,
+     they don't run braids); `ExpandPolicy`/`expand_by_type` are passed in code to
+     `execute()`.*
 4. **Run-fanout visualizer** (LAST). Project an actual run's `ExecutionResult` (its
    lineage of leaves) into the existing offline HTML engine as a selectable view — the
    "1 input → N (× M …) leaves" trace. Confirmed design (2026-06-14): input is a
