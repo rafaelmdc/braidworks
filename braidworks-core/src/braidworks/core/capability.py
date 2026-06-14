@@ -43,6 +43,19 @@ class Capability:
     # before fetching lineage). Unioned into WeaveResult.computed_groups so the
     # cache key isn't under-reported. Does not, by itself, emit those outputs.
     always_computed_groups: frozenset[str] = frozenset()
+    # Produced join keys that are intrinsically **one→many** (cardinality fan-out):
+    # the strand carries a *list* of values, and the executor may fork the entity one
+    # child per value (per ``ExpandPolicy``) so the braid continues for each. Must be a
+    # subset of ``produces``. Empty (the default) means every output is scalar — the
+    # historical behaviour, so nothing forks unless a weaver opts a key in.
+    set_outputs: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        extra = self.set_outputs - self.produces
+        if extra:
+            raise ValueError(
+                f"set_outputs must be a subset of produces; unknown: {sorted(extra)}"
+            )
 
     def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
         """Group ids containing at least one of the requested outputs."""
@@ -73,6 +86,7 @@ class Capability:
             "max_batch_size": self.max_batch_size,
             "cost": self.cost,
             "always_computed_groups": sorted(self.always_computed_groups),
+            "set_outputs": sorted(self.set_outputs),
         }
 
     @classmethod
@@ -86,6 +100,7 @@ class Capability:
             max_batch_size=data.get("max_batch_size"),
             cost=data.get("cost", 1.0),
             always_computed_groups=frozenset(data.get("always_computed_groups", ())),
+            set_outputs=frozenset(data.get("set_outputs", ())),
         )
 
 

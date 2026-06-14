@@ -110,14 +110,23 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
    candidate under `TOP_K`/`ALL` (or collapses under `TOP`) instead of only
    HALT-to-review. Reuses `CandidateResult`. Covers "query → all hits." See the
    "Phase 1 — shipped" section above.
-2. **Mid-braid `set`-output expansion** (completes the mechanism). Add output cardinality
-   to `Capability`; teach the executor to fork on a `set`-valued produced join key.
-   Convert the satellites to emit their id sets (`pathway.reactome.id`, `pdb.id`, …) as
-   fan dimensions (alongside the existing descriptive lists). Covers "protein → all
-   pathways, each drillable." **Finalize the lineage shape here:** Phase 1's root-only
-   `StrandSet.parent_id` cannot express *nested* fans (protein → pathways); decide
-   whether to carry a parent **path / immediate-parent id** so multi-level trees regroup
-   correctly. This is the data-shape decision the visualizer (Phase 4) depends on.
+2. **Mid-braid `set`-output expansion** (completes the mechanism).
+   - **Core mechanism — ✅ Done** (core 0.2.1). `Capability.set_outputs: frozenset[str]`
+     declares which produced join keys are one→many (subset of `produces`, default empty
+     → backwards-compatible). The executor forks on a set-valued produced strand (a list)
+     after merge: `TOP`/`TOP_K(1)` collapse to a representative in place (+warning);
+     `TOP_K(k>1)`/`ALL` fork the **cross-product** across every fan dimension into
+     children, reusing the Phase-1 lineage scheme (`entity_id` `parent#i`, `parent_id` =
+     root) and the `max_expansion` cap. Per-type policy via `execute(..., expand_by_type=
+     {type: ExpandPolicy})`. See `executor._expand_set_outputs`; tests in
+     `tests/test_fanout_setoutput.py`. **Lineage shape decided:** no change needed — the
+     hierarchical `entity_id` already encodes nested fans (`e0#1#3`), and `parent_id`
+     gives the root; the visualizer (Phase 4) reconstructs the tree by splitting on `#`.
+   - **Satellite conversion — next (PR-B).** Make `reactome_weaver` emit
+     `pathway.reactome.id` as the full id set (alongside the existing `…names` list) and
+     declare it in `set_outputs` (spec → `vocab.py`). Covers "protein → all pathways, each
+     drillable." Then `pdb.id`, etc. Needs weaverkit spec/scaffold support for
+     `set_outputs` first.
 3. **Surface the mechanism (non-visual).** `ExpandPolicy` in the `weaverkit view` path
    query + CLI knobs; align with `braidworks-arq` so expansion children distribute across
    workers; optionally annotate `set`-valued (fan-able) keys in the static network view.
