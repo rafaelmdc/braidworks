@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, is_not_found_status
 
 logger = logging.getLogger("quickgo_weaver.api")
 
@@ -37,6 +37,23 @@ _ASPECTS = {
     "biological_process": "go.biological_process",
     "cellular_component": "go.cellular_component",
 }
+
+
+def _describe(term: dict[str, Any]) -> dict[str, Any]:
+    """One GO term object (/ontology/go/terms/{id}) -> describe_go_term outputs."""
+    definition = (term.get("definition") or {}).get("text")
+    return {
+        "go.term.name": term.get("name"),
+        "go.term.aspect": term.get("aspect"),
+        "go.term.definition": definition,
+        "go.term.detail": {
+            "id": term.get("id"),
+            "name": term.get("name"),
+            "aspect": term.get("aspect"),
+            "definition": definition,
+            "is_obsolete": term.get("isObsolete"),
+        },
+    }
 
 
 def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -105,11 +122,35 @@ class QuickgoApiBackend(BackendBase):
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
     ) -> list[LookupRecord]:
+        # describe_go_term drills one GO id; list_go_terms lists a protein's terms.
+        if capability_id == "describe_go_term":
+            return [await self._describe_one(q) for q in queries]
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
+
+    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
+        """One go.term id -> that term's detail via /ontology/go/terms/{id}."""
+        term = str(query.get("go.term", "")).strip()
+        if not term:
+            return LookupRecord(query=query, found=False)
+        try:
+            resp = await self._http().get(f"/ontology/go/terms/{term}")
+            resp.raise_for_status()
+            results = resp.json().get("results") or []
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return LookupRecord(query=query, found=False)
+            logger.warning("QuickGO term detail failed for %r: %s", term, exc)
+            return LookupRecord(query=query, error=f"QuickGO API error: {exc}")
+        except httpx.HTTPError as exc:
+            logger.warning("QuickGO term detail failed for %r: %s", term, exc)
+            return LookupRecord(query=query, error=f"QuickGO API error: {exc}")
+        if not results or not results[0].get("id"):
+            return LookupRecord(query=query, found=False)
+        return LookupRecord(query=query, found=True, values=_describe(results[0]))
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

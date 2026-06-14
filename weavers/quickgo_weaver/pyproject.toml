@@ -1,6 +1,6 @@
 [project]
 name = "quickgo_weaver"
-version = "0.1.3"
+version = "0.1.4"
 description = "Gene Ontology annotations (accession -> GO terms by aspect) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

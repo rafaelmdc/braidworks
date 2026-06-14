@@ -43,12 +43,28 @@ _RESULTS = [
 ]
 
 
+# /ontology/go/terms/{id} detail objects (describe_go_term), shaped like real QuickGO.
+_TERM_DETAIL = {
+    "GO:0006915": {
+        "id": "GO:0006915", "name": "apoptotic process", "aspect": "biological_process",
+        "definition": {"text": "A programmed cell death process..."}, "isObsolete": False,
+    },
+}
+
+
 def _handler(request: httpx.Request) -> httpx.Response:
-    if request.url.path.endswith("/annotation/search"):
+    path = request.url.path
+    if path.endswith("/annotation/search"):
         acc = request.url.params.get("geneProductId", "")
         results = _RESULTS if "P04637" in acc else []
         body = {"numberOfHits": len(results), "pageInfo": {"current": 1, "total": 1}, "results": results}
         return httpx.Response(200, content=json.dumps(body))
+    if "/ontology/go/terms/" in path:
+        term = path.split("/ontology/go/terms/")[1].split("/")[0]
+        detail = _TERM_DETAIL.get(term)
+        if detail is not None:
+            return httpx.Response(200, content=json.dumps({"results": [detail]}))
+        return httpx.Response(404, content=json.dumps({"results": []}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 
