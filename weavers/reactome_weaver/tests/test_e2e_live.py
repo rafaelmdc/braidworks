@@ -29,7 +29,12 @@ async def _pathways(weaver, accession):
             "resolve_pathways",
             [ss],
             requested_outputs=frozenset(
-                {"pathway.reactome.names", "pathway.reactome.count", "pathway.reactome.records"}
+                {
+                    "pathway.reactome.id",
+                    "pathway.reactome.names",
+                    "pathway.reactome.count",
+                    "pathway.reactome.records",
+                }
             ),
             backend="api",
         )
@@ -50,6 +55,10 @@ async def test_live_tp53_pathways():
     assert produced["pathway.reactome.count"] >= len(records) > 0
     assert all(r["st_id"].startswith("R-") for r in records)
     assert [r["st_id"] for r in records] == sorted(r["st_id"] for r in records)
+    # The fan dimension: the full distinct stId set, deduped + ordered, matching count.
+    ids = produced["pathway.reactome.id"]
+    assert isinstance(ids, list) and len(ids) == produced["pathway.reactome.count"]
+    assert ids == sorted(set(ids)) and all(i.startswith("R-") for i in ids)
 
 
 async def test_live_malformed_accession_is_no_match():
