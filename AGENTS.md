@@ -125,6 +125,35 @@ When you add a `set_outputs` key:
 - Bump the weaver and raise its floor to `braidworks-core>=0.2.1` (where
   `Capability.set_outputs` landed). See `docs/fanout-roadmap.md`.
 
+## Per-query parameters (`[[capability.parameter]]`)
+
+A capability's four knobs are: `consumes`/`produces` (the **join**), output groups
+(**which** fields), `backends` (**where**), and **parameters** (**how** — filters,
+sort, page size, thresholds). Parameters are the per-query options an API exposes that
+aren't identifiers. Declare each in the spec:
+
+```toml
+[[capability.parameter]]
+name = "assembly_level"
+type = "string"            # string | int | float | bool
+enum = ["complete", "chromosome", "contig"]   # optional; restricts values
+default = "complete"        # optional; used when the caller omits it
+description = "Assembly completeness filter"
+```
+
+- **Defaults preserve determinism**: omitting every parameter reproduces today's
+  behaviour, and the *effective* params (defaults + caller overrides) fold into the
+  cache key, so a default call shares cache entries and a parameterised call is a
+  distinct entry. The planner never routes on parameters — they're refinements on a
+  step, not bridges.
+- A backend reads them from the `params` argument of `fetch` (validated + defaulted by
+  the time it arrives). The CLI exposes them as `--param name=value`; `braidworks
+  weavers` lists each capability's declared parameters.
+- Use a parameter for a *knob* (filter/sort/threshold); use **output groups** for
+  "which fields"; mint a **separate capability** only when it produces a different set
+  of ids. Raise the weaver's core floor to `braidworks-core>=0.4.0` (where
+  `Capability.parameters` landed).
+
 ## Versioning, tags & releasing
 
 - **Each package versions independently** (`braidworks-core`, `weaverkit`, every

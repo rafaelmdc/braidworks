@@ -55,7 +55,7 @@ class _SerialWeaver(BaseWeaver):
     def backend_fingerprint(self, backend: str) -> str:
         return "ds-test"
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         return _ok(strand_set.get("organism.name").value)
 
 
@@ -76,7 +76,7 @@ def test_missing_backend_fingerprint_is_abstract():
     class NoVersionWeaver(BaseWeaver):
         MANIFEST = manifest(resolve_name_capability())
 
-        async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
             return _ok("x")
 
     with pytest.raises(TypeError):

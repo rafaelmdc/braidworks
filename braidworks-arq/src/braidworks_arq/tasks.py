@@ -68,6 +68,7 @@ async def weave_step(
     backend: str,
     strand_sets_json: list[dict[str, Any]],
     requested_outputs: list[str],
+    params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Run one weave-step batch on this worker; return ``[WeaveResult.to_json(), ...]``.
 
@@ -89,6 +90,7 @@ async def weave_step(
             strand_sets,
             requested_outputs=requested,
             backend=backend,
+            params=params or None,
         )
     except _NO_RETRY:
         raise  # orchestrator-level control flow; never retry, never swallow

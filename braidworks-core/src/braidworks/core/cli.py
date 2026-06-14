@@ -70,6 +70,25 @@ def _parse_kv(item: str) -> tuple[str, str]:
     return key, val
 
 
+def _parse_params(items: list[str] | None) -> list[tuple[str | None, str, str]]:
+    """Parse ``--param`` values into ``(capability_id | None, name, value)`` triples.
+
+    Forms: ``name=value`` (applies to whichever step declares ``name``) or
+    ``capability_id:name=value`` (targets one capability).
+    """
+    out: list[tuple[str | None, str, str]] = []
+    for item in items or []:
+        key, _, value = item.partition("=")
+        if "=" not in item:
+            raise SystemExit(f"error: expected --param NAME=VALUE, got {item!r}")
+        cap_id, sep, name = key.partition(":")
+        if sep:
+            out.append((cap_id.strip(), name.strip(), value))
+        else:
+            out.append((None, key.strip(), value))
+    return out
+
+
 def _expand_policy(spec: str) -> ExpandPolicy:
     """Parse ``--expand``: ``none`` (default best-one), ``all``, or ``top:K``."""
     spec = (spec or "none").strip().lower()
@@ -275,13 +294,37 @@ def _cmd_weave(args: argparse.Namespace) -> int:
         _err("try `braidworks keys` to see what's produced, or `braidworks path --from … --to …`.")
         return 1
 
+    # Map --param values onto the braid's steps. A bare NAME=VALUE is assigned to
+    # every step whose capability declares a parameter of that name; CAP:NAME=VALUE
+    # targets one capability. An unmatched parameter is a hard error (likely a typo).
+    params: dict[str, dict[str, Any]] = {}
+    step_caps = {
+        s.capability_id: registry.get_capability(s.weaver_id, s.capability_id)
+        for s in braid.steps
+    }
+    for cap_id, name, value in _parse_params(args.param):
+        targets = (
+            [cap_id] if cap_id is not None
+            else [cid for cid, c in step_caps.items() if any(p.name == name for p in c.parameters)]
+        )
+        if not targets:
+            _err(f"error: no step in this route accepts a parameter named {name!r}. "
+                 f"See `braidworks weavers` for each capability's parameters.")
+            return 1
+        for cid in targets:
+            params.setdefault(cid, {})[name] = value
+
     sets = _collect_inputs(args)
     _err(f"running {len(braid.steps)} step(s) over {len(sets)} input(s)…")
-    result = asyncio.run(
-        LocalExecutor(registry).execute(
-            braid, sets, expand_policy=_expand_policy(args.expand)
+    try:
+        result = asyncio.run(
+            LocalExecutor(registry).execute(
+                braid, sets, expand_policy=_expand_policy(args.expand), params=params
+            )
         )
-    )
+    except ValueError as exc:  # bad param value (unknown name / outside enum)
+        _err(f"error: {exc}")
+        return 1
 
     records: list[dict[str, Any]] = []
     for ss in result.resolved:
@@ -330,15 +373,26 @@ def _cmd_run(args: argparse.Namespace) -> int:
             return 1
 
     want = _split_types(args.want) or sorted(cap.produces)
+    # One capability here, so every --param NAME=VALUE applies to it (CAP: prefix optional).
+    raw_params = {name: value for _cid, name, value in _parse_params(args.param)}
+    try:  # validate/default against the declaration up front for a clean error
+        run_params = cap.resolve_params(raw_params)
+    except ValueError as exc:
+        _err(f"error: {exc}")
+        return 1
     sets = _collect_inputs(args)
     weaver = registry.get_weaver(args.weaver)
     _err(f"running {args.weaver}.{args.capability} over {len(sets)} input(s)…")
-    results = asyncio.run(
-        weaver.execute_batch(
-            args.capability, sets,
-            requested_outputs=frozenset(want), backend=backend,
+    try:
+        results = asyncio.run(
+            weaver.execute_batch(
+                args.capability, sets,
+                requested_outputs=frozenset(want), backend=backend, params=run_params,
+            )
         )
-    )
+    except ValueError as exc:
+        _err(f"error: {exc}")
+        return 1
 
     records: list[dict[str, Any]] = []
     counts = {"resolved": 0, "unresolved": 0}
@@ -371,6 +425,7 @@ def _cmd_weavers(args: argparse.Namespace) -> int:
                         "produces": sorted(c.produces),
                         "set_outputs": sorted(c.set_outputs),
                         "backends": list(c.backends),
+                        "parameters": [p.to_json() for p in c.parameters],
                     }
                     for c in m.capabilities
                 ],
@@ -387,6 +442,14 @@ def _cmd_weavers(args: argparse.Namespace) -> int:
             produces = ", ".join(sorted(c.produces))
             fan = "  ⤜ fan: " + ", ".join(sorted(c.set_outputs)) if c.set_outputs else ""
             print(f"    {c.id}: {consumes}  →  {produces}{fan}")
+            for p in c.parameters:
+                bits = [p.type]
+                if p.enum:
+                    bits.append("∈ {" + ", ".join(str(e) for e in p.enum) + "}")
+                if p.default is not None:
+                    bits.append(f"default={p.default}")
+                desc = f" — {p.description}" if p.description else ""
+                print(f"        --param {p.name} ({', '.join(bits)}){desc}")
         print()
     return 0
 
@@ -493,6 +556,9 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
     w.add_argument("--expand", default="none", metavar="none|all|top:K",
                    help="fan out one→many set outputs (default: none = keep the best one).")
+    w.add_argument("--param", action="append", metavar="NAME=VALUE",
+                   help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
+                        "step. See `braidworks weavers` for each capability's parameters.")
     w.add_argument("--references", action="store_true",
                    help="print source citations for the route to stderr.")
     _add_output_flags(w)
@@ -505,6 +571,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--want", metavar="TYPE[,TYPE…]",
                    help="restrict outputs (default: all the capability produces).")
     r.add_argument("--backend", help="backend name (required only if the capability has >1).")
+    r.add_argument("--param", action="append", metavar="NAME=VALUE",
+                   help="a capability parameter (repeatable).")
     _add_input_flags(r)
     _add_output_flags(r)
     r.set_defaults(func=_cmd_run)

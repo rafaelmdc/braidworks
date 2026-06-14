@@ -229,6 +229,7 @@ class LocalExecutor:
         merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
         expand_policy: ExpandPolicy = ExpandPolicy(),
         expand_by_type: dict[str, ExpandPolicy] | None = None,
+        params: dict[str, dict[str, Any]] | None = None,
         confidence_threshold: float = 0.0,
         chunk_size: int = 10_000,
         max_expansion: int = 10_000,
@@ -267,6 +268,7 @@ class LocalExecutor:
                 merge_policy=merge_policy,
                 expand_policy=expand_policy,
                 expand_by_type=expand_by_type or {},
+                params=params or {},
                 confidence_threshold=confidence_threshold,
                 max_expansion=max_expansion,
             )
@@ -283,6 +285,7 @@ class LocalExecutor:
         merge_policy: MergePolicy,
         expand_policy: ExpandPolicy,
         expand_by_type: dict[str, ExpandPolicy],
+        params: dict[str, dict[str, Any]],
         confidence_threshold: float,
         max_expansion: int,
     ) -> None:
@@ -300,7 +303,7 @@ class LocalExecutor:
             # Steps in a wave are independent → run them concurrently. Each job only
             # awaits I/O and never mutates an entity, so results are merged afterwards
             # in deterministic step order (no shared-state hazard across the gather).
-            jobs = [self._run_step_over(braid, si, live) for si in wave]
+            jobs = [self._run_step_over(braid, si, live, params) for si in wave]
             wave_results = await asyncio.gather(*jobs)
             remaining_steps = tuple(
                 braid.steps[si] for later in waves[wi + 1 :] for si in later
@@ -370,7 +373,11 @@ class LocalExecutor:
                 result.unresolved.append((ss, rep))
 
     async def _run_step_over(
-        self, braid: Braid, step_index: int, entities: list[StrandSet]
+        self,
+        braid: Braid,
+        step_index: int,
+        entities: list[StrandSet],
+        params: dict[str, dict[str, Any]],
     ) -> tuple[int, CapabilityInvocation, list[tuple[StrandSet, str, WeaveResult | None]]]:
         """Run one step over the entities that can take it; collect, don't mutate.
 
@@ -387,6 +394,8 @@ class LocalExecutor:
         triggered = cap.triggered_groups(requested)
         manifest_version = weaver.MANIFEST.version
         primary_fingerprint = weaver.backend_fingerprint(invocation.primary_backend)
+        # Validate/default this step's params once (raises on an unknown name / bad enum).
+        effective_params = cap.resolve_params(params.get(invocation.capability_id))
 
         outs: list[tuple[StrandSet, str, WeaveResult | None]] = []
         misses: list[StrandSet] = []
@@ -404,6 +413,7 @@ class LocalExecutor:
                 weaver_version=manifest_version,
                 backend=invocation.primary_backend,
                 backend_fingerprint=primary_fingerprint,
+                params=effective_params,
             )
             cached = self._cache.get(key, triggered)
             if cached is not None:
@@ -412,7 +422,9 @@ class LocalExecutor:
                 misses.append(ss)
 
         if misses:
-            miss_results = await self._resolve_misses(cap, invocation, misses)
+            miss_results = await self._resolve_misses(
+                cap, invocation, misses, effective_params
+            )
             for ss, r in zip(misses, miss_results):
                 if r.status is not WeaveStatus.ERROR:
                     # Cache every non-error result (incl. NO_MATCH/AMBIGUOUS), keyed by
@@ -425,6 +437,7 @@ class LocalExecutor:
                             weaver_version=r.weaver_version,
                             backend=r.backend_used,
                             backend_fingerprint=weaver.backend_fingerprint(r.backend_used),
+                            params=effective_params,
                         ),
                         r,
                     )
@@ -436,6 +449,7 @@ class LocalExecutor:
         cap: Capability,
         invocation: CapabilityInvocation,
         entities: list[StrandSet],
+        params: dict[str, Any],
     ) -> list[WeaveResult]:
         """Run the weaver across backends, applying the fallback rules.
 
@@ -456,7 +470,7 @@ class LocalExecutor:
             sub_entities = [entities[i] for i in pending_idx]
             try:
                 batch_results = await self._call_batch(
-                    cap, invocation, sub_entities, backend
+                    cap, invocation, sub_entities, backend, params
                 )
             except BackendConfigurationError:
                 raise  # run-level: abort immediately
@@ -493,6 +507,7 @@ class LocalExecutor:
         invocation: CapabilityInvocation,
         entities: list[StrandSet],
         backend: str,
+        params: dict[str, Any],
     ) -> list[WeaveResult]:
         """Run the step via the runner, splitting into sub-batches of max_batch_size."""
         requested = invocation.output_types
@@ -510,6 +525,7 @@ class LocalExecutor:
                     backend,
                     sb,
                     requested,
+                    params=params,
                 )
             )
         return out

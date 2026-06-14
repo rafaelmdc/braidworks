@@ -12,7 +12,13 @@ from braidworks.core.cache import (
     StrandCacheKey,
     compute_cache_key,
 )
-from braidworks.core.capability import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core.capability import (
+    Capability,
+    OutputGroup,
+    Parameter,
+    Provenance,
+    WeaverManifest,
+)
 from braidworks.core.licenses import (
     ATTRIBUTION_REQUIRED,
     CITE_REQUESTED,
@@ -93,6 +99,7 @@ __all__ = [
     "compute_cache_key",
     "Capability",
     "OutputGroup",
+    "Parameter",
     "Provenance",
     "WeaverManifest",
     "ATTRIBUTION_REQUIRED",

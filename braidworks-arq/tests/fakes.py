@@ -45,7 +45,7 @@ class EchoWeaver(BaseWeaver):
     def backend_fingerprint(self, backend: str) -> str:
         return self._dataset
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         name = strand_set.get(NAME).value
         return WeaveResult(
             capability_id=capability_id,
@@ -56,7 +56,7 @@ class EchoWeaver(BaseWeaver):
             strands=(Strand(TAXID, abs(hash(name)) % 100_000),),
         )
 
-    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
         self.batch_calls += 1
         return [
             await self.execute(
@@ -78,7 +78,7 @@ class FlakyWeaver(EchoWeaver):
         )
         self._unavailable = unavailable_backend
 
-    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
         if backend == self._unavailable:
             raise BackendUnavailable(f"{backend} down")
         return await super().execute_batch(
@@ -142,7 +142,7 @@ class _Fn(BaseWeaver):
     def backend_fingerprint(self, backend):
         return "ds"
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         status = WeaveStatus.NO_MATCH if self._miss else WeaveStatus.OK
         strands = () if self._miss else (Strand(self._out, f"{self._out}:ok"),)
         return WeaveResult(

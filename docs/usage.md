@@ -44,7 +44,9 @@ braidworks references
 Input comes from `--have TYPE=VALUE` (repeatable; broadcast onto every file row), a
 file (`--in-file`; a CSV/TSV whose header is type-ids, or one value per line with
 `--in-type`), or stdin (`--in-file -`). Output is `--format human|json|jsonl|tsv|csv`;
-`--expand none|all|top:K` controls fan-out; `--only weaver,weaver` restricts the set.
+`--expand none|all|top:K` controls fan-out; `--param name=value` passes a capability's
+filters/options (run `braidworks weavers` to see what each accepts; use
+`capability:name=value` to target one step); `--only weaver,weaver` restricts the set.
 Data goes to **stdout**, progress + a resolved/unresolved/review count to **stderr**,
 so pipes stay clean. Exit code is non-zero only on a structural error (a `NO_MATCH` is
 valid data) — add `--strict` to also fail on any unresolved/review input.

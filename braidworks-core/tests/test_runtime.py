@@ -124,7 +124,7 @@ class _StubBackend(BackendBase):
     def fingerprint(self):
         return "stub-v1"
 
-    async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute):
+    async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None):
         self.seen_groups = groups_to_compute
         return [LookupRecord(query=q, found=True, values={"ncbi.taxon.id": 562}) for q in queries]
 

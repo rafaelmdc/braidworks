@@ -129,6 +129,7 @@ class PdbeApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # describe_structure drills one PDB id; list_structures lists a protein's structures.
         if capability_id == "describe_structure":

@@ -139,6 +139,7 @@ class BacdiveApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # The whole record arrives in one fetch, so we compute every trait and let
         # the shared mapper filter to requested_outputs; no per-group gating needed.

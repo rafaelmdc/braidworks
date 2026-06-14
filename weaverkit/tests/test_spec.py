@@ -163,6 +163,45 @@ def test_set_outputs_defaults_empty():
     assert WeaverSpec.from_dict(_valid_dict()).capabilities[0].set_outputs == ()
 
 
+def test_parameter_parsed_and_valid():
+    data = _valid_dict()
+    data["capability"][0]["parameter"] = [
+        {"name": "level", "type": "string", "enum": ["a", "b"], "default": "a",
+         "description": "pick"}
+    ]
+    spec = WeaverSpec.from_dict(data)
+    p = spec.capabilities[0].parameters[0]
+    assert p.name == "level" and p.enum == ("a", "b") and p.default == "a"
+    assert validate_spec(spec) == []
+
+
+def test_parameter_rejects_unknown_type():
+    data = _valid_dict()
+    data["capability"][0]["parameter"] = [{"name": "p", "type": "date"}]
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("unknown type 'date'" in p for p in problems)
+
+
+def test_parameter_rejects_default_outside_enum():
+    data = _valid_dict()
+    data["capability"][0]["parameter"] = [
+        {"name": "p", "enum": ["a", "b"], "default": "c"}
+    ]
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("default 'c' is not in its enum" in p for p in problems)
+
+
+def test_parameter_rejects_duplicate_names():
+    data = _valid_dict()
+    data["capability"][0]["parameter"] = [{"name": "p"}, {"name": "p"}]
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("duplicate parameter name 'p'" in p for p in problems)
+
+
+def test_parameters_default_empty():
+    assert WeaverSpec.from_dict(_valid_dict()).capabilities[0].parameters == ()
+
+
 def test_overlapping_group_outputs_rejected():
     data = _valid_dict()
     data["capability"][0]["group"][1]["outputs"] = ["microbe.trait.gram_stain"]

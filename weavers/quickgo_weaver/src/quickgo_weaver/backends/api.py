@@ -121,6 +121,7 @@ class QuickgoApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # describe_go_term drills one GO id; list_go_terms lists a protein's terms.
         if capability_id == "describe_go_term":

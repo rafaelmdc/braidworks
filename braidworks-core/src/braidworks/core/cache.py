@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from braidworks.core.result import WeaveResult
 
@@ -46,17 +46,23 @@ def compute_cache_key(
     weaver_version: str,
     backend: str,
     backend_fingerprint: str,
+    params: dict[str, Any] | None = None,
 ) -> StrandCacheKey:
-    """Build a cache key. The fingerprint hashes only ``capability.consumes`` values.
+    """Build a cache key. The fingerprint hashes ``capability.consumes`` values and
+    the effective ``params``.
 
     Provenance is excluded (the same value via different upstream paths shares an
-    entry) and extra strands in the set never affect the fingerprint.
+    entry) and extra strands in the set never affect the fingerprint. ``params`` are
+    folded in so the same input under different options is a distinct entry; an empty
+    ``params`` (the default) reproduces the historical key for that input.
     """
     fingerprint_inputs = {
         type_id: (s.value if (s := strand_set.get(type_id)) is not None else None)
         for type_id in capability.consumes
     }
-    payload = json.dumps(fingerprint_inputs, sort_keys=True, default=str)
+    payload = json.dumps(
+        {"in": fingerprint_inputs, "params": params or {}}, sort_keys=True, default=str
+    )
     input_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return StrandCacheKey(
         weaver_id=weaver_id,

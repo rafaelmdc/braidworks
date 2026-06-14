@@ -45,16 +45,19 @@ class BackendDispatchWeaver(BaseWeaver):
         return strat.fingerprint()
 
     async def execute(
-        self, capability_id, strand_set, *, requested_outputs, backend
+        self, capability_id, strand_set, *, requested_outputs, backend, params=None
     ) -> WeaveResult:
         results = await self.execute_batch(
-            capability_id, [strand_set], requested_outputs=requested_outputs, backend=backend
+            capability_id, [strand_set], requested_outputs=requested_outputs,
+            backend=backend, params=params,
         )
         return results[0]
 
     async def execute_batch(
-        self, capability_id, strand_sets, *, requested_outputs, backend
+        self, capability_id, strand_sets, *, requested_outputs, backend, params=None
     ) -> list[WeaveResult]:
+        # Today's taxonomy capabilities take no parameters; accepted for the uniform
+        # runner contract and ignored. Genome/gene capabilities will thread it to resolve.
         cap = self.MANIFEST.capability(capability_id)
         if cap is None:
             raise UnsupportedCapability(

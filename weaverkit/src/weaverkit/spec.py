@@ -50,6 +50,41 @@ class GroupSpec:
             raise SpecError(f"output group 'outputs' must be a list: {exc}") from None
 
 
+PARAM_TYPES = ("string", "int", "float", "bool")
+
+
+@dataclass(frozen=True)
+class ParameterSpec:
+    """One declared per-query parameter (maps to core ``Parameter``).
+
+    A knob the caller may pass at run time (a filter, sort, page size, threshold) —
+    distinct from the input strands. ``type`` is one of :data:`PARAM_TYPES`; ``enum``
+    (optional) restricts the accepted values; ``default`` (optional) is used when the
+    caller omits it.
+    """
+
+    name: str
+    type: str = "string"
+    enum: tuple[Any, ...] = ()
+    default: Any = None
+    description: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ParameterSpec:
+        try:
+            return cls(
+                name=str(data["name"]),
+                type=str(data.get("type", "string")),
+                enum=tuple(data.get("enum", ())),
+                default=data.get("default"),
+                description=str(data.get("description", "")),
+            )
+        except KeyError as exc:
+            raise SpecError(f"parameter missing required key: {exc}") from None
+        except TypeError as exc:
+            raise SpecError(f"parameter 'enum' must be a list: {exc}") from None
+
+
 @dataclass(frozen=True)
 class CapabilitySpec:
     """One declared operation: consumes shared keys, produces grouped outputs."""
@@ -69,6 +104,8 @@ class CapabilitySpec:
     # weaver emits a *list* and the executor may fork one child per value (per
     # ExpandPolicy). Must be a subset of ``produces``. Maps to Capability.set_outputs.
     set_outputs: tuple[str, ...] = ()
+    # Per-query knobs the capability accepts (maps to Capability.parameters).
+    parameters: tuple[ParameterSpec, ...] = ()
 
     @property
     def produces(self) -> tuple[str, ...]:
@@ -92,6 +129,9 @@ class CapabilitySpec:
                 cost=float(data.get("cost", 1.0)),
                 always_computed_groups=tuple(data.get("always_computed_groups", ())),
                 set_outputs=tuple(data.get("set_outputs", ())),
+                parameters=tuple(
+                    ParameterSpec.from_dict(p) for p in data.get("parameter", ())
+                ),
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -356,6 +396,24 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                 problems.append(
                     f"{where}: set_outputs lists {key!r}, which this capability does not "
                     f"produce ({sorted(produced)}) — set_outputs must be a subset of produces"
+                )
+
+        seen_params: set[str] = set()
+        for p in cap.parameters:
+            if not p.name:
+                problems.append(f"{where}: a parameter has an empty name")
+            if p.name in seen_params:
+                problems.append(f"{where}: duplicate parameter name {p.name!r}")
+            seen_params.add(p.name)
+            if p.type not in PARAM_TYPES:
+                problems.append(
+                    f"{where}: parameter {p.name!r} has unknown type {p.type!r} "
+                    f"(expected one of {list(PARAM_TYPES)})"
+                )
+            if p.enum and p.default is not None and p.default not in p.enum:
+                problems.append(
+                    f"{where}: parameter {p.name!r} default {p.default!r} is not in its "
+                    f"enum {list(p.enum)}"
                 )
 
     # --- bulk source ---------------------------------------------------------

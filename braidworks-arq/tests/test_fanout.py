@@ -72,9 +72,12 @@ class CountingPool:
         self._fn = fn
         self.chunk_sizes: list[int] = []
 
-    async def enqueue_job(self, name, weaver_id, cap, backend, payload, requested, _queue_name=None):
+    async def enqueue_job(self, name, weaver_id, cap, backend, payload, requested,
+                          params=None, _queue_name=None):
         self.chunk_sizes.append(len(payload))
-        return InlineJob(self._fn, (weaver_id, cap, backend, payload, requested), None)
+        return InlineJob(
+            self._fn, (weaver_id, cap, backend, payload, requested, params), None
+        )
 
 
 async def test_runner_fans_out_and_preserves_order(monkeypatch):
@@ -170,7 +173,7 @@ class _PathwaysWeaver(BaseWeaver):
     def backend_fingerprint(self, backend):
         return "ds"
 
-    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         acc = strand_set.get(ACCESSION).value
         return WeaveResult(
             capability_id=capability_id,
@@ -181,7 +184,7 @@ class _PathwaysWeaver(BaseWeaver):
             strands=(Strand(PATHWAY, [f"R-{acc}-1", f"R-{acc}-2", f"R-{acc}-3"]),),
         )
 
-    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend):
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
         return [
             await self.execute(capability_id, ss, requested_outputs=requested_outputs, backend=backend)
             for ss in strand_sets

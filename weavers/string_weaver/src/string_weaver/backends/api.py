@@ -116,6 +116,7 @@ class StringApiBackend(BackendBase):
         *,
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # One interaction_partners call per accession; the whole edge list arrives at
         # once, so we compute every leaf and let the shared mapper filter.

@@ -13,7 +13,13 @@ import json
 import pytest
 
 from braidworks.core import cli
-from braidworks.core.capability import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core.capability import (
+    Capability,
+    OutputGroup,
+    Parameter,
+    Provenance,
+    WeaverManifest,
+)
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand
@@ -36,6 +42,8 @@ DOWN_CAP = Capability(
     produces=frozenset({"pdb.id", "structure.pdb.ids"}),
     output_groups=(OutputGroup(id="g", outputs=frozenset({"pdb.id", "structure.pdb.ids"})),),
     set_outputs=frozenset({"pdb.id"}),
+    parameters=(Parameter("level", enum=("all", "best"), default="all",
+                          description="how many structures"),),
     backends=("api",),
 )
 
@@ -249,3 +257,58 @@ def test_expand_policy_parsing():
 def test_parse_kv_requires_equals():
     with pytest.raises(SystemExit):
         cli._parse_kv("novalue")
+
+
+# --- parameters --------------------------------------------------------------------
+
+def test_weavers_lists_parameters(capsys):
+    _run("weavers")
+    out = capsys.readouterr().out
+    assert "--param level" in out and "best" in out  # enum surfaced
+
+
+def test_weavers_json_includes_parameters(capsys):
+    _run("weavers", "--format", "json")
+    data = {m["weaver"]: m for m in json.loads(capsys.readouterr().out)}
+    params = data["pdbe"]["capabilities"][0]["parameters"]
+    assert params[0]["name"] == "level" and params[0]["enum"] == ["all", "best"]
+
+
+def test_weave_accepts_valid_param(capsys):
+    code = _run("weave", "--have", "protein.query=P1", "--want", "structure.pdb.ids",
+                "--param", "level=best")
+    assert code == 0
+    assert "ACC_P1-1" in capsys.readouterr().out
+
+
+def test_weave_rejects_param_outside_enum(capsys):
+    code = _run("weave", "--have", "protein.query=P1", "--want", "structure.pdb.ids",
+                "--param", "level=nope")
+    assert code == 1
+    assert "not in allowed values" in capsys.readouterr().err
+
+
+def test_weave_rejects_unknown_param_name(capsys):
+    code = _run("weave", "--have", "protein.query=P1", "--want", "structure.pdb.ids",
+                "--param", "bogus=1")
+    assert code == 1
+    assert "no step in this route accepts" in capsys.readouterr().err
+
+
+def test_run_accepts_param(capsys):
+    code = _run("run", "pdbe", "list_structures",
+                "--have", "protein.uniprot.accession=ACC_X", "--param", "level=best")
+    assert code == 0
+
+
+def test_run_rejects_bad_param(capsys):
+    code = _run("run", "pdbe", "list_structures",
+                "--have", "protein.uniprot.accession=ACC_X", "--param", "level=nope")
+    assert code == 1
+    assert "not in allowed values" in capsys.readouterr().err
+
+
+def test_parse_params_forms():
+    assert cli._parse_params(["a=1", "cap:b=2"]) == [(None, "a", "1"), ("cap", "b", "2")]
+    with pytest.raises(SystemExit):
+        cli._parse_params(["noequals"])
