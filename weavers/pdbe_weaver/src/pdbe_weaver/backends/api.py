@@ -65,6 +65,10 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     ordered = sorted(by_id.values(), key=_sort_key)
     top = ordered[:limit]
     return {
+        # The fan dimension (set_outputs): every distinct PDB id, so a caller can fan out
+        # one child per structure. Uncapped — structure.pdb.ids/records are the top-N
+        # display; the executor's max_expansion bounds any runaway.
+        "pdb.id": [r["pdb_id"] for r in ordered],
         "structure.pdb.ids": [r["pdb_id"] for r in top],
         "structure.pdb.count": len(by_id),  # true total distinct; ids/records are the top N
         "structure.pdb.records": top,

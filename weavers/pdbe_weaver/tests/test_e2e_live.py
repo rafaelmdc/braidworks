@@ -29,7 +29,7 @@ async def _structures(weaver, accession):
             "resolve_structures",
             [ss],
             requested_outputs=frozenset(
-                {"structure.pdb.ids", "structure.pdb.count", "structure.pdb.records"}
+                {"pdb.id", "structure.pdb.ids", "structure.pdb.count", "structure.pdb.records"}
             ),
             backend="api",
         )
@@ -52,6 +52,10 @@ async def test_live_tp53_has_structures():
     assert all(len(r["pdb_id"]) == 4 for r in recs)
     covs = [r.get("coverage") or 0.0 for r in recs]
     assert covs == sorted(covs, reverse=True)  # best coverage first
+    # the fan dimension: the full distinct id set, matching count
+    fan = produced["pdb.id"]
+    assert isinstance(fan, list) and len(fan) == produced["structure.pdb.count"]
+    assert fan == sorted(set(fan), key=fan.index)  # deduped, order preserved
 
 
 async def test_live_unknown_accession_is_no_match():
