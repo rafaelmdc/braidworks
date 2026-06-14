@@ -1,6 +1,6 @@
 [project]
 name = "reactome_weaver"
-version = "0.1.1"
+version = "0.1.2"
 description = "Reactome pathways (accession -> pathways) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

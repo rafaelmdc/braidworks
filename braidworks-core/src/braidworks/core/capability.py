@@ -135,6 +135,10 @@ class WeaverManifest:
     version: str
     capabilities: tuple[Capability, ...] = field(default_factory=tuple)
     provenance: Provenance | None = None
+    # One-line human description (mirrors the spec's ``title``). Optional and purely
+    # descriptive — surfaced by tooling (e.g. the network view's info card). Defaults
+    # to "" so a manifest without it is still valid.
+    title: str = ""
 
     def capability(self, capability_id: str) -> Capability | None:
         for c in self.capabilities:
@@ -150,6 +154,8 @@ class WeaverManifest:
         }
         if self.provenance is not None:
             data["provenance"] = self.provenance.to_json()
+        if self.title:
+            data["title"] = self.title
         return data
 
     @classmethod
@@ -160,4 +166,5 @@ class WeaverManifest:
             version=data["version"],
             capabilities=tuple(Capability.from_json(c) for c in data["capabilities"]),
             provenance=Provenance.from_json(prov) if prov is not None else None,
+            title=data.get("title", ""),
         )

@@ -1,6 +1,6 @@
 [project]
 name = "pdbe_weaver"
-version = "0.1.1"
+version = "0.1.2"
 description = "PDB experimental structures via PDBe (accession -> structures) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

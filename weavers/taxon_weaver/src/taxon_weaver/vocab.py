@@ -31,7 +31,8 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.1.3"
+WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
@@ -84,6 +85,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
+        title=WEAVER_TITLE,
         provenance=PROVENANCE,
         capabilities=(
             resolve_name_capability(backends=backends),

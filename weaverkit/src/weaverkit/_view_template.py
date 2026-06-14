@@ -106,16 +106,40 @@ HTML_TEMPLATE = r"""<!doctype html>
   .weaver-row .meta { color: var(--ink-dim); font-size: 10.5px; margin-left: auto; text-align: right; }
   .weaver-row code { color: var(--ink); font-size: 11px; }
   .note { color: var(--ink-dim); font-size: 10.5px; margin-top: 8px; line-height: 1.4; }
+  /* Weaver list scrolls within a viewport-relative cap so it never balloons. */
+  #weavers { max-height: clamp(110px, 30vh, 380px); overflow-y: auto; margin: -2px -4px 0; padding: 2px 4px; }
+  .weaver-row { cursor: pointer; border-radius: 7px; padding: 3px 5px; margin: 2px -5px; }
+  .weaver-row:hover { background: rgba(255,255,255,0.05); }
+  .weaver-row.sel { background: rgba(255,255,255,0.08); }
 
-  #detail { display: none; }
-  #detail.show { display: block; }
+  /* Anchored popover card — opens by the clicked node, never a permanent panel. */
+  .card {
+    position: fixed; z-index: 30; width: 290px; max-height: 52vh; overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(16px);
+    border: 1px solid var(--panel-edge); border-radius: 13px; padding: 13px 14px 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5); font-size: 12.5px;
+  }
+  .card-head { display: flex; align-items: flex-start; gap: 8px; }
+  .card-accent { width: 4px; align-self: stretch; border-radius: 3px; flex: none; }
+  .card-id { font-size: 14px; font-weight: 700; word-break: break-all; }
+  .card-title { color: var(--ink-dim); font-size: 11px; line-height: 1.35; margin-top: 1px; }
+  .card-x { margin-left: auto; cursor: pointer; color: var(--ink-dim); font-size: 16px; line-height: 1; padding: 0 2px; }
+  .card-x:hover { color: var(--ink); }
+  .card a { color: #8fb4ff; text-decoration: none; }
+  .card a:hover { text-decoration: underline; }
   .detail-key { font-size: 14px; font-weight: 600; word-break: break-all; }
   .chip {
     display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 6px;
     margin: 3px 4px 0 0; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-edge);
+    word-break: break-all;
   }
   .kv { margin: 7px 0 0; color: var(--ink-dim); }
   .kv b { color: var(--ink); font-weight: 600; }
+  details.fold { margin-top: 8px; }
+  details.fold > summary { cursor: pointer; color: var(--ink-dim); list-style: none; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "▸ "; }
+  details.fold[open] > summary::before { content: "▾ "; }
 
   .hint {
     position: fixed; bottom: 14px; left: 18px; z-index: 10;
@@ -156,14 +180,13 @@ HTML_TEMPLATE = r"""<!doctype html>
   <section id="weavers-wrap">
     <h2>Weavers</h2>
     <div id="weavers"></div>
-  </section>
-  <section id="detail">
-    <h2>Selected</h2>
-    <div id="detail-body"></div>
+    <div class="note">Click a weaver (or a node) for its card.</div>
   </section>
 </div>
 
-<div class="hint">scroll <b>zoom</b> · drag <b>pan</b> · hover to trace · click to pin</div>
+<div class="card" id="card" style="display:none"></div>
+
+<div class="hint">scroll <b>zoom</b> · drag <b>pan</b> · hover to trace · click for card</div>
 <div class="banner" id="banner" style="display:none"></div>
 
 <script>
@@ -191,6 +214,16 @@ DATA.paths.forEach((p, i) =>
   VIEWS.push({ key: "path" + i, label: p.title, graph: p, path: p })
 );
 let current = 0;
+
+// Per-weaver metadata (title / provenance / capabilities / leaf outputs) for the card.
+const WEAVERS = Object.fromEntries((DATA.network.weavers || []).map((w) => [w.id, w]));
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function linkOrText(s) {
+  return /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)} ↗</a>` : esc(s);
+}
 
 // ---- layout (standardized node sizing) -------------------------------------
 const COL_GAP = 264, ROW_GAP = 86;
@@ -471,8 +504,10 @@ addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("d
 canvas.addEventListener("click", (e) => {
   if (moved) return;
   const n = nodeAt(e.clientX, e.clientY);
-  pinned = n ? n.id : null; showDetail(n);
+  pinned = n ? n.id : null;
+  showCard(n, e.clientX, e.clientY);
 });
+addEventListener("keydown", (e) => { if (e.key === "Escape") { pinned = null; closeCard(); } });
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
   const [wx, wy] = toWorld(e.clientX, e.clientY);
@@ -488,7 +523,7 @@ function el(tag, cls, html) {
   if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n;
 }
 function selectView(i) {
-  current = i; pinned = null; showDetail(null); closeMenu(); renderNav(); renderPanels(); fitView();
+  current = i; pinned = null; closeCard(); closeMenu(); renderNav(); renderPanels(); fitView();
 }
 let menuEl = null;
 function closeMenu() { if (menuEl) menuEl.classList.remove("open"); }
@@ -546,43 +581,87 @@ function renderPanels() {
       `<span class="dot" style="background:${TYPE_COLOR[io]}"></span>${TYPE_LABEL[io]}`)));
 
   const box = document.getElementById("weavers"); box.innerHTML = "";
-  DATA.network.weavers.forEach((w) =>
-    box.appendChild(el("div", "weaver-row",
+  DATA.network.weavers.forEach((w) => {
+    const row = el("div", "weaver-row" + (pinned && pinnedWeaver() === w.id ? " sel" : ""),
       `<span class="swatch" style="background:${weaverColor(w.id)}"></span>` +
-      `<code>${w.id}</code><span class="meta">v${w.version}<br>${w.backends.join(" · ")}</span>`)));
+      `<code>${esc(w.id)}</code><span class="meta">v${esc(w.version)}<br>${esc(w.backends.join(" · "))}</span>`);
+    if (w.title) row.title = w.title;
+    row.onclick = () => {
+      // Find a node for this weaver in the current view (an op it owns).
+      let node = null;
+      for (const n of layouts[current].nodes.values())
+        if (n.kind === "op" && n.weaver === w.id) { node = n; break; }
+      if (!node) return;  // weaver not present in a path view
+      pinned = node.id;
+      const r = row.getBoundingClientRect();
+      showCard(node, r.left, r.top);
+      renderPanels();
+    };
+    box.appendChild(row);
+  });
 }
-function showDetail(n) {
-  const box = document.getElementById("detail");
-  const body = document.getElementById("detail-body");
-  if (!n) { box.classList.remove("show"); return; }
-  box.classList.add("show");
-  if (n.kind === "op") {
-    let h = `<div class="detail-key">${n.weaver}</div><div class="kv"><b>${n.capability}</b></div>`;
-    if (n.primary_backend) {
-      const fb = n.fallback_backends.length ? n.fallback_backends.join(", ") : "none";
-      h += `<div class="kv">primary backend: <b>${n.primary_backend}</b></div>`;
-      h += `<div class="kv">fallback: <b>${fb}</b></div>`;
-      if (n.fallback_on && n.fallback_on.length)
-        h += `<div class="kv">falls back on: ${n.fallback_on.join(", ")}</div>`;
-    } else if (n.backends) {
-      h += `<div class="kv">backends: <b>${n.backends.join(", ")}</b></div>`;
-    }
-    h += `<div class="kv">consumes</div>${n.input_types.map((t)=>`<span class="chip">${t}</span>`).join("")}`;
-    h += `<div class="kv">produces</div>${n.output_types.map((t)=>`<span class="chip">${t}</span>`).join("")}`;
-    body.innerHTML = h;
-  } else {
-    const L = layouts[current], uniq = (a) => [...new Set(a)];
-    const prod = L.edges.filter((e)=>e.target===n.id && e.weaver).map((e)=>e.weaver);
-    const cons = L.edges.filter((e)=>e.source===n.id && e.weaver).map((e)=>e.weaver);
-    const io = TYPE_LABEL[n.io] || "Endpoint";
-    const ioColor = TYPE_COLOR[n.io] || TYPE_IN;
-    body.innerHTML =
-      `<div class="detail-key">${n.key || n.id}</div>` +
-      `<div class="kv"><span class="chip" style="border-color:${ioColor}">${io}</span></div>` +
-      (n.description ? `<div class="kv">${n.description}</div>` : "") +
-      (prod.length ? `<div class="kv">produced by</div>${uniq(prod).map((t)=>`<span class="chip">${t}</span>`).join("")}` : "") +
-      (cons.length ? `<div class="kv">consumed by</div>${uniq(cons).map((t)=>`<span class="chip">${t}</span>`).join("")}` : "");
+function pinnedWeaver() {
+  const n = pinned && layouts[current].nodes.get(pinned);
+  return n ? n.weaver : null;
+}
+const cardEl = document.getElementById("card");
+function closeCard() { cardEl.style.display = "none"; }
+const chips = (arr) => (arr || []).map((t) => `<span class="chip">${esc(t)}</span>`).join("") || "—";
+
+function opCardHTML(n) {
+  const w = WEAVERS[n.weaver] || {};
+  const accent = weaverColor(n.weaver, 60);
+  let h = `<div class="card-head"><div class="card-accent" style="background:${accent}"></div>` +
+    `<div><div class="card-id">${esc(n.weaver)}</div>` +
+    (w.title ? `<div class="card-title">${esc(w.title)}</div>` : "") + `</div>` +
+    `<span class="card-x" onclick="closeCard()">✕</span></div>`;
+  h += `<div class="kv">capability <b>${esc(n.capability)}</b></div>`;
+  if (n.primary_backend) {
+    const fb = n.fallback_backends.length ? n.fallback_backends.join(", ") : "none";
+    h += `<div class="kv">backend <b>${esc(n.primary_backend)}</b> · fallback ${esc(fb)}</div>`;
+  } else if (n.backends) {
+    h += `<div class="kv">backends <b>${esc(n.backends.join(", "))}</b></div>`;
   }
+  h += `<div class="kv">consumes</div>${chips(n.input_types)}`;
+  h += `<div class="kv">produces (join keys)</div>${chips(n.output_types)}`;
+  if (n.output_leaves && n.output_leaves.length)
+    h += `<details class="fold"><summary>outputs (${n.output_leaves.length})</summary>${chips(n.output_leaves)}</details>`;
+  const p = w.provenance;
+  if (p) {
+    h += `<div class="kv">source</div><div class="kv">${linkOrText(p.source_url)}</div>`;
+    if (p.license) h += `<div class="kv">license <b>${esc(p.license)}</b></div>`;
+    if (p.citation) h += `<div class="kv">cite ${linkOrText(p.citation)}</div>`;
+  }
+  return h;
+}
+
+function typeCardHTML(n) {
+  const L = layouts[current], uniq = (a) => [...new Set(a)];
+  const prod = L.edges.filter((e) => e.target === n.id && e.weaver).map((e) => e.weaver);
+  const cons = L.edges.filter((e) => e.source === n.id && e.weaver).map((e) => e.weaver);
+  const io = TYPE_LABEL[n.io] || "Endpoint", ioColor = TYPE_COLOR[n.io] || TYPE_IN;
+  return `<div class="card-head"><div class="card-accent" style="background:${ioColor}"></div>` +
+    `<div class="card-id">${esc(n.key || n.id)}</div>` +
+    `<span class="card-x" onclick="closeCard()">✕</span></div>` +
+    `<div class="kv"><span class="chip" style="border-color:${ioColor}">${io}</span></div>` +
+    (n.description ? `<div class="kv">${esc(n.description)}</div>` : "") +
+    (prod.length ? `<div class="kv">produced by</div>${chips(uniq(prod))}` : "") +
+    (cons.length ? `<div class="kv">consumed by</div>${chips(uniq(cons))}` : "");
+}
+
+function showCard(n, ax, ay) {
+  if (!n) { closeCard(); return; }
+  cardEl.innerHTML = n.kind === "op" ? opCardHTML(n) : typeCardHTML(n);
+  cardEl.style.display = "block";
+  // Anchor near (ax, ay), clamped into the viewport.
+  const r = cardEl.getBoundingClientRect();
+  let x = ax + 18, y = ay - 10;
+  if (x + r.width > innerWidth - 12) x = ax - r.width - 18;
+  if (x < 12) x = 12;
+  if (y + r.height > innerHeight - 12) y = innerHeight - r.height - 12;
+  if (y < 12) y = 12;
+  cardEl.style.left = x + "px";
+  cardEl.style.top = y + "px";
 }
 
 // ---- boot ------------------------------------------------------------------

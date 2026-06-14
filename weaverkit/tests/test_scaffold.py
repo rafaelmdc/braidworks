@@ -107,6 +107,7 @@ def test_generated_manifest_carries_provenance(tmp_path):
     assert prov is not None
     assert prov.license == spec.license
     assert prov.source_url == spec.source_url
+    assert weaver.MANIFEST.title == spec.title
 
 
 def test_generated_fingerprints_are_not_unknown(tmp_path):

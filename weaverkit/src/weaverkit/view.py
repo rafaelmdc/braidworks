@@ -25,6 +25,7 @@ from pathlib import Path
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.planner import Braider
+from braidworks.core.references import references_for
 from braidworks.core.registry import BraidRegistry
 
 from weaverkit._view_template import HTML_TEMPLATE
@@ -96,13 +97,17 @@ def _type_node(key: str) -> dict:
 
 
 def build_network(registry: BraidRegistry) -> dict:
-    """Project every manifest into a bipartite ``type -> weaver-op -> type`` graph.
+    """Project every manifest into a ``shared-key -> weaver-op -> shared-key`` graph.
 
-    Each capability becomes an operation node owned by its weaver (carrying the
-    weaver's color), with edges from every consumed type and to every produced
-    type. Types are just endpoints; the weaver-op nodes are the actors. Unlike
-    ``BraidRegistry.build_graph`` this keeps multi-input capabilities — a view
-    wants the whole truth, not the planner's pruned single-input projection.
+    Only **shared/bridge keys** (the join vocabulary, ``weaverkit.keys.SHARED_KEYS``,
+    which includes entry keys) become type nodes — they are the connective tissue.
+    Descriptive **leaf outputs** (a weaver's payload, e.g. ``pathway.reactome.names``)
+    are *not* nodes; drawing them produced a "tower" of dozens of dead-end endpoints.
+    They ride along on each weaver's info card instead. The result is the graph that
+    actually carries meaning: which weaver bridges which keys.
+
+    Each weaver also carries its title, provenance, capabilities, and rendered
+    reference, so the view's per-weaver card needs no second pass.
     """
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
@@ -116,10 +121,13 @@ def build_network(registry: BraidRegistry) -> dict:
 
     for manifest in sorted(registry.manifests(), key=lambda m: m.weaver_id):
         backends: set[str] = set()
-        cap_ids: list[str] = []
+        caps_detail: list[dict] = []
+        weaver_leaves: set[str] = set()
         for cap in manifest.capabilities:
-            cap_ids.append(cap.id)
             backends.update(cap.backends)
+            shared_out = sorted(k for k in cap.produces if k in SHARED_KEYS)
+            leaf_out = sorted(k for k in cap.produces if k not in SHARED_KEYS)
+            weaver_leaves.update(leaf_out)
             op_id = f"op:{manifest.weaver_id}:{cap.id}"
             nodes[op_id] = {
                 "id": op_id,
@@ -129,24 +137,39 @@ def build_network(registry: BraidRegistry) -> dict:
                 "capability": cap.id,
                 "backends": sorted(cap.backends),
                 "input_types": sorted(cap.consumes),
-                "output_types": sorted(cap.produces),
+                "output_types": shared_out,  # only shared keys are graph nodes
+                "output_leaves": leaf_out,  # descriptive payload (card only)
             }
             for source in sorted(cap.consumes):
                 ensure_type(source)
                 edges.append(
                     {"source": f"type:{source}", "target": op_id, "weaver": manifest.weaver_id}
                 )
-            for target in sorted(cap.produces):
+            for target in shared_out:
                 ensure_type(target)
                 edges.append(
                     {"source": op_id, "target": f"type:{target}", "weaver": manifest.weaver_id}
                 )
+            caps_detail.append(
+                {
+                    "id": cap.id,
+                    "consumes": sorted(cap.consumes),
+                    "produces": sorted(cap.produces),
+                    "backends": sorted(cap.backends),
+                }
+            )
+        prov = manifest.provenance
+        refs = references_for([manifest.weaver_id], registry)
         weavers.append(
             {
                 "id": manifest.weaver_id,
+                "title": manifest.title,
                 "version": manifest.version,
                 "backends": sorted(backends),
-                "capabilities": cap_ids,
+                "capabilities": caps_detail,
+                "outputs": sorted(weaver_leaves),
+                "provenance": prov.to_json() if prov is not None else None,
+                "reference": refs[0].render() if refs else "",
             }
         )
 
