@@ -11,7 +11,7 @@ Supplied by the user at the start of a braid.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `organism.name` | Free-text organism name — the user-supplied entry input. | — | `ncbi:ncbi.resolve_name` |
-| `protein.query` | Free-text organism name — the user-supplied entry input. | `string:list_interactions` | `uniprot:resolve_protein` |
+| `protein.query` | Free-text organism name — the user-supplied entry input. | `string:list_interactions` | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
 
 ## Shared join keys
 
@@ -22,7 +22,7 @@ Registered bridge keys — what links weavers together.
 | `chem.chebi.id` | ChEBI chemical entity id. | — | — |
 | `enzyme.ec` | Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id. | — | — |
-| `gene.ncbi.id` | NCBI Gene id. | — | — |
+| `gene.ncbi.id` | NCBI Gene id. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.list_orthologs` | `ncbi:ncbi.describe_gene`, `ncbi:ncbi.list_orthologs` |
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
@@ -44,6 +44,14 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
+| `gene.detail` | Full gene record — symbol, description, type, chromosomes, synonyms, xrefs, counts. | `ncbi:ncbi.describe_gene` | — |
+| `gene.name` | Gene description / full name (NCBI Gene). | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | — |
+| `gene.organism` | Source organism of a gene (NCBI Gene taxname). | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | — |
+| `gene.ortholog.count` | Number of orthologs of a gene across taxa. | `ncbi:ncbi.list_orthologs` | — |
+| `gene.ortholog.records` | Ortholog genes of a gene — gene_id, symbol, organism. | `ncbi:ncbi.list_orthologs` | — |
+| `gene.product.records` | Transcript + protein products of a gene — accessions and names. | `ncbi:ncbi.describe_gene` | — |
+| `gene.symbol` | Official gene symbol (NCBI Gene). | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | — |
+| `gene.type` | Gene type (protein_coding, ncRNA, pseudo, …). | `ncbi:ncbi.describe_gene` | — |
 | `genome.assembly.count` | Number of genome assemblies for a taxon (list_genomes). | `ncbi:ncbi.list_genomes` | — |
 | `genome.assembly.detail` | Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts. | `ncbi:ncbi.describe_genome` | — |
 | `genome.assembly.level` | Assembly level of a single genome (Complete Genome/Chromosome/Scaffold/Contig). | `ncbi:ncbi.describe_genome` | — |

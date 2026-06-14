@@ -2,7 +2,7 @@
 
 NCBI Taxonomy resolver (name/taxid → taxonomy + lineage). Source:
 https://www.ncbi.nlm.nih.gov/taxonomy (Public Domain). Kind: `resolver`.
-Capabilities: `ncbi.resolve_name`, `ncbi.describe_taxon`, `ncbi.list_children`, `ncbi.list_genomes`, `ncbi.describe_genome`. weaver_id: `ncbi`.
+Capabilities: ncbi.resolve_name, describe_taxon, list_children, list_genomes, describe_genome, resolve_gene, describe_gene, list_orthologs. weaver_id: `ncbi`.
 
 > **This is the "bring your own plumbing" reference weaver** (see
 > [../../weaverkit/docs/decisions.md](../../weaverkit/docs/decisions.md)). Unlike a

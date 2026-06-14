@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.1.7"
+version = "0.1.8"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -51,6 +51,11 @@ source_sample = """
 # GET .../genome/accession/GCF_000005845.2/sequence_reports (describe_genome sequences group)
 { "reports": [ { "chr_name": "chromosome", "role": "assembled-molecule", "length": 4641652,
     "genbank_accession": "U00096.3", "refseq_accession": "NC_000913.3" } ] }
+
+# GET .../gene/symbol/TP53/taxon/9606/dataset_report (resolve_gene) and
+#     .../gene/id/7157/orthologs (list_orthologs) — both return reports[].gene
+{ "reports": [ { "gene": { "gene_id": 7157, "symbol": "TP53", "description": "tumor protein p53",
+    "type": "PROTEIN_CODING", "taxname": "Homo sapiens", "chromosomes": ["17"] } } ] }
 """
 
 [bulk]
@@ -170,6 +175,59 @@ max_batch_size = 1000
   [[capability.group]]
   id = "sequences"
   outputs = ["genome.sequence.records"]
+
+# ncbi.resolve_gene: a gene symbol (+ taxon) -> its NCBI gene id. Consumes protein.query
+# (a gene symbol is a valid molecular query) → shares the molecular entry point and gives
+# a second path into the gene layer. API-only: gene/symbol/{symbol}/taxon/{taxon}/dataset_report.
+[[capability]]
+id = "ncbi.resolve_gene"
+consumes = ["protein.query"]
+backends = ["api"]
+max_batch_size = 1000
+
+  [[capability.group]]
+  id = "gene"
+  outputs = ["gene.ncbi.id", "gene.symbol", "gene.name", "gene.organism"]
+
+  [[capability.parameter]]
+  name = "taxon"
+  type = "string"
+  default = "9606"
+  description = "Taxid/name to disambiguate the species (default human)."
+
+# ncbi.describe_gene: one NCBI gene id -> its detail. Two output groups fold two endpoints
+# — summary (dataset_report) and products (product_report: transcripts + proteins).
+[[capability]]
+id = "ncbi.describe_gene"
+consumes = ["gene.ncbi.id"]
+backends = ["api"]
+max_batch_size = 1000
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["gene.symbol", "gene.name", "gene.type", "gene.organism", "gene.detail"]
+
+  [[capability.group]]
+  id = "products"
+  outputs = ["gene.product.records"]
+
+# ncbi.list_orthologs: one NCBI gene id -> its ortholog gene ids across taxa. gene.ncbi.id
+# is a set output (the fan dimension): "this gene -> its ortholog in every species". API-only.
+[[capability]]
+id = "ncbi.list_orthologs"
+consumes = ["gene.ncbi.id"]
+backends = ["api"]
+max_batch_size = 1000
+set_outputs = ["gene.ncbi.id"]
+
+  [[capability.group]]
+  id = "orthologs"
+  outputs = ["gene.ncbi.id", "gene.ortholog.count", "gene.ortholog.records"]
+
+  [[capability.parameter]]
+  name = "taxon_filter"
+  type = "string"
+  description = "Restrict orthologs to this taxid/clade (e.g. 40674 mammals)."
 
 # Golden inputs are resident in the deterministic fixture DB (ncbi_weaver.fixture,
 # the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.
