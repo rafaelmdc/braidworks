@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import importlib
 import sys
+import tomllib
 from pathlib import Path
 
 from braidworks.core import ATTRIBUTION_REQUIRED, citation_requirement, is_known_license
@@ -69,6 +70,28 @@ def _provenance_warnings(spec: WeaverSpec) -> list[str]:
             "— add the DOI / reference so a braid can credit this source"
         )
     return warnings
+
+
+def _version_drift_warning(spec: WeaverSpec, spec_path: str) -> list[str]:
+    """Warn when the spec version disagrees with the package's pyproject version.
+
+    The two are independent sites that must stay in lockstep (the spec drives the
+    manifest version; pyproject drives the released artifact and its git tag). Drift
+    means a tag no longer identifies the manifest it shipped with. Non-fatal — read
+    from the pyproject.toml next to the spec; silently skip if it isn't there.
+    """
+    pyproject = Path(spec_path).resolve().parent / "pyproject.toml"
+    try:
+        data = tomllib.loads(pyproject.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    proj_version = str(data.get("project", {}).get("version", "")).strip()
+    if proj_version and proj_version != spec.version:
+        return [
+            f"version drift: spec version {spec.version!r} != pyproject version "
+            f"{proj_version!r} — reconcile so the released artifact matches its tag"
+        ]
+    return []
 
 
 def cmd_new(args: argparse.Namespace) -> int:
@@ -224,7 +247,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         _print_problems(f"{package} does not conform to {args.spec}:", conformance)
         return 1
 
-    for w in _provenance_warnings(spec):
+    for w in _provenance_warnings(spec) + _version_drift_warning(spec, args.spec):
         print(f"warning: {w}", file=sys.stderr)
 
     if args.strict:

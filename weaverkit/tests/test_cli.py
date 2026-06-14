@@ -14,6 +14,7 @@ from weaverkit.cli import (
     _build_fixture_weaver,
     _first_runnable_backend,
     _provenance_warnings,
+    _version_drift_warning,
     main,
 )
 from weaverkit.spec import load_spec
@@ -40,6 +41,32 @@ def test_provenance_no_warning_when_complete():
     spec = _spec(license="CC-BY-4.0", citation="https://doi.org/10.1093/nar/xyz")
     assert _provenance_warnings(spec) == []
     assert _provenance_warnings(_spec(license="CC0-1.0", citation="")) == []
+
+
+def _write_pyproject(tmp_path, version):
+    spec_path = tmp_path / "weaver.spec.toml"
+    spec_path.write_text(FIXTURE.read_text())
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "madin_weaver"\nversion = "{version}"\n'
+    )
+    return spec_path
+
+
+def test_version_drift_warns(tmp_path):
+    spec_path = _write_pyproject(tmp_path, "0.9.9")  # fixture spec version is 0.1.0
+    warnings = _version_drift_warning(load_spec(spec_path), str(spec_path))
+    assert any("version drift" in w for w in warnings)
+
+
+def test_version_no_drift_when_aligned(tmp_path):
+    spec_path = _write_pyproject(tmp_path, "0.1.0")
+    assert _version_drift_warning(load_spec(spec_path), str(spec_path)) == []
+
+
+def test_version_drift_skips_when_no_pyproject(tmp_path):
+    spec_path = tmp_path / "weaver.spec.toml"
+    spec_path.write_text(FIXTURE.read_text())
+    assert _version_drift_warning(load_spec(spec_path), str(spec_path)) == []
 
 
 class _FakeWeaver:
