@@ -23,6 +23,10 @@ make fmt                  # ruff format
 make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>_weaver
 make index                # rebuild docs/weavers-index.tsv (machine) + docs/keys-index.md (human)
+make view                 # regenerate the offline HTML network view -> docs/braidworks-network.html
+
+uv run weaverkit references          # print the source citations for all discovered weavers
+make tags-check                      # list any package versions missing a release tag
 ```
 
 CI runs `make lint` and `make test`; both must stay green.
@@ -38,6 +42,14 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    default; `resolver` for fuzzy/ambiguous name matching — it generates the richer
    candidate/`MatchStatus` shape). Validate it: `make verify-weaver SPEC=... ` —
    it reports every problem at once.
+   > **Provenance metadata (drives automatic references — issue #1).** Fill the
+   > `[weaver]` fields: `title` (one-line description, shown in the network-view card),
+   > `source_url`, `license` (a **known identifier** — `CC-BY-4.0`, `CC0-1.0`,
+   > `Public Domain`, `Open` … see `braidworks.core.licenses.LICENSE_RULES`), `citation`
+   > (DOI/reference), `attribution` (provider to credit). These flow into the runtime
+   > `WeaverManifest` and are emitted as citations on braid results / `weaverkit
+   > references` / the visualizer. `verify` *warns* if the license is unknown (treated
+   > as `restricted`) or an attribution-required license has no citation — fix those.
 2. **Scaffold.** `make new-weaver SPEC=... DEST=weavers/<db>_weaver` (under `weavers/`,
    so the generated `IMPLEMENTATION.md`'s `../../weaverkit/...` links resolve). This stamps a
    complete, importable package whose manifest already matches the spec and whose
@@ -74,6 +86,29 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    --strict` — it additionally fails while any `# TODO` placeholder remains and runs
    the golden examples (against a fixture or a configured backend; plain `verify`
    lets them skip).
+   > **Run the live E2E after touching any `api` backend.** CI only exercises mocked
+   > `httpx.MockTransport` responses, so upstream schema drift silently turns a live
+   > backend into all-`NO_MATCH` while unit tests stay green. Fill in
+   > `tests/test_e2e_live.py` with a real known-truth example (`--strict` now flags the
+   > scaffold's `"TODO-real-input"` placeholder) and run
+   > `BRAIDWORKS_RUN_LIVE=1 make -C weavers/<db>_weaver test-live` (real network). When a
+   > backend misbehaves, `curl` the endpoint and diff its shape against your mock first.
+
+## Versioning, tags & releasing
+
+- **Each package versions independently** (`braidworks-core`, `weaverkit`, every
+  `weavers/*`); dependents pin core with a **floor, no ceiling**
+  (`braidworks-core>=X.Y.Z`). Keep backwards compatibility by default.
+- **A weaver's version lives in THREE sites that must agree:** `weaver.spec.toml`
+  `version`, `pyproject.toml` `version`, and `vocab.py` `WEAVER_VERSION` (the last is
+  generated from the spec). `verify` *warns* on `spec` ≠ `pyproject` drift. When you
+  change a weaver's manifest/behaviour, patch-bump all three. If a backend now needs a
+  newer core API, raise its `braidworks-core>=` floor in the same change.
+- **Do NOT create git tags by hand.** Tagging is automated:
+  `.github/workflows/release-tags.yml` runs on every push to `main` and creates+pushes
+  `<package>-v<version>` for any package whose current version isn't tagged yet. So:
+  bump the version in your PR, merge, and the tag appears on its own. Locally,
+  `make tags-check` lists missing tags; `make tags` creates them.
 
 ## Boundaries (do not cross these)
 
@@ -88,8 +123,14 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
   producer exists *yet* is a softer matter — see "Connectivity" below.)
 - **Never return `"unknown"` (or empty) from a fingerprint.** It silently disables
   cache invalidation. Use a release tag, dump date, or checksum.
-- **Don't hand-edit generated `vocab.py`.** It mirrors the spec. Change the spec
-  and regenerate; `verify` checks the two stay in sync.
+- **Don't hand-edit generated `vocab.py`.** It mirrors the spec (capabilities +
+  `provenance` + `title`). Change the spec and regenerate (`weaverkit new --force`);
+  `verify` checks the two stay in sync. **Exception:** `taxon_weaver` is hand-written
+  ("bring your own plumbing" reference) — its `vocab.py` has custom module-level
+  constants, so regenerating it from the scaffold *clobbers* them; edit it by hand. The
+  scaffold also generates the `[project.entry-points."braidworks.weavers"]` block, which
+  makes the weaver discoverable (network view / `weaverkit references` / arq) — don't
+  remove it.
 - **`source_sample` in the spec must be real** — paste an actual snippet of the
   source data. It is the anti-hallucination guard: it proves the schema you mapped
   was observed, not invented.
