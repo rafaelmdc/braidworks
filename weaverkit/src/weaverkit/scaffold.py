@@ -151,6 +151,11 @@ def _vocab_source(spec: WeaverSpec) -> str:
                 f"                always_computed_groups="
                 f"{_frozenset_literal(cap.always_computed_groups)},"
             )
+        # One→many join keys the executor may fan out (cardinality fan-out).
+        if cap.set_outputs:
+            lines.append(
+                f"                set_outputs={_frozenset_literal(cap.set_outputs)},"
+            )
         lines.append("            ),")
     lines += [
         "        ),",

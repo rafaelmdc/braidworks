@@ -106,6 +106,12 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                 f"!= spec output groups {spec_groups} — {regen}"
             )
 
+        if set(man_cap.set_outputs) != set(spec_cap.set_outputs):
+            problems.append(
+                f"capability {cap_id!r}: manifest set_outputs {sorted(man_cap.set_outputs)} "
+                f"!= spec set_outputs {sorted(spec_cap.set_outputs)} — {regen}"
+            )
+
         for b in man_cap.backends:
             if b not in spec.backends:
                 problems.append(

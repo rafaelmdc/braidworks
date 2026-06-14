@@ -144,6 +144,25 @@ def test_always_computed_groups_rejects_undeclared_group():
     assert any("always_computed_groups references 'nope'" in p for p in problems)
 
 
+def test_set_outputs_accepts_produced_key():
+    data = _valid_dict()
+    data["capability"][0]["set_outputs"] = ["microbe.trait.gram_stain"]
+    spec = WeaverSpec.from_dict(data)
+    assert spec.capabilities[0].set_outputs == ("microbe.trait.gram_stain",)
+    assert validate_spec(spec) == []
+
+
+def test_set_outputs_rejects_unproduced_key():
+    data = _valid_dict()
+    data["capability"][0]["set_outputs"] = ["pathway.reactome.id"]  # not produced here
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("set_outputs lists 'pathway.reactome.id'" in p for p in problems)
+
+
+def test_set_outputs_defaults_empty():
+    assert WeaverSpec.from_dict(_valid_dict()).capabilities[0].set_outputs == ()
+
+
 def test_overlapping_group_outputs_rejected():
     data = _valid_dict()
     data["capability"][0]["group"][1]["outputs"] = ["microbe.trait.gram_stain"]

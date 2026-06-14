@@ -122,11 +122,15 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
      `tests/test_fanout_setoutput.py`. **Lineage shape decided:** no change needed — the
      hierarchical `entity_id` already encodes nested fans (`e0#1#3`), and `parent_id`
      gives the root; the visualizer (Phase 4) reconstructs the tree by splitting on `#`.
-   - **Satellite conversion — next (PR-B).** Make `reactome_weaver` emit
+   - **weaverkit `set_outputs` support — ✅ Done** (weaverkit 0.1.10, PR-B). A
+     `[[capability]]` may declare `set_outputs = [...]` (validated ⊆ produces); the
+     scaffold emits it into the generated `Capability`, and conformance checks the
+     manifest's `set_outputs` matches the spec. So a weaver can now declare a fan
+     dimension without hand-editing generated `vocab.py`.
+   - **Satellite conversion — next (PR-C).** Make `reactome_weaver` emit
      `pathway.reactome.id` as the full id set (alongside the existing `…names` list) and
-     declare it in `set_outputs` (spec → `vocab.py`). Covers "protein → all pathways, each
-     drillable." Then `pdb.id`, etc. Needs weaverkit spec/scaffold support for
-     `set_outputs` first.
+     declare it in `set_outputs` (bump its three version sites; run `--strict` + live
+     E2E). Covers "protein → all pathways, each drillable." Then `pdb.id`, etc.
 3. **Surface the mechanism (non-visual).** `ExpandPolicy` in the `weaverkit view` path
    query + CLI knobs; align with `braidworks-arq` so expansion children distribute across
    workers; optionally annotate `set`-valued (fan-able) keys in the static network view.
