@@ -22,6 +22,11 @@ from braidworks.core.licenses import (
     is_known_license,
 )
 from braidworks.core.factory import WeaverFactory, WeaverProvider
+from braidworks.core.discovery import (
+    ENTRY_POINT_GROUP,
+    build_registry_from_entry_points,
+    iter_weaver_builders,
+)
 from braidworks.core.http import NOT_FOUND_STATUSES, is_not_found_status
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
@@ -98,6 +103,9 @@ __all__ = [
     "is_known_license",
     "CANONICAL_TYPES",
     "canonicalize",
+    "ENTRY_POINT_GROUP",
+    "build_registry_from_entry_points",
+    "iter_weaver_builders",
     "BackendConfigurationError",
     "BackendUnavailable",
     "BraidworksError",

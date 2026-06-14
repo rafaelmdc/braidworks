@@ -10,6 +10,47 @@ last).
 uv sync --all-extras
 ```
 
+## From the command line (`braidworks`)
+
+The fastest way in — no Python needed. The `braidworks` command (installed with
+`braidworks-core`) discovers every installed weaver from entry points.
+
+```bash
+# plan a route from what you HAVE to what you WANT, and run it
+braidworks weave --have protein.query=P04637 --want protein.name,structure.pdb.ids
+
+# a whole column of IDs (one per line) -> a TSV for your spreadsheet
+braidworks weave --in-file accessions.txt --in-type protein.query \
+    --want protein.name,protein.gene --format tsv > out.tsv
+
+# pipe from stdin straight into jq
+cat accessions.txt | braidworks weave --in-file - --in-type protein.query \
+    --want structure.pdb.ids --format jsonl | jq .
+
+# fan one protein out into each of its structures, each then described
+braidworks weave --have protein.query=P04637 \
+    --want structure.pdb.title,structure.pdb.method --expand all --format tsv
+
+# call one capability directly (no routing)
+braidworks run pdbe describe_structure --have pdb.id=1tup
+
+# inspect: what's installed, what flows where, and a route preview
+braidworks weavers
+braidworks keys --produces structure.pdb.ids
+braidworks path --from protein.query --to pathway.reactome.id
+braidworks references
+```
+
+Input comes from `--have TYPE=VALUE` (repeatable; broadcast onto every file row), a
+file (`--in-file`; a CSV/TSV whose header is type-ids, or one value per line with
+`--in-type`), or stdin (`--in-file -`). Output is `--format human|json|jsonl|tsv|csv`;
+`--expand none|all|top:K` controls fan-out; `--only weaver,weaver` restricts the set.
+Data goes to **stdout**, progress + a resolved/unresolved/review count to **stderr**,
+so pipes stay clean. Exit code is non-zero only on a structural error (a `NO_MATCH` is
+valid data) — add `--strict` to also fail on any unresolved/review input.
+
+The same thing from Python:
+
 ## 1. Register weavers, plan, run (the common path)
 
 You register the weavers you want available, say what you *have* and what you *want*,

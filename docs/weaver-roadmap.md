@@ -19,6 +19,28 @@ exactly which source and license they're dealing with.
 
 ---
 
+## 0. Current priority & deferred breadth (2026-06)
+
+The protein hub is built out (uniprot → pdbe / alphafold / quickgo / reactome /
+string), each `list_*` set key has its `describe_*` consumer, and cardinality
+fan-out ships. The next investment is **depth-for-everyone, not breadth**: a
+first-class `braidworks` **CLI** (query + inspect from bash) so researchers can use
+the whole network without writing Python. Weaver breadth is **deferred below it**.
+
+Deferred-breadth weavers/capabilities (valuable, but each only deepens one corner —
+pick up after the CLI):
+
+- **`uniprot resolve_mapping`** — accession → cross-reference ids (KEGG, InterPro,
+  Pfam, Ensembl, …). Turns UniProt into the intermediate edge that unlocks the
+  islands below.
+- **`string → KEGG`** — STRING maps proteins to KEGG pathways; a `pathway.kegg.id`
+  producer (needs the KEGG-licensing note, §7).
+- **Disease / MeSH hub** — STRING (and others) are disease-queryable; a
+  `disease.*` / MeSH key would bridge phenotype ↔ molecular. Biggest new surface,
+  least defined — design before building.
+
+---
+
 ## 1. Reachability — how weavers connect
 
 The braider plans multi-hop paths automatically: **a weaver is reachable iff some
