@@ -2,7 +2,7 @@
 
 BacDive type-strain phenotypes — a microbe's curated type-strain traits (morphology,
 physiology, growth) keyed by scientific name, over the free, keyless BacDive API. A
-terminal weaver off the organism layer; chains behind `taxon_weaver` (which produces the
+terminal weaver off the organism layer; chains behind `ncbi_weaver` (which produces the
 scientific name) or `uniprot_weaver` (organism of a protein).
 
 - **Source:** https://bacdive.dsmz.de · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkab961 — BacDive (DSMZ)

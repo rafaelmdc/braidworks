@@ -39,4 +39,4 @@ uv run weaverkit verify --spec weaver.spec.toml \
 
 This is the *minimal* reference (a `lookup` weaver). For the *advanced* case — a
 `resolver` with fuzzy matching, two backends, and a multi-GB bulk DB — see
-[`../taxon_weaver/`](../taxon_weaver/). Build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[`../ncbi_weaver/`](../ncbi_weaver/). Build loop & boundaries: [AGENTS.md](../../AGENTS.md).

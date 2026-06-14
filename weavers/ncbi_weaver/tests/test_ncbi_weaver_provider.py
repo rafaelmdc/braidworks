@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from braidworks.core import WeaverFactory, WeaverProvider
 
-from taxon_weaver import NCBITaxonWeaver, NCBIWeaverProvider, vocab
+from ncbi_weaver import NCBITaxonWeaver, NCBIWeaverProvider, vocab
 
 
 def test_provider_conforms_to_contract():

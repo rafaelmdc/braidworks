@@ -3,7 +3,7 @@
 This is a build manual for an AI agent (or human) implementing a new Braidworks
 weaver. It is prescriptive: follow the steps in order, change only what's marked,
 and run the verification commands at each gate. When in doubt, **read the
-corresponding file in `weavers/taxon_weaver/src/taxon_weaver/` — it is the source of truth,
+corresponding file in `weavers/ncbi_weaver/src/ncbi_weaver/` — it is the source of truth,
 this guide just orients you.**
 
 > **Don't start by copying files by hand.** The deterministic path is
@@ -29,7 +29,7 @@ this guide just orients you.**
 > `map_resolver`, `BackendDispatchWeaver`, `BackendBase`). A scaffolded weaver
 > **imports** them — it does not generate `intermediate.py` / `mapper.py` /
 > `dispatch.py` / `backends/base.py`. The numbered concepts below still describe what
-> each piece *does* (and match `taxon_weaver`, which keeps its own hand-tuned versions
+> each piece *does* (and match `ncbi_weaver`, which keeps its own hand-tuned versions
 > as the "bring your own plumbing" reference) — but for a new weaver, items 2 and 4
 > are just `from braidworks.core import ...`.
 
@@ -63,7 +63,7 @@ never raw user input.
 | Terminal vs intermediate | Does it also emit cross-ref IDs others consume? | terminal (traits only) |
 
 If `consumes` is not already produced by a registered weaver, you also need (or
-must rely on) an upstream weaver — usually `taxon_weaver`.
+must rely on) an upstream weaver — usually `ncbi_weaver`.
 
 ---
 
@@ -110,11 +110,11 @@ weavers/<db>_weaver/
 ```
 
 > The numbered sections below (§4 intermediate, §6 dispatch, §7 mapper) describe what
-> each concept *does* and match `taxon_weaver`, the "bring your own plumbing"
+> each concept *does* and match `ncbi_weaver`, the "bring your own plumbing"
 > reference that keeps hand-tuned copies. For a **scaffolded** weaver those pieces are
 > just `from braidworks.core import ...` — you only write the backends.
 
-**`pyproject.toml`** (copy `weavers/taxon_weaver/pyproject.toml`, change name/packages/deps):
+**`pyproject.toml`** (copy `weavers/ncbi_weaver/pyproject.toml`, change name/packages/deps):
 
 ```toml
 [project]
@@ -146,7 +146,7 @@ imports — no manual member entry needed.
 
 Pattern: define `type_id` constants, group them, build one `Capability` per
 operation, and a `build_manifest(*, backends)` that takes the wired backends.
-Reference: `weavers/taxon_weaver/src/taxon_weaver/vocab.py`.
+Reference: `weavers/ncbi_weaver/src/ncbi_weaver/vocab.py`.
 
 ```python
 from braidworks.core import Capability, OutputGroup, WeaverManifest
@@ -202,7 +202,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
 One dataclass your backends fill and the mapper reads. It is **backend-neutral**
 and must never be imported by `braidworks-core`. Include a status enum mirroring
 `WeaveStatus` outcomes (resolved / ambiguous / no_match / error) and a `score`
-for confidence. Reference: `weavers/taxon_weaver/src/taxon_weaver/intermediate.py`.
+for confidence. Reference: `weavers/ncbi_weaver/src/ncbi_weaver/intermediate.py`.
 
 ```python
 from dataclasses import dataclass, field
@@ -266,7 +266,7 @@ silently disables cache invalidation.
 Copy `dispatch.py`. It: looks up the capability, selects the backend (raising
 `BackendUnavailable` if absent/unconfigured), extracts the single consumed value
 per input, calls `backend.resolve(...)`, and runs the mapper. **Adapt the
-"what does the backend need" line:** taxon_weaver computes
+"what does the backend need" line:** ncbi_weaver computes
 `need_lineage = "lineage" in cap.triggered_groups(requested_outputs)`. Generalize to
 pass the triggered optional groups:
 
@@ -276,7 +276,7 @@ matches = await strategy.resolve(capability_id, queries, groups=groups)
 ```
 
 `weaver.py` is tiny — subclass the dispatch weaver and set `MANIFEST` from the
-wired backends (copy `weavers/taxon_weaver/src/taxon_weaver/weaver.py`):
+wired backends (copy `weavers/ncbi_weaver/src/ncbi_weaver/weaver.py`):
 
 ```python
 class MadinWeaver(BackendDispatchWeaver):
@@ -295,7 +295,7 @@ class MadinWeaver(BackendDispatchWeaver):
 ## 7. `mapper.py` — the single strand-shape source
 
 The mapper is the contract: **all backends route through it, so all backends emit
-identical strands.** Reference: `weavers/taxon_weaver/src/taxon_weaver/mapper.py`.
+identical strands.** Reference: `weavers/ncbi_weaver/src/ncbi_weaver/mapper.py`.
 
 ```python
 def map_trait_match(match, *, capability, requested_outputs, backend, weaver_version) -> WeaveResult:
@@ -352,7 +352,7 @@ class MadinWeaverProvider:
     def build(self, config): return build_madin_weaver(**dict(config))
 ```
 
-If you have a local DB, copy taxon_weaver's `factory._ensure_local_db` +
+If you have a local DB, copy ncbi_weaver's `factory._ensure_local_db` +
 `_interactive` + `_prompt_for_setup` (interactive prompt vs actionable error vs
 consent). Otherwise omit.
 
@@ -368,7 +368,7 @@ lock, atomic temp→`os.replace`, idempotent reuse — lives in
 domain pieces: `db_is_valid(path)`, `_build(target)` (download + parse into the DB,
 recording the source version), and the consent message; then delegate to
 `ensure_local_db`. The `[bulk]` spec table makes the scaffold stamp this shape plus
-a `<db>-ensure` CLI for you. `weavers/taxon_weaver/src/taxon_weaver/setup.py` is the worked
+a `<db>-ensure` CLI for you. `weavers/ncbi_weaver/src/ncbi_weaver/setup.py` is the worked
 example (it adds `check_for_update` on top).
 
 **Reuse shortcut:** if the source is already in **NCBI taxdump format** (e.g.
@@ -384,24 +384,24 @@ Design rationale and the full decision log are in
 
 1. **Unit / behavior** (per backend): exact match, no-match, ambiguous, group
    selection (core-only vs +optional), batch order/length. Local: build a tiny
-   synthetic DB in a fixture (see `weavers/taxon_weaver/tests/conftest.py`). API: drive an
-   `httpx.MockTransport` (see `tests/test_taxon_weaver_api.py`).
+   synthetic DB in a fixture (see `weavers/ncbi_weaver/tests/conftest.py`). API: drive an
+   `httpx.MockTransport` (see `tests/test_ncbi_weaver_api.py`).
 2. **Contract mixins** (per backend): subclass `WeaverOrderContractTests` and
    `CacheFingerprintTests` from `braidworks.testing.contract`. Provide ≥5 distinct
-   samples. See `tests/test_taxon_weaver_local.py`.
+   samples. See `tests/test_ncbi_weaver_local.py`.
 3. **Opt-in live E2E**: gate with
    `pytest.mark.skipif(not os.environ.get("BRAIDWORKS_RUN_LIVE"), …)`; ensure the
    real DB, run a large/real batch, assert exact resolution + known-truth rows.
    Copy `tests/test_e2e_live.py`. It must **self-skip** without the env var.
 
-`conftest.py` note: taxon_weaver tests import `from tests....`; that only resolves
+`conftest.py` note: ncbi_weaver tests import `from tests....`; that only resolves
 with `pythonpath = ["."]` + running from the package dir — keep both.
 
 ---
 
 ## 11. `Makefile` — weaver-specific macros
 
-Copy `weavers/taxon_weaver/Makefile`: `test`, `test-live` (the `BRAIDWORKS_RUN_LIVE` E2E),
+Copy `weavers/ncbi_weaver/Makefile`: `test`, `test-live` (the `BRAIDWORKS_RUN_LIVE` E2E),
 `ensure` (if there's a local DB), `lint`, `fmt`, `help`. Then make the **root**
 `test-weaver` (or a per-weaver target) delegate: `$(MAKE) -C <path> test`. Add the
 package's `src`/`tests` to the root `LINT_PATHS`.
@@ -419,7 +419,7 @@ make -C <db>_weaver test-live  # BRAIDWORKS_RUN_LIVE=1 — real download/build/r
 ```
 
 Then plan an end-to-end chain to confirm reachability, e.g.:
-`organism.name → [taxon_weaver] → ncbi.taxon.id → [<db>_weaver] → microbe.trait.*`.
+`organism.name → [ncbi_weaver] → ncbi.taxon.id → [<db>_weaver] → microbe.trait.*`.
 
 ---
 
@@ -469,6 +469,6 @@ Then plan an end-to-end chain to confirm reachability, e.g.:
 | Core abstractions, two-layer factory | [architecture.md](architecture.md) |
 | Local DB auto-setup decisions | [local-db-setup-plan.md](local-db-setup-plan.md) |
 | Building the NCBI DB | [database.md](database.md) |
-| Reference implementation | `weavers/taxon_weaver/src/taxon_weaver/` (every file maps to a §above) |
+| Reference implementation | `weavers/ncbi_weaver/src/ncbi_weaver/` (every file maps to a §above) |
 | Core types | `braidworks-core/src/braidworks/core/` — `capability.py`, `weaver.py`, `result.py`, `strand.py` |
 | Shipped test mixins | `braidworks-core/src/braidworks/testing/contract.py` |

@@ -13,7 +13,7 @@ from __future__ import annotations
 SHARED_KEYS: dict[str, str] = {
     # Entry point
     "organism.name": "Free-text organism name — the entry input (user-provided).",
-    # Organism layer (taxon_weaver / gtdb_weaver)
+    # Organism layer (ncbi_weaver / gtdb_weaver)
     "ncbi.taxon.id": "NCBI Taxonomy taxid — the primary organism join key.",
     "organism.scientific_name": "Canonical scientific name — clade-keyed joins (e.g. FAPROTAX).",
     "ncbi.taxon.lineage": "Ranked lineage [{taxid,rank,name}] — clade-keyed joins.",
@@ -44,7 +44,7 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
-    # taxon_weaver leaf outputs
+    # ncbi_weaver leaf outputs
     "ncbi.taxon.parent_id": "Parent taxid of the resolved node (descriptive).",
     "ncbi.taxon.match_type": "How a name matched (exact/synonym/fuzzy/taxid).",
     "ncbi.taxon.review_required": "Whether the match needs human review (bool).",

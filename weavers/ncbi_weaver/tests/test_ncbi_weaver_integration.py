@@ -7,7 +7,6 @@ import httpx
 import pytest
 
 from braidworks.core import (
-    BackendConfigurationError,
     BackendUnavailable,
     Braider,
     BraidRegistry,
@@ -17,7 +16,7 @@ from braidworks.core import (
     StrandSet,
 )
 
-from taxon_weaver import build_ncbi_weaver, vocab
+from ncbi_weaver import build_ncbi_weaver, vocab
 
 RESOLVABLE = [
     "Faecalibacterium prausnitzii",
@@ -84,9 +83,12 @@ async def test_unconfigured_backend_raises_backend_unavailable(mini_db_path):
         )
 
 
-def test_factory_requires_at_least_one_backend():
-    with pytest.raises(BackendConfigurationError):
-        build_ncbi_weaver()
+def test_zero_arg_build_advertises_both_backends():
+    # No backend selected → the inspectable introspection form (verify's target):
+    # both backends declared; the keyless API is usable straight away.
+    weaver = build_ncbi_weaver()
+    assert set(weaver._backends) == {"local", "api"}
+    assert weaver._backends["api"].is_configured()
 
 
 def test_factory_local_only_manifest_declares_local(mini_db_path):

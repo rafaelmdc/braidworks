@@ -31,7 +31,7 @@ from rapidfuzz import fuzz
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .. import vocab
 
-logger = logging.getLogger("taxon_weaver.api")
+logger = logging.getLogger("ncbi_weaver.api")
 
 DEFAULT_BASE_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2"
 _PAGE_LIMIT = 1000

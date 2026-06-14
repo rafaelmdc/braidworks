@@ -7,7 +7,7 @@ import pytest
 from braidworks.core import BackendConfigurationError, Strand, StrandSet, WeaveStatus
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
 
-from taxon_weaver import build_ncbi_weaver, vocab
+from ncbi_weaver import build_ncbi_weaver, vocab
 
 SAMPLE_NAMES = [
     "Faecalibacterium prausnitzii",
@@ -110,7 +110,7 @@ def test_local_backend_missing_db_constructs_unconfigured(tmp_path):
     # Backbone contract: construction is cheap and never raises for a missing DB;
     # is_configured() reports the data state instead. The actionable "build it"
     # error lives in the configured builder path (see test_factory_autosetup).
-    from taxon_weaver.backends.local import LocalTaxonomyBackend
+    from ncbi_weaver.backends.local import LocalTaxonomyBackend
 
     backend = LocalTaxonomyBackend(tmp_path / "does-not-exist.sqlite")
     assert backend.is_configured() is False

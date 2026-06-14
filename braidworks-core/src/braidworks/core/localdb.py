@@ -8,7 +8,7 @@ cross-process build lock, and an atomically-published build.
 It is **callback-shaped**: :func:`ensure_local_db` owns the orchestration (validity →
 consent → lock → disk → atomic publish) and the caller supplies the domain-specific
 pieces — how to *build* the file and how to tell whether one is *valid*. The first
-real user is ``taxon_weaver``'s ``ensure_taxonomy_db``; keep this neutral (no NCBI /
+real user is ``ncbi_weaver``'s ``ensure_taxonomy_db``; keep this neutral (no NCBI /
 taxonomy assumptions) so the next bulk weaver can reuse it.
 """
 

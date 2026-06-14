@@ -48,7 +48,7 @@ braidworks/
     tests/                    + tests/fixtures/ (worked lookup/resolver/bulk specs)
 
   weavers/                    every weaver package (auto-discovered by the members glob)
-    taxon_weaver/             advanced reference: resolver, local SQLite + NCBI API, bulk DB
+    ncbi_weaver/             advanced reference: resolver, local SQLite + NCBI API, bulk DB
     example_weaver/           minimal reference: lookup over a ~5-row bundled CSV
     uniprot_weaver/           the hinge: protein query -> UniProt entry (+ ncbi.taxon.id)
     pdbe_weaver/              protein -> experimental PDB structures (+ describe one)
@@ -78,10 +78,10 @@ weavers/<db>_weaver/
   tests/                      unit + contract mixins + opt-in live E2E
 ```
 
-`taxon_weaver` is the exception — it brings its own `dispatch.py` / `mapper.py` /
+`ncbi_weaver` is the exception — it brings its own `dispatch.py` / `mapper.py` /
 `intermediate.py` and a hand-written `vocab.py` (the "bring your own plumbing"
 reference), and also carries `src/taxonomy_resolver/` (the resolver library migrated
-from taxonbridge) and `src/taxonomy_tools/` (the `taxon-weaver` CLI).
+from taxonbridge) and `src/taxonomy_tools/` (the `ncbi-weaver` CLI).
 
 ## Key `pyproject.toml` snippets
 

@@ -1,7 +1,7 @@
 [project]
-name = "taxon_weaver"
-version = "0.1.4"
-description = "NCBI taxonomy weaver for Braidworks: local SQLite + Datasets v2 API backends."
+name = "ncbi_weaver"
+version = "0.1.5"
+description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets v2 API backends)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,19 +15,19 @@ dependencies = [
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [project.scripts]
-taxon-weaver = "taxonomy_tools.cli:main"
+ncbi-weaver = "taxonomy_tools.cli:main"
 
 # Discovered by braidworks-celery workers (and any registry builder) — name is the
 # weaver_id, value is a zero-arg builder returning a BaseWeaver.
 [project.entry-points."braidworks.weavers"]
-ncbi = "taxon_weaver.factory:build_taxon_weaver"
+ncbi = "ncbi_weaver.factory:build_ncbi_weaver"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/taxon_weaver", "src/taxonomy_resolver", "src/taxonomy_tools"]
+packages = ["src/ncbi_weaver", "src/taxonomy_resolver", "src/taxonomy_tools"]
 
 [tool.uv.sources]
 braidworks-core = { workspace = true }

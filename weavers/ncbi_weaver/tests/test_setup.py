@@ -10,8 +10,8 @@ import pytest
 
 from braidworks.core import BackendConfigurationError
 from taxonomy_resolver.service import TaxonomyResolverService
-from taxon_weaver import setup as setup_mod
-from taxon_weaver.setup import default_db_path, ensure_taxonomy_db
+from ncbi_weaver import setup as setup_mod
+from ncbi_weaver.setup import default_db_path, ensure_taxonomy_db
 
 from tests.test_deterministic_resolution import NAMES_DMP, NODES_DMP, _BytesReader
 
@@ -108,7 +108,7 @@ def test_ensure_without_consent_raises_actionable(tmp_path, monkeypatch) -> None
     with pytest.raises(BackendConfigurationError) as excinfo:
         ensure_taxonomy_db(db_path, auto=False)
     message = str(excinfo.value)
-    assert "taxon-weaver ensure" in message
+    assert "ncbi-weaver ensure" in message
     assert "auto_setup=True" in message
     assert not db_path.exists()
 

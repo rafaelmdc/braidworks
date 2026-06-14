@@ -2,7 +2,7 @@
 #
 # A free-text gene/protein query -> the protein's UniProt identity card, plus its
 # NCBI taxid. That taxid is the *bridge*: it lets a protein hit cross back into the
-# organism layer (taxon_weaver lineage, BacDive traits, Disbiome disease), and it
+# organism layer (ncbi_weaver lineage, BacDive traits, Disbiome disease), and it
 # makes UniProt the hub every downstream molecular weaver (STRING, GO, PDB,
 # AlphaFold, Reactome) hangs off via `protein.uniprot.accession`.
 #

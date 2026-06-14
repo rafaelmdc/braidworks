@@ -53,7 +53,7 @@ once, so write a draft and let it guide you. The fields:
 | `fingerprint_source` | yes | what versions the data (release tag / dump date / checksum); never `"unknown"`. |
 | `source_sample` | yes | a **real** snippet of the source (anti-hallucination guard). |
 | `backends` | yes | e.g. `["local"]`, `["local", "api"]`. |
-| `weaver_id` | no | join namespace if it differs from `db_name` (taxon_weaver's is `ncbi`). |
+| `weaver_id` | no | join namespace if it differs from `db_name` (ncbi_weaver's is `ncbi`). |
 | `kind` | no | `"lookup"` (default, clean id→data) or `"resolver"` (fuzzy/ambiguous + candidates). |
 | `api_key` | no | `"none"` (default) / `"optional"` / `"required"` — drives the API backend stub. |
 

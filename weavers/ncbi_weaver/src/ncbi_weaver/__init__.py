@@ -1,4 +1,4 @@
-"""taxon_weaver — NCBI taxonomy weaver for Braidworks (local + Datasets v2 API)."""
+"""ncbi_weaver — NCBI taxonomy weaver for Braidworks (local + Datasets v2 API)."""
 
 from .backends.base import ResolutionBackend
 from .backends.datasets_v2 import DatasetsV2Backend

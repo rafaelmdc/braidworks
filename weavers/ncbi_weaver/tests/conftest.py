@@ -1,6 +1,6 @@
-"""Shared fixtures for taxon_weaver tests: a tiny synthetic taxonomy DB.
+"""Shared fixtures for ncbi_weaver tests: a tiny synthetic taxonomy DB.
 
-The mini dump + build live in the package (``taxon_weaver.fixture``) so the same
+The mini dump + build live in the package (``ncbi_weaver.fixture``) so the same
 deterministic fixture backs both the tests and ``weaverkit verify --strict``.
 """
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from taxon_weaver.fixture import build_fixture_db
+from ncbi_weaver.fixture import build_fixture_db
 
 
 def build_mini_db(directory: Path) -> Path:
@@ -20,4 +20,4 @@ def build_mini_db(directory: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def mini_db_path(tmp_path_factory) -> Path:
-    return build_mini_db(tmp_path_factory.mktemp("taxon_weaver_db"))
+    return build_mini_db(tmp_path_factory.mktemp("ncbi_weaver_db"))

@@ -1,4 +1,4 @@
-"""ensure_taxonomy_db — acquiring the local NCBI taxonomy DB (taxon_weaver-specific).
+"""ensure_taxonomy_db — acquiring the local NCBI taxonomy DB (ncbi_weaver-specific).
 
 The generic mechanics — the consent gate, streamed download, MD5 integrity check,
 disk precheck, cross-process build lock, and atomic publish — live in
@@ -28,7 +28,7 @@ from taxonomy_resolver.db import upsert_metadata
 
 _SOURCE_MD5_KEY = "source_dump_md5"
 
-logger = logging.getLogger("taxon_weaver.setup")
+logger = logging.getLogger("ncbi_weaver.setup")
 
 DEFAULT_TAXDUMP_URL = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
 _NAMESPACE = "taxonomy"
@@ -79,11 +79,11 @@ def _consent_message(db_path: Path) -> str:
         f"taxonomy database not found at {db_path}.\n"
         "The local backend needs a SQLite taxonomy DB "
         "(~1.2 GB, built from a ~70 MB NCBI download, ~1 minute). To create it:\n"
-        "  - run:  taxon-weaver ensure\n"
+        "  - run:  ncbi-weaver ensure\n"
         "  - or call: build_ncbi_weaver(auto_setup=True)\n"
         "  - or set: BRAIDWORKS_AUTO_DOWNLOAD=1\n"
         "Or build it yourself and pass db_path=:\n"
-        "  taxon-weaver build-db --download --dump <taxdump.tar.gz> --db <db.sqlite>"
+        "  ncbi-weaver build-db --download --dump <taxdump.tar.gz> --db <db.sqlite>"
     )
 
 

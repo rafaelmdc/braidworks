@@ -345,7 +345,7 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
             f"- [ ] build it locally: `uv run {pkg}-ensure`",
             f"- [ ] add `build_{pkg}_fixture()` in `factory.py` returning a weaver on a "
             "*tiny deterministic* dataset, so `--strict` can run golden without the full "
-            "download (see implementing-backends.md; taxon_weaver's `fixture.py` is the model)",
+            "download (see implementing-backends.md; ncbi_weaver's `fixture.py` is the model)",
             "",
         ]
 
@@ -795,7 +795,7 @@ offline — see ``fixture.py`` / ``build_{{DBWEAVER}}_fixture``. Implement the t
 > them at ``build_{{DBWEAVER}}_fixture()`` (see IMPLEMENTATION.md) to keep them offline.
 
 Guide: weaverkit/docs/implementing-backends.md
-Worked example: weavers/taxon_weaver/src/taxon_weaver/backends/datasets_v2.py
+Worked example: weavers/ncbi_weaver/src/ncbi_weaver/backends/datasets_v2.py
 """
 
 from __future__ import annotations
@@ -945,7 +945,7 @@ It is multi-GB and must not be committed; ``ensure_{{DB}}_db`` downloads and bui
 it into the per-user cache on first use. The generic plumbing — consent gate,
 download, MD5 check, disk precheck, cross-process lock, and atomic publish — lives
 in ``braidworks.core.localdb``; you implement only the two domain TODOs below
-(``db_is_valid`` and ``_build``). Model on taxon_weaver's ``setup.py``.
+(``db_is_valid`` and ``_build``). Model on ncbi_weaver's ``setup.py``.
 
 See: weaverkit/docs/implementing-backends.md#bulk-file-sources-setuppy
 """
@@ -1082,7 +1082,7 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
   It never raises for missing data.
 - a CONFIGURED builder (you write it, usually domain-named) — takes real config
   (db paths, API keys, injected clients) and may raise if nothing is usable. See
-  ``taxon_weaver``'s ``build_ncbi_weaver`` for a worked example; a commented
+  ``ncbi_weaver``'s ``build_ncbi_weaver`` for a worked example; a commented
   skeleton is at the bottom of this file.
 """
 
@@ -1330,7 +1330,7 @@ def scaffold(
             "#\n"
             "# A FIXTURE builder — only if no backend reads bundled/committed data; lets\n"
             "# `weaverkit verify --strict` run golden against a tiny deterministic dataset\n"
-            f"# (see decisions.md E and taxon_weaver's build_{pkg}_fixture):\n"
+            f"# (see decisions.md E and ncbi_weaver's build_{pkg}_fixture):\n"
             "#\n"
             f"# def build_{pkg}_fixture() -> BaseWeaver:\n"
             "#     ...  # return a weaver wired against a small synthesized/committed dataset\n"

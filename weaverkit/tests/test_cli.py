@@ -223,7 +223,7 @@ def test_verify_strict_reports_missing_package(tmp_path, capsys):
 def test_verify_reports_misnamed_builder_without_crashing(tmp_path, capsys):
     """A package whose factory imports but lacks build_<package> gets a clean finding.
 
-    This is taxon_weaver's real case: the factory module is importable, but its
+    This is ncbi_weaver's real case: the factory module is importable, but its
     builder is named differently (build_ncbi_weaver), so verify must report a fix
     instead of crashing with an AttributeError traceback.
     """
@@ -231,7 +231,7 @@ def test_verify_reports_misnamed_builder_without_crashing(tmp_path, capsys):
     pkg.mkdir(parents=True)
     (pkg / "__init__.py").write_text("")
     # Factory imports fine, but the builder is named differently (build_ncbi_weaver,
-    # not the expected build_madin_weaver) — taxon_weaver's real case.
+    # not the expected build_madin_weaver) — ncbi_weaver's real case.
     (pkg / "factory.py").write_text("def build_ncbi_weaver(**c):\n    raise SystemExit\n")
     src = str(tmp_path / "src")
     sys.path.insert(0, src)
