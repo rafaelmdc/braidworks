@@ -75,6 +75,24 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     }
 
 
+def _describe(pdb_id: str, obj: dict[str, Any]) -> dict[str, Any]:
+    """One PDBe entry summary (/pdb/entry/summary/{id}) -> describe_structure outputs."""
+    method = obj.get("experimental_method") or []
+    return {
+        "structure.pdb.title": obj.get("title"),
+        "structure.pdb.method": method[0] if method else None,
+        "structure.pdb.release_date": obj.get("release_date"),
+        "structure.pdb.detail": {
+            "pdb_id": pdb_id,
+            "title": obj.get("title"),
+            "method": method,
+            "release_date": obj.get("release_date"),
+            "deposition_date": obj.get("deposition_date"),
+            "authors": obj.get("entry_authors"),
+        },
+    }
+
+
 class PdbeApiBackend(BackendBase):
     """PDBe REST backend. Always configured — the API is free, no key."""
 
@@ -112,11 +130,37 @@ class PdbeApiBackend(BackendBase):
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
     ) -> list[LookupRecord]:
+        # describe_structure drills one PDB id; list_structures lists a protein's structures.
+        if capability_id == "describe_structure":
+            return [await self._describe_one(q) for q in queries]
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
+
+    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
+        """One pdb.id -> that structure's detail via /pdb/entry/summary/{id}."""
+        pid = str(query.get("pdb.id", "")).strip()
+        if not pid:
+            return LookupRecord(query=query, found=False)
+        try:
+            resp = await self._http().get(f"/pdb/entry/summary/{pid}")
+            resp.raise_for_status()
+            body = resp.json()
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return LookupRecord(query=query, found=False)
+            logger.warning("PDBe detail failed for %r: %s", pid, exc)
+            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+        except httpx.HTTPError as exc:
+            logger.warning("PDBe detail failed for %r: %s", pid, exc)
+            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+        # Response is {pdb_id: [summary]}; casing can differ, so fall back to the sole value.
+        rows = body.get(pid) or (next(iter(body.values()), []) if body else [])
+        if not rows:
+            return LookupRecord(query=query, found=False)
+        return LookupRecord(query=query, found=True, values=_describe(pid, rows[0]))
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

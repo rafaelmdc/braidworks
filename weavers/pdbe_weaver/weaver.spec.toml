@@ -10,7 +10,7 @@ db_name = "pdbe"
 weaver_id = "pdbe"
 kind = "lookup"
 title = "PDB experimental structures via PDBe (accession -> structures)"
-version = "0.1.4"
+version = "0.1.5"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkz990"
 attribution = "wwPDB / EMBL-EBI PDBe"
@@ -31,6 +31,18 @@ source_sample = """
       "unp_start": 1,
       "unp_end": 393,
       "coverage": 1.0
+    }
+  ]
+}
+# GET https://www.ebi.ac.uk/pdbe/api/pdb/entry/summary/1tup (describe_structure)
+{
+  "1tup": [
+    {
+      "title": "TUMOR SUPPRESSOR P53 COMPLEXED WITH DNA",
+      "experimental_method": ["X-ray diffraction"],
+      "release_date": "19950711",
+      "deposition_date": "19950711",
+      "entry_authors": ["Cho, Y.", "Gorina, S.", "Jeffrey, P.D.", "Pavletich, N.P."]
     }
   ]
 }
@@ -55,11 +67,33 @@ set_outputs = ["pdb.id"]
   id = "full"
   outputs = ["structure.pdb.records"]
 
+# The consumer of the fan dimension: one PDB id -> that structure's detail (PDBe
+# /pdb/entry/summary/{id}). Consumes pdb.id (what list_structures produces), so a
+# fanned structure is drillable: protein -> list_structures -> fan -> describe_structure.
+[[capability]]
+id = "describe_structure"
+consumes = ["pdb.id"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "detail"
+  outputs = [
+    "structure.pdb.title",
+    "structure.pdb.method",
+    "structure.pdb.release_date",
+    "structure.pdb.detail",
+  ]
+
 # Golden runs against the deterministic fixture (pdbe_weaver.fixture, an
-# httpx.MockTransport serving a canned best_structures response for P04637, with two
-# chains of one structure so the dedup path is exercised) so `weaverkit verify --strict`
-# is reproducible offline.
+# httpx.MockTransport serving a canned best_structures response for P04637 with two
+# chains of one structure, plus a /pdb/entry/summary/{id} detail object for 1tup) so
+# `weaverkit verify --strict` is reproducible offline.
 [[golden]]
 capability = "list_structures"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "structure.pdb.count" = 2 }
+
+[[golden]]
+capability = "describe_structure"
+input = { "pdb.id" = "1tup" }
+expect = { "structure.pdb.title" = "TUMOR SUPPRESSOR P53 COMPLEXED WITH DNA" }
