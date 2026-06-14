@@ -118,10 +118,29 @@ class StrandSet:
     # Per-step completion metadata (one entry per braid step that touched this
     # entity). Populated by the executor; empty for a freshly built input set.
     completion: list[StepOutcome] = field(default_factory=list)
+    # Fan-out lineage: when a one→many step forks an entity into children
+    # (cardinality fan-out), each child records the entity_id of the *originating
+    # input* it descended from, so callers can regroup leaves by the original query.
+    # ``None`` for a plain input set that was never forked.
+    parent_id: str | None = None
 
     @classmethod
     def from_strands(cls, entity_id: str, strands: list[Strand]) -> StrandSet:
         return cls(entity_id=entity_id, _strands={s.type_id: s for s in strands})
+
+    def clone(self, *, entity_id: str | None = None, parent_id: str | None = None) -> StrandSet:
+        """A detached copy for fan-out forking. Strands are immutable by convention,
+        so the strand objects are shared; the mutable containers are copied so each
+        child accumulates its own completion / warnings / errors independently."""
+        return StrandSet(
+            entity_id=entity_id if entity_id is not None else self.entity_id,
+            _strands=dict(self._strands),
+            requires_review=self.requires_review,
+            warnings=list(self.warnings),
+            errors=list(self.errors),
+            completion=list(self.completion),
+            parent_id=parent_id if parent_id is not None else self.parent_id,
+        )
 
     def has(self, type_id: str) -> bool:
         return type_id in self._strands
@@ -168,6 +187,7 @@ class StrandSet:
             "warnings": list(self.warnings),
             "errors": list(self.errors),
             "completion": [o.to_json() for o in self.completion],
+            "parent_id": self.parent_id,
         }
 
     @classmethod
@@ -179,4 +199,5 @@ class StrandSet:
             warnings=list(data.get("warnings", [])),
             errors=list(data.get("errors", [])),
             completion=[StepOutcome.from_json(o) for o in data.get("completion", [])],
+            parent_id=data.get("parent_id"),
         )
