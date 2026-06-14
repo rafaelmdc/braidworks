@@ -386,16 +386,19 @@ function drawLegs(sx, sy, w, h, color, sc, lit) {
 function drawFace(sx, sy, w, h, color, sc, lit) {
   if (sc < 0.34) return;
   const rx = 11 * sc, ry = 3.2 * sc;
-  // Tuck the top ~30% of the mouth into the body so it reads as connected, not floating.
-  const cx = sx, cy = sy + h / 2 + ry * 0.4;
+  // Mouth centre is tucked slightly up into the body so it reads as attached; the part
+  // that lands inside the body is CLIPPED away (below the bottom edge only), so no
+  // ellipse arc ever shows through the node — just a mouth emerging from underneath.
+  const cx = sx, cy = sy + h / 2 + ry * 0.4, edge = sy + h / 2;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, edge, innerWidth, innerHeight); ctx.clip();
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = 1 * Math.max(sc, 0.5); ctx.lineJoin = "round"; ctx.lineCap = "round";
   ctx.globalAlpha = lit ? 0.26 : 0.10;   // match the legs — subtle, not invasive
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);   // squashed mouth
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);   // squashed mouth (top arc clipped)
   ctx.stroke();
-  // Two fangs rooted on the mouth's lower arc, tilted outward so they align to the
-  // ellipse (their base lies along the curve, minimizing overlap).
+  // Two fangs rooted on the mouth's lower arc, tilted outward so they align to it.
   const L = 5.5 * sc, hw = 1.5 * sc, phi = 0.34;
   const fang = (ox, s) => {
     const ax = cx + ox;
@@ -409,6 +412,7 @@ function drawFace(sx, sy, w, h, color, sc, lit) {
     ctx.closePath(); ctx.fill();
   };
   fang(-3.5 * sc, -1); fang(3.5 * sc, 1);
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
