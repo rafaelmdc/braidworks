@@ -90,6 +90,17 @@ def test_generated_manifest_matches_spec(tmp_path):
     assert check_manifest(weaver.MANIFEST, spec) == []
 
 
+def test_generated_manifest_carries_provenance(tmp_path):
+    """Scaffolded vocab mirrors the spec's source/license into manifest.provenance."""
+    spec, dest, _ = _generate(tmp_path)
+    mod = _import_generated(dest, spec.package)
+    weaver = mod.build_madin_weaver()
+    prov = weaver.MANIFEST.provenance
+    assert prov is not None
+    assert prov.license == spec.license
+    assert prov.source_url == spec.source_url
+
+
 def test_generated_fingerprints_are_not_unknown(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     mod = _import_generated(dest, spec.package)
