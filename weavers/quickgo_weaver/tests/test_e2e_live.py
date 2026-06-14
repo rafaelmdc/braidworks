@@ -29,8 +29,8 @@ async def _go(weaver, accession):
             "resolve_go_terms",
             [ss],
             requested_outputs=frozenset(
-                {"go.molecular_function", "go.biological_process", "go.cellular_component",
-                 "go.count", "go.records"}
+                {"go.term", "go.molecular_function", "go.biological_process",
+                 "go.cellular_component", "go.count", "go.records"}
             ),
             backend="api",
         )
@@ -54,6 +54,8 @@ async def test_live_tp53_go_annotations():
     assert [r["go_id"] for r in records] == sorted(r["go_id"] for r in records)  # deterministic
     # apoptotic process GO:0006915 is a canonical p53 annotation
     assert any(r["go_id"] == "GO:0006915" for r in records)
+    # the fan dimension: the full distinct GO-id set, matching the records
+    assert produced["go.term"] == [r["go_id"] for r in records]
 
 
 async def test_live_unknown_accession_is_no_match():

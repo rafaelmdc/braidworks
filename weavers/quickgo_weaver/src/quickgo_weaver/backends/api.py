@@ -52,7 +52,13 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "aspect": row.get("goAspect"),
         }
     records = sorted(terms.values(), key=lambda t: t["go_id"])  # stable order by GO id
-    values: dict[str, Any] = {"go.count": len(records), "go.records": records}
+    values: dict[str, Any] = {
+        # The fan dimension (set_outputs): every distinct GO id, so a caller can fan out
+        # one child per term. The per-aspect lists below are descriptive term *names*.
+        "go.term": [t["go_id"] for t in records],
+        "go.count": len(records),
+        "go.records": records,
+    }
     for aspect, type_id in _ASPECTS.items():
         names = [t["name"] for t in records if t["aspect"] == aspect and t["name"]]
         if names:
