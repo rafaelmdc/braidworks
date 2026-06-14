@@ -12,7 +12,15 @@ from braidworks.core.cache import (
     StrandCacheKey,
     compute_cache_key,
 )
-from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
+from braidworks.core.capability import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core.licenses import (
+    ATTRIBUTION_REQUIRED,
+    CITE_REQUESTED,
+    LICENSE_RULES,
+    RESTRICTED,
+    citation_requirement,
+    is_known_license,
+)
 from braidworks.core.factory import WeaverFactory, WeaverProvider
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
@@ -71,7 +79,14 @@ __all__ = [
     "compute_cache_key",
     "Capability",
     "OutputGroup",
+    "Provenance",
     "WeaverManifest",
+    "ATTRIBUTION_REQUIRED",
+    "CITE_REQUESTED",
+    "RESTRICTED",
+    "LICENSE_RULES",
+    "citation_requirement",
+    "is_known_license",
     "CANONICAL_TYPES",
     "canonicalize",
     "BackendConfigurationError",

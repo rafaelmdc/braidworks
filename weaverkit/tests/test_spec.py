@@ -228,6 +228,21 @@ def test_golden_expect_key_not_in_produces_rejected():
     assert any("not in capability" in p and "produces" in p for p in problems)
 
 
+def test_citation_and_attribution_parse():
+    data = _valid_dict()
+    data["weaver"]["citation"] = "https://doi.org/10.1093/nar/xyz"
+    data["weaver"]["attribution"] = "Example Consortium"
+    spec = WeaverSpec.from_dict(data)
+    assert spec.citation == "https://doi.org/10.1093/nar/xyz"
+    assert spec.attribution == "Example Consortium"
+
+
+def test_citation_and_attribution_default_empty():
+    spec = WeaverSpec.from_dict(_valid_dict())
+    assert spec.citation == ""
+    assert spec.attribution == ""
+
+
 def test_kind_defaults_to_lookup():
     data = _valid_dict()
     assert "kind" not in data["weaver"]

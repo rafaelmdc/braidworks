@@ -7,10 +7,18 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, WeaverManifest
+from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.2"
+
+# Source/license/citation for automatic references — mirrors weaver.spec.toml.
+PROVENANCE = Provenance(
+    source_url="https://disbiome.ugent.be",
+    license="Open",
+    citation="https://doi.org/10.1186/s12866-018-1197-5",
+    attribution="Disbiome (Janssens et al., 2018)",
+)
 
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
@@ -18,6 +26,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
+        provenance=PROVENANCE,
         capabilities=(
             Capability(
                 id="disbiome.resolve_diseases",
