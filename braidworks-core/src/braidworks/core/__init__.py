@@ -62,6 +62,12 @@ from braidworks.core.localdb import (
     md5_file,
 )
 from braidworks.core.planner import Braider
+from braidworks.core.references import (
+    Reference,
+    format_references,
+    references_for,
+    references_for_braid,
+)
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
@@ -119,6 +125,10 @@ __all__ = [
     "WeaverProvider",
     "BraidRegistry",
     "validate_manifest",
+    "Reference",
+    "references_for",
+    "references_for_braid",
+    "format_references",
     "BackendBase",
     "BackendDispatchWeaver",
     "map_lookup",
