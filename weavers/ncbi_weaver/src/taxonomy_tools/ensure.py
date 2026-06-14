@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from taxon_weaver.setup import (
+from ncbi_weaver.setup import (
     DEFAULT_TAXDUMP_URL,
     auto_consented,
     check_for_update,
@@ -74,7 +74,7 @@ def run(args: argparse.Namespace) -> None:
         status = check_for_update(target, url=args.url)
         if status is True:
             print("A newer NCBI taxonomy release is available. "
-                  "Rebuild with: taxon-weaver ensure --refresh")
+                  "Rebuild with: ncbi-weaver ensure --refresh")
         elif status is False:
             print("It is current with the latest NCBI release.")
         return

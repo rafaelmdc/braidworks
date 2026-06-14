@@ -8,7 +8,7 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
   It never raises for missing data.
 - a CONFIGURED builder (you write it, usually domain-named) — takes real config
   (db paths, API keys, injected clients) and may raise if nothing is usable. See
-  ``taxon_weaver``'s ``build_ncbi_weaver`` for a worked example; a commented
+  ``ncbi_weaver``'s ``build_ncbi_weaver`` for a worked example; a commented
   skeleton is at the bottom of this file.
 """
 

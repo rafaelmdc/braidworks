@@ -19,7 +19,7 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 
 A UniProt entry carries its organism's NCBI taxid, so this weaver *produces*
 `ncbi.taxon.id`. That single edge bridges the molecular layer back into the organism
-layer — a protein hit flows on to `taxon_weaver` (lineage), `bacdive_weaver` (traits),
+layer — a protein hit flows on to `ncbi_weaver` (lineage), `bacdive_weaver` (traits),
 and `disbiome_weaver` (disease). UniProt is the one node that speaks both hub keys.
 
 ## Deterministic representative selection

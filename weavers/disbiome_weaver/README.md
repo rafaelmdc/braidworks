@@ -3,7 +3,7 @@
 Microbe ↔ disease associations from **[Disbiome](https://disbiome.ugent.be)** (Ghent
 University): given an organism by NCBI taxid, the diseases where its abundance is reported
 **Elevated/Reduced** vs healthy controls (human host, MedDRA-coded). A terminal weaver off
-the organism layer; chains straight behind `taxon_weaver`.
+the organism layer; chains straight behind `ncbi_weaver`.
 
 - **Source:** https://disbiome.ugent.be (keyless JSON API on port 8080) · **License:** Open · **Cite:** https://doi.org/10.1186/s12866-018-1197-5 — Janssens et al., 2018
 - **Backend:** `local` (a small SQLite built from the API; see below) · **Discoverable as** `disbiome`
@@ -32,7 +32,7 @@ content hash of the fetched tables (Disbiome has no release tag).
 
 ## Use it
 
-Build the DB once, then it chains straight off `taxon_weaver`
+Build the DB once, then it chains straight off `ncbi_weaver`
 (`organism.name → ncbi.taxon.id → microbe.disease.*`):
 
 ```python

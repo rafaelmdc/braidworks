@@ -1,20 +1,20 @@
 # NCBI Taxonomy Database
 
-The `taxon_weaver` **`local` backend** resolves names against a local SQLite copy
+The `ncbi_weaver` **`local` backend** resolves names against a local SQLite copy
 of the NCBI taxonomy. The **`api` backend** uses NCBI Datasets v2 remotely and
 needs **no database** — if you only use `api`, skip this page entirely.
 
 Braidworks never downloads the database implicitly. Acquisition is an explicit,
 opt-in, one-time step — a ~60 MB download plus a ~1-minute local build (~1.2 GB on
-disk). The easiest path is `taxon-weaver ensure` (below); `build-db` is the
+disk). The easiest path is `ncbi-weaver ensure` (below); `build-db` is the
 fully-manual alternative.
 
-## Easiest: `taxon-weaver ensure`
+## Easiest: `ncbi-weaver ensure`
 
 ```bash
-taxon-weaver ensure              # prompt, then download + build into the user cache
-taxon-weaver ensure --yes        # non-interactive (CI/servers)
-taxon-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+ncbi-weaver ensure              # prompt, then download + build into the user cache
+ncbi-weaver ensure --yes        # non-interactive (CI/servers)
+ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
 ```
 
 `ensure` is idempotent (a valid DB is reused instantly), lands the DB in the
@@ -25,11 +25,11 @@ automatically. The design and decisions are in
 
 ## Manual: build it (download + build in one step)
 
-A console script (`taxon-weaver`) ships with the `taxon_weaver` package:
+A console script (`ncbi-weaver`) ships with the `ncbi_weaver` package:
 
 ```bash
 # from the repo root
-uv run --package taxon_weaver taxon-weaver build-db \
+uv run --package ncbi_weaver ncbi-weaver build-db \
     --download \
     --dump  data/taxdump.tar.gz \
     --db    data/ncbi_taxonomy.sqlite
@@ -49,7 +49,7 @@ automatically invalidates stale cache entries.
 ## Use it
 
 ```python
-from taxon_weaver import build_ncbi_weaver
+from ncbi_weaver import build_ncbi_weaver
 
 weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite")   # local backend
 ```

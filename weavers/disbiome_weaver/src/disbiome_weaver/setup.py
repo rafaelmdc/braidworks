@@ -199,7 +199,7 @@ def ensure_disbiome_db(
     Idempotent: a valid DB is returned instantly. Otherwise acquisition needs
     consent (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); without it, an actionable
     ``BackendConfigurationError`` is raised. ``progress`` is accepted for API
-    symmetry with taxon_weaver (the build is fast and currently silent).
+    symmetry with ncbi_weaver (the build is fast and currently silent).
     """
     path = Path(db_path) if db_path else default_disbiome_db_path()
     return ensure_local_db(

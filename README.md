@@ -205,7 +205,7 @@ uv run weaverkit view --out net.html # render the offline network diagram
 make index                           # rebuild docs/keys-index.md + weavers-index.tsv
 make view                            # rebuild docs/braidworks-network.html
 
-taxon-weaver ensure                  # one-time: build the local NCBI taxonomy DB (optional)
+ncbi-weaver ensure                  # one-time: build the local NCBI taxonomy DB (optional)
 ```
 
 `weaverkit` is also the toolkit for *building* a new weaver from a spec — see below.

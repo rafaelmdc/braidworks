@@ -1,5 +1,5 @@
 # Braidworks developer tasks.
-# Tests are per-package and the working directory matters (taxon_weaver tests
+# Tests are per-package and the working directory matters (ncbi_weaver tests
 # import `from tests....`), so each target cd's into the right package.
 #
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`

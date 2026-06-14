@@ -9,7 +9,7 @@ import httpx
 
 from braidworks.core import Strand, StrandSet, WeaveStatus
 
-from taxon_weaver import build_ncbi_weaver, vocab
+from ncbi_weaver import build_ncbi_weaver, vocab
 
 # Mirrors the live Datasets v2 schema: "reports" entries, current_scientific_name,
 # parents (ancestor taxids), upper-cased rank. The backend lower-cases rank and
@@ -95,9 +95,9 @@ async def test_api_exact_core_only():
 async def test_api_logs_network_use_at_info(caplog):
     import logging
 
-    with caplog.at_level(logging.INFO, logger="taxon_weaver.api"):
+    with caplog.at_level(logging.INFO, logger="ncbi_weaver.api"):
         await _resolve(_weaver(), "Homo sapiens", {vocab.TAXON_ID})
-    messages = [rec.getMessage() for rec in caplog.records if rec.name == "taxon_weaver.api"]
+    messages = [rec.getMessage() for rec in caplog.records if rec.name == "ncbi_weaver.api"]
     assert any("NCBI Datasets v2 over the network" in m for m in messages)
 
 

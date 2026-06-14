@@ -85,7 +85,7 @@ choice is what lets the braider plan e.g.
 
 | Weaver (DB) | Consumes | Produces | Role |
 |---|---|---|---|
-| `taxon_weaver` (NCBI Taxonomy) | `organism.name` | `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.lineage` | source of identity |
+| `ncbi_weaver` (NCBI Taxonomy) | `organism.name` | `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.lineage` | source of identity |
 | `gtdb_weaver` (GTDB) | `ncbi.taxon.id` / name | `gtdb.taxon.id`, `gtdb.lineage` (rank-normalized) | intermediate (taxonomy bridge) |
 | `faprotax_weaver` (FAPROTAX) | `organism.scientific_name` + `ncbi.taxon.lineage` | `microbe.ecology.functional_groups` | **terminal (ecology)** |
 | `bacdive_weaver` (BacDive) | `organism.scientific_name` | `microbe.trait.*` (+ `enzyme.ec`, `chem.chebi.id` as later expansion) | terminal + intermediate |
@@ -114,7 +114,7 @@ bulk download + taxid/lineage key = cheap and high-value).
 
 | Tier | Weaver (source) | Function spectrum | Join key | Access | License | Why this rank |
 |---|---|---|---|---|---|---|
-| **P0** | `disbiome_weaver` — [Disbiome](https://disbiome.ugent.be/) | **Microbe ↔ disease** associations: per disease, abundance Elevated/Reduced vs healthy controls (human host; MedDRA-coded). **Must expose the full record** — quantitative values, method/sample/host, disease detail, organism detail, and the complete publication + study-quality metadata (see §4) | **NCBI taxid** (`organism_ncbi_id`) | Keyless JSON API (`disbiome.ugent.be:8080`); whole-table GETs (~7 MB total) = de-facto dump → build a small **local** SQLite (no separate dump file) | Open, cite [BMC Microbiol 2018](https://bmcmicrobiol.biomedcentral.com/articles/10.1186/s12866-018-1197-5) (confirm terms) | **Top priority.** taxid-keyed → reachable straight from `taxon_weaver` (same pattern as BacDive); keyless; small. Adds the host-health dimension to "what does this organism do." |
+| **P0** | `disbiome_weaver` — [Disbiome](https://disbiome.ugent.be/) | **Microbe ↔ disease** associations: per disease, abundance Elevated/Reduced vs healthy controls (human host; MedDRA-coded). **Must expose the full record** — quantitative values, method/sample/host, disease detail, organism detail, and the complete publication + study-quality metadata (see §4) | **NCBI taxid** (`organism_ncbi_id`) | Keyless JSON API (`disbiome.ugent.be:8080`); whole-table GETs (~7 MB total) = de-facto dump → build a small **local** SQLite (no separate dump file) | Open, cite [BMC Microbiol 2018](https://bmcmicrobiol.biomedcentral.com/articles/10.1186/s12866-018-1197-5) (confirm terms) | **Top priority.** taxid-keyed → reachable straight from `ncbi_weaver` (same pattern as BacDive); keyless; small. Adds the host-health dimension to "what does this organism do." |
 | **P0** | `faprotax_weaver` — [FAPROTAX](https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/lib/php/index.php) | ~90 ecological/metabolic **functional groups** (methanotrophy, N-fixation, sulfate respiration, fermentation, phototrophy…) | **lineage names** | Small bundled text DB + rules | Academic, cite | Most direct "organism → ecological function" signal — *exactly* ORDINA. Tiny data; ship in-package. |
 | **P1** | `gtdb_weaver` — [GTDB](https://gtdb.ecogenomic.org/) | Genome-based, rank-normalized **taxonomy bridge** | taxid ↔ GTDB id | Bulk taxdump-format ([gtdb-taxdump](https://github.com/shenwei356/gtdb-taxdump)) | CC BY-SA | Near-free: ships **taxdump-format** files → reuse `build_taxonomy_database` directly. Better lineages → better FAPROTAX hits. |
 | ✅ shipped | `bacdive_weaver` — [BacDive (DSMZ)](https://bacdive.dsmz.de/) | Richest curated metabolic/physiological/ecological strain profiles | **scientific name** (type strain) | REST API v2 (free, **no key**) | CC BY 4.0, cite | Deepest curation; shipped 0.1.0 (type-strain MVP). Also an intermediate (→ ChEBI, BRENDA, ENA) once those xrefs are emitted. |
@@ -156,7 +156,7 @@ they're how ORDINA would later go from organism → genes/proteins → mechanism
 > alternatives (Reactome CC0, Rhea CC BY, UniProt, GO) before committing to KEGG.
 
 **Picking the "first molecular weaver" (when ORDINA gets there):** `uniprot_weaver`,
-unquestionably — it's taxid-queryable (reachable straight from `taxon_weaver`) and
+unquestionably — it's taxid-queryable (reachable straight from `ncbi_weaver`) and
 its cross-references make GO, InterPro, STRING, PDB, Reactome and Rhea all reachable
 in one more hop. Build it as both terminal (keywords/GO) and intermediate (emit
 accessions + xref ids).
@@ -165,11 +165,11 @@ accessions + xref ids).
 
 ## 4. Proposed vocabulary (strand type IDs)
 
-Each weaver owns its `vocab.py` (see `weavers/taxon_weaver/src/taxon_weaver/vocab.py`). Keep
-core domain-neutral. Group outputs (like taxon_weaver's `core`/`lineage`) so the
+Each weaver owns its `vocab.py` (see `weavers/ncbi_weaver/src/ncbi_weaver/vocab.py`). Keep
+core domain-neutral. Group outputs (like ncbi_weaver's `core`/`lineage`) so the
 cache stores partial computation.
 
-- **Identity (taxon_weaver):** `ncbi.taxon.id`, `organism.scientific_name`,
+- **Identity (ncbi_weaver):** `ncbi.taxon.id`, `organism.scientific_name`,
   `ncbi.taxon.rank`, `ncbi.taxon.lineage`; **(GTDB)** `gtdb.taxon.id`, `gtdb.lineage`.
 - **Traits:** `microbe.trait.oxygen` (`aerobe|anaerobe|facultative|microaerophile`),
   `.metabolism`, `.gram_stain`, `.cell_shape`, `.motility`, `.sporulation`,
@@ -193,13 +193,13 @@ cache stores partial computation.
     `controls_matched_for_possible_confounding_factors`,
     `measure_of_variance_reported`, …) — keep all of them.
 
-  Implementation note — **prefer a `local` backend** (like taxon_weaver). There is
+  Implementation note — **prefer a `local` backend** (like ncbi_weaver). There is
   no separate dump *file* (the site's "Export" is a client-side json→csv of the
   current view), but the API serves each table **whole in one GET**, and the entire
   dataset is tiny — **~7 MB** total (`/experiment` ~5.8 MB / 10.9k rows, `/publication`
   ~1.2 MB, `/organism` ~241 KB, `/disease` ~60 KB, `/sample`+`/method` ~7 KB). So the
   build step is "fetch the 6 endpoints once," join them, and write a small SQLite via
-  `braidworks.core.localdb.ensure_local_db` (the callback-shaped plumbing taxon_weaver
+  `braidworks.core.localdb.ensure_local_db` (the callback-shaped plumbing ncbi_weaver
   uses — far lighter here: ~7 MB of JSON, not a 70 MB taxdump → 1.2 GB DB). Disbiome
   exposes no release tag, so derive `fingerprint()` from a **content hash** of the
   fetched tables (never `"unknown"`). An `api` backend (live fetch-all + in-memory
@@ -228,7 +228,7 @@ braidworks/
   braidworks-core/
   weaverkit/
   weavers/
-    taxon_weaver/
+    ncbi_weaver/
     example_weaver/
     bacdive_weaver/
     …
@@ -247,14 +247,14 @@ for the full current layout.
 
 ## 6. How to contribute a weaver
 
-Follow CONTRIBUTING.md's 7-step recipe (`Adding a new weaver`); `taxon_weaver/` is
+Follow CONTRIBUTING.md's 7-step recipe (`Adding a new weaver`); `ncbi_weaver/` is
 the reference implementation. This section adds the conventions we've since
 standardized and the ecology-weaver specifics.
 
-**Reuse what taxon_weaver proved out:**
+**Reuse what ncbi_weaver proved out:**
 
 - **Local DB acquisition.** Bulk-file sources: copy
-  `weavers/taxon_weaver/src/taxon_weaver/setup.py` — `ensure_<db>_db(path, auto=, refresh=)`
+  `weavers/ncbi_weaver/src/ncbi_weaver/setup.py` — `ensure_<db>_db(path, auto=, refresh=)`
   with default-path resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache),
   consent gate (`auto=` / `BRAIDWORKS_AUTO_DOWNLOAD`), checksum verify, atomic
   build→rename, lock, disk precheck, and a `<tool> ensure` CLI subcommand. For
@@ -272,7 +272,7 @@ standardized and the ecology-weaver specifics.
   intermediate.
 - **Contract tests.** Subclass `WeaverOrderContractTests` and
   `CacheFingerprintTests` once per backend, plus an opt-in live E2E gated by
-  `BRAIDWORKS_RUN_LIVE=1` (see `taxon_weaver/tests/test_e2e_live.py`).
+  `BRAIDWORKS_RUN_LIVE=1` (see `ncbi_weaver/tests/test_e2e_live.py`).
 
 **Acceptance checklist** (a weaver is "done" when):
 

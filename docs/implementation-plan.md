@@ -239,7 +239,7 @@ After last step:
 
 **Deliverables:**
 
-- `taxon_weaver/weaver.py` — `NCBITaxonWeaver(BaseWeaver)`
+- `ncbi_weaver/weaver.py` — `NCBITaxonWeaver(BaseWeaver)`
   - `MANIFEST` with two capabilities: `ncbi.resolve_name` and `ncbi.resolve_taxid`
   - Output groups per capability as defined in `architecture.md` (`id`, `outputs` only — no `marginal_cost`, no `depends_on`)
   - `backends=("local", "api")` for both capabilities. The `local` backend wraps the SQLite `TaxonomyResolverService`; the `api` backend calls NCBI Datasets v2 (`https://api.ncbi.nlm.nih.gov/datasets/v2`). See `architecture.md` for endpoint mapping.
@@ -249,13 +249,13 @@ After last step:
 
 **Package layout (strategy + shared mapper + factory):**
 
-- `taxon_weaver/backends/base.py` — `ResolutionBackend` (taxon-package interface; implements core's generic `BackendStrategy`): `name`, `is_configured()`, `fingerprint()`, and an `async resolve(queries, *, need_lineage) -> list[TaxonMatch]` returning input-order results.
-- `taxon_weaver/backends/local.py` — `LocalTaxonomyBackend`: wraps `TaxonomyResolverService`; `threading.local()` service per thread, lazily created; `asyncio.to_thread()`; `resolve_batch()` once per batch → `TaxonMatch`. `BackendConfigurationError` if `db_path` does not exist or is not valid SQLite.
-- `taxon_weaver/backends/datasets_v2.py` — `DatasetsV2Backend`: async HTTP to Datasets v2; `taxon_suggest` (exact + fuzzy) + a second batched lineage lookup over the deduped union of ancestor taxids (Datasets `lineage` is taxids-only); ≤1000 taxons/request; re-scores suggestions with the local rapidfuzz scoring for comparable `confidence`; uses `_reorder_by_key` to realign keyed responses.
-- `taxon_weaver/intermediate.py` — `TaxonMatch`, `LineageEntry`, `CandidateMatch` (taxon-specific; never leak into core).
-- `taxon_weaver/mapper.py` — the single `TaxonMatch -> WeaveResult` mapper: identical strand shapes across backends, status mapping, `computed_groups`.
-- `taxon_weaver/weaver.py` — `NCBITaxonWeaver(BackendDispatchWeaver)`: holds `dict[str, ResolutionBackend]`; `execute_batch` selects by `backend`, raises `BackendUnavailable` if absent/unconfigured, runs the mapper.
-- `taxon_weaver/factory.py` — `build_ncbi_weaver(config)`: configures `local` and `api` independently; a missing backend is simply not registered (does **not** poison the weaver when fallback covers it); surfaces as `BackendUnavailable` only if selected with no fallback.
+- `ncbi_weaver/backends/base.py` — `ResolutionBackend` (taxon-package interface; implements core's generic `BackendStrategy`): `name`, `is_configured()`, `fingerprint()`, and an `async resolve(queries, *, need_lineage) -> list[TaxonMatch]` returning input-order results.
+- `ncbi_weaver/backends/local.py` — `LocalTaxonomyBackend`: wraps `TaxonomyResolverService`; `threading.local()` service per thread, lazily created; `asyncio.to_thread()`; `resolve_batch()` once per batch → `TaxonMatch`. `BackendConfigurationError` if `db_path` does not exist or is not valid SQLite.
+- `ncbi_weaver/backends/datasets_v2.py` — `DatasetsV2Backend`: async HTTP to Datasets v2; `taxon_suggest` (exact + fuzzy) + a second batched lineage lookup over the deduped union of ancestor taxids (Datasets `lineage` is taxids-only); ≤1000 taxons/request; re-scores suggestions with the local rapidfuzz scoring for comparable `confidence`; uses `_reorder_by_key` to realign keyed responses.
+- `ncbi_weaver/intermediate.py` — `TaxonMatch`, `LineageEntry`, `CandidateMatch` (taxon-specific; never leak into core).
+- `ncbi_weaver/mapper.py` — the single `TaxonMatch -> WeaveResult` mapper: identical strand shapes across backends, status mapping, `computed_groups`.
+- `ncbi_weaver/weaver.py` — `NCBITaxonWeaver(BackendDispatchWeaver)`: holds `dict[str, ResolutionBackend]`; `execute_batch` selects by `backend`, raises `BackendUnavailable` if absent/unconfigured, runs the mapper.
+- `ncbi_weaver/factory.py` — `build_ncbi_weaver(config)`: configures `local` and `api` independently; a missing backend is simply not registered (does **not** poison the weaver when fallback covers it); surfaces as `BackendUnavailable` only if selected with no fallback.
 
 - Manual registration is the MVP path; no `pyproject.toml` entry point required yet:
   ```python
@@ -368,7 +368,7 @@ Verifies:
 braidworks-core
   └── stdlib + networkx only
 
-taxon_weaver (renamed from taxonbridge)
+ncbi_weaver (renamed from taxonbridge)
   ├── braidworks-core
   └── existing deps (rapidfuzz, etc.)
 

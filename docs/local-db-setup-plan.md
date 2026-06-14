@@ -1,8 +1,8 @@
 # Plan: Local taxonomy DB auto-setup
 
-**Status:** Implemented (2026-06-06). `weavers/taxon_weaver/src/taxon_weaver/setup.py`
+**Status:** Implemented (2026-06-06). `weavers/ncbi_weaver/src/ncbi_weaver/setup.py`
 (`ensure_taxonomy_db`, `check_for_update`), factory `auto_setup`, the
-`taxon-weaver ensure` CLI subcommand, the actionable local-backend error, and
+`ncbi-weaver ensure` CLI subcommand, the actionable local-backend error, and
 API-backend INFO logging are all in place and tested. One deviation from the
 sketch below: the default DB uses a stable, source-prefixed filename
 (`ncbi_taxonomy.sqlite`) rather than a versioned one, so `refresh=True` atomically
@@ -12,8 +12,8 @@ decisions behind it.
 
 ## Problem & philosophy
 
-The `taxon_weaver` **local** backend needs a SQLite taxonomy database. Today the
-user must build it manually (`taxon-weaver build-db …`) and pass the path. That
+The `ncbi_weaver` **local** backend needs a SQLite taxonomy database. Today the
+user must build it manually (`ncbi-weaver build-db …`) and pass the path. That
 is friction, and friction is against the goal of making things easy.
 
 The goal: a user who wants `local` should be able to get a working database
@@ -112,7 +112,7 @@ terminals are handled separately — see the design: they prompt.)
 
 ### Single source of truth
 
-One function owns "make sure a valid DB exists," in `taxon_weaver` (domain-specific
+One function owns "make sure a valid DB exists," in `ncbi_weaver` (domain-specific
 — never in `braidworks-core`):
 
 ```
@@ -141,7 +141,7 @@ surprise stall inside batch execution or a server request.
 
 ### Three entry points (consent by context)
 
-1. **CLI** (`taxon-weaver ensure`, plus the existing `build-db`):
+1. **CLI** (`ncbi-weaver ensure`, plus the existing `build-db`):
    interactive — detects a missing DB, prints the notice (source URL, ~60 MB
    download, ~1 GB result, target path), **prompts `y/N`**, shows progress. This
    is the recommended one-time path; no flags required.
@@ -171,13 +171,13 @@ surprise stall inside batch execution or a server request.
 
 ## Implementation sketch (touch points)
 
-- `taxon_weaver/setup.py` (new): `ensure_taxonomy_db(...)` + default-path resolution
+- `ncbi_weaver/setup.py` (new): `ensure_taxonomy_db(...)` + default-path resolution
   (`platformdirs` dependency) + md5 verify + atomic temp→rename + lock + disk check.
-- `taxon_weaver/factory.py`: add `auto_setup` / default-path handling to
+- `ncbi_weaver/factory.py`: add `auto_setup` / default-path handling to
   `build_ncbi_weaver`; interactive prompt vs actionable error vs `auto_setup`.
-- `taxon_weaver/backends/local.py`: actionable `BackendConfigurationError` message
+- `ncbi_weaver/backends/local.py`: actionable `BackendConfigurationError` message
   (quote the command) when the DB is absent and setup wasn't requested.
-- `taxon_weaver/backends/datasets_v2.py`: add `logging` (INFO) for network use.
+- `ncbi_weaver/backends/datasets_v2.py`: add `logging` (INFO) for network use.
 - `taxonomy_tools/cli.py`: add an `ensure` subcommand (prompt + progress);
   `build-db` already exists for the explicit path.
 - Tests: mock the downloader/transport (no live network); cover idempotency, the

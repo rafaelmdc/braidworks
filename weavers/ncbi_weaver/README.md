@@ -1,4 +1,4 @@
-# taxon_weaver
+# ncbi_weaver
 
 NCBI Taxonomy — resolve a free-text organism name to its NCBI taxid + ranked lineage, and
 describe a taxid. The **organism hub** of Braidworks (the taxid that BacDive, Disbiome,
@@ -24,7 +24,7 @@ This is a **resolver**: a fuzzy/ambiguous name match can come back flagged
 ## Choosing a backend
 
 ```python
-from taxon_weaver import build_ncbi_weaver
+from ncbi_weaver import build_ncbi_weaver
 
 weaver = build_ncbi_weaver(enable_api=True)                  # API only — no local data, zero setup
 weaver = build_ncbi_weaver(db_path="data/ncbi_taxonomy.sqlite")  # local only — prebuilt SQLite
@@ -34,23 +34,23 @@ weaver = build_ncbi_weaver(db_path="…", enable_api=True)    # local preferred,
 
 The manifest advertises only the backends you wire in, so a missing one never breaks
 planning — it just isn't an option. See [docs/database.md](../../docs/database.md) for the
-local DB. In an app that wires a `WeaverFactory`, `taxon_weaver.register(factory)` adds it.
+local DB. In an app that wires a `WeaverFactory`, `ncbi_weaver.register(factory)` adds it.
 
 ## Use it
 
 The local backend needs a one-time DB (the `api` backend doesn't):
 
 ```bash
-taxon-weaver ensure                 # prompt, then download + build the SQLite into the user cache
-taxon-weaver ensure --yes           # non-interactive (CI/servers)
+ncbi-weaver ensure                 # prompt, then download + build the SQLite into the user cache
+ncbi-weaver ensure --yes           # non-interactive (CI/servers)
 
 braidworks run ncbi ncbi.resolve_name --have organism.name="Homo sapiens"
 braidworks weave --have organism.name="Escherichia coli" --want ncbi.taxon.id,ncbi.taxon.lineage
 ```
 
-> `taxon_weaver` is the hand-written "bring your own plumbing" reference — unlike scaffolded
+> `ncbi_weaver` is the hand-written "bring your own plumbing" reference — unlike scaffolded
 > weavers it carries its own `dispatch.py`/`mapper.py`, the `taxonomy_resolver` library, and
-> the `taxon-weaver` CLI, so its `vocab.py` is **hand-maintained** (don't regenerate it).
+> the `ncbi-weaver` CLI, so its `vocab.py` is **hand-maintained** (don't regenerate it).
 
 ## Develop
 

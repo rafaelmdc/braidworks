@@ -1,4 +1,4 @@
-# Contributing to taxon_weaver
+# Contributing to ncbi_weaver
 
 NCBI Taxonomy resolver (name/taxid → taxonomy + lineage). Source:
 https://www.ncbi.nlm.nih.gov/taxonomy (Public Domain). Kind: `resolver`.
@@ -16,7 +16,7 @@ Capabilities: `ncbi.resolve_name`, `ncbi.describe_taxon`. weaver_id: `ncbi`.
 After any change, re-verify (runs golden against the mini fixture — no 1.2 GB build):
 
 ```bash
-weaverkit verify --spec weaver.spec.toml --package taxon_weaver --strict
+weaverkit verify --spec weaver.spec.toml --package ncbi_weaver --strict
 make test
 ```
 
@@ -24,7 +24,7 @@ make test
 
 `weaverkit verify` only requires that `MANIFEST` matches `weaver.spec.toml`,
 fingerprints are real, and golden passes — not that you use the shared runtime. So
-when you extend taxon_weaver, keep `weaver.spec.toml` and `vocab.py` in lockstep and
+when you extend ncbi_weaver, keep `weaver.spec.toml` and `vocab.py` in lockstep and
 the rest is your call.
 
 ## Add an output / capability
@@ -35,7 +35,7 @@ the rest is your call.
 2. Produce it in the backends (`backends/local.py`, `backends/datasets_v2.py`) by
    filling the typed `TaxonMatch`, and emit it in `mapper.py`.
 3. Add a `[[golden]]` whose input resolves in the mini fixture
-   (`src/taxon_weaver/fixture.py`, the *Faecalibacterium* clade).
+   (`src/ncbi_weaver/fixture.py`, the *Faecalibacterium* clade).
 
 ## Backends
 
@@ -43,8 +43,10 @@ the rest is your call.
   download/build/lock/publish to `braidworks.core.localdb`; only `db_is_valid` /
   `_build` are taxonomy-specific).
 - `api` — NCBI Datasets v2 (`datasets_v2.py`), injectable `httpx.AsyncClient`.
-- Two builders: `build_taxon_weaver()` (zero-config introspection, verify's target)
-  and `build_ncbi_weaver(...)` (configured, with consent-gated DB acquisition).
+- `build_ncbi_weaver(...)` is both the configured builder (consent-gated DB
+  acquisition) and — called with no backend args — the zero-config introspection
+  weaver that `weaverkit verify` / entry-point discovery use; `build_ncbi_weaver_fixture()`
+  backs golden with the tiny deterministic DB.
 
 ## Expansion notes
 

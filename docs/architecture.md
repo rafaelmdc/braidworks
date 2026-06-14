@@ -712,7 +712,7 @@ exceptions.py   BackendConfigurationError, BackendUnavailable, NoPathError,
 ```
 
 `NCBITaxonWeaver` and the migrated `TaxonomyResolverService` live in the
-`taxon_weaver` package under `weavers/`; manual registration is the supported path
+`ncbi_weaver` package under `weavers/`; manual registration is the supported path
 (entry-point `discover()` is deferred). A Celery/HPC executor would satisfy the same
 `Braid` + `ExecutionResult` interfaces — see "What is Explicitly Deferred" above.
 

@@ -4,7 +4,7 @@
 # reported Elevated/Reduced vs healthy controls (human host; MedDRA-coded), from the
 # free, keyless Disbiome JSON API. Disbiome is tiny (~7 MB across 6 endpoints), so the
 # `local` backend builds a small SQLite once by fetching + joining all tables, then
-# serves offline (like taxon_weaver, but far lighter — no taxdump, no GB-scale DB).
+# serves offline (like ncbi_weaver, but far lighter — no taxdump, no GB-scale DB).
 #
 # Outputs come in light→heavy slices so a caller can ask for exactly what a prompt
 # needs: `summary` (just disease names + a count), `associations` (the per-experiment

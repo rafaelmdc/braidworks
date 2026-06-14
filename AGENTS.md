@@ -8,7 +8,7 @@ before making changes. It is intentionally short and prescriptive; the deeper
 
 Braidworks is a `uv` workspace of composable biological data resolvers called
 **weavers**. `braidworks-core` is the domain-neutral framework; each weaver (e.g.
-`taxon_weaver`) wraps one data source. `weaverkit` is the toolkit that makes adding
+`ncbi_weaver`) wraps one data source. `weaverkit` is the toolkit that makes adding
 a weaver deterministic rather than improvised.
 
 ## Commands
@@ -19,7 +19,7 @@ make test                 # run every package's suite (core + weavers + weaverki
 make lint                 # ruff check across all packages
 make fmt                  # ruff format
 
-# adding a weaver (weavers live under weavers/, e.g. weavers/taxon_weaver/, weavers/example_weaver/):
+# adding a weaver (weavers live under weavers/, e.g. weavers/ncbi_weaver/, weavers/example_weaver/):
 make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>_weaver
 make index                # rebuild docs/weavers-index.tsv (machine) + docs/keys-index.md (human)
@@ -185,7 +185,7 @@ description = "Assembly completeness filter"
   cache invalidation. Use a release tag, dump date, or checksum.
 - **Don't hand-edit generated `vocab.py`.** It mirrors the spec (capabilities +
   `provenance` + `title`). Change the spec and regenerate (`weaverkit new --force`);
-  `verify` checks the two stay in sync. **Exception:** `taxon_weaver` is hand-written
+  `verify` checks the two stay in sync. **Exception:** `ncbi_weaver` is hand-written
   ("bring your own plumbing" reference) — its `vocab.py` has custom module-level
   constants, so regenerating it from the scaffold *clobbers* them; edit it by hand. The
   scaffold also generates the `[project.entry-points."braidworks.weavers"]` block, which

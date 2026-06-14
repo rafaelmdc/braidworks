@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from braidworks.core import BackendConfigurationError
-from taxon_weaver import factory
-from taxon_weaver.factory import build_ncbi_weaver
-from taxon_weaver.setup import default_db_path
+from ncbi_weaver import factory
+from ncbi_weaver.factory import build_ncbi_weaver
+from ncbi_weaver.setup import default_db_path
 
 
 @pytest.fixture
@@ -66,11 +66,16 @@ def test_interactive_prompt_no_declines(record_ensure, monkeypatch, tmp_path):
 def test_non_interactive_missing_db_raises_actionable(monkeypatch, tmp_path):
     monkeypatch.delenv("BRAIDWORKS_AUTO_DOWNLOAD", raising=False)
     monkeypatch.setattr(factory, "_interactive", lambda: False)
-    with pytest.raises(BackendConfigurationError, match="taxon-weaver ensure"):
+    with pytest.raises(BackendConfigurationError, match="ncbi-weaver ensure"):
         build_ncbi_weaver(db_path=tmp_path / "missing.sqlite")
 
 
-def test_no_local_no_api_still_requires_a_backend(monkeypatch):
+def test_zero_arg_build_is_the_inspectable_default(monkeypatch):
+    # With no backend selected, build_ncbi_weaver() is the introspection form
+    # (what `weaverkit verify` / entry-point discovery call): it advertises both
+    # backends — the keyless API is usable; local is present-but-unconfigured until
+    # its DB is built (it never downloads here).
     monkeypatch.setattr(factory, "_interactive", lambda: False)
-    with pytest.raises(BackendConfigurationError, match="at least one backend"):
-        build_ncbi_weaver()
+    weaver = build_ncbi_weaver()
+    assert set(weaver._backends) == {"local", "api"}
+    assert weaver._backends["api"].is_configured()

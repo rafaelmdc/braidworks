@@ -20,8 +20,8 @@ import pytest
 from braidworks.core import Strand, StrandSet, WeaveStatus
 from braidworks.testing.contract import WeaverOrderContractTests
 
-from taxon_weaver import build_ncbi_weaver, vocab
-from taxon_weaver.setup import db_is_valid, default_db_path, ensure_taxonomy_db
+from ncbi_weaver import build_ncbi_weaver, vocab
+from ncbi_weaver.setup import db_is_valid, default_db_path, ensure_taxonomy_db
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 pytestmark = pytest.mark.skipif(

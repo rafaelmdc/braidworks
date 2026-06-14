@@ -26,7 +26,7 @@ Equivalent raw command (per package):
 
 ```bash
 cd braidworks-core      && uv run --extra test python -m pytest -q
-cd weavers/taxon_weaver && uv run --extra test python -m pytest -q
+cd weavers/ncbi_weaver && uv run --extra test python -m pytest -q
 ```
 
 A bare `pytest` (or `uv run pytest`) from the repo root will pick up the root
@@ -58,7 +58,7 @@ deterministic path is **not** copying files by hand — use the scaffold generat
 
 ```bash
 make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver   # under weavers/, like weavers/taxon_weaver/
+make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver   # under weavers/, like weavers/ncbi_weaver/
 ```
 
 This stamps a complete package from a `weaver.spec.toml`; you then implement only
@@ -75,7 +75,7 @@ done-checklist, see
    The root `members = ["braidworks-core", "weaverkit", "weavers/*"]` glob picks it up
    automatically — no root edit needed.
 2. **Define a neutral intermediate** — a small dataclass your backends normalize
-   their native responses into (taxon_weaver's is `TaxonMatch`). Keep it in your
+   their native responses into (ncbi_weaver's is `TaxonMatch`). Keep it in your
    package; never leak it into core.
 3. **Write one mapper** `intermediate -> WeaveResult`. A single mapper is what
    guarantees every backend emits identical strand shapes.
@@ -107,7 +107,7 @@ version:
 
 ```
 braidworks-core-v0.1.1
-taxon_weaver-v0.1.1
+ncbi_weaver-v0.1.1
 bacdive_weaver-v0.1.1
 ```
 

@@ -10,11 +10,11 @@ members = [
     "braidworks-core",
     "disbiome-weaver",
     "example-weaver",
+    "ncbi-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
     "reactome-weaver",
     "string-weaver",
-    "taxon-weaver",
     "uniprot-weaver",
     "weaverkit",
 ]
@@ -345,6 +345,34 @@ wheels = [
 ]
 
 [[package]]
+name = "ncbi-weaver"
+version = "0.1.5"
+source = { editable = "weavers/ncbi_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+    { name = "platformdirs" },
+    { name = "rapidfuzz" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "platformdirs", specifier = ">=4.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "rapidfuzz", specifier = ">=3.0,<4.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
 name = "networkx"
 version = "3.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -608,34 +636,6 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
     { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
-]
-provides-extras = ["test"]
-
-[[package]]
-name = "taxon-weaver"
-version = "0.1.4"
-source = { editable = "weavers/taxon_weaver" }
-dependencies = [
-    { name = "braidworks-core" },
-    { name = "httpx" },
-    { name = "platformdirs" },
-    { name = "rapidfuzz" },
-]
-
-[package.optional-dependencies]
-test = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "braidworks-core", editable = "braidworks-core" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "platformdirs", specifier = ">=4.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
-    { name = "rapidfuzz", specifier = ">=3.0,<4.0" },
 ]
 provides-extras = ["test"]
 

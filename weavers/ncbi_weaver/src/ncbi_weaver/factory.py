@@ -21,7 +21,6 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendConfigurationError
 
 from .backends.datasets_v2 import DEFAULT_BASE_URL, DatasetsV2Backend
 from .backends.local import LocalTaxonomyBackend
@@ -86,7 +85,10 @@ def build_ncbi_weaver(
     The local backend is configured when ``db_path`` is given or ``auto_setup`` is
     set; its DB is ensured (default path under the user cache when ``db_path`` is
     omitted). The API backend is configured when ``enable_api`` is set or a client
-    is injected. At least one backend must be configured.
+    is injected. With **no** backend-selecting argument, returns the zero-config
+    introspection weaver — both backends declared, the keyless API usable and local
+    present-but-unconfigured — which is what ``weaverkit verify`` and entry-point
+    discovery call as ``build_ncbi_weaver()``.
     """
     backends = {}
     want_local = db_path is not None or auto_setup
@@ -101,46 +103,31 @@ def build_ncbi_weaver(
             allow_fuzzy=allow_fuzzy,
         )
     if not backends:
-        raise BackendConfigurationError(
-            "build_ncbi_weaver: configure at least one backend "
-            "(pass db_path or auto_setup=True for local and/or enable_api for the API backend)"
-        )
+        # No backend selected → the zero-config **introspection** form: wire every
+        # declared backend present-but-possibly-unconfigured (local points at the
+        # default DB path without downloading; the API needs no local data). The
+        # manifest is then complete for inspection/fingerprint checks (this is what
+        # `weaverkit verify` and entry-point discovery call as `build_ncbi_weaver()`),
+        # while an unconfigured backend simply skips at run/golden time.
+        backends["local"] = LocalTaxonomyBackend(default_db_path())
+        backends["api"] = DatasetsV2Backend()
     return NCBITaxonWeaver(backends)
-
-
-def build_taxon_weaver(**_config: Any) -> NCBITaxonWeaver:
-    """Zero-config introspection builder — the weaverkit ``verify`` entry point.
-
-    Wires every declared backend *present but possibly unconfigured*: the local
-    backend points at the default DB path (configured only if it's already built;
-    it never downloads), and the API backend needs no local data. The manifest is
-    therefore complete for inspection and fingerprint checks, while an unconfigured
-    backend simply skips at run/golden time. For a real, configured weaver — with
-    consent-gated DB acquisition, an injected client, etc. — use
-    :func:`build_ncbi_weaver`.
-    """
-    return NCBITaxonWeaver(
-        {
-            "local": LocalTaxonomyBackend(default_db_path()),
-            "api": DatasetsV2Backend(),
-        }
-    )
 
 
 # Process-lifetime cache so repeated fixture builds in one run don't rebuild the DB.
 _FIXTURE_DB: Path | None = None
 
 
-def build_taxon_weaver_fixture(**_config: Any) -> NCBITaxonWeaver:
+def build_ncbi_weaver_fixture(**_config: Any) -> NCBITaxonWeaver:
     """Build a weaver backed by the tiny deterministic fixture DB (no download).
 
     The ``weaverkit verify --strict`` golden hook and tests use this to run real
     resolutions reproducibly. The local backend is configured against a ~6-species
-    *Faecalibacterium* SQLite built from inline dumps (see :mod:`taxon_weaver.fixture`).
+    *Faecalibacterium* SQLite built from inline dumps (see :mod:`ncbi_weaver.fixture`).
     """
     global _FIXTURE_DB
     from .fixture import build_fixture_db
 
     if _FIXTURE_DB is None or not db_is_valid(_FIXTURE_DB):
-        _FIXTURE_DB = build_fixture_db(Path(tempfile.mkdtemp(prefix="taxon_weaver-fixture-")))
+        _FIXTURE_DB = build_fixture_db(Path(tempfile.mkdtemp(prefix="ncbi_weaver-fixture-")))
     return NCBITaxonWeaver({"local": LocalTaxonomyBackend(_FIXTURE_DB)})

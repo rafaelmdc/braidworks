@@ -1,13 +1,13 @@
-# taxon_weaver — NCBI taxonomy resolver (organism name / taxid -> taxonomy).
+# ncbi_weaver — NCBI taxonomy resolver (organism name / taxid -> taxonomy).
 # A resolver weaver: fuzzy/ambiguous name matching with candidates, two backends
 # (local SQLite built from the NCBI taxdump, and the live NCBI Datasets v2 API).
-# weaver_id is "ncbi" (the join namespace), distinct from the package "taxon_weaver".
+# weaver_id is "ncbi" (the join namespace), distinct from the package "ncbi_weaver".
 [weaver]
-db_name = "taxon"
+db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.1.4"
+version = "0.1.5"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -71,7 +71,7 @@ always_computed_groups = ["core"]
   id = "lineage"
   outputs = ["ncbi.taxon.lineage"]
 
-# Golden inputs are resident in the deterministic fixture DB (taxon_weaver.fixture,
+# Golden inputs are resident in the deterministic fixture DB (ncbi_weaver.fixture,
 # the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.
 [[golden]]
 capability = "ncbi.resolve_name"

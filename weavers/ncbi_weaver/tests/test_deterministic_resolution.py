@@ -14,7 +14,7 @@ from taxonomy_resolver.schemas import ResolveRequest
 from taxonomy_resolver.service import TaxonomyResolverService
 
 # Single source of the mini dump (also used by conftest + weaverkit verify --strict).
-from taxon_weaver.fixture import NAMES_DMP, NODES_DMP
+from ncbi_weaver.fixture import NAMES_DMP, NODES_DMP
 
 
 class DeterministicResolutionTests(unittest.TestCase):

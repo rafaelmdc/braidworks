@@ -142,11 +142,11 @@ regroup fanned leaves by the question that produced them. See
 
 ## 5. Example: NCBI taxonomy (and choosing a backend)
 
-`taxon_weaver` exposes NCBI taxonomy with two interchangeable backends. Build a
+`ncbi_weaver` exposes NCBI taxonomy with two interchangeable backends. Build a
 weaver with the factory:
 
 ```python
-from taxon_weaver import build_ncbi_weaver
+from ncbi_weaver import build_ncbi_weaver
 
 # API only — no local data needed (NCBI Datasets v2, over the network)
 weaver = build_ncbi_weaver(enable_api=True)
@@ -171,9 +171,9 @@ missing backend never breaks planning — it just isn't an option.
 The recommended way to provision the local database once:
 
 ```bash
-taxon-weaver ensure              # prompt, then download + build into the user cache
-taxon-weaver ensure --yes        # non-interactive (CI/servers)
-taxon-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+ncbi-weaver ensure              # prompt, then download + build into the user cache
+ncbi-weaver ensure --yes        # non-interactive (CI/servers)
+ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
 ```
 
 `ensure` is idempotent (a valid DB is reused instantly) and, when the DB is
@@ -199,7 +199,7 @@ result = await LocalExecutor(registry).execute(braid, sets)
 Because `uniprot_weaver` also produces `ncbi.taxon.id`, a protein query can cross
 into the organism hub and on to taxonomy/phenotype weavers in a single braid.
 
-## Strand types produced by `taxon_weaver`
+## Strand types produced by `ncbi_weaver`
 
 | type_id | group | notes |
 |---|---|---|
@@ -223,7 +223,7 @@ calling each `build_*` function directly:
 
 ```python
 from braidworks.core import WeaverFactory
-from taxon_weaver import NCBIWeaverProvider
+from ncbi_weaver import NCBIWeaverProvider
 
 factory = WeaverFactory()
 factory.register(NCBIWeaverProvider())
