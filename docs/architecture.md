@@ -1,8 +1,12 @@
 # Braidworks Architecture
 
-Braidworks is the framework layer that turns TaxonWeaver into one member of a composable network of biological data resolvers. Each resolver is a **Weaver**. Weavers declare what data types they consume and produce. A central registry builds a graph from those declarations. A braider finds routes through the graph. An executor runs the braid.
+Braidworks is the framework layer that composes biological data sources into one network of resolvers. Each source is a **Weaver** (UniProt, PDBe, Reactome, NCBI Taxonomy, …). Weavers declare what data types they consume and produce. A central registry builds a graph from those declarations. A braider finds routes through the graph. An executor runs the braid.
 
-The goal is to make queries like "I have an organism name, I want a UniProt proteome ID" work automatically by routing through whichever weavers can bridge the gap, without the caller knowing how.
+The goal is to make queries like "I have a protein query, I want its PDB structures" work automatically by routing through whichever weavers can bridge the gap (here `protein.query → uniprot → accession → pdbe → structures`), without the caller knowing how.
+
+> This document is the deep reference for the core abstractions and their contracts.
+> For a quick start see the [top-level README](../README.md) and [usage.md](usage.md);
+> for the cardinality fan-out model see [fanout-roadmap.md](fanout-roadmap.md).
 
 ---
 

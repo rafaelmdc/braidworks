@@ -1,6 +1,6 @@
 # Contributing to quickgo_weaver
 
-Gene Ontology annotations (accession -> GO terms by aspect). Source: https://www.ebi.ac.uk/QuickGO (CC BY 4.0 (Gene Ontology / EBI QuickGO; cite https://doi.org/10.1093/bioinformatics/btp536)). Kind: `lookup`. Capabilities: `list_go_terms`.
+Gene Ontology annotations (accession -> GO terms by aspect). Source: https://www.ebi.ac.uk/QuickGO (CC BY 4.0 (Gene Ontology / EBI QuickGO; cite https://doi.org/10.1093/bioinformatics/btp536)). Kind: `lookup`. Capabilities: `list_go_terms`, `describe_go_term`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -40,10 +40,10 @@ weaverkit verify --spec weaver.spec.toml --package quickgo_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `go.biological_process`, `go.cellular_component`, `go.count`, `go.molecular_function`, `go.records`.
+See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
 
 ## Expansion notes
 
 <!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
      data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.

@@ -1,6 +1,6 @@
 # Contributing to reactome_weaver
 
-Reactome pathways (accession -> pathways). Source: https://reactome.org (CC0 (Reactome; cite https://doi.org/10.1093/nar/gkab1028)). Kind: `lookup`. Capabilities: `list_pathways`.
+Reactome pathways (accession -> pathways). Source: https://reactome.org (CC0 (Reactome; cite https://doi.org/10.1093/nar/gkab1028)). Kind: `lookup`. Capabilities: `list_pathways`, `describe_pathway`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -40,10 +40,10 @@ weaverkit verify --spec weaver.spec.toml --package reactome_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `pathway.reactome.count`, `pathway.reactome.names`, `pathway.reactome.records`.
+See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
 
 ## Expansion notes
 
 <!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
      data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.

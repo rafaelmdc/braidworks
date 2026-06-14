@@ -1,6 +1,6 @@
 # Contributing to pdbe_weaver
 
-PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)). Kind: `lookup`. Capabilities: `list_structures`.
+PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)). Kind: `lookup`. Capabilities: `list_structures`, `describe_structure`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -40,10 +40,10 @@ weaverkit verify --spec weaver.spec.toml --package pdbe_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `structure.pdb.count`, `structure.pdb.ids`, `structure.pdb.records`.
+See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
 
 ## Expansion notes
 
 <!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
      data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.

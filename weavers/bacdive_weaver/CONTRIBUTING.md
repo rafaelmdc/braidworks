@@ -40,7 +40,7 @@ weaverkit verify --spec weaver.spec.toml --package bacdive_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `microbe.trait.cell_shape`, `microbe.trait.gram_stain`, `microbe.trait.motility`, `microbe.trait.optimum_ph`, `microbe.trait.optimum_temp`, `microbe.trait.oxygen_tolerance`, `microbe.trait.spore_formation`.
+See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
 
 ## Expansion notes
 
