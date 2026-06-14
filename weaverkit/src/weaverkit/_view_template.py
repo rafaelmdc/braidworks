@@ -119,7 +119,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     border: 1px solid var(--panel-edge); border-radius: 13px; padding: 13px 14px 14px;
     box-shadow: 0 24px 60px rgba(0,0,0,0.5); font-size: 12.5px;
   }
-  .card-head { display: flex; align-items: flex-start; gap: 8px; }
+  .card-head { display: flex; align-items: flex-start; gap: 8px; cursor: move; user-select: none; }
   .card-accent { width: 4px; align-self: stretch; border-radius: 3px; flex: none; }
   .card-id { font-size: 14px; font-weight: 700; word-break: break-all; }
   .card-title { color: var(--ink-dim); font-size: 11px; line-height: 1.35; margin-top: 1px; }
@@ -380,6 +380,38 @@ function drawLegs(sx, sy, w, h, color, sc, lit) {
   ctx.globalAlpha = 1;
 }
 
+// A tiny "face" under the spider's body: a very squashed ellipse (mouth) with two
+// downward triangle fangs near its centre. Drawn in the weaver colour, just below the
+// body's bottom edge. Hidden when zoomed out so it never turns to noise.
+function drawFace(sx, sy, w, h, color, sc, lit) {
+  if (sc < 0.34) return;
+  const rx = 11 * sc, ry = 3.2 * sc;
+  // Tuck the top ~30% of the mouth into the body so it reads as connected, not floating.
+  const cx = sx, cy = sy + h / 2 + ry * 0.4;
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = 1 * Math.max(sc, 0.5); ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.globalAlpha = lit ? 0.26 : 0.10;   // match the legs — subtle, not invasive
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);   // squashed mouth
+  ctx.stroke();
+  // Two fangs rooted on the mouth's lower arc, tilted outward so they align to the
+  // ellipse (their base lies along the curve, minimizing overlap).
+  const L = 5.5 * sc, hw = 1.5 * sc, phi = 0.34;
+  const fang = (ox, s) => {
+    const ax = cx + ox;
+    const ay = cy + ry * Math.sqrt(Math.max(0, 1 - (ox / rx) ** 2));  // on the lower arc
+    const dx = s * Math.sin(phi), dy = Math.cos(phi);                 // down + outward
+    const px = dy, py = -dx;                                          // base along the curve
+    ctx.beginPath();
+    ctx.moveTo(ax + hw * px, ay + hw * py);
+    ctx.lineTo(ax - hw * px, ay - hw * py);
+    ctx.lineTo(ax + L * dx, ay + L * dy);
+    ctx.closePath(); ctx.fill();
+  };
+  fang(-3.5 * sc, -1); fang(3.5 * sc, 1);
+  ctx.globalAlpha = 1;
+}
+
 let lastT = performance.now();
 function frame(now) {
   const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
@@ -452,6 +484,7 @@ function frame(now) {
       ctx.fillStyle = "rgba(13,18,32,0.97)"; ctx.fill();
       ctx.shadowBlur = 0;
       ctx.lineWidth = (n.id === focus ? 2 : 1.4); ctx.strokeStyle = base; ctx.stroke();
+      drawFace(sx, sy, w, h, base, cam.scale, lit);
     } else {
       ctx.shadowBlur = 0;
       roundRect(sx - w/2, sy - h/2, w, h, h/2);
@@ -663,6 +696,24 @@ function showCard(n, ax, ay) {
   cardEl.style.left = x + "px";
   cardEl.style.top = y + "px";
 }
+
+// Draggable by its header — lets you pull an expanded card fully back on-screen.
+let cardDrag = null;
+cardEl.addEventListener("mousedown", (e) => {
+  const head = e.target.closest(".card-head");
+  if (!head || e.target.closest(".card-x")) return;
+  const r = cardEl.getBoundingClientRect();
+  cardDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+  e.preventDefault();
+});
+addEventListener("mousemove", (e) => {
+  if (!cardDrag) return;
+  let x = e.clientX - cardDrag.dx, y = e.clientY - cardDrag.dy;
+  x = Math.min(Math.max(x, 6), innerWidth - cardEl.offsetWidth - 6);
+  y = Math.min(Math.max(y, 6), innerHeight - 44);   // keep the header grabbable
+  cardEl.style.left = x + "px"; cardEl.style.top = y + "px";
+});
+addEventListener("mouseup", () => { cardDrag = null; });
 
 // ---- boot ------------------------------------------------------------------
 if (DATA.meta.problems && DATA.meta.problems.length) {
