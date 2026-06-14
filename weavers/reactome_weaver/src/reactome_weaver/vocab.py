@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.5"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -55,6 +55,35 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(id="full", outputs=frozenset({"pathway.reactome.records"})),
                 ),
                 set_outputs=frozenset({"pathway.reactome.id"}),
+                backends=backends,
+                max_batch_size=25,
+            ),
+            # The consumer side: one pathway id -> that pathway's detail. Consumes the
+            # set key list_pathways produces, so a fanned pathway is drillable.
+            Capability(
+                id="describe_pathway",
+                consumes=frozenset({"pathway.reactome.id"}),
+                produces=frozenset(
+                    {
+                        "pathway.reactome.display_name",
+                        "pathway.reactome.species",
+                        "pathway.reactome.in_disease",
+                        "pathway.reactome.detail",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="detail",
+                        outputs=frozenset(
+                            {
+                                "pathway.reactome.display_name",
+                                "pathway.reactome.species",
+                                "pathway.reactome.in_disease",
+                                "pathway.reactome.detail",
+                            }
+                        ),
+                    ),
+                ),
                 backends=backends,
                 max_batch_size=25,
             ),

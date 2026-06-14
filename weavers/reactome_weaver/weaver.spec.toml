@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.4"
+version = "0.1.5"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -18,8 +18,9 @@ source_url = "https://reactome.org"
 fingerprint_source = "Reactome ContentService API contract (reactome.org/ContentService)"
 api_key = "none"
 backends = ["api"]
-# Real excerpt of GET https://reactome.org/ContentService/data/mapping/UniProt/P04637/pathways
+# Real excerpts: GET /data/mapping/UniProt/P04637/pathways (list) + GET /data/query/{id} (detail).
 source_sample = """
+# /data/mapping/UniProt/P04637/pathways
 [
   {
     "stId": "R-HSA-111448",
@@ -28,6 +29,15 @@ source_sample = """
     "isInDisease": false
   }
 ]
+# /data/query/R-HSA-69541
+{
+  "stId": "R-HSA-69541",
+  "displayName": "Stabilization of p53",
+  "schemaClass": "Pathway",
+  "speciesName": "Homo sapiens",
+  "isInDisease": false,
+  "releaseDate": "2004-07-06"
+}
 """
 
 # One accession -> one mapping/pathways call. Reactome has no batch endpoint that
@@ -49,10 +59,33 @@ set_outputs = ["pathway.reactome.id"]
   id = "full"
   outputs = ["pathway.reactome.records"]
 
+# The consumer of the fan dimension: one pathway id -> that pathway's detail (Reactome
+# /data/query/{id}). Consumes pathway.reactome.id (what list_pathways produces), so a
+# fanned pathway is drillable: protein -> list_pathways -> fan -> describe_pathway.
+[[capability]]
+id = "describe_pathway"
+consumes = ["pathway.reactome.id"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "detail"
+  outputs = [
+    "pathway.reactome.display_name",
+    "pathway.reactome.species",
+    "pathway.reactome.in_disease",
+    "pathway.reactome.detail",
+  ]
+
 # Golden runs against the deterministic fixture (reactome_weaver.fixture, an
-# httpx.MockTransport serving a canned 2-pathway response for P04637, with a duplicate
-# stId so the dedup path is exercised) so `weaverkit verify --strict` is reproducible.
+# httpx.MockTransport serving a canned 2-pathway response for P04637 with a duplicate
+# stId, plus a /data/query/{id} detail object for R-HSA-69541) so `weaverkit verify
+# --strict` is reproducible.
 [[golden]]
 capability = "list_pathways"
 input = { "protein.uniprot.accession" = "P04637" }
 expect = { "pathway.reactome.count" = 2 }
+
+[[golden]]
+capability = "describe_pathway"
+input = { "pathway.reactome.id" = "R-HSA-69541" }
+expect = { "pathway.reactome.display_name" = "Stabilization of p53" }
