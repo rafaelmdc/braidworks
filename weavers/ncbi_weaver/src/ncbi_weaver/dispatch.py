@@ -67,14 +67,13 @@ class BackendDispatchWeaver(BaseWeaver):
             )
         strategy = self._strategy(backend)  # raises BackendUnavailable
 
-        # list_children has a different output shape (a set of child taxids), so it
-        # uses core's LookupRecord/map_lookup path rather than the TaxonMatch mapper.
-        if capability_id == vocab.LIST_CHILDREN:
-            effective = cap.resolve_params(params)
-            queries = [
-                {vocab.TAXON_ID: self._value(ss, vocab.TAXON_ID)} for ss in strand_sets
-            ]
-            records = await strategy.list_children(queries, rank=effective.get("rank"))
+        # The list_/describe_ capabilities have a set-of-ids / detail output shape that
+        # doesn't fit the TaxonMatch resolver mapper, so they use core's
+        # LookupRecord/map_lookup path. Each builds queries, calls a backend method, maps.
+        if capability_id in (vocab.LIST_CHILDREN, vocab.LIST_GENOMES, vocab.DESCRIBE_GENOME):
+            records = await self._lookup_records(
+                capability_id, cap, strand_sets, backend, requested_outputs, params
+            )
             return [
                 map_lookup(
                     r,
@@ -101,6 +100,27 @@ class BackendDispatchWeaver(BaseWeaver):
             )
             for m in matches
         ]
+
+    async def _lookup_records(
+        self, capability_id, cap, strand_sets, backend, requested_outputs, params
+    ):
+        """Run a list_/describe_ capability on the backend, returning LookupRecords."""
+        strategy = self._strategy(backend)
+        (input_type,) = tuple(cap.consumes)
+        queries = [{input_type: self._value(ss, input_type)} for ss in strand_sets]
+        effective = cap.resolve_params(params)
+        if capability_id == vocab.LIST_CHILDREN:
+            return await strategy.list_children(queries, rank=effective.get("rank"))
+        if capability_id == vocab.LIST_GENOMES:
+            return await strategy.list_genomes(
+                queries,
+                reference_only=bool(effective.get("reference_only", False)),
+                annotated_only=bool(effective.get("annotated_only", False)),
+                assembly_level=effective.get("assembly_level"),
+            )
+        # describe_genome: pass the triggered groups so it fetches sequences only if asked.
+        groups = cap.triggered_groups(requested_outputs)
+        return await strategy.describe_genome(queries, groups=groups)
 
     @staticmethod
     def _value(strand_set, type_id: str):

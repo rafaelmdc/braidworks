@@ -1,6 +1,6 @@
 [project]
 name = "ncbi_weaver"
-version = "0.1.6"
+version = "0.1.7"
 description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets v2 API backends)."
 readme = "README.md"
 requires-python = ">=3.12"

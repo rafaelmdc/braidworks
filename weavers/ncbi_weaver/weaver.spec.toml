@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.1.6"
+version = "0.1.7"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -34,6 +34,23 @@ source_sample = """
   ],
   "total_count": 121
 }
+
+# GET .../datasets/v2/genome/taxon/562/dataset_report (list_genomes) +
+#     .../genome/accession/GCF_000005845.2/dataset_report (describe_genome)
+{
+  "reports": [
+    {
+      "accession": "GCF_000005845.2",
+      "organism": { "organism_name": "Escherichia coli str. K-12 substr. MG1655", "tax_id": 511145 },
+      "assembly_info": { "assembly_level": "Complete Genome", "assembly_name": "ASM584v2",
+        "submitter": "Univ. Wisconsin", "release_date": "2013-09-26", "refseq_category": "reference genome" },
+      "assembly_stats": { "total_sequence_length": 4641652, "gc_percent": 51, "contig_n50": 4641652 }
+    }
+  ]
+}
+# GET .../genome/accession/GCF_000005845.2/sequence_reports (describe_genome sequences group)
+{ "reports": [ { "chr_name": "chromosome", "role": "assembled-molecule", "length": 4641652,
+    "genbank_accession": "U00096.3", "refseq_accession": "NC_000913.3" } ] }
 """
 
 [bulk]
@@ -105,6 +122,54 @@ set_outputs = ["ncbi.taxon.id"]
   type = "string"
   default = "species"
   description = "Descendant rank to return (e.g. species, genus, strain)."
+
+# ncbi.list_genomes: a taxid -> its genome assembly accessions (the genome bridge).
+# API-only — genome/taxon/{taxon}/dataset_report. genome.accession is a set output
+# (the fan dimension): "organism -> every assembly, each drillable". Parameters filter
+# the live search.
+[[capability]]
+id = "ncbi.list_genomes"
+consumes = ["ncbi.taxon.id"]
+backends = ["api"]
+max_batch_size = 1000
+set_outputs = ["genome.accession"]
+
+  [[capability.group]]
+  id = "genomes"
+  outputs = ["genome.accession", "genome.assembly.count", "genome.assembly.records"]
+
+  [[capability.parameter]]
+  name = "reference_only"
+  type = "bool"
+  default = false
+  description = "Only NCBI reference/representative genomes."
+
+  [[capability.parameter]]
+  name = "annotated_only"
+  type = "bool"
+  default = false
+  description = "Only assemblies that have annotation."
+
+  [[capability.parameter]]
+  name = "assembly_level"
+  type = "string"
+  description = "Filter to a level: Complete Genome / Chromosome / Scaffold / Contig."
+
+# ncbi.describe_genome: one genome accession -> its assembly detail. Two output groups
+# fold two endpoints — assembly (dataset_report) and sequences (sequence_reports).
+[[capability]]
+id = "ncbi.describe_genome"
+consumes = ["genome.accession"]
+backends = ["api"]
+max_batch_size = 1000
+
+  [[capability.group]]
+  id = "assembly"
+  outputs = ["genome.assembly.title", "genome.assembly.level", "genome.assembly.organism", "genome.assembly.detail"]
+
+  [[capability.group]]
+  id = "sequences"
+  outputs = ["genome.sequence.records"]
 
 # Golden inputs are resident in the deterministic fixture DB (ncbi_weaver.fixture,
 # the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.

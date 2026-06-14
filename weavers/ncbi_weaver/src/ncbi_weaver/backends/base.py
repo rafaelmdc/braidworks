@@ -49,3 +49,30 @@ class ResolutionBackend(ABC):
         raise UnsupportedCapability(
             f"{type(self).__name__} does not support list_children"
         )
+
+    async def list_genomes(
+        self,
+        queries: list[dict[str, Any]],
+        *,
+        reference_only: bool = False,
+        annotated_only: bool = False,
+        assembly_level: str | None = None,
+    ) -> list[LookupRecord]:
+        """List each input taxid's genome assembly accessions (one record per input).
+
+        API-only (live NCBI Datasets search); a non-API backend is never asked.
+        """
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support list_genomes"
+        )
+
+    async def describe_genome(
+        self, queries: list[dict[str, Any]], *, groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        """Describe each input genome accession (assembly detail; sequences if asked).
+
+        API-only; a non-API backend is never asked.
+        """
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support describe_genome"
+        )

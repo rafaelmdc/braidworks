@@ -211,6 +211,175 @@ class DatasetsV2Backend:
         # Deterministic order: ascending taxid.
         return [out[k] for k in sorted(out)]
 
+    # --- genome capabilities ------------------------------------------------
+
+    async def list_genomes(
+        self,
+        queries: list[dict[str, Any]],
+        *,
+        reference_only: bool = False,
+        annotated_only: bool = False,
+        assembly_level: str | None = None,
+    ) -> list[LookupRecord]:
+        """One taxid -> its genome assembly accessions, filtered per the parameters."""
+        params: dict[str, Any] = {"page_size": 1000}
+        if reference_only:
+            params["filters.reference_only"] = "true"
+        if annotated_only:
+            params["filters.has_annotation"] = "true"
+        if assembly_level:
+            params["filters.assembly_level"] = assembly_level
+        records: list[LookupRecord] = []
+        for q in queries:
+            taxid = str(q.get(vocab.TAXON_ID, "") or "").strip()
+            if not taxid:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                assemblies = await self._fetch_genomes(taxid, params)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {exc}"))
+                continue
+            if not assemblies:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            records.append(LookupRecord(query=q, found=True, values={
+                vocab.GENOME_ACCESSION: [a["accession"] for a in assemblies],  # the fan dimension
+                vocab.ASSEMBLY_COUNT: len(assemblies),
+                vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
+            }))
+        return records
+
+    async def _fetch_genomes(self, taxid: str, base_params: dict) -> list[dict[str, Any]]:
+        """Paginate genome/taxon/{taxid}/dataset_report into compact assembly rows."""
+        out: dict[str, dict[str, Any]] = {}
+        page_token: str | None = None
+        while True:
+            params = dict(base_params)
+            if page_token:
+                params["page_token"] = page_token
+            resp = await self._http().get(
+                f"/genome/taxon/{taxid}/dataset_report", params=params
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            for a in body.get("reports") or []:
+                acc = a.get("accession")
+                if not acc or acc in out:
+                    continue
+                info = a.get("assembly_info") or {}
+                org = a.get("organism") or {}
+                out[acc] = {
+                    "accession": acc,
+                    "organism": org.get("organism_name"),
+                    "tax_id": org.get("tax_id"),
+                    "assembly_level": info.get("assembly_level"),
+                    "assembly_name": info.get("assembly_name"),
+                    "refseq_category": info.get("refseq_category"),
+                    "release_date": info.get("release_date"),
+                }
+            page_token = body.get("next_page_token")
+            if not page_token:
+                break
+        # Deterministic: accession ascending.
+        return [out[k] for k in sorted(out)]
+
+    async def describe_genome(
+        self, queries: list[dict[str, Any]], *, groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        """One genome accession -> assembly detail (+ sequences if that group was asked)."""
+        want_sequences = "sequences" in groups
+        records: list[LookupRecord] = []
+        for q in queries:
+            acc = str(q.get(vocab.GENOME_ACCESSION, "") or "").strip()
+            if not acc:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                values = await self._describe_one_genome(acc, want_sequences)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                records.append(LookupRecord(query=q, error=f"NCBI genome error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                records.append(LookupRecord(query=q, error=f"NCBI genome error: {exc}"))
+                continue
+            if values is None:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            records.append(LookupRecord(query=q, found=True, values=values))
+        return records
+
+    async def _describe_one_genome(
+        self, acc: str, want_sequences: bool
+    ) -> dict[str, Any] | None:
+        resp = await self._http().get(f"/genome/accession/{acc}/dataset_report")
+        resp.raise_for_status()
+        reports = resp.json().get("reports") or []
+        if not reports:
+            return None
+        a = reports[0]
+        info = a.get("assembly_info") or {}
+        stats = a.get("assembly_stats") or {}
+        ann = a.get("annotation_info") or {}
+        org = a.get("organism") or {}
+        values: dict[str, Any] = {
+            vocab.ASSEMBLY_TITLE: info.get("assembly_name"),
+            vocab.ASSEMBLY_LEVEL: info.get("assembly_level"),
+            vocab.ASSEMBLY_ORGANISM: org.get("organism_name"),
+            vocab.ASSEMBLY_DETAIL: {
+                "accession": a.get("accession"),
+                "assembly_name": info.get("assembly_name"),
+                "assembly_level": info.get("assembly_level"),
+                "submitter": info.get("submitter"),
+                "release_date": info.get("release_date"),
+                "refseq_category": info.get("refseq_category"),
+                "organism": org.get("organism_name"),
+                "tax_id": org.get("tax_id"),
+                "total_sequence_length": stats.get("total_sequence_length"),
+                "gc_percent": stats.get("gc_percent"),
+                "contig_n50": stats.get("contig_n50"),
+                "gene_counts": (ann.get("stats") or {}).get("gene_counts"),
+            },
+        }
+        if want_sequences:
+            values[vocab.SEQUENCE_RECORDS] = await self._fetch_sequences(acc)
+        return values
+
+    async def _fetch_sequences(self, acc: str) -> list[dict[str, Any]]:
+        """Per-sequence reports for an assembly (chromosomes/plasmids/contigs)."""
+        out: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {"page_size": 1000}
+            if page_token:
+                params["page_token"] = page_token
+            resp = await self._http().get(
+                f"/genome/accession/{acc}/sequence_reports", params=params
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            for s in body.get("reports") or []:
+                out.append({
+                    "name": s.get("chr_name") or s.get("sequence_name"),
+                    "role": s.get("role"),
+                    "length": s.get("length"),
+                    "refseq_accession": s.get("refseq_accession"),
+                    "genbank_accession": s.get("genbank_accession"),
+                })
+            page_token = body.get("next_page_token")
+            if not page_token:
+                break
+        return out[:_CHILDREN_LIMIT]
+
     # --- HTTP shape parsing ------------------------------------------------
 
     async def _dataset_report(self, taxons: list[str]) -> dict[str, dict]:

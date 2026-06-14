@@ -45,6 +45,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "protein.interpro.id": str,
     "protein.pfam.id": str,
     "pdb.id": str,
+    "genome.accession": str,
 }
 
 

@@ -33,6 +33,7 @@ SHARED_KEYS: dict[str, str] = {
     "protein.interpro.id": "InterPro entry id.",
     "protein.pfam.id": "Pfam family id.",
     "pdb.id": "PDB / PDBe structure id.",
+    "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
 }
 
 
@@ -50,6 +51,14 @@ OUTPUT_KEYS: dict[str, str] = {
     "ncbi.taxon.review_required": "Whether the match needs human review (bool).",
     "ncbi.taxon.children_count": "Number of descendant taxa of the requested rank (list_children).",
     "ncbi.taxon.children_records": "Descendant taxa of the requested rank — {taxid, name, rank}.",
+    # genome assembly outputs (ncbi_weaver list_genomes / describe_genome)
+    "genome.assembly.count": "Number of genome assemblies for a taxon (list_genomes).",
+    "genome.assembly.records": "Genome assemblies for a taxon — accession, organism, level, refseq category.",
+    "genome.assembly.title": "Assembly name of a single genome (describe_genome).",
+    "genome.assembly.level": "Assembly level of a single genome (Complete Genome/Chromosome/Scaffold/Contig).",
+    "genome.assembly.organism": "Source organism of a single genome assembly.",
+    "genome.assembly.detail": "Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts.",
+    "genome.sequence.records": "Per-sequence reports of a genome — name, role, length, RefSeq/GenBank accession.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "Gram stain (positive/negative).",
     "microbe.trait.optimum_temp": "Optimum growth temperature.",

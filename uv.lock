@@ -125,7 +125,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -346,7 +346,7 @@ wheels = [
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.1.6"
+version = "0.1.7"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -676,7 +676,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "weaverkit"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

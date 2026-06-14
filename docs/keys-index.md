@@ -23,9 +23,10 @@ Registered bridge keys — what links weavers together.
 | `enzyme.ec` | Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id. | — | — |
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
+| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
-| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children` |
+| `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits` |
@@ -43,6 +44,13 @@ Descriptive payload fields; nothing joins on them.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
+| `genome.assembly.count` | Number of genome assemblies for a taxon (list_genomes). | `ncbi:ncbi.list_genomes` | — |
+| `genome.assembly.detail` | Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts. | `ncbi:ncbi.describe_genome` | — |
+| `genome.assembly.level` | Assembly level of a single genome (Complete Genome/Chromosome/Scaffold/Contig). | `ncbi:ncbi.describe_genome` | — |
+| `genome.assembly.organism` | Source organism of a single genome assembly. | `ncbi:ncbi.describe_genome` | — |
+| `genome.assembly.records` | Genome assemblies for a taxon — accession, organism, level, refseq category. | `ncbi:ncbi.list_genomes` | — |
+| `genome.assembly.title` | Assembly name of a single genome (describe_genome). | `ncbi:ncbi.describe_genome` | — |
+| `genome.sequence.records` | Per-sequence reports of a genome — name, role, length, RefSeq/GenBank accession. | `ncbi:ncbi.describe_genome` | — |
 | `go.biological_process` | GO biological-process term names annotated to a protein. | `quickgo:list_go_terms` | — |
 | `go.cellular_component` | GO cellular-component term names annotated to a protein. | `quickgo:list_go_terms` | — |
 | `go.count` | Number of distinct GO terms annotated to a protein. | `quickgo:list_go_terms` | — |
