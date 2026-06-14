@@ -1,76 +1,195 @@
 # Braidworks
 
-Braidworks is a modular biological data-integration framework. Source-specific
-**weavers** expose typed **capabilities**; Braidworks discovers and runs routes
-between identifiers, records, and databases automatically — in batch, with
-caching, and with human-review hooks for ambiguous results.
+Braidworks connects biological databases so you can go from *what you have* (a gene
+name, an organism, a protein accession) to *what you want* (structures, pathways,
+interactions, taxonomy, phenotypes) without hand-writing the glue between every API.
 
-> You describe what data you *have* and what you *want*; Braidworks finds the
-> path between them and runs it.
+Each data source is wrapped in a **weaver** that declares, in typed terms, what it
+*consumes* and *produces*. Braidworks reads those declarations, finds a route from
+your inputs to your targets across all installed weavers, and runs it — in batch,
+with caching, deduplication, and provenance/citations attached.
 
-## How it works (one paragraph)
+> You describe what data you *have* and what you *want*; Braidworks finds the path
+> between them and runs it.
 
-Every value is a typed `Strand`; a collection of strands for one entity is a
-`StrandSet`. A **Weaver** declares `Capabilities` — which strand types it consumes
-and produces. The `BraidRegistry` projects those declarations into a graph, the
-`Braider` finds the shortest route from your available types to your target
-types, and the `LocalExecutor` runs that route in batch through a `StrandCache`.
-Ambiguous or low-confidence results are flagged for review instead of silently
-propagating.
+Most weavers are **keyless and need zero setup** — they call free public APIs
+(UniProt, PDBe, Reactome, QuickGO, STRING, AlphaFold, NCBI). Install and run.
 
-## Repository layout
+---
 
-This is a [`uv`](https://docs.astral.sh/uv/) workspace monorepo:
+## For biologists: the bare minimum
 
-```
-braidworks/
-├── braidworks-core/     # framework: strands, capabilities, registry, braider, executor, cache, factory
-├── weaverkit/           # toolkit to add a weaver deterministically (spec → scaffold → verify)
-├── weavers/             # the weavers (auto-discovered by the workspace glob)
-│   ├── taxon_weaver/    #   advanced reference: NCBI taxonomy (local SQLite + Datasets v2 API)
-│   ├── example_weaver/  #   minimal reference: lookup over a bundled CSV
-│   └── bacdive_weaver/  #   BacDive type-strain phenotypes
-├── docs/                # architecture, usage, database setup, roadmap, guides
-├── Makefile             # common dev tasks (test, lint, new-weaver, verify-weaver, index)
-└── pyproject.toml       # workspace root
-```
+Goal: start from a UniProt accession and get the protein's name and its experimental
+PDB structures — crossing two databases (UniProt → PDBe) automatically.
 
-See [docs/repo-structure.md](docs/repo-structure.md) for the full tree.
-
-## Install
+### 1. Install
 
 ```bash
-uv sync --all-extras    # creates the workspace venv and installs every package
+git clone https://github.com/rafaelmdc/braidworks
+cd braidworks
+uv sync --all-extras       # creates the environment and installs every weaver
 ```
 
-## Quickstart
+(That uses [`uv`](https://docs.astral.sh/uv/). `uv run python yourscript.py` runs a
+script inside the environment.)
 
-Two backends ship for NCBI taxonomy. **The API backend needs no local data:**
+### 2. Ask a question
+
+A value you have is a **Strand** (a typed fact, e.g. `protein.query = "P04637"`).
+You give Braidworks the strands you have and the strand *types* you want; it does
+the rest.
 
 ```python
 import asyncio
 from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
-from taxon_weaver import build_ncbi_weaver
+from uniprot_weaver import build_uniprot_weaver
+from pdbe_weaver import build_pdbe_weaver
 
 async def main():
+    # 1. Register the weavers you want available.
     registry = BraidRegistry()
-    registry.register(build_ncbi_weaver(enable_api=True))   # remote NCBI Datasets v2; zero setup
+    registry.register(build_uniprot_weaver())   # gene/name/accession -> protein entry
+    registry.register(build_pdbe_weaver())      # protein -> experimental structures
 
+    # 2. Say what you HAVE and what you WANT. Braidworks finds the route
+    #    (here: protein.query -> UniProt -> accession -> PDBe -> structures).
     braid = Braider(registry).plan(
-        available_types=frozenset({"organism.name"}),
-        target_types=frozenset({"ncbi.taxon.id", "ncbi.taxon.lineage"}),
+        available_types=frozenset({"protein.query"}),
+        target_types=frozenset({"protein.name", "structure.pdb.ids"}),
     )
-    sets = [StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens")])]
-    result = await LocalExecutor(registry).execute(braid, sets)
-    for ss in result.resolved:
-        print(ss.get("ncbi.taxon.id").value, ss.get("ncbi.taxon.lineage").value)
+
+    # 3. Provide one (or thousands of) inputs and run.
+    inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "P04637")])]
+    result = await LocalExecutor(registry).execute(braid, inputs)
+
+    # 4. Read the answers.
+    for entity in result.resolved:
+        print(entity.get("protein.name").value)        # Cellular tumor antigen p53
+        print(entity.get("structure.pdb.ids").value)   # ['9r2q', '9r2m', '8r1f', ...]
 
 asyncio.run(main())
 ```
 
-For the **local** backend you first build the SQLite taxonomy DB once — see
-[docs/database.md](docs/database.md) — then `build_ncbi_weaver(db_path=...)`.
-Full guide: [docs/usage.md](docs/usage.md).
+`"P04637"` is human p53; `"TP53"`, `"insulin"`, or a UniProt accession work too. Pass
+a list of many `StrandSet`s to process a whole spreadsheet of inputs in one batch.
+
+### 3. Read the results
+
+Every input lands in exactly one bucket of the result:
+
+| Bucket | Meaning |
+|---|---|
+| `resolved` | The targets were produced — it worked. |
+| `unresolved` | The route ran but found no match (a valid biological "nothing here"). |
+| `review_queue` | The match was ambiguous; a human should pick. |
+| `errors` | A structural problem (e.g. no route exists from your inputs). |
+
+`len(resolved) + len(unresolved) + len(review_queue) + len(errors)` always equals the
+number of inputs — nothing is silently dropped.
+
+---
+
+## What you can ask for (the weavers)
+
+Two "hubs" — **organism** (NCBI taxid) and **protein** (UniProt accession) — are
+bridged by `uniprot_weaver`, so a question can cross from one to the other.
+
+| Weaver | From → To | Setup |
+|---|---|---|
+| `uniprot` | gene/name/accession → UniProt entry (+ name, gene, organism, **taxid**) | keyless API |
+| `pdbe` | protein → experimental **PDB structures** (and one id → its detail) | keyless API |
+| `alphafold` | protein → **predicted structure** model (pLDDT, model URL) | keyless API |
+| `quickgo` | protein → **GO terms** by aspect (and one term → its detail) | keyless API |
+| `reactome` | protein → **pathways** it participates in (and one id → its detail) | keyless API |
+| `string` | protein → **interaction partners** (STRING network) | keyless API |
+| `taxon` (`ncbi`) | organism name → **NCBI taxid** + lineage (and taxid → detail) | API, or local DB |
+| `bacdive` | organism → **type-strain phenotypes** (gram stain, shape, oxygen…) | keyless API |
+| `disbiome` | organism (taxid) → **microbe–disease** associations | bundled local DB |
+| `example` | taxid → a couple of traits from a tiny CSV (reference weaver) | bundled |
+
+The full, generated map of which weaver produces and consumes each key is in
+[docs/keys-index.md](docs/keys-index.md), and an **offline interactive diagram** of
+the whole network is at [docs/braidworks-network.html](docs/braidworks-network.html)
+(open it in a browser; regenerate with `make view`).
+
+### Capability naming — what a verb means
+
+Every weaver capability is named by what it does, so you can predict its shape:
+
+- **`resolve_*`** — fuzzy input → an identifier (e.g. a messy name → a UniProt accession).
+- **`list_*`** — one identifier → a *set* of related identifiers (e.g. a protein → all its PDB ids).
+- **`describe_*`** — one identifier → *that one entity's* attributes (e.g. one PDB id → its title/method/date).
+
+---
+
+## Fan-out: one input → many results
+
+Some `list_*` capabilities emit a **set** identifier (e.g. `pdb.id`, `go.term`,
+`pathway.reactome.id`). By default Braidworks keeps the single best one, but you can
+ask it to **fan out** — fork one input into an independent child per result and keep
+going. That turns "p53 → its structures" into "p53 → *each* structure, each then
+drilled by `describe_structure`".
+
+```python
+from braidworks.core import ExpandPolicy
+
+result = await LocalExecutor(registry).execute(
+    braid, inputs,
+    expand_policy=ExpandPolicy.all(),           # one child per pdb.id
+    # or ExpandPolicy.top_k(5) to keep only the best five.
+)
+```
+
+Children carry a `parent_id` back to the originating input, so you can regroup the
+fanned leaves by the question that produced them. See
+[docs/fanout-roadmap.md](docs/fanout-roadmap.md) for the model.
+
+---
+
+## Command-line tools
+
+Braidworks ships inspection/build CLIs (the query API above is Python):
+
+```bash
+uv run weaverkit references          # print source citations for all installed weavers
+uv run weaverkit view --out net.html # render the offline network diagram
+make index                           # rebuild docs/keys-index.md + weavers-index.tsv
+make view                            # rebuild docs/braidworks-network.html
+
+taxon-weaver ensure                  # one-time: build the local NCBI taxonomy DB (optional)
+```
+
+`weaverkit` is also the toolkit for *building* a new weaver from a spec — see below.
+
+---
+
+## Repository layout
+
+A [`uv`](https://docs.astral.sh/uv/) workspace monorepo:
+
+```
+braidworks/
+├── braidworks-core/     # the framework: strands, capabilities, registry, braider, executor, cache
+├── weaverkit/           # toolkit to add a weaver deterministically (spec → scaffold → verify) + CLIs
+├── weavers/             # the data-source weavers (auto-discovered)
+│   ├── uniprot_weaver/  #   the hinge: protein query → UniProt entry (+ taxid)
+│   ├── pdbe_weaver/     #   protein → experimental structures
+│   ├── ...              #   alphafold, quickgo, reactome, string, taxon, bacdive, disbiome, example
+├── braidworks-arq/      # optional: distributed execution over arq/Redis
+├── docs/                # architecture, usage, key index, network view, roadmaps
+└── Makefile             # make help to list tasks
+```
+
+## Adding a weaver
+
+New data sources are added through `weaverkit`'s **Spec → Scaffold → Implement →
+Verify** loop, not hand-written. Start with [AGENTS.md](AGENTS.md) (the contributor
+contract) and [weaverkit/README.md](weaverkit/README.md).
+
+```bash
+make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
+make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>_weaver
+```
 
 ## Development
 
@@ -80,23 +199,22 @@ make lint     # ruff across the workspace
 make help     # list all tasks
 ```
 
-Note: tests are per-package and the working directory matters — use `make test`
-(or see [CONTRIBUTING.md](CONTRIBUTING.md)) rather than a bare `pytest` from the
-repo root.
+Tests are per-package and the working directory matters — use `make test` (or see
+[CONTRIBUTING.md](CONTRIBUTING.md)) rather than a bare `pytest` from the repo root.
 
 ## Documentation
 
 | Doc | What it covers |
 |---|---|
 | [docs/index.md](docs/index.md) | Concepts and the result model |
-| [docs/usage.md](docs/usage.md) | Install → choose a backend → run |
-| [docs/database.md](docs/database.md) | Building / acquiring the NCBI taxonomy DB |
-| [docs/architecture.md](docs/architecture.md) | Core abstractions, contracts, design decisions |
-| [docs/repo-structure.md](docs/repo-structure.md) | Full repository layout |
-| [docs/implementation-plan.md](docs/implementation-plan.md) | Build order, deliverables, definition of done |
-| [docs/weaver-roadmap.md](docs/weaver-roadmap.md) | Which weavers to build next + the reachability model |
-| [docs/weaver-implementation-guide.md](docs/weaver-implementation-guide.md) | Step-by-step manual for building a weaver |
+| [docs/usage.md](docs/usage.md) | Install → register weavers → plan → run, with more examples |
 | [docs/keys-index.md](docs/keys-index.md) | Catalog of keys that flow between weavers (generated) |
+| [docs/architecture.md](docs/architecture.md) | Core abstractions, contracts, design decisions |
+| [docs/fanout-roadmap.md](docs/fanout-roadmap.md) | Cardinality fan-out (one → many) model |
+| [docs/database.md](docs/database.md) | Building / acquiring the NCBI taxonomy DB |
+| [docs/repo-structure.md](docs/repo-structure.md) | Full repository layout |
 | [AGENTS.md](AGENTS.md) | Contributor boundaries + the Spec→Scaffold→Implement→Verify loop |
 | [weaverkit/README.md](weaverkit/README.md) | The spec/scaffold/conformance toolkit |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, testing, and how to add a new weaver |
+</content>
+</invoke>

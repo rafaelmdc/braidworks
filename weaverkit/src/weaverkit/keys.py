@@ -82,10 +82,20 @@ OUTPUT_KEYS: dict[str, str] = {
     "go.cellular_component": "GO cellular-component term names annotated to a protein.",
     "go.count": "Number of distinct GO terms annotated to a protein.",
     "go.records": "Full distinct GO annotations - GO id, name, and aspect.",
+    # one GO term's detail (quickgo_weaver describe_go_term — consumes go.term)
+    "go.term.name": "Name/label of a single GO term.",
+    "go.term.aspect": "GO aspect of a term (molecular_function/biological_process/cellular_component).",
+    "go.term.definition": "Textual definition of a single GO term.",
+    "go.term.detail": "Full GO term object — name, aspect, definition, synonyms.",
     # experimental-structure outputs (pdbe_weaver)
     "structure.pdb.ids": "PDB ids of experimental structures covering a protein (best first).",
     "structure.pdb.count": "Number of distinct PDB structures covering a protein.",
     "structure.pdb.records": "Distinct PDB structures - id, method, resolution, coverage.",
+    # one PDB structure's detail (pdbe_weaver describe_structure — consumes pdb.id)
+    "structure.pdb.title": "Title of a single PDB structure.",
+    "structure.pdb.method": "Primary experimental method of a single PDB structure.",
+    "structure.pdb.release_date": "Release date of a single PDB structure.",
+    "structure.pdb.detail": "Full PDB entry detail — title, method, release/deposition date, authors.",
     # predicted-structure outputs (alphafold_weaver)
     "structure.alphafold.entry_id": "AlphaFold DB entry id for a protein's predicted model.",
     "structure.alphafold.mean_plddt": "Mean pLDDT confidence (0-100) of the AlphaFold model.",
@@ -97,6 +107,11 @@ OUTPUT_KEYS: dict[str, str] = {
     "pathway.reactome.names": "Names of Reactome pathways a protein participates in.",
     "pathway.reactome.count": "Number of distinct Reactome pathways for a protein.",
     "pathway.reactome.records": "Distinct Reactome pathways - stable id, name, in-disease flag.",
+    # one Reactome pathway's detail (reactome_weaver describe_pathway — consumes pathway.reactome.id)
+    "pathway.reactome.display_name": "Display name of a single Reactome pathway.",
+    "pathway.reactome.species": "Species a single Reactome pathway belongs to.",
+    "pathway.reactome.in_disease": "Whether a single Reactome pathway is disease-associated (bool).",
+    "pathway.reactome.detail": "Full Reactome pathway object — name, species, disease flag, type.",
 }
 
 

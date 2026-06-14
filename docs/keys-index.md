@@ -23,15 +23,15 @@ Registered bridge keys — what links weavers together.
 | `enzyme.ec` | Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id. | — | — |
 | `gene.ncbi.id` | NCBI Gene id. | — | — |
-| `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | — |
+| `go.term` | Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id. | — | — |
 | `ncbi.taxon.id` | NCBI Taxonomy taxid — the primary organism join key. | `ncbi:ncbi.resolve_name`, `uniprot:resolve_protein` | `disbiome:disbiome.list_diseases`, `example:describe_traits`, `ncbi:ncbi.describe_taxon` |
 | `ncbi.taxon.lineage` | Ranked lineage [{taxid,rank,name}] — clade-keyed joins. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.rank` | Taxonomic rank (species, genus, …). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `organism.scientific_name` | Canonical scientific name — clade-keyed joins (e.g. FAPROTAX). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits` |
 | `pathway.kegg.id` | KEGG pathway id. | — | — |
-| `pathway.reactome.id` | Reactome pathway id. | `reactome:list_pathways` | — |
-| `pdb.id` | PDB / PDBe structure id. | `pdbe:list_structures` | — |
+| `pathway.reactome.id` | Reactome pathway id. | `reactome:list_pathways` | `reactome:describe_pathway` |
+| `pdb.id` | PDB / PDBe structure id. | `pdbe:list_structures` | `pdbe:describe_structure` |
 | `protein.interpro.id` | InterPro entry id. | — | — |
 | `protein.pfam.id` | Pfam family id. | — | — |
 | `protein.uniprot.accession` | UniProt accession — the primary protein join key. | `uniprot:resolve_protein` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions` |
@@ -48,6 +48,10 @@ Descriptive payload fields; nothing joins on them.
 | `go.count` | Number of distinct GO terms annotated to a protein. | `quickgo:list_go_terms` | — |
 | `go.molecular_function` | GO molecular-function term names annotated to a protein. | `quickgo:list_go_terms` | — |
 | `go.records` | Full distinct GO annotations - GO id, name, and aspect. | `quickgo:list_go_terms` | — |
+| `go.term.aspect` | GO aspect of a term (molecular_function/biological_process/cellular_component). | `quickgo:describe_go_term` | — |
+| `go.term.definition` | Textual definition of a single GO term. | `quickgo:describe_go_term` | — |
+| `go.term.detail` | Full GO term object — name, aspect, definition, synonyms. | `quickgo:describe_go_term` | — |
+| `go.term.name` | Name/label of a single GO term. | `quickgo:describe_go_term` | — |
 | `microbe.disease.associations` | Compact per-experiment microbe–disease rows (disease, Elevated/Reduced direction, method, sample, host). | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | Number of disease-association experiment records for a microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | Distinct disease names a microbe is associated with. | `disbiome:disbiome.list_diseases` | — |
@@ -64,8 +68,12 @@ Descriptive payload fields; nothing joins on them.
 | `ncbi.taxon.parent_id` | Parent taxid of the resolved node (descriptive). | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.review_required` | Whether the match needs human review (bool). | `ncbi:ncbi.resolve_name` | — |
 | `pathway.reactome.count` | Number of distinct Reactome pathways for a protein. | `reactome:list_pathways` | — |
+| `pathway.reactome.detail` | Full Reactome pathway object — name, species, disease flag, type. | `reactome:describe_pathway` | — |
+| `pathway.reactome.display_name` | Display name of a single Reactome pathway. | `reactome:describe_pathway` | — |
+| `pathway.reactome.in_disease` | Whether a single Reactome pathway is disease-associated (bool). | `reactome:describe_pathway` | — |
 | `pathway.reactome.names` | Names of Reactome pathways a protein participates in. | `reactome:list_pathways` | — |
 | `pathway.reactome.records` | Distinct Reactome pathways - stable id, name, in-disease flag. | `reactome:list_pathways` | — |
+| `pathway.reactome.species` | Species a single Reactome pathway belongs to. | `reactome:describe_pathway` | — |
 | `protein.function` | Curated function summary (UniProt FUNCTION comment). | `uniprot:resolve_protein` | — |
 | `protein.gene` | Primary gene symbol (UniProt). | `uniprot:resolve_protein` | — |
 | `protein.interaction.count` | Number of interaction partners returned (STRING). | `string:list_interactions` | — |
@@ -82,5 +90,9 @@ Descriptive payload fields; nothing joins on them.
 | `structure.alphafold.records` | Full AlphaFold model metadata - id, confidence breakdown, URLs. | `alphafold:describe_model` | — |
 | `structure.alphafold.version` | AlphaFold DB model version. | `alphafold:describe_model` | — |
 | `structure.pdb.count` | Number of distinct PDB structures covering a protein. | `pdbe:list_structures` | — |
+| `structure.pdb.detail` | Full PDB entry detail — title, method, release/deposition date, authors. | `pdbe:describe_structure` | — |
 | `structure.pdb.ids` | PDB ids of experimental structures covering a protein (best first). | `pdbe:list_structures` | — |
+| `structure.pdb.method` | Primary experimental method of a single PDB structure. | `pdbe:describe_structure` | — |
 | `structure.pdb.records` | Distinct PDB structures - id, method, resolution, coverage. | `pdbe:list_structures` | — |
+| `structure.pdb.release_date` | Release date of a single PDB structure. | `pdbe:describe_structure` | — |
+| `structure.pdb.title` | Title of a single PDB structure. | `pdbe:describe_structure` | — |
