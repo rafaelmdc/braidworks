@@ -22,7 +22,7 @@ from braidworks.core.references import Reference, references_for_braid
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
-from braidworks.core.strand import MergePolicy, StepOutcome, StrandSet
+from braidworks.core.strand import MergePolicy, Strand, StepOutcome, StrandSet
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +228,7 @@ class LocalExecutor:
         error_policy: ErrorPolicy = ErrorPolicy.RECORD_AND_CONTINUE,
         merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
         expand_policy: ExpandPolicy = ExpandPolicy(),
+        expand_by_type: dict[str, ExpandPolicy] | None = None,
         confidence_threshold: float = 0.0,
         chunk_size: int = 10_000,
         max_expansion: int = 10_000,
@@ -265,6 +266,7 @@ class LocalExecutor:
                 error_policy=error_policy,
                 merge_policy=merge_policy,
                 expand_policy=expand_policy,
+                expand_by_type=expand_by_type or {},
                 confidence_threshold=confidence_threshold,
                 max_expansion=max_expansion,
             )
@@ -280,6 +282,7 @@ class LocalExecutor:
         error_policy: ErrorPolicy,
         merge_policy: MergePolicy,
         expand_policy: ExpandPolicy,
+        expand_by_type: dict[str, ExpandPolicy],
         confidence_threshold: float,
         max_expansion: int,
     ) -> None:
@@ -304,6 +307,9 @@ class LocalExecutor:
             )
 
             for step_index, invocation, outs in sorted(wave_results, key=lambda t: t[0]):
+                cap = self._registry.get_capability(
+                    invocation.weaver_id, invocation.capability_id
+                )
                 for ss, kind, payload in outs:
                     if id(ss) in terminal:
                         continue
@@ -325,6 +331,7 @@ class LocalExecutor:
                         payload,
                         step_index,
                         invocation,
+                        cap.set_outputs,
                         remaining_steps,
                         result,
                         terminal,
@@ -334,6 +341,7 @@ class LocalExecutor:
                         error_policy=error_policy,
                         merge_policy=merge_policy,
                         expand_policy=expand_policy,
+                        expand_by_type=expand_by_type,
                         confidence_threshold=confidence_threshold,
                     )
 
@@ -512,6 +520,7 @@ class LocalExecutor:
         r: WeaveResult,
         step_index: int,
         invocation: CapabilityInvocation,
+        set_outputs: frozenset[str],
         remaining_steps: tuple[CapabilityInvocation, ...],
         result: ExecutionResult,
         terminal: set[int],
@@ -522,6 +531,7 @@ class LocalExecutor:
         error_policy: ErrorPolicy,
         merge_policy: MergePolicy,
         expand_policy: ExpandPolicy,
+        expand_by_type: dict[str, ExpandPolicy],
         confidence_threshold: float,
     ) -> None:
         """Fold one step's result into an entity and record its completion outcome.
@@ -590,6 +600,20 @@ class LocalExecutor:
         ss.completion.append(
             StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in r.strands))
         )
+        # Mid-braid cardinality fan-out: if this step produced any set-valued join key,
+        # ExpandPolicy decides whether the entity continues as one (TOP) or forks into
+        # one child per value (TOP_K/ALL) so the braid drills each.
+        if set_outputs:
+            self._expand_set_outputs(
+                ss,
+                set_outputs,
+                cap_id,
+                spawned,
+                terminal,
+                expand_policy,
+                expand_by_type,
+                merge_policy,
+            )
 
     def _expand_candidates(
         self,
@@ -649,6 +673,89 @@ class LocalExecutor:
                 cap_id,
             )
         terminal.add(id(ss))  # the parent is replaced by its children
+
+    def _expand_set_outputs(
+        self,
+        ss: StrandSet,
+        set_outputs: frozenset[str],
+        cap_id: str,
+        spawned: list[StrandSet],
+        terminal: set[int],
+        expand_policy: ExpandPolicy,
+        expand_by_type: dict[str, ExpandPolicy],
+        merge_policy: MergePolicy,
+    ) -> None:
+        """Fork ``ss`` on each set-valued produced join key, per its ``ExpandPolicy``.
+
+        A set output's strand carries a *list* of values. ``TOP``/``TOP_K(1)`` collapse
+        that list to one representative in place (the entity stays live); ``TOP_K(k>1)``
+        / ``ALL`` replace the entity with children — the **cross-product** across every
+        forking dimension — each holding one scalar value so the braid drills it. Reuses
+        the Phase-1 lineage scheme (``entity_id`` ``parent#i``, ``parent_id`` = root).
+        """
+        # Gather the fan dimensions actually present on this entity, with their policy.
+        dims: list[tuple[str, list, ExpandPolicy, Strand]] = []
+        for type_id in sorted(set_outputs):
+            strand = ss.get(type_id)
+            if strand is None or strand.value is None:
+                continue
+            raw = strand.value if isinstance(strand.value, list) else [strand.value]
+            seen: set[str] = set()
+            values: list = []
+            for v in raw:  # de-dup, preserve the weaver's best-first order
+                key = json.dumps(v, sort_keys=True, default=str)
+                if key not in seen:
+                    seen.add(key)
+                    values.append(v)
+            if values:
+                dims.append((type_id, values, expand_by_type.get(type_id, expand_policy), strand))
+        if not dims:
+            return
+
+        root = ss.parent_id if ss.parent_id is not None else ss.entity_id
+        working = [ss]  # expand one dimension at a time → cross-product of all dims
+        forked = False
+        for type_id, values, policy, strand in dims:
+            take = policy.fork_count(len(values))
+            kept = values[:take]
+
+            def _scalar(value: object) -> Strand:
+                return Strand(
+                    type_id, value, confidence=strand.confidence, provenance=strand.provenance
+                )
+
+            if len(kept) <= 1:  # TOP / TOP_K(1): collapse the list to one value in place
+                for w in working:
+                    w.add_strand(_scalar(kept[0]), MergePolicy.LAST_WINS)
+                if len(values) > 1:  # not silent: record the N→1 collapse
+                    for w in working:
+                        w.warnings.append(
+                            f"ExpandPolicy.{policy.mode.name}: auto-selected 1 of "
+                            f"{len(values)} {type_id} at {cap_id}"
+                        )
+                continue
+
+            next_working: list[StrandSet] = []
+            for w in working:
+                for i, value in enumerate(kept):
+                    child = w.clone(entity_id=f"{w.entity_id}#{i}", parent_id=root)
+                    child.add_strand(_scalar(value), MergePolicy.LAST_WINS)
+                    next_working.append(child)
+            working = next_working
+            forked = True
+            if take < len(values):
+                logger.warning(
+                    "ExpandPolicy.%s: kept %d of %d %s at %s",
+                    policy.mode.name,
+                    take,
+                    len(values),
+                    type_id,
+                    cap_id,
+                )
+
+        if forked:
+            terminal.add(id(ss))  # the parent is replaced by its children
+            spawned.extend(working)
 
     @staticmethod
     def _below_threshold(r: WeaveResult, threshold: float) -> bool:
