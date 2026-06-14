@@ -40,10 +40,10 @@ weaverkit verify --spec weaver.spec.toml --package uniprot_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `ncbi.taxon.id`, `protein.function`, `protein.gene`, `protein.length`, `protein.name`, `protein.organism`, `protein.reviewed`, `protein.uniprot.accession`.
+See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
 
 ## Expansion notes
 
 <!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
      data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.

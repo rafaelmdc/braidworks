@@ -1,5 +1,11 @@
 # Braidworks Implementation Plan
 
+> **Status: historical (MVP shipped).** This is the original build-order plan for the
+> core MVP — kept for the rationale and definition-of-done discipline it records. The
+> MVP (registry, braider, executor, cache, the first weavers) is built and well past
+> this scope; for what exists now and what's next see the [README](../README.md),
+> [architecture.md](architecture.md), and [weaver-roadmap.md](weaver-roadmap.md).
+
 This document defines the concrete implementation order for Braidworks. Each phase has a clear deliverable, a definition of done, and a note on what it explicitly does not include.
 
 The goal is a working MVP: organism name → multiple NCBI strand types, resolved in batch, with caching, through a proper registry and braider. Everything beyond that is deferred.
