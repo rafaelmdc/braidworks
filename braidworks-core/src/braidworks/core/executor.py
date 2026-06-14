@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -18,9 +20,55 @@ from braidworks.core.exceptions import (
 )
 from braidworks.core.references import Reference, references_for_braid
 from braidworks.core.registry import BraidRegistry
-from braidworks.core.result import WeaveResult, WeaveStatus
+from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.strand import MergePolicy, StepOutcome, StrandSet
+
+logger = logging.getLogger(__name__)
+
+
+class ExpandMode(Enum):
+    """How a one→many step (cardinality fan-out) resolves its alternatives."""
+
+    TOP = "top"  # collapse to the single best representative (default)
+    TOP_K = "top_k"  # fork the best ``k`` into independent children
+    ALL = "all"  # fork every alternative into an independent child
+
+
+@dataclass(frozen=True)
+class ExpandPolicy:
+    """Cardinality knob for fan-out, sitting beside ``BackendPolicy`` / ``ReviewPolicy``.
+
+    Governs what the executor does when a step yields several successors (today: a
+    resolver's ``candidates`` / an ``AMBIGUOUS`` result). ``TOP`` contracts to one;
+    ``TOP_K``/``ALL`` expand the braid, continuing it per child. The default is
+    ``TOP`` so existing single-result runs are unaffected.
+    """
+
+    mode: ExpandMode = ExpandMode.TOP
+    k: int = 1
+
+    @classmethod
+    def top(cls) -> ExpandPolicy:
+        return cls(ExpandMode.TOP, 1)
+
+    @classmethod
+    def top_k(cls, k: int) -> ExpandPolicy:
+        if k < 1:
+            raise ValueError("ExpandPolicy.top_k requires k >= 1")
+        return cls(ExpandMode.TOP_K, k)
+
+    @classmethod
+    def all(cls) -> ExpandPolicy:
+        return cls(ExpandMode.ALL, 0)
+
+    def fork_count(self, n: int) -> int:
+        """How many of ``n`` available alternatives to materialize as children."""
+        if self.mode is ExpandMode.TOP:
+            return 1
+        if self.mode is ExpandMode.TOP_K:
+            return min(self.k, n)
+        return n  # ALL
 
 
 class ReviewPolicy(Enum):
@@ -179,8 +227,10 @@ class LocalExecutor:
         review_policy: ReviewPolicy = ReviewPolicy.HALT,
         error_policy: ErrorPolicy = ErrorPolicy.RECORD_AND_CONTINUE,
         merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
+        expand_policy: ExpandPolicy = ExpandPolicy(),
         confidence_threshold: float = 0.0,
         chunk_size: int = 10_000,
+        max_expansion: int = 10_000,
     ) -> ExecutionResult:
         result = ExecutionResult()
         # Citations for every source this braid draws on (issue #1). Computed from the
@@ -214,7 +264,9 @@ class LocalExecutor:
                 review_policy=review_policy,
                 error_policy=error_policy,
                 merge_policy=merge_policy,
+                expand_policy=expand_policy,
                 confidence_threshold=confidence_threshold,
+                max_expansion=max_expansion,
             )
         return result
 
@@ -227,7 +279,9 @@ class LocalExecutor:
         review_policy: ReviewPolicy,
         error_policy: ErrorPolicy,
         merge_policy: MergePolicy,
+        expand_policy: ExpandPolicy,
         confidence_threshold: float,
+        max_expansion: int,
     ) -> None:
         live = list(chunk)  # entities still progressing (not terminally bucketed)
         terminal: set[int] = set()  # id(entity) already placed in errors/review_queue
@@ -237,6 +291,9 @@ class LocalExecutor:
         for wi, wave in enumerate(waves):
             if not live:
                 break
+            # Children spawned by fan-out this wave; folded into ``live`` afterwards so
+            # they flow through the remaining waves alongside un-forked entities.
+            spawned: list[StrandSet] = []
             # Steps in a wave are independent → run them concurrently. Each job only
             # awaits I/O and never mutates an entity, so results are merged afterwards
             # in deterministic step order (no shared-state hazard across the gather).
@@ -272,14 +329,27 @@ class LocalExecutor:
                         result,
                         terminal,
                         representative,
+                        spawned,
                         review_policy=review_policy,
                         error_policy=error_policy,
                         merge_policy=merge_policy,
+                        expand_policy=expand_policy,
                         confidence_threshold=confidence_threshold,
                     )
 
             if terminal:
                 live = [ss for ss in live if id(ss) not in terminal]
+            if spawned:
+                room = max_expansion - len(live)
+                if room < len(spawned):
+                    logger.warning(
+                        "fan-out cap %d reached: dropping %d of %d expanded entities",
+                        max_expansion,
+                        len(spawned) - max(room, 0),
+                        len(spawned),
+                    )
+                    spawned = spawned[: max(room, 0)]
+                live.extend(spawned)
 
         # Survivors: resolved if any requested target type was produced (branches are
         # best-effort enrichment — empty branches are recorded in completion, not a
@@ -446,17 +516,21 @@ class LocalExecutor:
         result: ExecutionResult,
         terminal: set[int],
         representative: dict[int, WeaveResult],
+        spawned: list[StrandSet],
         *,
         review_policy: ReviewPolicy,
         error_policy: ErrorPolicy,
         merge_policy: MergePolicy,
+        expand_policy: ExpandPolicy,
         confidence_threshold: float,
     ) -> None:
         """Fold one step's result into an entity and record its completion outcome.
 
         NO_MATCH is *branch-local*: it is recorded and the entity keeps going (another
-        branch or a later wave may still produce a target). ERROR / AMBIGUOUS / review
-        are entity-terminal — the entity is added to ``terminal`` and bucketed.
+        branch or a later wave may still produce a target). ERROR is entity-terminal.
+        AMBIGUOUS is governed by ``expand_policy``: with candidates it collapses
+        (``TOP``) or forks into children (``TOP_K``/``ALL``); with no candidates it
+        falls back to the review/raise path. OK + review is entity-terminal under HALT.
         """
         cap_id = invocation.capability_id
 
@@ -484,7 +558,15 @@ class LocalExecutor:
             return
 
         if r.status is WeaveStatus.AMBIGUOUS:
-            # AMBIGUOUS always halts or raises; ALLOW_CONTINUE never applies.
+            # Cardinality fan-out: when the result carries candidates, ``ExpandPolicy``
+            # decides how many successors continue — TOP collapses to the best one,
+            # TOP_K/ALL fork the entity into independent children. With no candidates
+            # there is nothing to pick or fork, so fall back to today's review/raise.
+            if r.candidates:
+                self._expand_candidates(
+                    ss, r, cap_id, spawned, terminal, expand_policy, merge_policy
+                )
+                return
             if review_policy is ReviewPolicy.RAISE:
                 raise ReviewRequired(f"ambiguous result at step {step_index} ({cap_id})")
             result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
@@ -508,6 +590,65 @@ class LocalExecutor:
         ss.completion.append(
             StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in r.strands))
         )
+
+    def _expand_candidates(
+        self,
+        ss: StrandSet,
+        r: WeaveResult,
+        cap_id: str,
+        spawned: list[StrandSet],
+        terminal: set[int],
+        expand_policy: ExpandPolicy,
+        merge_policy: MergePolicy,
+    ) -> None:
+        """Resolve an AMBIGUOUS result's candidates per ``expand_policy``.
+
+        ``TOP`` merges the single best candidate into ``ss`` in place (it stays live).
+        ``TOP_K``/``ALL`` replace ``ss`` with N lineage-tagged children, each carrying
+        the parent strands plus one candidate's strands, appended to ``spawned``.
+        """
+        ranked = _rank_candidates(r.candidates)
+        n = len(ranked)
+
+        if expand_policy.mode is ExpandMode.TOP:
+            best = ranked[0]
+            for strand in best.strands:
+                ss.add_strand(strand, merge_policy)
+            ss.completion.append(
+                StepOutcome(
+                    cap_id, r.backend_used, "ok", tuple(s.type_id for s in best.strands)
+                )
+            )
+            if n > 1:
+                # Not a silent collapse: record that N-1 alternatives were discarded.
+                ss.warnings.append(
+                    f"ExpandPolicy.TOP: auto-selected 1 of {n} candidates at {cap_id}"
+                )
+            return
+
+        # TOP_K / ALL: fork. The originating-input id is preserved across forks so
+        # leaves regroup to the original query even if a later step forks again.
+        root = ss.parent_id if ss.parent_id is not None else ss.entity_id
+        take = expand_policy.fork_count(n)
+        for i, cand in enumerate(ranked[:take]):
+            child = ss.clone(entity_id=f"{ss.entity_id}#{i}", parent_id=root)
+            for strand in cand.strands:
+                child.add_strand(strand, merge_policy)
+            child.completion.append(
+                StepOutcome(
+                    cap_id, r.backend_used, "ok", tuple(s.type_id for s in cand.strands)
+                )
+            )
+            spawned.append(child)
+        if take < n:
+            logger.warning(
+                "ExpandPolicy.%s: kept %d of %d candidates at %s",
+                expand_policy.mode.name,
+                take,
+                n,
+                cap_id,
+            )
+        terminal.add(id(ss))  # the parent is replaced by its children
 
     @staticmethod
     def _below_threshold(r: WeaveResult, threshold: float) -> bool:
@@ -539,3 +680,18 @@ class LocalExecutor:
             status=WeaveStatus.ERROR,
             errors=(message,),
         )
+
+
+def _candidate_sort_key(c: CandidateResult) -> tuple[float, str]:
+    """Deterministic ordering: highest confidence first, ties broken by a stable
+    serialization of the candidate's strands so fan-out is reproducible run to run."""
+    strand_repr = json.dumps(
+        sorted((s.type_id, s.value) for s in c.strands),
+        sort_keys=True,
+        default=str,
+    )
+    return (-c.confidence, strand_repr)
+
+
+def _rank_candidates(candidates: tuple[CandidateResult, ...]) -> list[CandidateResult]:
+    return sorted(candidates, key=_candidate_sort_key)

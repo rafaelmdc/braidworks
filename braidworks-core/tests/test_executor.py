@@ -15,7 +15,6 @@ from braidworks.core.exceptions import (
 )
 from braidworks.core.executor import ErrorPolicy, LocalExecutor, ReviewPolicy
 from braidworks.core.registry import BraidRegistry
-from braidworks.core.result import CandidateResult
 from braidworks.core.strand import Strand, StrandSet
 
 from helpers import (
@@ -137,8 +136,10 @@ async def test_cached_no_match_routes_to_unresolved():
     assert len(r2.unresolved) == 1 and not r2.resolved
 
 
-async def test_cached_ambiguous_routes_to_review():
-    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r, CandidateResult(confidence=0.5)))
+async def test_cached_ambiguous_no_candidates_routes_to_review():
+    # AMBIGUOUS with no candidates has nothing to pick/fork, so it still routes to
+    # the review queue under the default ExpandPolicy.TOP (and the result is cached).
+    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
     braid = single_step_braid({ID})
     await ex.execute(braid, name_strand_sets("amb"))
     r2 = await ex.execute(braid, name_strand_sets("amb"))
@@ -179,8 +180,9 @@ async def test_no_match_goes_to_unresolved_not_errors():
     assert len(res.unresolved) == 1 and not res.errors and not res.resolved
 
 
-async def test_ambiguous_halts_even_with_allow_continue():
-    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r, CandidateResult(confidence=0.6)))
+async def test_ambiguous_no_candidates_halts_even_with_allow_continue():
+    # No candidates → nothing to fan out → review path; ALLOW_CONTINUE never rescues it.
+    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
     res = await ex.execute(
         single_step_braid({ID}), name_strand_sets("amb"), review_policy=ReviewPolicy.ALLOW_CONTINUE
     )
@@ -401,7 +403,7 @@ async def test_buckets_are_exhaustive_for_mixed_batch():
         if name == "nm":
             return no_match_result(requested)
         if name == "amb":
-            return ambiguous_result(requested, CandidateResult(confidence=0.5))
+            return ambiguous_result(requested)  # no candidates → review queue
         return error_result(requested, "boom")  # name == "err"
 
     reg, weaver, ex = _setup(resolver)
