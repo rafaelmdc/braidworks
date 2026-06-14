@@ -118,6 +118,15 @@ def test_output_group_mismatch_caught():
     assert any("output groups" in p for p in problems)
 
 
+def test_set_outputs_mismatch_caught():
+    # Manifest declares a set_output the spec does not — regenerate-from-spec drift.
+    cap = _manifest().capabilities[0]
+    bad_cap = dataclasses.replace(cap, set_outputs=frozenset({"microbe.trait.gram_stain"}))
+    bad = _with_capabilities(_manifest(), [bad_cap])
+    problems = check_manifest(bad, _spec())
+    assert any("set_outputs" in p for p in problems)
+
+
 def test_backend_not_in_spec_caught():
     cap = _manifest().capabilities[0]
     bad_cap = dataclasses.replace(cap, backends=("local", "api"))
