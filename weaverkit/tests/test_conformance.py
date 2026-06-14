@@ -180,11 +180,17 @@ def test_every_shared_key_has_a_canonical_type():
     """
     from braidworks.core import CANONICAL_TYPES
 
+    from weaverkit.index import ENTRY_KEYS
     from weaverkit.keys import SHARED_KEYS
 
-    missing = sorted(set(SHARED_KEYS) - set(CANONICAL_TYPES))
+    # Entry keys are user-supplied at the start of a braid and are never a join
+    # *target* (nothing produces them), so they need no canonical coercion —
+    # ``canonicalize`` passes an unregistered key through unchanged, which is correct
+    # for a free-text entry. Exempt them so adding an entry key doesn't force a core
+    # edit (build-notes #3). A real bridge key (a join target) still must be declared.
+    missing = sorted(set(SHARED_KEYS) - set(CANONICAL_TYPES) - set(ENTRY_KEYS))
     assert not missing, (
-        "shared keys with no canonical type in braidworks.core.keytypes: "
+        "non-entry shared keys with no canonical type in braidworks.core.keytypes: "
         f"{missing} — add them to CANONICAL_TYPES"
     )
     extra = sorted(set(CANONICAL_TYPES) - set(SHARED_KEYS))
@@ -192,6 +198,20 @@ def test_every_shared_key_has_a_canonical_type():
         "CANONICAL_TYPES declares keys that are not registered shared keys: "
         f"{extra} — add them to weaverkit.keys.SHARED_KEYS or drop them"
     )
+
+
+def test_entry_keys_are_shared_but_exempt_from_canonical_type():
+    """Entry keys must be reachable (shared) yet need no canonical type (#3)."""
+    from braidworks.core import CANONICAL_TYPES
+
+    from weaverkit.index import ENTRY_KEYS
+    from weaverkit.keys import SHARED_KEYS
+
+    assert set(ENTRY_KEYS) <= set(SHARED_KEYS)  # reachable as a consumes target
+    # Even if no entry key had a canonical type, parity would still hold — they are
+    # exempt, so adding one never forces a core CANONICAL_TYPES edit.
+    canon_without_entries = set(CANONICAL_TYPES) - set(ENTRY_KEYS)
+    assert set(SHARED_KEYS) - canon_without_entries - set(ENTRY_KEYS) == set()
 
 
 def test_unconfigured_fingerprint_is_not_treated_as_configured():

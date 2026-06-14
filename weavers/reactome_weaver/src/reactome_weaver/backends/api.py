@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, is_not_found_status
 
 logger = logging.getLogger("reactome_weaver.api")
 
@@ -105,7 +105,7 @@ class ReactomeApiBackend(BackendBase):
             rows = resp.json()
         except httpx.HTTPStatusError as exc:
             # Reactome 404/400s an accession it can't map to pathways — a NO_MATCH, not error.
-            if exc.response.status_code in (400, 404):
+            if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("Reactome lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"Reactome API error: {exc}")

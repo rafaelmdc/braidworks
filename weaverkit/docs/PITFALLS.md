@@ -48,5 +48,24 @@ do/don't pair. Keep this list short; if it grows, the important ones get lost.
    `ensure_<db>_db` (downloaded into the user cache), not in the repo. (A *tiny*
    bundled sample like `example_weaver`'s 5-row CSV is fine.)
 
+10. **An HTTP 400/404 is a miss, not an error.**
+    Don't let a blanket `except httpx.HTTPError` turn an unmappable-identifier 404 into
+    `record.error` (→ `ERROR`). Do branch:
+    `is_not_found_status(exc.response.status_code)` (from `braidworks.core`) → 400/404 →
+    `found=False`; 5xx and network/timeout → `record.error`. (This bit STRING; mocks
+    missed it, the live E2E caught it.)
+
+11. **Make ambiguous picks deterministic.**
+    Don't trust the API's relevance ranking to be stable — it isn't. Do sort by an
+    explicit total order with an id as the final tiebreak, so the same input always
+    yields the same representative. For "list" outputs: dedup by stable id, sort, cap to
+    top-N, but report the *true* total `count` — never silently drop.
+
+12. **Fill in the live-E2E (`tests/test_e2e_live.py`).**
+    Don't ship the `"TODO-real-input"` placeholder — it's skipped without
+    `BRAIDWORKS_RUN_LIVE=1`, and `--strict` now flags it. Do replace it with a real
+    known-truth example; the live test is your schema-drift detector.
+
 See also: [implementing-backends.md](implementing-backends.md) (per-function
-contracts) and [AGENTS.md](../../AGENTS.md) (the full boundaries).
+contracts, incl. the **Fetch patterns** section) and
+[AGENTS.md](../../AGENTS.md) (the full boundaries).

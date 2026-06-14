@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "pdbe"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.1"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(

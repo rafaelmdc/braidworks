@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, is_not_found_status
 
 logger = logging.getLogger("pdbe_weaver.api")
 
@@ -122,8 +122,9 @@ class PdbeApiBackend(BackendBase):
             resp.raise_for_status()
             body = resp.json()
         except httpx.HTTPStatusError as exc:
-            # PDBe 404s an accession with no structure mapping — a NO_MATCH, not an error.
-            if exc.response.status_code == 404:
+            # PDBe 404s (or 400s a malformed) accession with no structure mapping —
+            # a NO_MATCH, not an error (shared 400/404 rule, braidworks.core.http).
+            if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("PDBe lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"PDBe API error: {exc}")

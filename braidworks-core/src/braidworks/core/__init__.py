@@ -22,6 +22,7 @@ from braidworks.core.licenses import (
     is_known_license,
 )
 from braidworks.core.factory import WeaverFactory, WeaverProvider
+from braidworks.core.http import NOT_FOUND_STATUSES, is_not_found_status
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
     BackendConfigurationError,
@@ -129,6 +130,8 @@ __all__ = [
     "references_for",
     "references_for_braid",
     "format_references",
+    "NOT_FOUND_STATUSES",
+    "is_not_found_status",
     "BackendBase",
     "BackendDispatchWeaver",
     "map_lookup",
