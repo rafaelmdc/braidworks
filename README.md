@@ -33,11 +33,51 @@ uv sync --all-extras       # creates the environment and installs every weaver
 (That uses [`uv`](https://docs.astral.sh/uv/). `uv run python yourscript.py` runs a
 script inside the environment.)
 
-### 2. Ask a question
+### 2. Ask a question — from the shell
 
 A value you have is a **Strand** (a typed fact, e.g. `protein.query = "P04637"`).
-You give Braidworks the strands you have and the strand *types* you want; it does
-the rest.
+You tell Braidworks the strands you *have* and the strand *types* you *want*; it
+finds the route across all installed weavers and runs it. From bash:
+
+```bash
+braidworks weave --have protein.query=P04637 --want protein.name,structure.pdb.ids
+```
+
+```
+p53 (P04637)
+  protein.name       Cellular tumor antigen p53
+  structure.pdb.ids  9r2q; 9r2m; 8r1f; ... (25)
+```
+
+`"P04637"` is human p53; `"TP53"`, `"insulin"`, or any UniProt accession work too.
+
+**Run a whole column of IDs** (one per line), and get a table back for your
+spreadsheet/pandas:
+
+```bash
+braidworks weave --in-file accessions.txt --in-type protein.query \
+    --want protein.name,protein.gene --format tsv > out.tsv
+
+# or stream from a pipe straight into jq:
+cat accessions.txt | braidworks weave --in-file - --in-type protein.query \
+    --want structure.pdb.ids --format jsonl | jq .
+```
+
+**Drill every result** — fan one protein out into each of its structures, each then
+described:
+
+```bash
+braidworks weave --have protein.query=P04637 \
+    --want structure.pdb.title,structure.pdb.method --expand all --format tsv
+```
+
+Other commands: `braidworks weavers` (what's installed), `braidworks keys` (what
+each weaver produces/consumes), `braidworks path --from … --to …` (preview a route),
+`braidworks run <weaver> <capability>` (call one capability directly). Add `--help`
+to any. Data goes to stdout; progress and a resolved/unresolved count go to stderr,
+so pipes stay clean.
+
+### 2b. …or from Python
 
 ```python
 import asyncio
@@ -46,23 +86,17 @@ from uniprot_weaver import build_uniprot_weaver
 from pdbe_weaver import build_pdbe_weaver
 
 async def main():
-    # 1. Register the weavers you want available.
     registry = BraidRegistry()
     registry.register(build_uniprot_weaver())   # gene/name/accession -> protein entry
     registry.register(build_pdbe_weaver())      # protein -> experimental structures
 
-    # 2. Say what you HAVE and what you WANT. Braidworks finds the route
-    #    (here: protein.query -> UniProt -> accession -> PDBe -> structures).
     braid = Braider(registry).plan(
         available_types=frozenset({"protein.query"}),
         target_types=frozenset({"protein.name", "structure.pdb.ids"}),
     )
-
-    # 3. Provide one (or thousands of) inputs and run.
     inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "P04637")])]
     result = await LocalExecutor(registry).execute(braid, inputs)
 
-    # 4. Read the answers.
     for entity in result.resolved:
         print(entity.get("protein.name").value)        # Cellular tumor antigen p53
         print(entity.get("structure.pdb.ids").value)   # ['9r2q', '9r2m', '8r1f', ...]
@@ -70,8 +104,7 @@ async def main():
 asyncio.run(main())
 ```
 
-`"P04637"` is human p53; `"TP53"`, `"insulin"`, or a UniProt accession work too. Pass
-a list of many `StrandSet`s to process a whole spreadsheet of inputs in one batch.
+Pass a list of many `StrandSet`s to process a whole batch in one call.
 
 ### 3. Read the results
 
@@ -148,10 +181,25 @@ fanned leaves by the question that produced them. See
 
 ## Command-line tools
 
-Braidworks ships inspection/build CLIs (the query API above is Python):
+The **`braidworks`** command (installed with `braidworks-core`) is the query/inspect
+front door — see [§2 above](#2-ask-a-question--from-the-shell):
 
 ```bash
-uv run weaverkit references          # print source citations for all installed weavers
+braidworks weave --have TYPE=VALUE --want TYPE[,TYPE…]   # plan a route and run it
+braidworks run <weaver> <capability> --have TYPE=VALUE   # call one capability directly
+braidworks weavers                                       # list installed weavers + capabilities
+braidworks keys [--produces TYPE | --consumes TYPE]      # what flows between weavers
+braidworks path --from TYPE --to TYPE                    # preview a route, don't run it
+braidworks references                                    # source citations
+```
+
+Inputs from flags, a file (`--in-file`, one value per line with `--in-type`, or a
+CSV/TSV with type-id columns), or stdin (`--in-file -`). Output `--format
+human|json|jsonl|tsv|csv`; `--expand all|top:K` to fan one→many.
+
+`weaverkit` (a separate CLI) is the *build/inspect* toolkit:
+
+```bash
 uv run weaverkit view --out net.html # render the offline network diagram
 make index                           # rebuild docs/keys-index.md + weavers-index.tsv
 make view                            # rebuild docs/braidworks-network.html

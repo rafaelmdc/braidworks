@@ -1,10 +1,13 @@
 [project]
 name = "braidworks-core"
-version = "0.2.1"
+version = "0.3.0"
 description = "Core abstractions for Braidworks: strands, weavers, registry, braider, executor."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["networkx>=3.0", "platformdirs>=4.0"]
+
+[project.scripts]
+braidworks = "braidworks.core.cli:main"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
