@@ -1,10 +1,10 @@
 [project]
 name = "weaverkit"
-version = "0.1.9"
+version = "0.1.10"
 description = "Guardrails for building Braidworks weavers: spec, scaffold, and conformance."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.1.6"]
+dependencies = ["braidworks-core>=0.2.1"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]

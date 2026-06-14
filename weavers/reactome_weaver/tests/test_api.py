@@ -14,7 +14,14 @@ import httpx
 from reactome_weaver.backends.api import ReactomeApiBackend
 
 CAP = "resolve_pathways"
-ALL = frozenset({"pathway.reactome.names", "pathway.reactome.count", "pathway.reactome.records"})
+ALL = frozenset(
+    {
+        "pathway.reactome.id",
+        "pathway.reactome.names",
+        "pathway.reactome.count",
+        "pathway.reactome.records",
+    }
+)
 
 
 def _pw(st_id, name=None, in_disease=False):
@@ -51,6 +58,16 @@ async def test_dedups_and_orders_by_st_id():
     assert v["pathway.reactome.count"] == 2  # duplicate collapsed
     assert [r["st_id"] for r in v["pathway.reactome.records"]] == ["R-HSA-100", "R-HSA-200"]
     assert v["pathway.reactome.names"] == ["Alpha", "Beta"]
+    # the fan dimension: every distinct stId, deduped and ordered
+    assert v["pathway.reactome.id"] == ["R-HSA-100", "R-HSA-200"]
+
+
+async def test_id_set_is_full_while_names_are_capped():
+    rows = [_pw(f"R-HSA-{i:03d}") for i in range(5)]
+    v = (await _one(_backend(rows, limit=2), "P04637")).values
+    # names/records are the top-N display; the id fan dimension is the full set.
+    assert len(v["pathway.reactome.names"]) == 2
+    assert v["pathway.reactome.id"] == [f"R-HSA-{i:03d}" for i in range(5)]
 
 
 async def test_names_capped_but_count_is_true_total():
