@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.1.5"
+version = "0.1.6"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -20,6 +20,20 @@ source_sample = """
 562\t|\tEscherichia coli\t|\t\t|\tscientific name\t|
 562\t|\tE. coli\t|\t\t|\tcommon name\t|
 561\t|\tEscherichia\t|\t\t|\tscientific name\t|
+
+# GET .../datasets/v2/taxonomy/taxon/216851/dataset_report?children=true (list_children)
+# returns one report per node in the subtree; `parents` ends with the immediate parent.
+{
+  "reports": [
+    { "taxonomy": { "tax_id": 853, "rank": "SPECIES",
+        "current_scientific_name": { "name": "Faecalibacterium prausnitzii" },
+        "parents": [2, 1239, 853058, 216851] } },
+    { "taxonomy": { "tax_id": 4203190, "rank": "SPECIES",
+        "current_scientific_name": { "name": "Faecalibacterium gallinarum" },
+        "parents": [2, 1239, 853058, 216851] } }
+  ],
+  "total_count": 121
+}
 """
 
 [bulk]
@@ -70,6 +84,27 @@ always_computed_groups = ["core"]
   [[capability.group]]
   id = "lineage"
   outputs = ["ncbi.taxon.lineage"]
+
+# ncbi.list_children: a taxid -> its descendant taxids of a given rank (default
+# species). API-only — it walks the live NCBI taxonomy subtree via the Datasets v2
+# dataset_report?children=true endpoint. ncbi.taxon.id is a set output (the fan
+# dimension): "genus -> every species, each drillable".
+[[capability]]
+id = "ncbi.list_children"
+consumes = ["ncbi.taxon.id"]
+backends = ["api"]
+max_batch_size = 1000
+set_outputs = ["ncbi.taxon.id"]
+
+  [[capability.group]]
+  id = "children"
+  outputs = ["ncbi.taxon.id", "ncbi.taxon.children_count", "ncbi.taxon.children_records"]
+
+  [[capability.parameter]]
+  name = "rank"
+  type = "string"
+  default = "species"
+  description = "Descendant rank to return (e.g. species, genus, strain)."
 
 # Golden inputs are resident in the deterministic fixture DB (ncbi_weaver.fixture,
 # the Faecalibacterium clade) so `weaverkit verify --strict` runs them reproducibly.

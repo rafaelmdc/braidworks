@@ -13,8 +13,10 @@ from braidworks.core import (
     BackendUnavailable,
     UnsupportedCapability,
     WeaveResult,
+    map_lookup,
 )
 
+from . import vocab
 from .backends.base import ResolutionBackend
 from .mapper import map_taxon_match
 
@@ -64,6 +66,27 @@ class BackendDispatchWeaver(BaseWeaver):
                 f"{self.MANIFEST.weaver_id!r} has no capability {capability_id!r}"
             )
         strategy = self._strategy(backend)  # raises BackendUnavailable
+
+        # list_children has a different output shape (a set of child taxids), so it
+        # uses core's LookupRecord/map_lookup path rather than the TaxonMatch mapper.
+        if capability_id == vocab.LIST_CHILDREN:
+            effective = cap.resolve_params(params)
+            queries = [
+                {vocab.TAXON_ID: self._value(ss, vocab.TAXON_ID)} for ss in strand_sets
+            ]
+            records = await strategy.list_children(queries, rank=effective.get("rank"))
+            return [
+                map_lookup(
+                    r,
+                    capability=cap,
+                    requested_outputs=requested_outputs,
+                    backend=backend,
+                    weaver_version=self.MANIFEST.version,
+                    weaver_id=self.MANIFEST.weaver_id,
+                )
+                for r in records
+            ]
+
         need_lineage = "lineage" in cap.triggered_groups(requested_outputs)
         (input_type,) = tuple(cap.consumes)  # MVP: single-input capabilities only
         queries = [self._value(ss, input_type) for ss in strand_sets]

@@ -616,6 +616,15 @@ class LocalExecutor:
         ss.completion.append(
             StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in r.strands))
         )
+        # A produced set-output strand is the authoritative fan dimension, so it must win
+        # over any pre-existing value of that type — notably when a capability *consumes
+        # and produces the same key* (e.g. taxid -> child taxids), where the input scalar
+        # would otherwise shadow the produced list under HIGHEST_CONFIDENCE. Re-apply the
+        # produced set-output strands LAST_WINS before expanding.
+        if set_outputs:
+            for s in r.strands:
+                if s.type_id in set_outputs:
+                    ss.add_strand(s, MergePolicy.LAST_WINS)
         # Mid-braid cardinality fan-out: if this step produced any set-valued join key,
         # ExpandPolicy decides whether the entity continues as one (TOP) or forks into
         # one child per value (TOP_K/ALL) so the braid drills each.

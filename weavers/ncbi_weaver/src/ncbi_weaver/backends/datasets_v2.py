@@ -28,8 +28,12 @@ from typing import Any
 import httpx
 from rapidfuzz import fuzz
 
+from braidworks.core import LookupRecord, is_not_found_status
+
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .. import vocab
+
+_CHILDREN_LIMIT = 200  # top-N children surfaced in records (ids/count stay the true total)
 
 logger = logging.getLogger("ncbi_weaver.api")
 
@@ -141,6 +145,71 @@ class DatasetsV2Backend:
 
         # Preserve input order (queries may contain duplicates → reuse the match).
         return [matches[q] for q in queries]
+
+    async def list_children(
+        self, queries: list[dict[str, Any]], *, rank: str
+    ) -> list[LookupRecord]:
+        """One taxid -> its descendant taxids of ``rank`` (walks the subtree)."""
+        rank_norm = (rank or "species").strip().lower()
+        records: list[LookupRecord] = []
+        for q in queries:
+            taxid = str(q.get(vocab.TAXON_ID, "") or "").strip()
+            if not taxid:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                children = await self._fetch_children(taxid, rank_norm)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                logger.warning("NCBI children failed for %r: %s", taxid, exc)
+                records.append(LookupRecord(query=q, error=f"NCBI children error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                logger.warning("NCBI children failed for %r: %s", taxid, exc)
+                records.append(LookupRecord(query=q, error=f"NCBI children error: {exc}"))
+                continue
+            if not children:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            ids = [c["taxid"] for c in children]
+            records.append(LookupRecord(query=q, found=True, values={
+                # The fan dimension: every distinct descendant taxid (uncapped).
+                vocab.TAXON_ID: ids,
+                vocab.CHILDREN_COUNT: len(ids),
+                vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
+            }))
+        return records
+
+    async def _fetch_children(self, taxid: str, rank: str) -> list[dict[str, Any]]:
+        """Walk dataset_report?children=true, keep distinct descendants of ``rank``."""
+        out: dict[int, dict[str, Any]] = {}
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {"children": "true", "page_size": 1000}
+            if page_token:
+                params["page_token"] = page_token
+            resp = await self._http().get(
+                f"/taxonomy/taxon/{taxid}/dataset_report", params=params
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            for entry in body.get("reports") or []:
+                node = entry.get("taxonomy") or {}
+                tid = node.get("tax_id")
+                if tid is None or str(tid) == taxid:
+                    continue  # skip the queried node itself
+                if rank and (node.get("rank") or "").lower() != rank:
+                    continue
+                if tid not in out:
+                    out[tid] = {"taxid": tid, "name": _node_name(node),
+                                "rank": (node.get("rank") or "").lower()}
+            page_token = body.get("next_page_token")
+            if not page_token:
+                break
+        # Deterministic order: ascending taxid.
+        return [out[k] for k in sorted(out)]
 
     # --- HTTP shape parsing ------------------------------------------------
 
