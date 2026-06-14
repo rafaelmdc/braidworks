@@ -338,6 +338,68 @@ mapper already reflect this — see [lookup vs resolver](#lookup-vs-resolver-wea
 
 ---
 
+## Fetch patterns (HTTP backends)
+
+Recurring shapes that came up building the molecular weavers (UniProt, STRING,
+QuickGO, PDBe, AlphaFold, Reactome). Reach for these so a new backend is
+deterministic and classifies failures the same way as its neighbours.
+
+### HTTP status → outcome (4xx-as-not-found)
+
+A web API signals "no data for this identifier" with a status code, and you must
+**not** lump that in with real failures. The shared rule (it held across every bio
+API so far): **400/404 → `NO_MATCH`** (an unmappable/unknown identifier), while
+**5xx and network/timeout → error**. Use the helper so the line is identical
+everywhere:
+
+```python
+from braidworks.core import is_not_found_status  # True for 400/404
+
+try:
+    resp = await self._http().get(path)
+    resp.raise_for_status()
+    payload = resp.json()
+except httpx.HTTPStatusError as exc:
+    if is_not_found_status(exc.response.status_code):
+        return LookupRecord(query=q, found=False)        # a normal miss
+    return LookupRecord(query=q, error=f"... {exc}")     # 5xx etc. is a real error
+except httpx.HTTPError as exc:                            # network/timeout
+    return LookupRecord(query=q, error=f"... {exc}")
+```
+
+The trap (build-notes #8): a blanket `except httpx.HTTPError` turns a 404 *miss* into
+a spurious `record.error` → `ERROR`. STRING's live "unknown id → NO_MATCH" test only
+passed once the 400/404 branch existed; mocks couldn't catch it, the live E2E did.
+Note empty-but-200 (`results: []`) is already a clean miss via `found=False` — the
+status rule is specifically about non-2xx "not found" (QuickGO, #13).
+
+### Deterministic representative / canonical selection
+
+When a query is ambiguous and you must pick **one** answer, the source's own
+relevance ranking is often unstable across calls — pin a deterministic choice
+yourself. UniProt escalates accession → exact-gene → free-text and then picks
+`max(annotation_score)` with the accession as a tiebreak (`_pick`); AlphaFold prefers
+the canonical `AF-{acc}-F1` id with a lowest-id fallback (`_pick`). Rule: sort by a
+**total order** with an id as the final tiebreak, so the same input always yields the
+same representative. Document any surprise (e.g. a bare cross-species symbol resolves
+to the best-annotated *ortholog*, not necessarily human).
+
+### Dedup → order → cap, but count the true total
+
+The house shape for "list" outputs (STRING partners, QuickGO terms, PDBe structures,
+Reactome pathways): dedup to distinct entities by a stable id, sort by a deterministic
+total order, expose the **top-N** list **and** a true total `count`, plus a full
+records blob. Cap the list, but report the real total so a consumer knows it was
+truncated — never silently drop.
+
+### Bounded pagination
+
+For an endpoint that pages (QuickGO returns ~1 row per annotation evidence), loop
+`page`/`limit` up to a **cap**, accumulate, and `log()` when you truncate at the cap —
+no silent limits. See `quickgo_weaver`'s `_all_annotations` (cap 10×200).
+
+---
+
 ## golden examples (in the spec, not the code)
 
 Add known input→output pairs to `weaver.spec.toml` so conformance can prove the

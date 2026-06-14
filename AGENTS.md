@@ -62,6 +62,11 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    the generated `factory.py` has a commented skeleton); if no backend reads
    bundled data, add a `build_<package>_fixture()` so `verify --strict` can run
    golden against a tiny deterministic dataset.
+   > For HTTP backends, follow the **Fetch patterns** in
+   > `weaverkit/docs/implementing-backends.md`: classify 400/404 as `NO_MATCH` with
+   > `braidworks.core.is_not_found_status` (5xx/network → error), make ambiguous picks
+   > deterministic (sort + id tiebreak), and dedup→sort→cap "list" outputs while
+   > reporting the true total. Fill in `tests/test_e2e_live.py` (not the placeholder).
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>_weaver` (spec valid +
    manifest matches + reachable + real fingerprints) and `cd weavers/<db>_weaver &&
    make test`. The **definition of done** is the `--strict` gate (what the generated

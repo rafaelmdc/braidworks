@@ -831,6 +831,12 @@ class {{BACKEND_CLASS}}(BackendBase):
         # {{RECORD_CLASS}} PER input query, IN THE SAME ORDER (the dispatch relies on
         # positional alignment — never drop, reorder, or merge).
 {{FETCH_HINT}}
+        # HTTP errors: after resp.raise_for_status(), catch httpx.HTTPStatusError and
+        # treat an unmappable-identifier status as a MISS, not an error — import and use
+        # ``from braidworks.core import is_not_found_status`` (True for 400/404) -> set
+        # found=False. Catch httpx.HTTPError (network/timeout, 5xx) as a per-entity
+        # record.error. (build-notes #8: a blanket except turns a 404 NO_MATCH into a
+        # spurious error.)
         # See: weaverkit/docs/implementing-backends.md#fetch
         raise NotImplementedError("TODO: implement {{BACKEND}} fetch for {{DBWEAVER}}")
 '''
