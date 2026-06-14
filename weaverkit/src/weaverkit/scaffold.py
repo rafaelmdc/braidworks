@@ -98,6 +98,7 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "",
         f"WEAVER_ID = {spec.resolved_weaver_id!r}",
         f"WEAVER_VERSION = {spec.version!r}",
+        f"WEAVER_TITLE = {spec.title!r}",
         "",
         "# Source/license/citation for automatic references — mirrors weaver.spec.toml.",
         "PROVENANCE = Provenance(",
@@ -113,6 +114,7 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "    return WeaverManifest(",
         "        weaver_id=WEAVER_ID,",
         "        version=WEAVER_VERSION,",
+        "        title=WEAVER_TITLE,",
         "        provenance=PROVENANCE,",
         "        capabilities=(",
     ]
