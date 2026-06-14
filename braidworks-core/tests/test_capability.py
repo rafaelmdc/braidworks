@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from braidworks.core import Provenance, WeaverManifest
 from helpers import CORE_OUTPUTS, LINEAGE_OUTPUTS, resolve_name_capability
 
 
@@ -32,3 +33,33 @@ def test_requesting_both_triggers_both():
     req = frozenset({"ncbi.taxon.id", "ncbi.taxon.lineage"})
     assert cap.triggered_groups(req) == frozenset({"core", "lineage"})
     assert cap.outputs_to_compute(req) == CORE_OUTPUTS | LINEAGE_OUTPUTS
+
+
+def test_manifest_without_provenance_round_trips_and_omits_key():
+    cap = resolve_name_capability()
+    manifest = WeaverManifest(weaver_id="taxon", version="1.0.0", capabilities=(cap,))
+    data = manifest.to_json()
+    assert "provenance" not in data  # absent, not null, when unset
+    assert WeaverManifest.from_json(data) == manifest
+    assert manifest.provenance is None
+
+
+def test_manifest_with_provenance_round_trips():
+    cap = resolve_name_capability()
+    prov = Provenance(
+        source_url="https://www.uniprot.org",
+        license="CC-BY-4.0",
+        citation="https://doi.org/10.1093/nar/gkac1052",
+        attribution="UniProt Consortium",
+    )
+    manifest = WeaverManifest(
+        weaver_id="uniprot", version="0.1.0", capabilities=(cap,), provenance=prov
+    )
+    data = manifest.to_json()
+    assert data["provenance"]["license"] == "CC-BY-4.0"
+    assert WeaverManifest.from_json(data) == manifest
+
+
+def test_provenance_is_empty():
+    assert Provenance().is_empty()
+    assert not Provenance(license="CC0-1.0").is_empty()

@@ -90,12 +90,51 @@ class Capability:
 
 
 @dataclass(frozen=True)
+class Provenance:
+    """Where a weaver's data comes from and how it must be credited.
+
+    Mirrors the structured ``[weaver]`` source/license fields in ``weaver.spec.toml``
+    so a *running* braid can introspect which source each weaver drew on and emit the
+    references that source requires. ``license`` is a short identifier (ideally SPDX,
+    e.g. ``CC-BY-4.0`` / ``CC0-1.0``); ``citation`` is the DOI or reference text;
+    ``attribution`` names the provider to credit (e.g. ``UniProt Consortium``). All
+    fields are optional so a manifest without provenance is still valid.
+    """
+
+    source_url: str = ""
+    license: str = ""
+    citation: str = ""
+    attribution: str = ""
+
+    def is_empty(self) -> bool:
+        return not (self.source_url or self.license or self.citation or self.attribution)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "source_url": self.source_url,
+            "license": self.license,
+            "citation": self.citation,
+            "attribution": self.attribution,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Provenance:
+        return cls(
+            source_url=data.get("source_url", ""),
+            license=data.get("license", ""),
+            citation=data.get("citation", ""),
+            attribution=data.get("attribution", ""),
+        )
+
+
+@dataclass(frozen=True)
 class WeaverManifest:
     """Static declaration of a weaver's capabilities. Read before instantiation."""
 
     weaver_id: str
     version: str
     capabilities: tuple[Capability, ...] = field(default_factory=tuple)
+    provenance: Provenance | None = None
 
     def capability(self, capability_id: str) -> Capability | None:
         for c in self.capabilities:
@@ -104,16 +143,21 @@ class WeaverManifest:
         return None
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "weaver_id": self.weaver_id,
             "version": self.version,
             "capabilities": [c.to_json() for c in self.capabilities],
         }
+        if self.provenance is not None:
+            data["provenance"] = self.provenance.to_json()
+        return data
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> WeaverManifest:
+        prov = data.get("provenance")
         return cls(
             weaver_id=data["weaver_id"],
             version=data["version"],
             capabilities=tuple(Capability.from_json(c) for c in data["capabilities"]),
+            provenance=Provenance.from_json(prov) if prov is not None else None,
         )

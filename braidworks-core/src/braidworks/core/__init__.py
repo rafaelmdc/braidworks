@@ -12,7 +12,7 @@ from braidworks.core.cache import (
     StrandCacheKey,
     compute_cache_key,
 )
-from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
+from braidworks.core.capability import Capability, OutputGroup, Provenance, WeaverManifest
 from braidworks.core.factory import WeaverFactory, WeaverProvider
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
@@ -71,6 +71,7 @@ __all__ = [
     "compute_cache_key",
     "Capability",
     "OutputGroup",
+    "Provenance",
     "WeaverManifest",
     "CANONICAL_TYPES",
     "canonicalize",
