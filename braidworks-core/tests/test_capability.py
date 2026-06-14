@@ -44,6 +44,19 @@ def test_manifest_without_provenance_round_trips_and_omits_key():
     assert manifest.provenance is None
 
 
+def test_manifest_title_round_trips_and_omits_when_empty():
+    cap = resolve_name_capability()
+    bare = WeaverManifest(weaver_id="taxon", version="1.0.0", capabilities=(cap,))
+    assert "title" not in bare.to_json()
+    assert bare.title == ""
+
+    titled = WeaverManifest(
+        weaver_id="taxon", version="1.0.0", capabilities=(cap,), title="NCBI taxonomy"
+    )
+    assert titled.to_json()["title"] == "NCBI taxonomy"
+    assert WeaverManifest.from_json(titled.to_json()) == titled
+
+
 def test_manifest_with_provenance_round_trips():
     cap = resolve_name_capability()
     prov = Provenance(
