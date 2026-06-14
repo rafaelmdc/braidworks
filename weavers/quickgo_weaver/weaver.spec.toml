@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.1"
+version = "0.1.2"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -45,6 +45,10 @@ source_sample = """
 id = "resolve_go_terms"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 10
+# go.term is one→many: the weaver emits every distinct GO id, so a caller can fan out
+# (ExpandPolicy) one child per term — "protein -> all GO terms, each drillable". The
+# per-aspect lists (go.molecular_function/…) are descriptive term names; go.count the total.
+set_outputs = ["go.term"]
 
   [[capability.group]]
   id = "aspects"
@@ -56,7 +60,7 @@ max_batch_size = 10
 
   [[capability.group]]
   id = "summary"
-  outputs = ["go.count"]
+  outputs = ["go.term", "go.count"]
 
   [[capability.group]]
   id = "full"

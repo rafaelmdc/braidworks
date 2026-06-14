@@ -15,7 +15,7 @@ from quickgo_weaver.backends.api import QuickgoApiBackend
 
 CAP = "resolve_go_terms"
 ALL = frozenset(
-    {"go.molecular_function", "go.biological_process", "go.cellular_component",
+    {"go.term", "go.molecular_function", "go.biological_process", "go.cellular_component",
      "go.count", "go.records"}
 )
 
@@ -66,6 +66,8 @@ async def test_dedups_to_distinct_terms_and_groups_by_aspect():
     assert v["go.cellular_component"] == ["nucleus"]
     # records sorted by GO id (deterministic)
     assert [r["go_id"] for r in v["go.records"]] == ["GO:0003700", "GO:0005634", "GO:0006915"]
+    # the fan dimension: every distinct GO id (across aspects), deduped + ordered
+    assert v["go.term"] == ["GO:0003700", "GO:0005634", "GO:0006915"]
 
 
 async def test_paginates_until_total():
