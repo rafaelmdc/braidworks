@@ -56,6 +56,23 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     }
 
 
+def _describe(obj: dict[str, Any]) -> dict[str, Any]:
+    """One Reactome pathway object (/data/query/{id}) -> describe_pathway outputs."""
+    return {
+        "pathway.reactome.display_name": obj.get("displayName"),
+        "pathway.reactome.species": obj.get("speciesName"),
+        "pathway.reactome.in_disease": obj.get("isInDisease"),
+        "pathway.reactome.detail": {
+            "st_id": obj.get("stId"),
+            "display_name": obj.get("displayName"),
+            "species": obj.get("speciesName"),
+            "in_disease": obj.get("isInDisease"),
+            "release_date": obj.get("releaseDate"),
+            "schema_class": obj.get("schemaClass"),
+        },
+    }
+
+
 class ReactomeApiBackend(BackendBase):
     """Reactome ContentService backend. Always configured — the API is free, no key."""
 
@@ -95,11 +112,35 @@ class ReactomeApiBackend(BackendBase):
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
     ) -> list[LookupRecord]:
+        # describe_pathway drills one pathway id; list_pathways lists a protein's pathways.
+        if capability_id == "describe_pathway":
+            return [await self._describe_one(q) for q in queries]
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
+
+    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
+        """One pathway.reactome.id -> that pathway's detail via /data/query/{id}."""
+        pid = str(query.get("pathway.reactome.id", "")).strip()
+        if not pid:
+            return LookupRecord(query=query, found=False)
+        try:
+            resp = await self._http().get(f"/data/query/{pid}")
+            resp.raise_for_status()
+            obj = resp.json()
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return LookupRecord(query=query, found=False)
+            logger.warning("Reactome detail failed for %r: %s", pid, exc)
+            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+        except httpx.HTTPError as exc:
+            logger.warning("Reactome detail failed for %r: %s", pid, exc)
+            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+        if not isinstance(obj, dict) or not obj.get("stId"):
+            return LookupRecord(query=query, found=False)
+        return LookupRecord(query=query, found=True, values=_describe(obj))
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

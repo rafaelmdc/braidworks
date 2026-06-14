@@ -24,13 +24,28 @@ _PATHWAYS = [
      "schemaClass": "Pathway", "isInDisease": False},
 ]
 
+# /data/query/{id} detail objects (describe_pathway), shaped like real Reactome.
+_PATHWAY_DETAIL = {
+    "R-HSA-69541": {
+        "stId": "R-HSA-69541", "displayName": "Stabilization of p53", "schemaClass": "Pathway",
+        "speciesName": "Homo sapiens", "isInDisease": False, "releaseDate": "2004-07-06",
+    },
+}
+
 
 def _handler(request: httpx.Request) -> httpx.Response:
-    if request.url.path.endswith("/pathways") and "/UniProt/" in request.url.path:
-        acc = request.url.path.split("/UniProt/")[1].split("/")[0]
+    path = request.url.path
+    if path.endswith("/pathways") and "/UniProt/" in path:
+        acc = path.split("/UniProt/")[1].split("/")[0]
         if acc == "P04637":
             return httpx.Response(200, content=json.dumps(_PATHWAYS))
         return httpx.Response(404, content=json.dumps({"messages": ["no pathways"]}))
+    if "/data/query/" in path:
+        pid = path.split("/data/query/")[1].split("/")[0]
+        detail = _PATHWAY_DETAIL.get(pid)
+        if detail is not None:
+            return httpx.Response(200, content=json.dumps(detail))
+        return httpx.Response(404, content=json.dumps({"code": 404}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

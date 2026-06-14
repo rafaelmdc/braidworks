@@ -82,6 +82,63 @@ async def test_in_disease_flag_carried():
     assert v["pathway.reactome.records"][0]["in_disease"] is True
 
 
+# --- describe_pathway (one id -> detail) --------------------------------------
+
+DESCRIBE = "describe_pathway"
+_DETAIL = {
+    "stId": "R-HSA-69541", "displayName": "Stabilization of p53", "schemaClass": "Pathway",
+    "speciesName": "Homo sapiens", "isInDisease": False, "releaseDate": "2004-07-06",
+}
+
+
+def _detail_backend(obj=None, *, status=200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if status != 200:
+            return httpx.Response(status, content=b"{}")
+        if "/data/query/" in request.url.path:
+            return httpx.Response(200, content=json.dumps(obj if obj is not None else {}))
+        return httpx.Response(404, content=b"{}")
+
+    client = httpx.AsyncClient(base_url="https://r/ContentService",
+                              transport=httpx.MockTransport(handler))
+    return ReactomeApiBackend(client=client)
+
+
+async def _describe(backend, pid):
+    records = await backend.fetch(
+        DESCRIBE, [{"pathway.reactome.id": pid}],
+        requested_outputs=frozenset(
+            {"pathway.reactome.display_name", "pathway.reactome.species",
+             "pathway.reactome.in_disease", "pathway.reactome.detail"}
+        ),
+        groups_to_compute=frozenset(),
+    )
+    assert len(records) == 1
+    return records[0]
+
+
+async def test_describe_pathway_maps_detail():
+    rec = await _describe(_detail_backend(_DETAIL), "R-HSA-69541")
+    assert rec.found is True
+    v = rec.values
+    assert v["pathway.reactome.display_name"] == "Stabilization of p53"
+    assert v["pathway.reactome.species"] == "Homo sapiens"
+    assert v["pathway.reactome.in_disease"] is False
+    assert v["pathway.reactome.detail"]["release_date"] == "2004-07-06"
+    assert v["pathway.reactome.detail"]["schema_class"] == "Pathway"
+
+
+async def test_describe_pathway_blank_and_404_are_misses():
+    assert (await _describe(_detail_backend(_DETAIL), "  ")).found is False
+    rec = await _describe(_detail_backend(status=404), "R-HSA-000")
+    assert rec.found is False and rec.error is None
+
+
+async def test_describe_pathway_server_error_is_per_entity_error():
+    rec = await _describe(_detail_backend(status=500), "R-HSA-69541")
+    assert rec.found is False and rec.error is not None and "Reactome" in rec.error
+
+
 async def test_400_and_404_are_misses():
     for status in (400, 404):
         record = await _one(_backend(status=status), "bad")

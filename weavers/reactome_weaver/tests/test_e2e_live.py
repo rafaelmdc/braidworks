@@ -65,3 +65,24 @@ async def test_live_malformed_accession_is_no_match():
     weaver = build_reactome_weaver()
     result = await _pathways(weaver, "NOTAREALACC")
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_describe_pathway():
+    """Drift detector for the consumer side: one pathway id -> its detail (/data/query)."""
+    weaver = build_reactome_weaver()
+    ss = StrandSet.from_strands("p1", [Strand("pathway.reactome.id", "R-HSA-69541")])
+    result = (
+        await weaver.execute_batch(
+            "describe_pathway", [ss],
+            requested_outputs=frozenset(
+                {"pathway.reactome.display_name", "pathway.reactome.species",
+                 "pathway.reactome.in_disease", "pathway.reactome.detail"}
+            ),
+            backend="api",
+        )
+    )[0]
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    assert produced["pathway.reactome.display_name"] == "Stabilization of p53"
+    assert produced["pathway.reactome.species"] == "Homo sapiens"
+    assert produced["pathway.reactome.detail"]["st_id"] == "R-HSA-69541"
