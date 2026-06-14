@@ -303,6 +303,8 @@ def cmd_index(args: argparse.Namespace) -> int:
 
 
 def cmd_view(args: argparse.Namespace) -> int:
+    import json as _json
+
     from weaverkit.view import parse_policy, write_view
 
     from_types = frozenset(args.from_type or ())
@@ -316,16 +318,37 @@ def cmd_view(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
+    run: dict | None = None
+    if args.run:
+        try:
+            run = _json.loads(Path(args.run).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"--run: cannot read {args.run!r}: {exc}", file=sys.stderr)
+            return 1
+        if not isinstance(run, dict) or "resolved" not in run:
+            print(
+                f"--run: {args.run!r} is not an ExecutionResult.to_json() "
+                "(expected a JSON object with a 'resolved' key)",
+                file=sys.stderr,
+            )
+            return 1
+
     data = write_view(
         args.out,
         from_types=from_types or None,
         to_types=to_types or None,
         policy=policy,
+        run=run,
     )
     net = data["network"]["stats"]
+    extras = ""
+    if data["paths"]:
+        extras += f", {len(data['paths'])} path view"
+    if data["runs"]:
+        extras += f", {len(data['runs'])} run view(s)"
     print(
         f"wrote {args.out} — {net['weavers']} weaver(s), {net['types']} join key(s), "
-        f"{net['edges']} link(s)" + (f", {len(data['paths'])} path view" if data["paths"] else "")
+        f"{net['edges']} link(s)" + extras
     )
     for problem in data["meta"]["problems"]:
         print(f"  note: {problem}", file=sys.stderr)
@@ -436,6 +459,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_view.add_argument(
         "--policy", default="local_first",
         help="backend policy for the path: local_first|api_first|local_only|api_only",
+    )
+    p_view.add_argument(
+        "--run", metavar="RESULT.json",
+        help="an ExecutionResult.to_json() file; adds a run-lineage (fan-out trace) view "
+        "per originating input",
     )
     p_view.set_defaults(func=cmd_view)
 

@@ -142,15 +142,17 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
    - *CLI knobs: N/A — there is no braid-execution CLI (the CLIs plan/verify/visualize,
      they don't run braids); `ExpandPolicy`/`expand_by_type` are passed in code to
      `execute()`.*
-4. **Run-fanout visualizer** (LAST). Project an actual run's `ExecutionResult` (its
-   lineage of leaves) into the existing offline HTML engine as a selectable view — the
-   "1 input → N (× M …) leaves" trace. Confirmed design (2026-06-14): input is a
-   serialized `ExecutionResult.to_json()` (`weaverkit view --run result.json`); output is
-   the **full lineage tree** (input → ops → fan → per-leaf chains), reusing the generic
-   `{nodes, edges}` template (`VIEWS` already renders arbitrary graphs — see
-   `weaverkit/src/weaverkit/view.py:build_path` + template `VIEWS`). Build only after
-   Phase 2 fixes the lineage shape, so nested fans render right and the realized fan
-   factor (and, if added to `ExecutionResult`, the `ExpandPolicy`) show faithfully.
+4. **Run-fanout visualizer** — ✅ **Done** (weaverkit 0.1.12). `weaverkit view --run
+   result.json` (a serialized `ExecutionResult.to_json()`) adds one selectable
+   **run-lineage view per originating input**: `input → [shared ops] → fork ⤜ one value
+   node per fanned leaf → [per-leaf enrichment ops]`, reusing the generic `{nodes, edges}`
+   template (`VIEWS` gained a `DATA.runs` hook). `build_run_views` groups leaves by
+   `parent_id` (the originating-input root), finds the fork (first step whose produced
+   value differs across leaves), and renders shared-prefix + per-leaf chains; the realized
+   fan factor shows in the view title (`×N`). Caps at `max_roots` with a logged note.
+   *Limitation:* a single fork is detected per group, so a deeply **nested** multi-fork
+   run renders as a flattened fan from the first fork (no current weaver chains two set
+   fans, so no real run hits this yet — enhance when a two-level producer chain exists).
 
 ## Dependent / folds in
 

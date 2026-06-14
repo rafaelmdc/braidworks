@@ -213,6 +213,11 @@ const VIEWS = [{ key: "network", label: "Network", graph: DATA.network }];
 DATA.paths.forEach((p, i) =>
   VIEWS.push({ key: "path" + i, label: p.title, graph: p, path: p })
 );
+// Run lineage views (cardinality fan-out trace): one per originating input. Guard
+// (DATA.runs || []) keeps pre-run-view payloads working.
+(DATA.runs || []).forEach((r, i) =>
+  VIEWS.push({ key: "run" + i, label: r.title, graph: r, run: r })
+);
 let current = 0;
 
 // Per-weaver metadata (title / provenance / capabilities / leaf outputs) for the card.
