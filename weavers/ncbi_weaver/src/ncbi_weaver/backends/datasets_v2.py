@@ -380,6 +380,178 @@ class DatasetsV2Backend:
                 break
         return out[:_CHILDREN_LIMIT]
 
+    # --- gene capabilities --------------------------------------------------
+
+    @staticmethod
+    def _gene_summary(g: dict[str, Any]) -> dict[str, Any]:
+        return {
+            vocab.GENE_SYMBOL: g.get("symbol"),
+            vocab.GENE_NAME: g.get("description"),
+            vocab.GENE_TYPE: g.get("type"),
+            vocab.GENE_ORGANISM: g.get("taxname"),
+            vocab.GENE_DETAIL: {
+                "gene_id": g.get("gene_id"),
+                "symbol": g.get("symbol"),
+                "description": g.get("description"),
+                "type": g.get("type"),
+                "taxname": g.get("taxname"),
+                "tax_id": g.get("tax_id"),
+                "chromosomes": g.get("chromosomes"),
+                "synonyms": g.get("synonyms"),
+                "ensembl_gene_ids": g.get("ensembl_gene_ids"),
+                "swiss_prot_accessions": g.get("swiss_prot_accessions"),
+                "transcript_count": g.get("transcript_count"),
+                "protein_count": g.get("protein_count"),
+            },
+        }
+
+    async def resolve_gene(
+        self, queries: list[dict[str, Any]], *, taxon: str
+    ) -> list[LookupRecord]:
+        """A gene symbol (in ``taxon``) -> its NCBI gene id + summary."""
+        tx = (taxon or "9606").strip()
+        records: list[LookupRecord] = []
+        for q in queries:
+            symbol = str(q.get(vocab.PROTEIN_QUERY, "") or "").strip()
+            if not symbol:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                resp = await self._http().get(
+                    f"/gene/symbol/{symbol}/taxon/{tx}/dataset_report"
+                )
+                resp.raise_for_status()
+                reports = resp.json().get("reports") or []
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                continue
+            gene = next((r.get("gene") for r in reports if r.get("gene")), None)
+            if not gene or gene.get("gene_id") is None:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            records.append(LookupRecord(query=q, found=True, values={
+                vocab.GENE_ID: int(gene["gene_id"]),
+                vocab.GENE_SYMBOL: gene.get("symbol"),
+                vocab.GENE_NAME: gene.get("description"),
+                vocab.GENE_ORGANISM: gene.get("taxname"),
+            }))
+        return records
+
+    async def describe_gene(
+        self, queries: list[dict[str, Any]], *, groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        """One gene id -> summary (+ products if that group was requested)."""
+        want_products = "products" in groups
+        records: list[LookupRecord] = []
+        for q in queries:
+            gid = str(q.get(vocab.GENE_ID, "") or "").strip()
+            if not gid:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                resp = await self._http().get(f"/gene/id/{gid}/dataset_report")
+                resp.raise_for_status()
+                reports = resp.json().get("reports") or []
+                gene = next((r.get("gene") for r in reports if r.get("gene")), None)
+                if gene is None:
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                values = self._gene_summary(gene)
+                if want_products:
+                    values[vocab.GENE_PRODUCTS] = await self._fetch_gene_products(gid)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                continue
+            records.append(LookupRecord(query=q, found=True, values=values))
+        return records
+
+    async def _fetch_gene_products(self, gid: str) -> list[dict[str, Any]]:
+        """Transcript + protein products of a gene (compact rows)."""
+        resp = await self._http().get(f"/gene/id/{gid}/product_report", params={"page_size": 1000})
+        resp.raise_for_status()
+        out: list[dict[str, Any]] = []
+        for r in resp.json().get("reports") or []:
+            product = r.get("product") or {}
+            for t in product.get("transcripts") or []:
+                prot = t.get("protein") or {}
+                out.append({
+                    "transcript": t.get("accession_version"),
+                    "name": t.get("name"),
+                    "protein": prot.get("accession_version"),
+                    "protein_name": prot.get("name"),
+                })
+        return out[:_CHILDREN_LIMIT]
+
+    async def list_orthologs(
+        self, queries: list[dict[str, Any]], *, taxon_filter: str | None = None
+    ) -> list[LookupRecord]:
+        """One gene id -> its ortholog gene ids across taxa (excludes the query gene)."""
+        records: list[LookupRecord] = []
+        for q in queries:
+            gid = str(q.get(vocab.GENE_ID, "") or "").strip()
+            if not gid:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            try:
+                orthologs = await self._fetch_orthologs(gid, taxon_filter)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    records.append(LookupRecord(query=q, found=False))
+                    continue
+                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {exc}"))
+                continue
+            except httpx.HTTPError as exc:
+                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {exc}"))
+                continue
+            if not orthologs:
+                records.append(LookupRecord(query=q, found=False))
+                continue
+            records.append(LookupRecord(query=q, found=True, values={
+                vocab.GENE_ID: [o["gene_id"] for o in orthologs],  # the fan dimension
+                vocab.ORTHOLOG_COUNT: len(orthologs),
+                vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
+            }))
+        return records
+
+    async def _fetch_orthologs(
+        self, gid: str, taxon_filter: str | None
+    ) -> list[dict[str, Any]]:
+        """Paginate gene/id/{id}/orthologs, excluding the query gene; distinct + ordered."""
+        out: dict[int, dict[str, Any]] = {}
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {"page_size": 1000}
+            if taxon_filter:
+                params["taxon_filter"] = taxon_filter
+            if page_token:
+                params["page_token"] = page_token
+            resp = await self._http().get(f"/gene/id/{gid}/orthologs", params=params)
+            resp.raise_for_status()
+            body = resp.json()
+            for r in body.get("reports") or []:
+                g = r.get("gene") or {}
+                oid = g.get("gene_id")
+                if oid is None or str(oid) == gid or oid in out:
+                    continue  # skip the query gene itself
+                out[oid] = {"gene_id": int(oid), "symbol": g.get("symbol"),
+                            "organism": g.get("taxname")}
+            page_token = body.get("next_page_token")
+            if not page_token:
+                break
+        return [out[k] for k in sorted(out)]
+
     # --- HTTP shape parsing ------------------------------------------------
 
     async def _dataset_report(self, taxons: list[str]) -> dict[str, dict]:

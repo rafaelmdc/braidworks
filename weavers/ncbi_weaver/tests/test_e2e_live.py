@@ -224,3 +224,34 @@ async def test_live_list_genomes_and_describe():
     assert d[vocab.ASSEMBLY_LEVEL] == "Complete Genome"
     assert "Escherichia coli" in d[vocab.ASSEMBLY_ORGANISM]
     assert any(s["refseq_accession"] == "NC_000913.3" for s in d[vocab.SEQUENCE_RECORDS])
+
+
+async def test_live_gene_resolve_describe_orthologs():
+    """API-only drift check: TP53 -> gene id -> detail + orthologs."""
+    weaver = build_ncbi_weaver(enable_api=True)
+    res = await weaver.execute_batch(
+        vocab.RESOLVE_GENE,
+        [StrandSet.from_strands("e", [Strand(vocab.PROTEIN_QUERY, "TP53")])],
+        requested_outputs=vocab.RESOLVE_GENE_OUTPUTS, backend="api",
+    )
+    sm = {s.type_id: s.value for s in res[0].strands}
+    assert sm[vocab.GENE_ID] == 7157 and sm[vocab.GENE_ORGANISM] == "Homo sapiens"
+
+    desc = await weaver.execute_batch(
+        vocab.DESCRIBE_GENE,
+        [StrandSet.from_strands("g", [Strand(vocab.GENE_ID, 7157)])],
+        requested_outputs=vocab.GENE_SUMMARY_GROUP | vocab.GENE_PRODUCTS_GROUP, backend="api",
+    )
+    d = {s.type_id: s.value for s in desc[0].strands}
+    assert d[vocab.GENE_SYMBOL] == "TP53" and d[vocab.GENE_TYPE] == "PROTEIN_CODING"
+    assert any("NM_000546" in (p.get("transcript") or "") for p in d[vocab.GENE_PRODUCTS])
+
+    orth = await weaver.execute_batch(
+        vocab.LIST_ORTHOLOGS,
+        [StrandSet.from_strands("o", [Strand(vocab.GENE_ID, 7157)])],
+        requested_outputs=vocab.ORTHOLOG_OUTPUTS, backend="api",
+        params={"taxon_filter": "40674"},  # mammals
+    )
+    o = {s.type_id: s.value for s in orth[0].strands}
+    assert 7157 not in o[vocab.GENE_ID]  # excludes the query gene
+    assert o[vocab.ORTHOLOG_COUNT] > 5 and 22059 in o[vocab.GENE_ID]  # mouse Trp53

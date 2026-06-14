@@ -59,6 +59,15 @@ OUTPUT_KEYS: dict[str, str] = {
     "genome.assembly.organism": "Source organism of a single genome assembly.",
     "genome.assembly.detail": "Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts.",
     "genome.sequence.records": "Per-sequence reports of a genome — name, role, length, RefSeq/GenBank accession.",
+    # NCBI gene outputs (ncbi_weaver resolve_gene / describe_gene / list_orthologs)
+    "gene.symbol": "Official gene symbol (NCBI Gene).",
+    "gene.name": "Gene description / full name (NCBI Gene).",
+    "gene.type": "Gene type (protein_coding, ncRNA, pseudo, …).",
+    "gene.organism": "Source organism of a gene (NCBI Gene taxname).",
+    "gene.detail": "Full gene record — symbol, description, type, chromosomes, synonyms, xrefs, counts.",
+    "gene.product.records": "Transcript + protein products of a gene — accessions and names.",
+    "gene.ortholog.count": "Number of orthologs of a gene across taxa.",
+    "gene.ortholog.records": "Ortholog genes of a gene — gene_id, symbol, organism.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "Gram stain (positive/negative).",
     "microbe.trait.optimum_temp": "Optimum growth temperature.",

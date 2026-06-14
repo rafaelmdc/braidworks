@@ -76,3 +76,27 @@ class ResolutionBackend(ABC):
         raise UnsupportedCapability(
             f"{type(self).__name__} does not support describe_genome"
         )
+
+    async def resolve_gene(
+        self, queries: list[dict[str, Any]], *, taxon: str
+    ) -> list[LookupRecord]:
+        """Resolve each input gene symbol (in ``taxon``) to its NCBI gene id. API-only."""
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support resolve_gene"
+        )
+
+    async def describe_gene(
+        self, queries: list[dict[str, Any]], *, groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        """Describe each input gene id (summary; products if that group is asked). API-only."""
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support describe_gene"
+        )
+
+    async def list_orthologs(
+        self, queries: list[dict[str, Any]], *, taxon_filter: str | None = None
+    ) -> list[LookupRecord]:
+        """List each input gene id's ortholog gene ids across taxa. API-only."""
+        raise UnsupportedCapability(
+            f"{type(self).__name__} does not support list_orthologs"
+        )
