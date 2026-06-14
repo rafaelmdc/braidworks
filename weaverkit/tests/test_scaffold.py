@@ -90,6 +90,14 @@ def test_generated_manifest_matches_spec(tmp_path):
     assert check_manifest(weaver.MANIFEST, spec) == []
 
 
+def test_generated_pyproject_has_entry_point(tmp_path):
+    """Scaffolded pyproject registers the weaver for entry-point discovery."""
+    spec, dest, _ = _generate(tmp_path)
+    text = (dest / "pyproject.toml").read_text()
+    assert '[project.entry-points."braidworks.weavers"]' in text
+    assert f'{spec.resolved_weaver_id} = "{spec.package}.factory:build_{spec.package}"' in text
+
+
 def test_generated_manifest_carries_provenance(tmp_path):
     """Scaffolded vocab mirrors the spec's source/license into manifest.provenance."""
     spec, dest, _ = _generate(tmp_path)
