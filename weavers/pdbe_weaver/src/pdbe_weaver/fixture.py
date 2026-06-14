@@ -4,7 +4,8 @@ The api backend is *always configured* (PDBe needs no key), so golden would othe
 hit the live service. This module serves a canned ``best_structures`` response for
 P04637 with **two distinct structures and a duplicate chain of one** (so the dedup +
 best-chain path is exercised), shaped like real PDBe rows
-(``pdb_id``/``experimental_method``/``resolution``/``coverage``).
+(``pdb_id``/``experimental_method``/``resolution``/``coverage``). It also serves a
+``/pdb/entry/summary/{id}`` detail object for ``1tup`` (describe_structure golden).
 ``build_pdbe_weaver_fixture()`` (in factory.py) wires the backend to this transport.
 """
 
@@ -26,6 +27,17 @@ _BEST_STRUCTURES = {
     ]
 }
 
+# One PDB entry summary (describe_structure), shaped like real /pdb/entry/summary/1tup.
+_STRUCTURE_DETAIL = {
+    "1tup": {
+        "title": "TUMOR SUPPRESSOR P53 COMPLEXED WITH DNA",
+        "experimental_method": ["X-ray diffraction"],
+        "release_date": "19950711",
+        "deposition_date": "19950711",
+        "entry_authors": ["Cho, Y.", "Gorina, S.", "Jeffrey, P.D.", "Pavletich, N.P."],
+    }
+}
+
 
 def _handler(request: httpx.Request) -> httpx.Response:
     if "/best_structures/" in request.url.path:
@@ -33,6 +45,11 @@ def _handler(request: httpx.Request) -> httpx.Response:
         if acc in _BEST_STRUCTURES:
             return httpx.Response(200, content=json.dumps({acc: _BEST_STRUCTURES[acc]}))
         return httpx.Response(404, content=json.dumps({"detail": "no structures"}))
+    if "/pdb/entry/summary/" in request.url.path:
+        pid = request.url.path.rsplit("/", 1)[1]
+        if pid in _STRUCTURE_DETAIL:
+            return httpx.Response(200, content=json.dumps({pid: [_STRUCTURE_DETAIL[pid]]}))
+        return httpx.Response(404, content=json.dumps({"detail": "no entry"}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

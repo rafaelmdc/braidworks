@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "pdbe"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.5"
 WEAVER_TITLE = "PDB experimental structures via PDBe (accession -> structures)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -51,6 +51,35 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(id="full", outputs=frozenset({"structure.pdb.records"})),
                 ),
                 set_outputs=frozenset({"pdb.id"}),
+                backends=backends,
+                max_batch_size=25,
+            ),
+            # The consumer side: one PDB id -> that structure's detail. Consumes the set
+            # key list_structures produces, so a fanned structure is drillable.
+            Capability(
+                id="describe_structure",
+                consumes=frozenset({"pdb.id"}),
+                produces=frozenset(
+                    {
+                        "structure.pdb.title",
+                        "structure.pdb.method",
+                        "structure.pdb.release_date",
+                        "structure.pdb.detail",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="detail",
+                        outputs=frozenset(
+                            {
+                                "structure.pdb.title",
+                                "structure.pdb.method",
+                                "structure.pdb.release_date",
+                                "structure.pdb.detail",
+                            }
+                        ),
+                    ),
+                ),
                 backends=backends,
                 max_batch_size=25,
             ),

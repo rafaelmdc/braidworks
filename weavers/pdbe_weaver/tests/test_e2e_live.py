@@ -62,3 +62,35 @@ async def test_live_unknown_accession_is_no_match():
     weaver = build_pdbe_weaver()
     result = await _structures(weaver, "X0X0X0")
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def _describe(weaver, pdb_id):
+    ss = StrandSet.from_strands("e1", [Strand("pdb.id", pdb_id)])
+    return (
+        await weaver.execute_batch(
+            "describe_structure",
+            [ss],
+            requested_outputs=frozenset(
+                {"structure.pdb.title", "structure.pdb.method",
+                 "structure.pdb.release_date", "structure.pdb.detail"}
+            ),
+            backend="api",
+        )
+    )[0]
+
+
+async def test_live_describe_1tup():
+    """Drift detector: 1tup (p53/DNA) summary still maps to our describe leaves."""
+    weaver = build_pdbe_weaver()
+    result = await _describe(weaver, "1tup")
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    assert "P53" in produced["structure.pdb.title"].upper()
+    assert produced["structure.pdb.method"]  # an experimental method string
+    assert produced["structure.pdb.detail"]["pdb_id"] == "1tup"
+
+
+async def test_live_describe_unknown_is_no_match():
+    weaver = build_pdbe_weaver()
+    result = await _describe(weaver, "9zz9")
+    assert result.status is WeaveStatus.NO_MATCH
