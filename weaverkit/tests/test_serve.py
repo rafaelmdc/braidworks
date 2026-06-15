@@ -178,7 +178,9 @@ def test_interactive_render_injects_serve_ui():
 
     html = render_html(build_data(), interactive=True)
     for token in ('id="builder"', "runControlsHTML", "exportRows", "function setupBuilder",
-                  'class="results"'):
+                  'class="results"',
+                  'id="b-search"', "function applySearch",       # graph search
+                  'id="b-recipes"', "function saveRecipe"):      # save/load recipes
         assert token in html, token
 
 

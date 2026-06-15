@@ -502,6 +502,7 @@ function frame(now) {
     const [sx, sy] = toScreen(n.x, n.y);
     const w = n.w * cam.scale, h = n.h * cam.scale;
     let lit = !focus || focusNodes.has(n.id);
+    if (searchHits && !searchHits.has(n.id)) lit = false;  // search filter dims non-matches
     const isOp = n.kind === "op";
     let base = isOp ? weaverColor(n.weaver, 60) : (TYPE_COLOR[n.io] || TYPE_IN);
     // Run light-up: op nodes reveal wave-by-wave — green when the step ran, red on error.
@@ -753,8 +754,10 @@ addEventListener("mousemove", (e) => {
 });
 addEventListener("mouseup", () => { cardDrag = null; });
 
-// Run light-up state: written by the serve UI (when present), read by the draw loop.
+// Run light-up + search-filter state: written by the serve UI (when present), read by the
+// draw loop. searchHits = null means no filter; otherwise a Set of node ids to keep lit.
 let runAnim = null;
+let searchHits = null;
 function runStatusOf(nodeId, now) {
   if (!runAnim) return null;
   const info = runAnim.perNode[nodeId];

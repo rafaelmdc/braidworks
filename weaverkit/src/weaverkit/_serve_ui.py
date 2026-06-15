@@ -42,6 +42,7 @@ SERVE_CSS = """
     border: 1px solid rgba(120,150,220,0.4); border-radius: 8px; padding: 7px 14px; font-size: 12.5px;
   }
   .builder button.go:hover { background: rgba(120,150,220,0.3); }
+  .bsearch { margin-bottom: 12px; }
   #b-out { margin-top: 14px; }
   #b-out .berr { color: #e6a3a3; font-size: 11.5px; line-height: 1.45; }
   #b-out .bsum { color: var(--ink); margin-bottom: 10px; }
@@ -89,6 +90,7 @@ SERVE_CSS = """
 SERVE_HTML = """
 <div class="builder" id="builder" style="display:none">
   <h2>Build a braid</h2>
+  <input id="b-search" class="bsearch" placeholder="🔍 filter the graph…" autocomplete="off">
   <label>Have (input types)
     <input id="b-have" list="b-types" placeholder="e.g. protein.query" autocomplete="off">
   </label>
@@ -106,6 +108,15 @@ SERVE_HTML = """
     <button class="go" id="b-plan">Plan ▶</button>
   </div>
   <div class="note">Comma-separate multiple types. Autocomplete from the network.</div>
+  <div class="brun" id="b-recipes-wrap">
+    <label>Recipes
+      <select id="b-recipes"><option value="">— load saved —</option></select>
+    </label>
+    <div class="brow">
+      <input id="b-recipe-name" placeholder="name to save" autocomplete="off">
+      <button class="go" id="b-save">Save</button>
+    </div>
+  </div>
   <div id="b-out"></div>
 </div>
 
@@ -341,6 +352,57 @@ async function runPlan() {
   } catch (e) { out.innerHTML = whyNoPath(String(e)); }
 }
 
+// ---- graph search (filter) -------------------------------------------------
+// Sets the base template's `searchHits` (a Set of node ids to keep lit; null = no filter).
+function applySearch(q) {
+  q = (q || "").trim().toLowerCase();
+  if (!q) { searchHits = null; return; }
+  const hits = new Set();
+  (layouts[current].nodes || new Map()).forEach((n) => {
+    const hay = [n.label, n.key, n.weaver, n.capability].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) hits.add(n.id);
+  });
+  searchHits = hits;
+}
+
+// ---- recipes (save/load built braids; client-side localStorage) ------------
+const RECIPES_KEY = "braidworks.recipes";
+
+function loadRecipes() {
+  try { return JSON.parse(localStorage.getItem(RECIPES_KEY) || "{}"); }
+  catch (e) { return {}; }
+}
+
+function refreshRecipes() {
+  const sel = document.getElementById("b-recipes");
+  if (!sel) return;
+  const recipes = loadRecipes();
+  sel.innerHTML = '<option value="">— load saved —</option>' +
+    Object.keys(recipes).sort().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+}
+
+function saveRecipe() {
+  const name = (document.getElementById("b-recipe-name").value || "").trim();
+  const have = document.getElementById("b-have").value.trim();
+  const want = document.getElementById("b-want").value.trim();
+  if (!name || (!have && !want)) return;
+  const recipes = loadRecipes();
+  recipes[name] = { have, want, policy: document.getElementById("b-policy").value };
+  localStorage.setItem(RECIPES_KEY, JSON.stringify(recipes));
+  document.getElementById("b-recipe-name").value = "";
+  refreshRecipes();
+  document.getElementById("b-recipes").value = name;
+}
+
+function loadRecipe(name) {
+  const r = loadRecipes()[name];
+  if (!r) return;
+  document.getElementById("b-have").value = r.have || "";
+  document.getElementById("b-want").value = r.want || "";
+  if (r.policy) document.getElementById("b-policy").value = r.policy;
+  runPlan();
+}
+
 function setupBuilder() {
   if (!SERVED) return;
   document.getElementById("builder").style.display = "block";
@@ -351,6 +413,12 @@ function setupBuilder() {
   document.getElementById("b-plan").onclick = runPlan;
   ["b-have", "b-want"].forEach((id) =>
     document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") runPlan(); }));
+  // Graph search filter.
+  document.getElementById("b-search").addEventListener("input", (e) => applySearch(e.target.value));
+  // Recipes: save current build / load a saved one.
+  document.getElementById("b-save").onclick = saveRecipe;
+  document.getElementById("b-recipes").onchange = (e) => { if (e.target.value) loadRecipe(e.target.value); };
+  refreshRecipes();
   // Deep link: #have=...&want=... pre-fills and auto-plans (shareable braid).
   const m = new URLSearchParams(location.hash.slice(1));
   if (m.get("have") || m.get("want")) {
