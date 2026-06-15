@@ -20,13 +20,19 @@ so it is unit-testable without the optional web dependency. FastAPI + uvicorn ar
 import them lazily and fail with a clear install hint if missing.
 """
 
+import asyncio
+
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.exceptions import NoPathError, NoPlanError
+from braidworks.core.executor import ExpandPolicy, LocalExecutor
+from braidworks.core.planner import Braider
 from braidworks.core.references import references_for
+from braidworks.core.strand import Strand, StrandSet
 
 from weaverkit.view import (
     build_data,
     build_path,
+    build_run_views,
     discover_registry,
     parse_policy,
     render_html,
@@ -112,6 +118,81 @@ def plan_response(
     }
 
 
+def _expand_policy(mode: str, k: int) -> ExpandPolicy:
+    """Map the GUI's fan-out choice onto an ``ExpandPolicy`` (top / top-k / all)."""
+    if mode == "all":
+        return ExpandPolicy.all()
+    if mode == "top_k":
+        return ExpandPolicy.top_k(max(1, k))
+    return ExpandPolicy.top()
+
+
+def _rows(result_json: dict) -> tuple[list[str], list[dict]]:
+    """Flatten resolved strand-sets into ``(columns, rows)`` for the results table."""
+    rows: list[dict] = []
+    columns: list[str] = []
+    for ss in result_json.get("resolved", []):
+        row = {t: s.get("value") for t, s in (ss.get("strands") or {}).items()}
+        for k in row:
+            if k not in columns:
+                columns.append(k)
+        rows.append(row)
+    return sorted(columns), rows
+
+
+def run_response(
+    registry,
+    have: dict,
+    want: list,
+    *,
+    policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+    expand: str = "top",
+    k: int = 1,
+) -> dict:
+    """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
+
+    Returns ``{"ok": True, "path", "result", "runs", "columns", "rows", "summary"}`` —
+    ``result`` is ``ExecutionResult.to_json()`` (carries the per-step ``completion`` the
+    front-end replays as the light-up), ``runs`` the fan-out lineage views, ``rows`` the
+    flat results table. ``{"ok": False, "error"}`` when unroutable. Pure + sync (drives the
+    async executor via ``asyncio.run``), so it is unit-testable without the web dependency.
+    """
+    have = {str(t): v for t, v in (have or {}).items() if str(t).strip()}
+    want = [str(t) for t in (want or [])]
+    if not have or not want:
+        return {"ok": False, "error": "enter a value for at least one Have type and a Want type"}
+
+    braider = Braider(registry)
+    try:
+        braid = braider.plan(frozenset(have), frozenset(want), backend_policy=policy)
+    except (NoPathError, NoPlanError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
+    executor = LocalExecutor(registry)
+    result = asyncio.run(
+        executor.execute(
+            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy
+        )
+    )
+    rj = result.to_json()
+    runs, _dropped = build_run_views(rj, registry)
+    columns, rows = _rows(rj)
+    return {
+        "ok": True,
+        "path": build_path(registry, frozenset(have), frozenset(want), policy=policy),
+        "result": rj,
+        "runs": runs,
+        "columns": columns,
+        "rows": rows,
+        "summary": {
+            "resolved": len(rj.get("resolved", [])),
+            "unresolved": len(rj.get("unresolved", [])),
+            "errors": len(rj.get("errors", [])),
+        },
+    }
+
+
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
 
 
@@ -132,6 +213,13 @@ def create_app():
         to_types: list[str] = Field(default_factory=list)
         policy: str = "local_first"
 
+    class RunRequest(BaseModel):
+        have: dict[str, str] = Field(default_factory=dict)
+        want: list[str] = Field(default_factory=list)
+        policy: str = "local_first"
+        expand: str = "top"  # top | top_k | all
+        k: int = 3
+
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
     # The page, with the network blob already injected (graph reads it; no /api/network).
@@ -149,6 +237,17 @@ def create_app():
         except ValueError as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         return plan_response(registry, req.from_types, req.to_types, policy=policy)
+
+    @app.post("/api/run")
+    def api_run(req: RunRequest):
+        registry = discover_registry().registry
+        try:
+            policy = parse_policy(req.policy)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        return run_response(
+            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k
+        )
 
     return app
 
