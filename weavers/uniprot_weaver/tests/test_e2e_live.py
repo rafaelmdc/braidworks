@@ -84,3 +84,46 @@ async def test_live_unknown_query_is_no_match():
     )[0]
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def _idmap(capability, input_type, value, output):
+    weaver = build_uniprot_weaver()
+    ss = StrandSet.from_strands("g1", [Strand(input_type, value)])
+    result = (
+        await weaver.execute_batch(
+            capability, [ss], requested_outputs=frozenset({output}), backend="api"
+        )
+    )[0]
+    skip_if_transient(result)
+    return result
+
+
+async def test_live_map_to_accession_from_geneid():
+    """Async ID-mapping: NCBI GeneID 7157 (human TP53) -> P04637 (reviewed leads)."""
+    result = await _idmap("map_to_accession", "gene.ncbi.id", "7157", "protein.uniprot.accession")
+    assert result.status is WeaveStatus.OK
+    accs = {s.type_id: s.value for s in result.strands}["protein.uniprot.accession"]
+    assert isinstance(accs, list) and accs[0] == "P04637"
+
+
+async def test_live_map_to_accession_from_ensembl():
+    """Alternative input: Ensembl gene ENSG00000141510 (TP53) -> includes P04637."""
+    result = await _idmap(
+        "map_to_accession", "gene.ensembl.id", "ENSG00000141510", "protein.uniprot.accession"
+    )
+    assert result.status is WeaveStatus.OK
+    accs = {s.type_id: s.value for s in result.strands}["protein.uniprot.accession"]
+    assert "P04637" in accs
+
+
+async def test_live_map_from_accession_to_geneid():
+    """Reverse bridge: accession P04637 -> NCBI GeneID 7157 (routes by requested output)."""
+    result = await _idmap("map_from_accession", "protein.uniprot.accession", "P04637", "gene.ncbi.id")
+    assert result.status is WeaveStatus.OK
+    gene_ids = {s.type_id: s.value for s in result.strands}["gene.ncbi.id"]
+    assert any(str(g) == "7157" for g in gene_ids)
+
+
+async def test_live_map_to_accession_unknown_is_no_match():
+    result = await _idmap("map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession")
+    assert result.status is WeaveStatus.NO_MATCH

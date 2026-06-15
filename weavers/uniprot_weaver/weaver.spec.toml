@@ -15,7 +15,7 @@ db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
 title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
-version = "0.1.2"
+version = "0.2.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -79,6 +79,51 @@ always_computed_groups = ["identity"]
   id = "function"
   outputs = ["protein.function", "protein.length"]
 
+# --- ID mapping: cross-reference to/from the UniProt accession hub ------------
+# Two directional capabilities over the async, batched UniProt ID-mapping REST service.
+# UniProt accession is the hub; the API maps INTO it (X -> UniProtKB) or OUT of it
+# (UniProtKB_AC-ID -> Y). See src/uniprot_weaver/mapping.py for the db tables.
+
+# map_to_accession: ANY supported id -> protein.uniprot.accession. consumes_any (the
+# alternative inputs) means any one present id suffices; the backend picks the UniProt
+# `from` db from whichever is supplied. Two jobs (reviewed Swiss-Prot + full UniProtKB),
+# accession ordered reviewed-first; accession is a set output (the fan dimension).
+[[capability]]
+id = "map_to_accession"
+consumes = [
+  "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "gene.symbol",
+  "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id",
+]
+consumes_any = true
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession", "protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+# map_from_accession: protein.uniprot.accession -> any supported id. The backend picks the
+# UniProt `to` db from whichever output is requested (single job). Every target is a set
+# output (one accession can map to many ids).
+[[capability]]
+id = "map_from_accession"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = [
+  "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "pathway.kegg.id",
+  "pathway.reactome.id", "refseq.protein.id", "orthodb.group", "eggnog.group",
+  "chembl.id", "drugbank.id", "pdb.id", "string.id",
+]
+  [[capability.group]]
+  id = "mapping"
+  outputs = [
+    "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "pathway.kegg.id",
+    "pathway.reactome.id", "refseq.protein.id", "orthodb.group", "eggnog.group",
+    "chembl.id", "drugbank.id", "pdb.id", "string.id",
+    "protein.uniprot.mapping.count", "protein.uniprot.mapping.records",
+  ]
+
 # Golden runs against the deterministic fixture (uniprot_weaver.fixture, an
 # httpx.MockTransport serving a canned TP53 search response) so
 # `weaverkit verify --strict` is reproducible offline.
@@ -86,3 +131,10 @@ always_computed_groups = ["identity"]
 capability = "resolve_protein"
 input = { "protein.query" = "TP53" }
 expect = { "protein.uniprot.accession" = "P04637", "protein.gene" = "TP53" }
+
+# map_to_accession golden: NCBI GeneID 7157 (human TP53) -> [P04637] (reviewed canonical
+# first). accession is a set output, so the produced strand value is a list.
+[[golden]]
+capability = "map_to_accession"
+input = { "gene.ncbi.id" = "7157" }
+expect = { "protein.uniprot.accession" = ["P04637"], "protein.uniprot.mapping.count" = 1 }

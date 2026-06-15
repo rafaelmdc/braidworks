@@ -146,3 +146,103 @@ def test_pick_is_deterministic_best_score_then_accession():
 def test_fingerprint_is_stable_and_real():
     fp = UniprotApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+# --- ID mapping (map_to_accession / map_from_accession) ----------------------
+
+from urllib.parse import parse_qs  # noqa: E402
+
+ACC = "protein.uniprot.accession"
+COUNT = "protein.uniprot.mapping.count"
+RECORDS = "protein.uniprot.mapping.records"
+
+
+def _idmap_backend(maps, *, run_calls=None, run_status=200):
+    """A backend serving the ID-mapping flow from ``maps`` = {(from,to): {src: [target]}}."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/idmapping/run"):
+            form = parse_qs(request.content.decode())
+            if run_calls is not None:
+                run_calls.append((form.get("from", [""])[0], form.get("to", [""])[0]))
+            if run_status != 200:
+                return httpx.Response(run_status, content=b"{}")
+            frm, to = form.get("from", [""])[0], form.get("to", [""])[0]
+            return httpx.Response(200, content=json.dumps({"jobId": f"{frm}|{to}"}))
+        if "/idmapping/status/" in path:
+            return httpx.Response(200, content=json.dumps({"jobStatus": "FINISHED"}))
+        if "/idmapping/results/" in path:
+            frm, to = path.rsplit("/", 1)[-1].split("|")
+            rows = [{"from": s, "to": t} for s, ts in maps.get((frm, to), {}).items() for t in ts]
+            return httpx.Response(200, content=json.dumps({"results": rows}))
+        return httpx.Response(404, content=b"{}")
+
+    client = httpx.AsyncClient(base_url="https://u", transport=httpx.MockTransport(handler))
+    return UniprotApiBackend(client=client)
+
+
+async def test_map_to_accession_reviewed_first_and_picks_from_db():
+    backend = _idmap_backend({
+        ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
+        ("GeneID", "UniProtKB"): {"7157": ["A0A087WT22", "P04637"]},
+    })
+    rec = (await backend.fetch("map_to_accession", [{"gene.ncbi.id": "7157"}],
+                               requested_outputs=frozenset({ACC}),
+                               groups_to_compute=frozenset()))[0]
+    assert rec.found and rec.values[ACC] == ["P04637", "A0A087WT22"]
+    assert rec.values[RECORDS][0] == {"id": "P04637", "reviewed": True}
+
+
+async def test_map_to_accession_groups_inputs_by_source_db():
+    run_calls: list = []
+    backend = _idmap_backend({
+        ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
+        ("GeneID", "UniProtKB"): {"7157": ["P04637"]},
+        ("Ensembl", "UniProtKB-Swiss-Prot"): {"ENSG1": ["P04637"]},
+        ("Ensembl", "UniProtKB"): {"ENSG1": ["P04637"]},
+    }, run_calls=run_calls)
+    recs = await backend.fetch(
+        "map_to_accession",
+        [{"gene.ncbi.id": "7157"}, {"gene.ensembl.id": "ENSG1"}],
+        requested_outputs=frozenset({ACC}), groups_to_compute=frozenset(),
+    )
+    assert [r.values[ACC] for r in recs] == [["P04637"], ["P04637"]]
+    # two source dbs × reviewed+full = 4 jobs; the from db is chosen per input type.
+    assert set(run_calls) == {("GeneID", "UniProtKB-Swiss-Prot"), ("GeneID", "UniProtKB"),
+                              ("Ensembl", "UniProtKB-Swiss-Prot"), ("Ensembl", "UniProtKB")}
+
+
+async def test_map_from_accession_picks_to_db_from_requested_output():
+    run_calls: list = []
+    backend = _idmap_backend({("UniProtKB_AC-ID", "KEGG"): {"P04637": ["hsa:7157"]}},
+                             run_calls=run_calls)
+    rec = (await backend.fetch("map_from_accession", [{ACC: "P04637"}],
+                               requested_outputs=frozenset({"pathway.kegg.id"}),
+                               groups_to_compute=frozenset()))[0]
+    assert rec.values["pathway.kegg.id"] == ["hsa:7157"]
+    assert run_calls == [("UniProtKB_AC-ID", "KEGG")]  # single job, only the requested target
+
+
+async def test_map_from_accession_unrequested_target_is_no_match():
+    backend = _idmap_backend({})
+    rec = (await backend.fetch("map_from_accession", [{ACC: "P04637"}],
+                               requested_outputs=frozenset({COUNT}),  # nothing routable
+                               groups_to_compute=frozenset()))[0]
+    assert rec.found is False
+
+
+async def test_map_to_accession_miss_and_blank():
+    backend = _idmap_backend({})
+    recs = await backend.fetch(
+        "map_to_accession", [{"gene.ncbi.id": "999"}, {"gene.ncbi.id": "  "}],
+        requested_outputs=frozenset({ACC}), groups_to_compute=frozenset(),
+    )
+    assert recs[0].found is False and recs[1].found is False
+
+
+async def test_map_job_failure_is_per_query_error():
+    backend = _idmap_backend({}, run_status=500)
+    recs = await backend.fetch("map_to_accession", [{"gene.ncbi.id": "7157"}],
+                               requested_outputs=frozenset({ACC}), groups_to_compute=frozenset())
+    assert recs[0].error is not None and "ID-mapping" in recs[0].error
