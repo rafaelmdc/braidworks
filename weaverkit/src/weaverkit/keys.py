@@ -24,6 +24,11 @@ SHARED_KEYS: dict[str, str] = {
     "protein.uniprot.accession": "UniProt accession — the primary protein join key.",
     "gene.ncbi.id": "NCBI Gene id.",
     "gene.ensembl.id": "Ensembl gene id.",
+    "gene.symbol": "Official gene symbol (e.g. TP53) — a cross-database gene join key.",
+    "gene.hgnc.id": "HGNC id — HUGO human gene nomenclature join key.",
+    "protein.ensembl.id": "Ensembl protein id.",
+    "refseq.protein.id": "NCBI RefSeq protein accession (NP_/XP_).",
+    "nucleotide.insdc.accession": "INSDC nucleotide accession (EMBL/GenBank/DDBJ).",
     "go.term": "Gene Ontology term id.",
     "enzyme.ec": "Enzyme Commission (EC) number.",
     "chem.chebi.id": "ChEBI chemical entity id.",
@@ -60,7 +65,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "genome.assembly.detail": "Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts.",
     "genome.sequence.records": "Per-sequence reports of a genome — name, role, length, RefSeq/GenBank accession.",
     # NCBI gene outputs (ncbi_weaver resolve_gene / describe_gene / list_orthologs)
-    "gene.symbol": "Official gene symbol (NCBI Gene).",
+    # (gene.symbol is a shared join key — see SHARED_KEYS — consumed by idmapping_weaver)
     "gene.name": "Gene description / full name (NCBI Gene).",
     "gene.type": "Gene type (protein_coding, ncRNA, pseudo, …).",
     "gene.organism": "Source organism of a gene (NCBI Gene taxname).",
@@ -91,6 +96,9 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.function": "Curated function summary (UniProt FUNCTION comment).",
     "protein.length": "Sequence length in amino acids.",
     "protein.reviewed": "Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL).",
+    # UniProt ID-mapping outputs (idmapping_weaver) — shared across every map_* edge
+    "protein.uniprot.mapping.count": "Number of ids a source id maps to (idmapping_weaver).",
+    "protein.uniprot.mapping.records": "Mapped ids for a source id — id + reviewed flag (idmapping_weaver).",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "Names of a protein's interaction partners (STRING).",
     "protein.interaction.count": "Number of interaction partners returned (STRING).",

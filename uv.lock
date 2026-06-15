@@ -10,6 +10,7 @@ members = [
     "braidworks-core",
     "disbiome-weaver",
     "example-weaver",
+    "idmapping-weaver",
     "ncbi-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
@@ -125,7 +126,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.7.1"
+version = "0.7.2"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -325,6 +326,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
+
+[[package]]
+name = "idmapping-weaver"
+version = "0.1.0"
+source = { editable = "weavers/idmapping_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "idna"
@@ -676,7 +703,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "weaverkit"
-version = "0.1.17"
+version = "0.1.18"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

@@ -1,0 +1,151 @@
+# idmapping_weaver — the UniProt ID-mapping hub.
+#
+# UniProt accession is the molecular hub. The ID-mapping REST API
+# (rest.uniprot.org/idmapping) only maps INTO the hub (X -> UniProtKB) or OUT of it
+# (UniProtKB_AC-ID -> Y), so this weaver is a hub-and-spoke: each capability is one
+# typed cross-reference edge, all sharing one async, batched engine.
+#
+# Batch A (this file) ships the INTO-hub spokes: GeneID / Ensembl / Ensembl_Protein /
+# Gene_Name / RefSeq / HGNC / EMBL-GenBank-DDBJ / PDB -> protein.uniprot.accession. Each
+# runs two jobs (reviewed Swiss-Prot for the canonical accession + full UniProtKB for
+# coverage) and orders the result reviewed-first; accession is a set output (the fan
+# dimension). Out-of-hub spokes (accession -> KEGG/Reactome/OrthoDB/...) follow in B/C.
+[weaver]
+db_name = "idmapping"
+weaver_id = "idmapping"
+kind = "lookup"
+title = "UniProt ID mapping — cross-reference any id to/from the UniProt accession hub"
+version = "0.1.0"
+license = "CC-BY-4.0"
+citation = "https://doi.org/10.1093/nar/gkac1052"
+attribution = "UniProt Consortium"
+source_url = "https://www.uniprot.org/help/id_mapping"
+fingerprint_source = "UniProt ID-mapping REST API contract (rest.uniprot.org/idmapping, JSON)"
+api_key = "none"
+backends = ["api"]
+# Real excerpt of the results of POST /idmapping/run {from=GeneID,to=UniProtKB,ids=7157}
+# then GET /idmapping/results/{jobId}. The `to` field is the target accession string.
+source_sample = """
+{
+  "results": [
+    { "from": "7157", "to": "P04637" }
+  ]
+}
+"""
+
+# --- INTO the hub: X -> protein.uniprot.accession ----------------------------
+# Every capability shares the same shape: consume one id type, produce the accession
+# (a set output, reviewed-first) plus the mapping count/records detail group.
+
+[[capability]]
+id = "map_geneid"
+consumes = ["gene.ncbi.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_ensembl"
+consumes = ["gene.ensembl.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_ensembl_protein"
+consumes = ["protein.ensembl.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_gene_name"
+consumes = ["gene.symbol"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_refseq_protein"
+consumes = ["refseq.protein.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_hgnc"
+consumes = ["gene.hgnc.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_insdc"
+consumes = ["nucleotide.insdc.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_pdb"
+consumes = ["pdb.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+# Golden runs against the deterministic fixture (idmapping_weaver.fixture, an
+# httpx.MockTransport serving the canned ID-mapping flow) so `weaverkit verify --strict`
+# is reproducible offline: NCBI GeneID 7157 (human TP53) -> [P04637]. accession is a set
+# output, so the produced strand value is a list.
+[[golden]]
+capability = "map_geneid"
+input = { "gene.ncbi.id" = "7157" }
+expect = { "protein.uniprot.accession" = ["P04637"], "protein.uniprot.mapping.count" = 1 }
