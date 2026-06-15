@@ -29,8 +29,25 @@ Every edge consumes one id type and produces `protein.uniprot.accession` (a **se
 | `map_insdc` | `nucleotide.insdc.accession` | `EMBL-GenBank-DDBJ` |
 | `map_pdb` | `pdb.id` | `PDB` |
 
-*Out-of-hub spokes (`accession → KEGG / Reactome / OrthoDB / eggNOG / ChEMBL / DrugBank /
-…`) ship in batches B and C.*
+## Capabilities (Batch B — out of the hub)
+
+Each consumes `protein.uniprot.accession` and produces one target id type (a **set
+output**) plus the shared `protein.uniprot.mapping.count`/`.records`.
+
+| Capability | Produces | UniProt `to` db |
+|---|---|---|
+| `map_to_geneid` | `gene.ncbi.id` | `GeneID` |
+| `map_to_ensembl` | `gene.ensembl.id` | `Ensembl` |
+| `map_to_ensembl_protein` | `protein.ensembl.id` | `Ensembl_Protein` |
+| `map_to_kegg` | `pathway.kegg.id` | `KEGG` |
+| `map_to_reactome` | `pathway.reactome.id` | `Reactome` |
+| `map_to_refseq_protein` | `refseq.protein.id` | `RefSeq_Protein` |
+
+These compose through the hub — e.g. `gene.symbol → accession → pathway.reactome.id` is a
+two-step braid the planner finds automatically.
+
+*Specialty out-of-hub spokes (`accession → OrthoDB / eggNOG / ChEMBL / DrugBank / PDB /
+STRING`) ship in batch C.*
 
 ## How it works
 

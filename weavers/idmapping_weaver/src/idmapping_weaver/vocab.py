@@ -12,7 +12,7 @@ from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 from idmapping_weaver import edges
 
 WEAVER_ID = "idmapping"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "UniProt ID mapping — cross-reference any id to/from the UniProt accession hub"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

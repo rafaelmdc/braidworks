@@ -55,3 +55,22 @@ async def test_live_ensembl_gene_maps_to_accession():
 async def test_live_unknown_id_is_no_match():
     result = await _accessions("map_geneid", "gene.ncbi.id", "999999999")
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_out_of_hub_accession_to_geneid():
+    """Reverse bridge: accession P04637 -> NCBI GeneID 7157 (single-job, out of hub)."""
+    weaver = build_idmapping_weaver()
+    ss = StrandSet.from_strands("e1", [Strand("protein.uniprot.accession", "P04637")])
+    result = (
+        await weaver.execute_batch(
+            "map_to_geneid",
+            [ss],
+            requested_outputs=frozenset({"gene.ncbi.id"}),
+            backend="api",
+        )
+    )[0]
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    gene_ids = {s.type_id: s.value for s in result.strands}["gene.ncbi.id"]
+    # Raw set-output list (canonicalization to int happens on executor fan-out expansion).
+    assert any(str(g) == "7157" for g in gene_ids)

@@ -15,7 +15,7 @@ db_name = "idmapping"
 weaver_id = "idmapping"
 kind = "lookup"
 title = "UniProt ID mapping — cross-reference any id to/from the UniProt accession hub"
-version = "0.1.0"
+version = "0.2.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -137,6 +137,88 @@ set_outputs = ["protein.uniprot.accession"]
   [[capability.group]]
   id = "mapping"
   outputs = ["protein.uniprot.accession"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+# --- OUT of the hub: protein.uniprot.accession -> Y (Batch B, core targets) --
+# Single-job edges from the hub. Each consumes the accession and produces one target id
+# type (a set output) plus the shared mapping count/records detail group.
+
+[[capability]]
+id = "map_to_geneid"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["gene.ncbi.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["gene.ncbi.id"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_to_ensembl"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["gene.ensembl.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["gene.ensembl.id"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_to_ensembl_protein"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.ensembl.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.ensembl.id"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_to_kegg"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["pathway.kegg.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["pathway.kegg.id"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_to_reactome"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["pathway.reactome.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["pathway.reactome.id"]
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
+[[capability]]
+id = "map_to_refseq_protein"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["refseq.protein.id"]
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["refseq.protein.id"]
   [[capability.group]]
   id = "mapping_detail"
   outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]

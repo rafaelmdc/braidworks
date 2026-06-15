@@ -50,6 +50,18 @@ def _into_hub(capability: str, from_db: str, consumes: str) -> Edge:
     )
 
 
+def _out_of_hub(capability: str, to_db: str, produces: str) -> Edge:
+    """A ``protein.uniprot.accession -> Y`` edge (single job from the hub)."""
+    return Edge(
+        capability=capability,
+        from_db=FROM_UNIPROT,
+        to_db=to_db,
+        consumes=ACCESSION,
+        produces=produces,
+        into_hub=False,
+    )
+
+
 # --- Batch A: into the hub (X -> protein.uniprot.accession) -------------------
 EDGES: tuple[Edge, ...] = (
     _into_hub("map_geneid", "GeneID", "gene.ncbi.id"),
@@ -60,6 +72,13 @@ EDGES: tuple[Edge, ...] = (
     _into_hub("map_hgnc", "HGNC", "gene.hgnc.id"),
     _into_hub("map_insdc", "EMBL-GenBank-DDBJ", "nucleotide.insdc.accession"),
     _into_hub("map_pdb", "PDB", "pdb.id"),
+    # --- Batch B: out of the hub (protein.uniprot.accession -> Y), core targets -----
+    _out_of_hub("map_to_geneid", "GeneID", "gene.ncbi.id"),
+    _out_of_hub("map_to_ensembl", "Ensembl", "gene.ensembl.id"),
+    _out_of_hub("map_to_ensembl_protein", "Ensembl_Protein", "protein.ensembl.id"),
+    _out_of_hub("map_to_kegg", "KEGG", "pathway.kegg.id"),
+    _out_of_hub("map_to_reactome", "Reactome", "pathway.reactome.id"),
+    _out_of_hub("map_to_refseq_protein", "RefSeq_Protein", "refseq.protein.id"),
 )
 
 EDGES_BY_CAPABILITY: dict[str, Edge] = {e.capability: e for e in EDGES}
