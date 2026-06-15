@@ -39,6 +39,7 @@ from braidworks.core.references import (
 )
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.strand import Strand, StrandSet
+from braidworks.core.traverse import resolve_traversal, run_traversed
 
 
 # --------------------------------------------------------------------------- #
@@ -271,11 +272,32 @@ def _summary(counts: dict[str, int]) -> None:
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
+def _map_params(
+    parsed: list[tuple[str | None, str, str]], caps_by_id: dict[str, Any]
+) -> dict[str, dict[str, Any]] | None:
+    """Map parsed ``--param`` triples onto the capabilities involved in a route.
+
+    A bare ``NAME=VALUE`` lands on every involved capability that declares ``NAME``;
+    ``CAP:NAME=VALUE`` targets one. On an unmatched parameter (likely a typo) the
+    error is printed to stderr and ``None`` is returned so the caller exits 1."""
+    params: dict[str, dict[str, Any]] = {}
+    for cap_id, name, value in parsed:
+        targets = (
+            [cap_id] if cap_id is not None
+            else [cid for cid, c in caps_by_id.items() if any(p.name == name for p in c.parameters)]
+        )
+        if not targets:
+            _err(f"error: no step in this route accepts a parameter named {name!r}. "
+                 f"See `braidworks weavers` for each capability's parameters.")
+            return None
+        for cid in targets:
+            params.setdefault(cid, {})[name] = value
+    return params
+
+
 def _cmd_weave(args: argparse.Namespace) -> int:
     registry = _load_registry(args.only)
     want = _split_types(args.want)
-    if not want:
-        raise SystemExit("error: --want TYPE[,TYPE…] is required")
     have_types = frozenset(
         [k for k, _ in (_parse_kv(i) for i in (args.have or []))]
         + ([args.in_type] if args.in_type else [])
@@ -285,6 +307,13 @@ def _cmd_weave(args: argparse.Namespace) -> int:
         sets_preview = _collect_inputs(args)
         have_types = frozenset().union(*(s.available_types() for s in sets_preview))
 
+    # Traversal fan-out: --for-each <relationship> / --traverse <capability-id>.
+    traversal_tokens = list(args.for_each or []) + list(args.traverse or [])
+    if traversal_tokens:
+        return _weave_traversed(args, registry, want, have_types, traversal_tokens)
+
+    if not want:
+        raise SystemExit("error: --want TYPE[,TYPE…] is required")
     try:
         braid = Braider(registry).plan(
             available_types=have_types, target_types=frozenset(want)
@@ -294,25 +323,13 @@ def _cmd_weave(args: argparse.Namespace) -> int:
         _err("try `braidworks keys` to see what's produced, or `braidworks path --from … --to …`.")
         return 1
 
-    # Map --param values onto the braid's steps. A bare NAME=VALUE is assigned to
-    # every step whose capability declares a parameter of that name; CAP:NAME=VALUE
-    # targets one capability. An unmatched parameter is a hard error (likely a typo).
-    params: dict[str, dict[str, Any]] = {}
     step_caps = {
         s.capability_id: registry.get_capability(s.weaver_id, s.capability_id)
         for s in braid.steps
     }
-    for cap_id, name, value in _parse_params(args.param):
-        targets = (
-            [cap_id] if cap_id is not None
-            else [cid for cid, c in step_caps.items() if any(p.name == name for p in c.parameters)]
-        )
-        if not targets:
-            _err(f"error: no step in this route accepts a parameter named {name!r}. "
-                 f"See `braidworks weavers` for each capability's parameters.")
-            return 1
-        for cid in targets:
-            params.setdefault(cid, {})[name] = value
+    params = _map_params(_parse_params(args.param), step_caps)
+    if params is None:
+        return 1
 
     sets = _collect_inputs(args)
     _err(f"running {len(braid.steps)} step(s) over {len(sets)} input(s)…")
@@ -337,6 +354,92 @@ def _cmd_weave(args: argparse.Namespace) -> int:
     _emit(records, args.format, want)
     if args.references:
         refs = format_references(references_for_braid(braid, registry))
+        if refs:
+            _err("\nSources:\n" + refs)
+    _summary(
+        {
+            "resolved": len(result.resolved),
+            "unresolved": len(result.unresolved),
+            "review": len(result.review_queue),
+        }
+    )
+    if args.strict and (result.unresolved or result.review_queue):
+        return 1
+    return 0
+
+
+def _weave_traversed(
+    args: argparse.Namespace,
+    registry: BraidRegistry,
+    want: list[str],
+    have_types: frozenset[str],
+    tokens: list[str],
+) -> int:
+    """Run a weave that fans *through* one or more relationships (--for-each/--traverse).
+
+    Each token names a fan capability (a relationship noun, or a full capability id);
+    we run them in order, re-rooting on every produced value, then plan ``--want`` from
+    each child. ``--want`` is optional here — with none you just get the fanned entities.
+    """
+    try:
+        traversals = [resolve_traversal(registry, t) for t in tokens]
+    except NoPlanError as exc:
+        _err(f"no traversal: {exc}")
+        return 1
+
+    # Capabilities that --param can target: the traversal caps, plus a best-effort
+    # preview of the final route (planned from the types available after fanning).
+    caps_by_id = {cid: registry.get_capability(wid, cid) for wid, cid in traversals}
+    if want:
+        est_types = have_types.union(
+            *(registry.get_capability(wid, cid).produces for wid, cid in traversals)
+        )
+        try:
+            preview = Braider(registry).plan(
+                available_types=est_types, target_types=frozenset(want)
+            )
+            for s in preview.steps:
+                caps_by_id.setdefault(
+                    s.capability_id, registry.get_capability(s.weaver_id, s.capability_id)
+                )
+        except (NoPathError, NoPlanError):
+            pass  # the orchestrator re-plans and surfaces the real error below
+    params = _map_params(_parse_params(args.param), caps_by_id)
+    if params is None:
+        return 1
+
+    # --for-each/--traverse imply fanning ALL produced values unless --expand is given.
+    expand = _expand_policy(args.expand) if args.expand else ExpandPolicy.all()
+
+    sets = _collect_inputs(args)
+    # capability ids are already weaver-namespaced (e.g. ncbi.list_orthologs)
+    rels = " → ".join(cid for _wid, cid in traversals)
+    _err(f"fanning through {rels} over {len(sets)} input(s)…")
+    try:
+        result = asyncio.run(
+            run_traversed(
+                registry, sets, traversals, frozenset(want),
+                expand_policy=expand, params=params,
+            )
+        )
+    except (NoPathError, NoPlanError) as exc:
+        _err(f"no route after traversal: {exc}")
+        return 1
+    except ValueError as exc:  # bad param value
+        _err(f"error: {exc}")
+        return 1
+
+    records: list[dict[str, Any]] = []
+    for ss in result.resolved:
+        records.append(_record(ss.entity_id, "resolved", ss, want))
+    for ss, _wr in result.unresolved:
+        records.append(_record(ss.entity_id, "unresolved", ss, want))
+    for item in result.review_queue:
+        records.append(_record(item.strand_set.entity_id, "review", item.strand_set, want))
+
+    _emit(records, args.format, want)
+    if args.references:
+        refs = format_references(result.references)
         if refs:
             _err("\nSources:\n" + refs)
     _summary(
@@ -554,8 +657,15 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("weave", help="plan a route from --have to --want and run it.")
     _add_input_flags(w)
     w.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
-    w.add_argument("--expand", default="none", metavar="none|all|top:K",
-                   help="fan out one→many set outputs (default: none = keep the best one).")
+    w.add_argument("--for-each", action="append", metavar="RELATIONSHIP", dest="for_each",
+                   help="fan the weave THROUGH a relationship, then plan --want from each "
+                        "result (e.g. --for-each orthologs). Repeatable; implies --expand all.")
+    w.add_argument("--traverse", action="append", metavar="CAPABILITY",
+                   help="like --for-each but names a fan capability id directly "
+                        "(e.g. --traverse ncbi.list_orthologs); the unambiguous form.")
+    w.add_argument("--expand", default=None, metavar="none|all|top:K",
+                   help="fan out one→many set outputs (default: none, or all when "
+                        "--for-each/--traverse is used).")
     w.add_argument("--param", action="append", metavar="NAME=VALUE",
                    help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
                         "step. See `braidworks weavers` for each capability's parameters.")

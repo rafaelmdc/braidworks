@@ -83,6 +83,12 @@ from braidworks.core.references import (
     references_for_braid,
 )
 from braidworks.core.registry import BraidRegistry, validate_manifest
+from braidworks.core.traverse import (
+    fan_capabilities,
+    relationship_name,
+    resolve_traversal,
+    run_traversed,
+)
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet
@@ -168,4 +174,8 @@ __all__ = [
     "check_disk",
     "BuildLock",
     "Braider",
+    "fan_capabilities",
+    "relationship_name",
+    "resolve_traversal",
+    "run_traversed",
 ]
