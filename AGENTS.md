@@ -105,6 +105,9 @@ output from the verb (the network view and `keys-index` group by it):
   (e.g. a protein → all its PDB ids / GO terms / pathways). Plural.
 - **`describe_<thing>`** — one identifier → **that one entity's** attributes
   (e.g. one PDB id → its title/method/date). Singular.
+- **`map_to_<x>` / `map_from_<x>`** — deterministic identifier ↔ identifier
+  cross-reference (no fuzziness, no attributes). Use when a single source maps many
+  id types to/from a hub key (e.g. UniProt ID-mapping). See `consumes_any` below.
 
 A `list_*` and its matching `describe_*` form a pair: `list_*` produces a set key,
 `describe_*` *consumes* that same key — so a fanned member is drillable.
@@ -124,6 +127,23 @@ When you add a `set_outputs` key:
   the set key is the *full* distinct ordered set (the fan dimension), uncapped.
 - Bump the weaver and raise its floor to `braidworks-core>=0.2.1` (where
   `Capability.set_outputs` landed). See `docs/fanout-roadmap.md`.
+
+## Alternative inputs (`consumes_any`)
+
+By default a capability's `consumes` is a **conjunction** — it needs *all* those types
+together, and such multi-input capabilities are **not** routed by the planner's graph.
+Set **`consumes_any = true`** to make `consumes` a set of **alternatives**: any one
+present input suffices, and `build_graph` offers an edge from *each* alternative input to
+each produced type. The backend dispatches on whichever input strand is present.
+
+This lets **one** capability be the routable edge for many interchangeable inputs (e.g.
+`{gene id, ensembl id, pdb id, …} → accession`) instead of one near-identical capability
+per source. It's the input-side mirror of routing by **requested output** (one capability,
+one `consumes`, many `produces` — the backend keys off `requested_outputs`). A hub source
+is naturally **two directional capabilities** (`map_to_<hub>` with `consumes_any`,
+`map_from_<hub>` routing by output) — not 20 edges, not one opaque param-tool. See
+`weaverkit/docs/decisions.md` (H) and `uniprot_weaver`'s `map_to_accession` /
+`map_from_accession`. Needs `braidworks-core>=0.8.0`.
 
 ## Per-query parameters (`[[capability.parameter]]`)
 

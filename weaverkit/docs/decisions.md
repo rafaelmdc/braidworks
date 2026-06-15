@@ -121,6 +121,38 @@ no join-eligibility — promote to `SHARED_KEYS` for that.
 
 ---
 
+## H — A capability is one typed edge; `consumes_any` collapses interchangeable inputs
+
+**Decision.** The planner routes on **typed edges** (`consume → produce`), so each
+routable edge is a capability — you can't fold N typed mappings into one capability by
+parameterising the output type (the planner can't read a *parameter* to know what comes
+out). Two refinements keep this from forcing edge-explosion on hub-shaped sources:
+
+1. **Route by requested output.** One capability with one `consumes` and *many*
+   `produces` already routes per output — `build_graph` emits one edge per produced type,
+   and the executor passes the step's `output_types` as `requested_outputs`, so the
+   backend picks its behaviour (e.g. the UniProt `to` db) from *what was asked for*.
+2. **Route by present input (`consumes_any`).** For the symmetric case — many
+   interchangeable *inputs* → one output — set `consumes_any`: `consumes` becomes a set
+   of **alternatives**, `build_graph` emits an edge from *each* one, and the backend
+   dispatches on whichever input strand is present.
+
+A "hub" source (e.g. UniProt ID-mapping, ~100 db pairs through the accession hub) is then
+**two directional capabilities** — `*_to_<hub>` (`consumes_any` over the sources) and
+`*_from_<hub>` (routes by requested output) — not one opaque param-tool and not 20 edges.
+
+**Why not one capability spanning both directions.** A single `{8 ids} → {12 ids}`
+capability would make `build_graph` claim direct one-step edges the source can't do
+(e.g. `gene id → kegg id`, which actually needs two hops through the hub). Splitting by
+direction keeps the graph honest, so the planner composes the real multi-hop route.
+
+**Default stays conjunctive.** Without `consumes_any`, multi-`consumes` means *all
+required* (AND) and such capabilities are still **not** projected into the routing graph —
+unchanged behaviour. See `Capability.consumes_any`, `registry.build_graph`, and the
+`uniprot_weaver` `map_to_accession` / `map_from_accession` capabilities.
+
+---
+
 ## Resulting work
 
 See `weaverkit/docs/backlog.md` for the concrete, prioritized tickets these
