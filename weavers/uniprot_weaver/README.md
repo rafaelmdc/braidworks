@@ -14,6 +14,27 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 | Capability | Consumes | Produces |
 |---|---|---|
 | `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
+| `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id` | `protein.uniprot.accession` (set) + mapping count/records |
+| `map_from_accession` | `protein.uniprot.accession` | **any of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `pathway.kegg.id`, `pathway.reactome.id`, `refseq.protein.id`, `orthodb.group`, `eggnog.group`, `chembl.id`, `drugbank.id`, `pdb.id`, `string.id` (each a set) + mapping count/records |
+
+## ID mapping (`map_to_accession` / `map_from_accession`)
+
+Two directional capabilities over the async, batched UniProt **ID-mapping** service
+(`rest.uniprot.org/idmapping`). UniProt accession is the hub: the API maps **into** it
+(`X → UniProtKB`) or **out of** it (`UniProtKB_AC-ID → Y`).
+
+- `map_to_accession` uses **alternative inputs** (`consumes_any`): supply *any one* of the
+  supported ids and the backend picks the UniProt `from` db. It runs two jobs (reviewed
+  Swiss-Prot + full UniProtKB) and orders accessions **reviewed-first**, so
+  `ExpandPolicy.top()` takes the canonical entry while `ALL` fans every isoform.
+- `map_from_accession` picks the `to` db from **whichever output is requested**, so one
+  capability serves every target — the planner routes `accession → pathway.kegg.id`,
+  `accession → gene.ncbi.id` (reverse bridge), etc.
+
+They compose through the hub automatically — e.g. `gene.ncbi.id → accession → structure`
+(the ortholog→protein→structure chain) or `gene.symbol → accession → pathway.reactome.id`.
+The db tables live in `src/uniprot_weaver/mapping.py`. Backed by the same UniProt source,
+so it stays one weaver, one citation.
 
 ## The bridge
 
