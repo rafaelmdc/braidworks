@@ -1,0 +1,32 @@
+name: Live E2E
+
+# Runs the live, network-hitting end-to-end tests (BRAIDWORKS_RUN_LIVE=1) that the
+# normal CI gates OUT — so upstream API drift / outages (e.g. a weaver's source changing
+# its response shape) surface here instead of silently passing against mocks. It is NOT
+# a required check: it only runs on a schedule or on demand, so flaky third-party APIs
+# can never block a merge. A red run means "go look", not "the code is broken".
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch: {}   # run on demand from the Actions tab
+
+# Don't pile up overlapping live runs.
+concurrency:
+  group: live-e2e
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync workspace
+        run: uv sync --all-extras
+      - name: Live E2E (real network calls)
+        env:
+          BRAIDWORKS_RUN_LIVE: "1"
+        run: make test

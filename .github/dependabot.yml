@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Keep the GitHub Actions we pin (checkout@v4, setup-uv@v5, …) current — picks up
+  # security patches and new majors as a reviewable PR instead of silent staleness.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]  # one batched PR per week, not one per action
