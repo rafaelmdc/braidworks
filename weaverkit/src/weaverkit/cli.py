@@ -355,6 +355,20 @@ def cmd_view(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Run the interactive GUI server (requires the optional ``[serve]`` extra)."""
+    from weaverkit.serve import serve
+
+    try:
+        serve(host=args.host, port=args.port, open_browser=not args.no_open)
+    except RuntimeError as exc:  # missing [serve] extra
+        print(str(exc), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:  # pragma: no cover
+        print()
+    return 0
+
+
 def cmd_references(args: argparse.Namespace) -> int:
     """Print the citations for discovered weavers: all, a chosen set, or a braid path."""
     import json as _json
@@ -466,6 +480,16 @@ def build_parser() -> argparse.ArgumentParser:
         "per originating input",
     )
     p_view.set_defaults(func=cmd_view)
+
+    p_serve = sub.add_parser(
+        "serve", help="run the interactive GUI (build/plan braids in the browser)"
+    )
+    p_serve.add_argument("--port", type=int, default=8765, help="port (default: 8765)")
+    p_serve.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
+    p_serve.add_argument(
+        "--no-open", action="store_true", help="do not open a browser automatically"
+    )
+    p_serve.set_defaults(func=cmd_serve)
 
     p_refs = sub.add_parser(
         "references",

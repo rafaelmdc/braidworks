@@ -26,6 +26,12 @@ weaver reliably instead of vibe-coding it. Three pieces:
   `ExecutionResult.to_json()`) to add a **run-lineage view** per originating
   input — the cardinality fan-out trace, `input → fork ⤜ one leaf per value`.
   No CDN, opens offline.
+- **serve** (`weaverkit serve`) — the *interactive* counterpart to `view`: a localhost
+  GUI to **build** a braid (enter a have-type and a want-type, autocompleted from the
+  network), plan the route live, and copy the generated `braidworks weave` line / Python
+  snippet / braid JSON, with the route's source citations. Requires the optional extra
+  (`pip install 'weaverkit[serve]'` — FastAPI + uvicorn); the base package stays
+  stdlib-only. Localhost-only; the static `view` export is unaffected.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
 the `--strict` regimes, dispatcher/backend split) live in

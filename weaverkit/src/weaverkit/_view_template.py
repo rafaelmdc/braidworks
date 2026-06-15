@@ -154,6 +154,48 @@ HTML_TEMPLATE = r"""<!doctype html>
     background: rgba(50,28,10,0.7); border: 1px solid rgba(230,165,90,0.28);
     border-radius: 10px; padding: 9px 13px; backdrop-filter: blur(8px);
   }
+  /* Builder (weaverkit serve only) — top-left, mirrors .panel */
+  .builder {
+    position: fixed; top: 80px; left: 18px; z-index: 10; width: 300px;
+    max-height: calc(100vh - 112px); overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-edge); border-radius: 14px;
+    padding: 16px 16px 18px; font-size: 12.5px;
+    box-shadow: 0 22px 54px rgba(0,0,0,0.42);
+  }
+  .builder h2 {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim); margin: 0 0 12px;
+  }
+  .builder label { display: block; margin-bottom: 9px; color: var(--ink-dim); font-size: 11px; }
+  .builder input, .builder select {
+    width: 100%; margin-top: 4px; box-sizing: border-box;
+    background: rgba(10,16,30,0.6); color: var(--ink);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 7px 9px; font-size: 12.5px;
+  }
+  .builder .brow { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
+  .builder .brow select { width: auto; flex: 1; }
+  .builder button.go {
+    background: rgba(120,150,220,0.18); color: var(--ink); cursor: pointer;
+    border: 1px solid rgba(120,150,220,0.4); border-radius: 8px; padding: 7px 14px; font-size: 12.5px;
+  }
+  .builder button.go:hover { background: rgba(120,150,220,0.3); }
+  #b-out { margin-top: 14px; }
+  #b-out .berr { color: #e6a3a3; font-size: 11.5px; line-height: 1.45; }
+  #b-out .bsum { color: var(--ink); margin-bottom: 10px; }
+  .btabs { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .btab { cursor: pointer; font-size: 10.5px; color: var(--ink-dim);
+    border: 1px solid var(--panel-edge); border-radius: 7px; padding: 3px 8px; }
+  .btab.on { color: var(--ink); border-color: rgba(120,150,220,0.4); }
+  #b-out pre {
+    background: rgba(8,12,24,0.7); border: 1px solid var(--panel-edge); border-radius: 8px;
+    padding: 9px; font-size: 10.5px; line-height: 1.4; overflow-x: auto; white-space: pre-wrap;
+    word-break: break-word; margin: 0;
+  }
+  .bcopy { cursor: pointer; float: right; font-size: 10px; color: var(--ink-dim);
+    border: 1px solid var(--panel-edge); border-radius: 6px; padding: 1px 6px; margin: -2px 0 4px 6px; }
+  .bcite { font-size: 10.5px; color: var(--ink-dim); line-height: 1.5; margin-top: 10px; }
+  .bcite b { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -182,6 +224,28 @@ HTML_TEMPLATE = r"""<!doctype html>
     <div id="weavers"></div>
     <div class="note">Click a weaver (or a node) for its card.</div>
   </section>
+</div>
+
+<div class="builder" id="builder" style="display:none">
+  <h2>Build a braid</h2>
+  <label>Have (input types)
+    <input id="b-have" list="b-types" placeholder="e.g. protein.query" autocomplete="off">
+  </label>
+  <label>Want (target types)
+    <input id="b-want" list="b-types" placeholder="e.g. pdb.id" autocomplete="off">
+  </label>
+  <datalist id="b-types"></datalist>
+  <div class="brow">
+    <select id="b-policy" title="backend policy">
+      <option value="local_first">local_first</option>
+      <option value="api_first">api_first</option>
+      <option value="local_only">local_only</option>
+      <option value="api_only">api_only</option>
+    </select>
+    <button class="go" id="b-plan">Plan ▶</button>
+  </div>
+  <div class="note">Comma-separate multiple types. Autocomplete from the network.</div>
+  <div id="b-out"></div>
 </div>
 
 <div class="card" id="card" style="display:none"></div>
@@ -743,13 +807,117 @@ addEventListener("mousemove", (e) => {
 });
 addEventListener("mouseup", () => { cardDrag = null; });
 
+// ---- builder (weaverkit serve only) ----------------------------------------
+// Interactive only when served over HTTP; a file:// export stays the static picture.
+const SERVED = location.protocol === "http:" || location.protocol === "https:";
+
+function newParticles(L) {
+  return L.edges.map(() => Array.from({ length: 3 }, (_, i) => i / 3 + Math.random() * 0.04));
+}
+
+// Inject a planned route as a view (same shape as DATA.paths), reusing the path
+// renderer. A single reusable "built" slot, so re-planning replaces rather than piles up.
+function addPlanView(path) {
+  const view = { key: "built", label: path.title, graph: path, path: path };
+  let i = VIEWS.findIndex((v) => v.key === "built");
+  if (i < 0) { i = VIEWS.length; VIEWS.push(view); } else { VIEWS[i] = view; }
+  layouts[i] = computeLayout(path);
+  particles[i] = newParticles(layouts[i]);
+  selectView(i);
+}
+
+function splitTypes(s) {
+  return (s || "").split(/[,\s]+/).map((t) => t.trim()).filter(Boolean);
+}
+
+function setHash(from, to) {
+  location.hash = "have=" + encodeURIComponent(from.join(",")) +
+    "&want=" + encodeURIComponent(to.join(","));
+}
+
+function copyBtn(text) {
+  return `<span class="bcopy" onclick='navigator.clipboard.writeText(this.nextSibling.textContent)'>copy</span>`;
+}
+
+function renderArtifacts(d) {
+  const a = d.artifacts, p = d.path;
+  const tabs = [
+    ["weave", "CLI (run)", a.cli_weave],
+    ["path", "CLI (route)", a.cli_path],
+    ["python", "Python", a.python],
+    ["json", "JSON", JSON.stringify(a.braid, null, 2)],
+  ];
+  let h = `<div class="bsum"><b>${esc(String(p.step_count))}</b> step(s): ` +
+    esc(p.from_types.join(", ")) + " → " + esc(p.to_types.join(", ")) + "</div>";
+  h += `<div class="btabs">` +
+    tabs.map((t, i) => `<span class="btab${i === 0 ? " on" : ""}" data-i="${i}">${esc(t[1])}</span>`).join("") +
+    `</div>`;
+  h += tabs.map((t, i) =>
+    `<div class="bpane" data-i="${i}" style="display:${i === 0 ? "block" : "none"}">` +
+    copyBtn() + `<pre>${esc(t[2])}</pre></div>`).join("");
+  if (d.citations && d.citations.length) {
+    h += `<div class="bcite"><b>Cite</b><br>` + d.citations.map(esc).join("<br>") + `</div>`;
+  }
+  return h;
+}
+
+function whyNoPath(msg) {
+  return `<div class="berr"><b>No route.</b><br>${esc(msg)}</div>`;
+}
+
+async function runPlan() {
+  const out = document.getElementById("b-out");
+  const from = splitTypes(document.getElementById("b-have").value);
+  const to = splitTypes(document.getElementById("b-want").value);
+  const policy = document.getElementById("b-policy").value;
+  if (!from.length || !to.length) { out.innerHTML = whyNoPath("pick a Have and a Want type"); return; }
+  out.innerHTML = `<div class="bsum">planning…</div>`;
+  try {
+    const r = await fetch("/api/plan", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from_types: from, to_types: to, policy }),
+    });
+    const d = await r.json();
+    if (!d.ok) { out.innerHTML = whyNoPath(d.error || "unroutable"); return; }
+    setHash(from, to);
+    addPlanView(d.path);
+    out.innerHTML = renderArtifacts(d);
+    out.querySelectorAll(".btab").forEach((tab) => {
+      tab.onclick = () => {
+        const i = tab.dataset.i;
+        out.querySelectorAll(".btab").forEach((t) => t.classList.toggle("on", t === tab));
+        out.querySelectorAll(".bpane").forEach((p) => { p.style.display = p.dataset.i === i ? "block" : "none"; });
+      };
+    });
+  } catch (e) { out.innerHTML = whyNoPath(String(e)); }
+}
+
+function setupBuilder() {
+  if (!SERVED) return;
+  document.getElementById("builder").style.display = "block";
+  const dl = document.getElementById("b-types");
+  (DATA.network.nodes || []).filter((n) => n.kind === "type")
+    .map((n) => n.key).sort()
+    .forEach((k) => { const o = document.createElement("option"); o.value = k; dl.appendChild(o); });
+  document.getElementById("b-plan").onclick = runPlan;
+  ["b-have", "b-want"].forEach((id) =>
+    document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") runPlan(); }));
+  // Deep link: #have=...&want=... pre-fills and auto-plans (shareable braid).
+  const m = new URLSearchParams(location.hash.slice(1));
+  if (m.get("have") || m.get("want")) {
+    document.getElementById("b-have").value = (m.get("have") || "").replace(/,/g, ", ");
+    document.getElementById("b-want").value = (m.get("want") || "").replace(/,/g, ", ");
+    runPlan();
+  }
+}
+
 // ---- boot ------------------------------------------------------------------
 if (DATA.meta.problems && DATA.meta.problems.length) {
   const b = document.getElementById("banner");
   b.style.display = "block";
   b.innerHTML = "<b>note</b><br>" + DATA.meta.problems.join("<br>");
 }
-resize(); renderNav(); renderPanels(); fitView(); requestAnimationFrame(frame);
+resize(); renderNav(); renderPanels(); fitView(); setupBuilder(); requestAnimationFrame(frame);
 </script>
 </body>
 </html>

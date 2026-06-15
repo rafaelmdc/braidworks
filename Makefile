@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index view lint fmt clean tags tags-check
+.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index view serve lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -45,6 +45,9 @@ VIEW_OUT ?= docs/braidworks-network.html
 view:  ## Render the weaver-network view -> $(VIEW_OUT) (VIEW_OUT=.. to override; FROM=.. TO=.. adds a braid path)
 	uv run weaverkit view --out $(VIEW_OUT) \
 		$(if $(FROM),$(foreach k,$(FROM),--from $(k))) $(if $(TO),$(foreach k,$(TO),--to $(k)))
+
+serve:  ## Run the interactive GUI (weaverkit serve; needs the [serve] extra: fastapi+uvicorn)
+	uv run --with fastapi --with uvicorn weaverkit serve $(if $(PORT),--port $(PORT))
 
 # Lint every package and its tests. Weaver src/tests are derived from WEAVER_DIRS,
 # so a new weaver is linted automatically.
