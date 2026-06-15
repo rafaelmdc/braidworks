@@ -203,3 +203,18 @@ def test_app_serves_page_and_plan_endpoint():
     # The request body is a real Pydantic model — a malformed payload is a 422, not a crash.
     bad = client.post("/api/plan", json={"from_types": "not-a-list", "to_types": []})
     assert bad.status_code == 422
+
+
+def test_run_stream_emits_sse_done_event():
+    testclient = pytest.importorskip(
+        "fastapi.testclient", reason="weaverkit[serve] extra not installed"
+    )
+    from weaverkit.serve import create_app
+
+    client = testclient.TestClient(create_app())
+    # A trivial 0-step run (the target is already available) — no network, ends immediately.
+    body = client.get(
+        "/api/run/stream",
+        params={"have": '{"protein.query": "P04637"}', "want": "protein.query"},
+    ).text
+    assert '"event": "done"' in body and '"ok": true' in body

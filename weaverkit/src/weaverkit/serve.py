@@ -140,41 +140,17 @@ def _rows(result_json: dict) -> tuple[list[str], list[dict]]:
     return sorted(columns), rows
 
 
-def run_response(
-    registry,
-    have: dict,
-    want: list,
-    *,
-    policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
-    expand: str = "top",
-    k: int = 1,
-) -> dict:
-    """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
-
-    Returns ``{"ok": True, "path", "result", "runs", "columns", "rows", "summary"}`` —
-    ``result`` is ``ExecutionResult.to_json()`` (carries the per-step ``completion`` the
-    front-end replays as the light-up), ``runs`` the fan-out lineage views, ``rows`` the
-    flat results table. ``{"ok": False, "error"}`` when unroutable. Pure + sync (drives the
-    async executor via ``asyncio.run``), so it is unit-testable without the web dependency.
-    """
+def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
+    """Normalize have/want; return ``(have, want, error)`` (error set if either is empty)."""
     have = {str(t): v for t, v in (have or {}).items() if str(t).strip()}
     want = [str(t) for t in (want or [])]
     if not have or not want:
-        return {"ok": False, "error": "enter a value for at least one Have type and a Want type"}
+        return have, want, "enter a value for at least one Have type and a Want type"
+    return have, want, None
 
-    braider = Braider(registry)
-    try:
-        braid = braider.plan(frozenset(have), frozenset(want), backend_policy=policy)
-    except (NoPathError, NoPlanError) as exc:
-        return {"ok": False, "error": str(exc)}
 
-    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
-    executor = LocalExecutor(registry)
-    result = asyncio.run(
-        executor.execute(
-            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy
-        )
-    )
+def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPolicy) -> dict:
+    """Assemble the run response from an ``ExecutionResult`` (shared by sync + streaming)."""
     rj = result.to_json()
     runs, _dropped = build_run_views(rj, registry)
     columns, rows = _rows(rj)
@@ -193,14 +169,52 @@ def run_response(
     }
 
 
+def run_response(
+    registry,
+    have: dict,
+    want: list,
+    *,
+    policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+    expand: str = "top",
+    k: int = 1,
+) -> dict:
+    """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
+
+    Returns ``{"ok": True, "path", "result", "runs", "columns", "rows", "summary"}`` —
+    ``result`` is ``ExecutionResult.to_json()`` (carries the per-step ``completion`` the
+    front-end replays as the light-up), ``runs`` the fan-out lineage views, ``rows`` the
+    flat results table. ``{"ok": False, "error"}`` when unroutable. Pure + sync (drives the
+    async executor via ``asyncio.run``), so it is unit-testable without the web dependency.
+    """
+    have, want, err = _clean_run_inputs(have, want)
+    if err:
+        return {"ok": False, "error": err}
+    braider = Braider(registry)
+    try:
+        braid = braider.plan(frozenset(have), frozenset(want), backend_policy=policy)
+    except (NoPathError, NoPlanError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
+    result = asyncio.run(
+        LocalExecutor(registry).execute(
+            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy
+        )
+    )
+    return _run_payload(registry, result, have, want, policy=policy)
+
+
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
 
 
 def create_app():
     """Build the FastAPI app. Raises a clear error if the ``[serve]`` extra is missing."""
+    import asyncio as _asyncio
+    import json as _json
+
     try:
         from fastapi import FastAPI
-        from fastapi.responses import HTMLResponse, JSONResponse
+        from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
         from pydantic import BaseModel, Field
     except ImportError as exc:  # pragma: no cover - exercised only without the extra
         raise RuntimeError(_SERVE_EXTRA_HINT) from exc
@@ -249,6 +263,51 @@ def create_app():
         return run_response(
             registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k
         )
+
+    @app.get("/api/run/stream")
+    def api_run_stream(have: str = "{}", want: str = "", policy: str = "local_first",
+                       expand: str = "top", k: int = 3):
+        # GET + query params so the browser drives it with a native EventSource (SSE).
+        # `have` is a JSON object; `want` is comma-separated.
+        def sse(obj) -> str:
+            return f"data: {_json.dumps(obj)}\n\n"
+
+        async def stream():
+            registry = discover_registry().registry
+            try:
+                bpolicy = parse_policy(policy)
+                have_map = _json.loads(have or "{}")
+            except (ValueError, TypeError) as exc:
+                yield sse({"event": "error", "error": str(exc)})
+                return
+            want_list = [t for t in (want or "").split(",") if t]
+            hm, wl, err = _clean_run_inputs(have_map, want_list)
+            if err:
+                yield sse({"event": "error", "error": err})
+                return
+            try:
+                braid = Braider(registry).plan(frozenset(hm), frozenset(wl), backend_policy=bpolicy)
+            except (NoPathError, NoPlanError) as exc:
+                yield sse({"event": "error", "error": str(exc)})
+                return
+
+            queue: _asyncio.Queue = _asyncio.Queue()
+            ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in hm.items()])
+            task = _asyncio.create_task(LocalExecutor(registry).execute(
+                braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=bpolicy,
+                on_event=lambda ev: queue.put_nowait(ev)))
+            # Drain wave events live until the run finishes, then emit the final payload.
+            while not (task.done() and queue.empty()):
+                try:
+                    ev = await _asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield sse({"event": "wave", **ev})
+                except _asyncio.TimeoutError:
+                    continue
+            result = await task
+            payload = _run_payload(registry, result, hm, wl, policy=bpolicy)
+            yield sse({"event": "done", **payload})
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
 
     return app
 

@@ -224,26 +224,43 @@ function runControlsHTML(path) {
     </div></div>`;
 }
 
-async function runBraid() {
+// Provisional live light-up: reveal the planned route wave-by-wave as SSE events arrive
+// (statuses provisional "ok"; the final "done" event recolors via startRunAnim).
+function initLiveAnim(path) {
+  const waveOf = {};
+  (path.waves || []).forEach((w, wi) => w.forEach((si) => { waveOf["op:" + si] = wi; }));
+  const perNode = {};
+  (path.nodes || []).forEach((n) => {
+    if (n.kind === "op") perNode[n.id] = { wave: waveOf[n.id] || 0, status: "ok" };
+  });
+  runAnim = { live: true, revealedWave: -1, perNode, waveMs: 0 };
+}
+
+// Run via Server-Sent Events: the braid lights up live, wave by wave, as the executor's
+// on_event fires server-side. (POST /api/run remains for non-streaming callers.)
+function runBraid() {
   if (!lastPlan) return;
-  const out = document.getElementById("b-out");
   const have = parseValues(lastPlan.from, document.getElementById("r-values").value);
-  if (!Object.keys(have).length) { return; }
+  if (!Object.keys(have).length) return;
   const expand = document.getElementById("r-expand").value;
   const k = parseInt(document.getElementById("r-k").value, 10) || 3;
   const btn = document.getElementById("r-run"); btn.textContent = "running…"; btn.disabled = true;
-  try {
-    const r = await fetch("/api/run", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ have, want: lastPlan.to, policy: lastPlan.policy, expand, k }),
-    });
-    const d = await r.json();
-    if (!d.ok) { renderResults(null, d.error); return; }
-    addPlanView(d.path);
-    startRunAnim(d.path, d.result);
-    renderResults(d);
-  } catch (e) { renderResults(null, String(e)); }
-  finally { btn.textContent = "Run ▶"; btn.disabled = false; }
+  const done = () => { btn.textContent = "Run ▶"; btn.disabled = false; };
+  initLiveAnim(lastPlan.path);
+  const qs = new URLSearchParams({
+    have: JSON.stringify(have), want: lastPlan.to.join(","),
+    policy: lastPlan.policy, expand, k: String(k),
+  });
+  const es = new EventSource("/api/run/stream?" + qs.toString());
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.event === "wave") { runAnim.revealedWave = ev.wave; }
+    else if (ev.event === "done") {
+      es.close(); done();
+      addPlanView(ev.path); startRunAnim(ev.path, ev.result); renderResults(ev);
+    } else if (ev.event === "error") { es.close(); done(); renderResults(null, ev.error); }
+  };
+  es.onerror = () => { es.close(); done(); };
 }
 
 function renderResults(d, err) {
@@ -306,7 +323,7 @@ async function runPlan() {
     runAnim = null;  // clear any prior run light-up when re-planning
     setHash(from, to);
     addPlanView(d.path);
-    lastPlan = { from: d.path.from_types, to: d.path.to_types, policy };
+    lastPlan = { from: d.path.from_types, to: d.path.to_types, policy, path: d.path };
     out.innerHTML = renderArtifacts(d);
     out.querySelectorAll(".btab[data-i]").forEach((tab) => {
       tab.onclick = () => {
