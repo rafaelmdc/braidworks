@@ -15,7 +15,7 @@ db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
 title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
-version = "0.1.1"
+version = "0.1.2"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -55,6 +55,11 @@ id = "resolve_protein"
 consumes = ["protein.query"]
 max_batch_size = 25
 always_computed_groups = ["identity"]
+
+  [[capability.parameter]]
+  name = "organism"
+  type = "string"
+  description = "NCBI taxid to constrain the species (e.g. 9606 human, 10090 mouse). A bare gene symbol like TP53 otherwise resolves to whichever species ranks first; unset = any."
 
   [[capability.group]]
   id = "identity"
