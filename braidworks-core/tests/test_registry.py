@@ -32,6 +32,43 @@ def test_multi_input_capability_registered_but_not_an_edge():
     assert "c" not in graph
 
 
+def test_consumes_any_projects_one_edge_per_alternative_input():
+    """An ``consumes_any`` capability is routable from *each* alternative input."""
+    cap = Capability(
+        id="map.to_acc",
+        consumes=frozenset({"gene.id", "ensembl.id", "pdb.id"}),
+        produces=frozenset({"accession"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"accession"})),),
+        backends=("api",),
+        consumes_any=True,
+    )
+    reg = BraidRegistry()
+    reg.register(make_weaver(cap, weaver_id="uniprot"))
+    graph = reg.build_graph()
+    for src in ("gene.id", "ensembl.id", "pdb.id"):
+        assert graph.has_edge(src, "accession"), src
+
+
+def test_consumes_any_routes_each_input_to_accession():
+    from braidworks.core.planner import Braider
+
+    cap = Capability(
+        id="map.to_acc",
+        consumes=frozenset({"gene.id", "ensembl.id"}),
+        produces=frozenset({"accession"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"accession"})),),
+        backends=("api",),
+        consumes_any=True,
+    )
+    reg = BraidRegistry()
+    reg.register(make_weaver(cap, weaver_id="uniprot"))
+    braider = Braider(reg)
+    for src in ("gene.id", "ensembl.id"):
+        braid = braider.plan(frozenset({src}), frozenset({"accession"}))
+        assert len(braid.steps) == 1
+        assert braid.steps[0].input_types == frozenset({src})
+
+
 def test_empty_weaver_id_rejected():
     reg = BraidRegistry()
     with pytest.raises(InvalidManifestError):

@@ -131,6 +131,15 @@ class Capability:
     # subset of ``produces``. Empty (the default) means every output is scalar — the
     # historical behaviour, so nothing forks unless a weaver opts a key in.
     set_outputs: frozenset[str] = frozenset()
+    # Alternative inputs (OR-consume). By default ``consumes`` is **conjunctive** — the
+    # capability needs *all* of those types together (and a multi-input capability is not
+    # routed by the planner's type→type graph). When ``consumes_any`` is set, ``consumes``
+    # is instead a set of **alternatives**: any *one* present input suffices, and the
+    # backend dispatches on whichever is supplied. The graph then offers an edge from
+    # *each* alternative input to each produced type, so one capability can serve many
+    # interchangeable inputs (e.g. a UniProt ID-mapping ``{gene id, ensembl id, …} →
+    # accession``). Requires ``consumes`` to be non-empty (enforced by the registry).
+    consumes_any: bool = False
     # Per-query knobs this capability accepts (filters, sort, page size, thresholds).
     # Declarative, validated, and defaulted; the planner never routes on them. Empty
     # (the default) means the capability takes no parameters.
@@ -202,6 +211,7 @@ class Capability:
             "cost": self.cost,
             "always_computed_groups": sorted(self.always_computed_groups),
             "set_outputs": sorted(self.set_outputs),
+            "consumes_any": self.consumes_any,
             "parameters": [p.to_json() for p in self.parameters],
         }
 
@@ -217,6 +227,7 @@ class Capability:
             cost=data.get("cost", 1.0),
             always_computed_groups=frozenset(data.get("always_computed_groups", ())),
             set_outputs=frozenset(data.get("set_outputs", ())),
+            consumes_any=data.get("consumes_any", False),
             parameters=tuple(Parameter.from_json(p) for p in data.get("parameters", ())),
         )
 

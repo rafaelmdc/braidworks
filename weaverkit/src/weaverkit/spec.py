@@ -104,6 +104,10 @@ class CapabilitySpec:
     # weaver emits a *list* and the executor may fork one child per value (per
     # ExpandPolicy). Must be a subset of ``produces``. Maps to Capability.set_outputs.
     set_outputs: tuple[str, ...] = ()
+    # When true, ``consumes`` is a set of *alternatives* (any one input suffices) rather
+    # than a conjunction (all required). Maps to Capability.consumes_any: the planner then
+    # offers an edge from each alternative input to each produced type.
+    consumes_any: bool = False
     # Per-query knobs the capability accepts (maps to Capability.parameters).
     parameters: tuple[ParameterSpec, ...] = ()
 
@@ -129,6 +133,7 @@ class CapabilitySpec:
                 cost=float(data.get("cost", 1.0)),
                 always_computed_groups=tuple(data.get("always_computed_groups", ())),
                 set_outputs=tuple(data.get("set_outputs", ())),
+                consumes_any=bool(data.get("consumes_any", False)),
                 parameters=tuple(
                     ParameterSpec.from_dict(p) for p in data.get("parameter", ())
                 ),

@@ -105,6 +105,22 @@ def test_capability_produces_is_union_of_groups():
     assert cap.produces == ("a", "b", "c")
 
 
+def test_consumes_any_defaults_false_and_parses_true():
+    cap = CapabilitySpec.from_dict(
+        {"id": "c", "consumes": ["a"], "group": [{"id": "g", "outputs": ["x"]}]}
+    )
+    assert cap.consumes_any is False
+    cap2 = CapabilitySpec.from_dict(
+        {
+            "id": "c",
+            "consumes": ["a", "b"],
+            "consumes_any": True,
+            "group": [{"id": "g", "outputs": ["x"]}],
+        }
+    )
+    assert cap2.consumes_any is True
+
+
 def test_resolved_weaver_id_falls_back_to_db_name():
     data = _valid_dict()
     del data["weaver"]["weaver_id"]

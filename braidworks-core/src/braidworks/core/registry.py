@@ -114,7 +114,11 @@ class BraidRegistry:
 
         Each single-input capability ``consumes={A}, produces={B, C}`` adds edges
         ``A→B`` and ``A→C``, annotated with ``(weaver_id, capability_id, cost)``.
-        Multi-input capabilities are skipped. The graph is a **multigraph**: when two
+        An **alternative-input** capability (``consumes_any``) treats its ``consumes`` as
+        *alternatives* — any one suffices — so it adds an edge from *each* consumed type to
+        each produced type (``consumes={A, B}, produces={C}`` → ``A→C`` and ``B→C``); the
+        backend dispatches on whichever input is supplied. Plain multi-input (conjunctive)
+        capabilities are skipped. The graph is a **multigraph**: when two
         capabilities offer the *same* ``A→B`` edge (interchangeable sources — e.g. two
         taxonomy resolvers ``organism.name → taxon.id``), both are kept as parallel
         edges. Routing takes the cheapest (Dijkstra minimizes over parallels), but the
@@ -128,16 +132,23 @@ class BraidRegistry:
         graph = nx.MultiDiGraph()
         for weaver_id, manifest in self._manifests.items():
             for cap in manifest.capabilities:
-                if len(cap.consumes) != 1:
-                    continue  # multi-input capabilities are not in the MVP graph
-                (source,) = tuple(cap.consumes)
-                for target in cap.produces:
-                    graph.add_edge(
-                        source,
-                        target,
-                        weaver_id=weaver_id,
-                        capability_id=cap.id,
-                        cost=cap.cost,
-                    )
+                # consumes_any => each consumed type is an independent edge source
+                # (alternatives); a plain multi-input capability is conjunctive and not
+                # routed by the type→type graph.
+                if cap.consumes_any:
+                    sources = tuple(cap.consumes)
+                elif len(cap.consumes) == 1:
+                    sources = tuple(cap.consumes)
+                else:
+                    continue
+                for source in sources:
+                    for target in cap.produces:
+                        graph.add_edge(
+                            source,
+                            target,
+                            weaver_id=weaver_id,
+                            capability_id=cap.id,
+                            cost=cap.cost,
+                        )
         self._graph = graph
         return graph
