@@ -204,9 +204,16 @@ to pass a capability's filters/options (see `braidworks weavers` for what each a
 uv run weaverkit view --out net.html # render the offline network diagram
 make index                           # rebuild docs/keys-index.md + weavers-index.tsv
 make view                            # rebuild docs/braidworks-network.html
+make serve                           # interactive GUI: build/run braids in the browser
 
 ncbi-weaver ensure                  # one-time: build the local NCBI taxonomy DB (optional)
 ```
+
+The **GUI** (`make serve`, or `pip install 'weaverkit[serve]'` then `weaverkit serve`)
+opens a localhost app to build a braid (pick a have-type and a want-type), see the route
+and the generated `braidworks weave` command, then run it and watch the braid light up —
+with a results table, CSV/TSV/JSON export, graph search, and saved recipes. FastAPI lives
+in the optional `[serve]` extra; the base install stays stdlib-only.
 
 `weaverkit` is also the toolkit for *building* a new weaver from a spec — see below.
 
