@@ -9,13 +9,21 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from braidworks.core.braid import Braid, CapabilityInvocation, FallbackCondition
+from braidworks.core.braid import (
+    BackendPolicy,
+    Braid,
+    CapabilityInvocation,
+    FallbackCondition,
+)
 from braidworks.core.cache import StrandCache, compute_cache_key
 from braidworks.core.capability import Capability
+from braidworks.core.errors import ErrorCategory, classify_error
 from braidworks.core.exceptions import (
     BackendConfigurationError,
     BackendUnavailable,
     BraidworksError,
+    NoPathError,
+    NoPlanError,
     ReviewRequired,
 )
 from braidworks.core.references import Reference, references_for_braid
@@ -118,13 +126,20 @@ class ReviewQueueItem:
 
 @dataclass
 class ExecutionError:
-    """A structural/technical failure captured without a raw Exception object."""
+    """A structural/technical failure captured without a raw Exception object.
+
+    ``category`` buckets the failure (upstream 5xx, rate-limit, timeout, …) so callers
+    get a plain-English reason instead of a raw message. ``recovered`` is set when the
+    executor rerouted around this failed node and reached the targets another way — the
+    error is then a *report*, not a fatal outcome (the entity is among ``resolved``)."""
 
     strand_set: StrandSet
     error_type: str
     message: str
     step_index: int | None = None  # None = preflight failure
     capability_id: str | None = None  # None = preflight failure
+    category: ErrorCategory = ErrorCategory.UNKNOWN
+    recovered: bool = False
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -133,6 +148,8 @@ class ExecutionError:
             "message": self.message,
             "step_index": self.step_index,
             "capability_id": self.capability_id,
+            "category": self.category.value,
+            "recovered": self.recovered,
         }
 
     @classmethod
@@ -143,6 +160,8 @@ class ExecutionError:
             message=data["message"],
             step_index=data.get("step_index"),
             capability_id=data.get("capability_id"),
+            category=ErrorCategory(data.get("category", "unknown")),
+            recovered=data.get("recovered", False),
         )
 
 
@@ -165,6 +184,17 @@ class ExecutionResult:
             + len(self.review_queue)
             + len(self.errors)
         )
+
+    def fatal_errors(self) -> list[ExecutionError]:
+        """Errors that actually blocked an entity — i.e. were not recovered by a reroute
+        and whose entity reached none of its targets. A failure on one branch of an
+        otherwise-resolved entity (partial success) is reported but *not* fatal, so a
+        caller can exit non-zero only when the request truly could not be met."""
+        resolved_ids = {id(ss) for ss in self.resolved}
+        return [
+            e for e in self.errors
+            if not e.recovered and id(e.strand_set) not in resolved_ids
+        ]
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -233,6 +263,8 @@ class LocalExecutor:
         confidence_threshold: float = 0.0,
         chunk_size: int = 10_000,
         max_expansion: int = 10_000,
+        backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+        reroute: bool = True,
     ) -> ExecutionResult:
         result = ExecutionResult()
         # Citations for every source this braid draws on (issue #1). Computed from the
@@ -251,10 +283,17 @@ class LocalExecutor:
                         message=f"missing required input types: {sorted(missing)}",
                         step_index=None,
                         capability_id=None,
+                        category=ErrorCategory.INPUT,
                     )
                 )
             else:
                 survivors.append(ss)
+
+        # Entities that errored mid-braid and still miss a target — candidates for a
+        # one-shot reroute around the failed node(s). Collected only when reroute is on.
+        reroute_out: list[tuple[StrandSet, frozenset[tuple[str, str]]]] | None = (
+            [] if reroute else None
+        )
 
         # Chunked processing: each chunk runs through all steps before the next.
         for start in range(0, len(survivors), chunk_size):
@@ -271,8 +310,69 @@ class LocalExecutor:
                 params=params or {},
                 confidence_threshold=confidence_threshold,
                 max_expansion=max_expansion,
+                reroute_out=reroute_out,
+            )
+
+        if reroute_out:
+            await self._reroute(
+                braid,
+                reroute_out,
+                result,
+                review_policy=review_policy,
+                error_policy=error_policy,
+                merge_policy=merge_policy,
+                expand_policy=expand_policy,
+                expand_by_type=expand_by_type or {},
+                params=params or {},
+                confidence_threshold=confidence_threshold,
+                max_expansion=max_expansion,
+                backend_policy=backend_policy,
             )
         return result
+
+    async def _reroute(
+        self,
+        braid: Braid,
+        candidates: list[tuple[StrandSet, frozenset[tuple[str, str]]]],
+        result: ExecutionResult,
+        *,
+        backend_policy: BackendPolicy,
+        **run_kwargs: Any,
+    ) -> None:
+        """One bounded re-plan per error-stranded entity, around its failed node(s).
+
+        For each entity that errored mid-braid and still misses a target, re-plan from
+        what it *currently has* to the missing targets with the failed capabilities
+        excluded. If the graph offers an alternate route (e.g. a second producer of an
+        intermediate type), run it and the entity joins ``resolved`` — its original
+        error stays in ``result.errors`` but flagged ``recovered``. If no route exists,
+        the entity stays reported by its existing error (a clean "else, just report").
+        """
+        from braidworks.core.planner import Braider
+
+        braider = Braider(self._registry)
+        for ss, failed_caps in candidates:
+            missing = braid.to_types - ss.available_types()
+            if not missing:
+                result.resolved.append(ss)  # nothing left to route; targets already met
+                _flag_recovered(result, ss)
+                continue
+            try:
+                alt = braider.plan(
+                    ss.available_types(), missing,
+                    backend_policy=backend_policy, exclude=failed_caps,
+                )
+            except (NoPathError, NoPlanError):
+                continue  # no alternate path → entity stays reported via its error
+            sub = await self.execute(
+                alt, [ss], backend_policy=backend_policy, reroute=False, **run_kwargs
+            )
+            result.resolved.extend(sub.resolved)
+            result.unresolved.extend(sub.unresolved)
+            result.review_queue.extend(sub.review_queue)
+            result.errors.extend(sub.errors)
+            if sub.resolved:
+                _flag_recovered(result, ss)
 
     async def _run_chunk(
         self,
@@ -288,10 +388,15 @@ class LocalExecutor:
         params: dict[str, dict[str, Any]],
         confidence_threshold: float,
         max_expansion: int,
+        reroute_out: list[tuple[StrandSet, frozenset[tuple[str, str]]]] | None = None,
     ) -> None:
         live = list(chunk)  # entities still progressing (not terminally bucketed)
         terminal: set[int] = set()  # id(entity) already placed in errors/review_queue
         representative: dict[int, WeaveResult] = {}  # a NO_MATCH to attach if unresolved
+        # id(entity) -> the (weaver, capability) it errored on. A step error is
+        # branch-local (the entity keeps flowing through its other branches); this records
+        # the failed node(s) so a fully-blocked entity can be rerouted around them.
+        errored: dict[int, set[tuple[str, str]]] = {}
         waves = braid.waves()
 
         for wi, wave in enumerate(waves):
@@ -340,6 +445,7 @@ class LocalExecutor:
                         terminal,
                         representative,
                         spawned,
+                        errored,
                         review_policy=review_policy,
                         error_policy=error_policy,
                         merge_policy=merge_policy,
@@ -364,10 +470,16 @@ class LocalExecutor:
 
         # Survivors: resolved if any requested target type was produced (branches are
         # best-effort enrichment — empty branches are recorded in completion, not a
-        # failure), else unresolved.
+        # failure). An entity that reached no target *and* errored on a branch is a
+        # reroute candidate (try an alternate path) — failing that it stays reported by
+        # its already-recorded ExecutionError; one that merely came up empty is unresolved.
         for ss in live:
             if braid.to_types & ss.available_types():
-                result.resolved.append(ss)
+                result.resolved.append(ss)  # may carry a reported error on a failed branch
+            elif id(ss) in errored:
+                if reroute_out is not None:
+                    reroute_out.append((ss, frozenset(errored[id(ss)])))
+                # else already reported via its ExecutionError(s) in result.errors
             else:
                 rep = representative.get(id(ss)) or self._synth_no_match(braid)
                 result.unresolved.append((ss, rep))
@@ -542,6 +654,7 @@ class LocalExecutor:
         terminal: set[int],
         representative: dict[int, WeaveResult],
         spawned: list[StrandSet],
+        errored: dict[int, set[tuple[str, str]]],
         *,
         review_policy: ReviewPolicy,
         error_policy: ErrorPolicy,
@@ -552,10 +665,12 @@ class LocalExecutor:
     ) -> None:
         """Fold one step's result into an entity and record its completion outcome.
 
-        NO_MATCH is *branch-local*: it is recorded and the entity keeps going (another
-        branch or a later wave may still produce a target). ERROR is entity-terminal.
-        AMBIGUOUS is governed by ``expand_policy``: with candidates it collapses
-        (``TOP``) or forks into children (``TOP_K``/``ALL``); with no candidates it
+        NO_MATCH and ERROR are both *branch-local*: each is recorded and the entity keeps
+        going, so a failed branch (e.g. one DB that 5xx'd) never discards the data its
+        sibling branches already produced. An ERROR additionally classifies the failure
+        and notes the failed node so a fully-blocked entity can be rerouted; only
+        ``ErrorPolicy.RAISE`` makes it abort. AMBIGUOUS is governed by ``expand_policy``:
+        with candidates it collapses (``TOP``) or forks (``TOP_K``/``ALL``); with none it
         falls back to the review/raise path. OK + review is entity-terminal under HALT.
         """
         cap_id = invocation.capability_id
@@ -571,16 +686,23 @@ class LocalExecutor:
                     f"weaver ERROR at step {step_index} ({cap_id}): "
                     f"{'; '.join(r.errors) or 'unspecified'}"
                 )
+            message = "; ".join(r.errors) or "weaver returned ERROR"
             result.errors.append(
                 ExecutionError(
                     strand_set=ss,
                     error_type="WeaverError",
-                    message="; ".join(r.errors) or "weaver returned ERROR",
+                    message=message,
                     step_index=step_index,
                     capability_id=cap_id,
+                    category=classify_error(message),
                 )
             )
-            terminal.add(id(ss))
+            ss.completion.append(StepOutcome(cap_id, r.backend_used, "error"))
+            # Branch-local: record the failed node and keep the entity live so its other
+            # branches still run; a fully-blocked entity is rerouted after the chunk.
+            errored.setdefault(id(ss), set()).add(
+                (invocation.weaver_id, cap_id)
+            )
             return
 
         if r.status is WeaveStatus.AMBIGUOUS:
@@ -827,3 +949,11 @@ def _candidate_sort_key(c: CandidateResult) -> tuple[float, str]:
 
 def _rank_candidates(candidates: tuple[CandidateResult, ...]) -> list[CandidateResult]:
     return sorted(candidates, key=_candidate_sort_key)
+
+
+def _flag_recovered(result: ExecutionResult, ss: StrandSet) -> None:
+    """Mark every recorded error of entity ``ss`` as recovered (a reroute reached the
+    targets another way), so it reports as a warning rather than a fatal failure."""
+    for e in result.errors:
+        if e.strand_set is ss:
+            e.recovered = True

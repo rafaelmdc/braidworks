@@ -46,6 +46,7 @@ from braidworks.core.exceptions import (
     ReviewRequired,
     UnsupportedCapability,
 )
+from braidworks.core.errors import ErrorCategory, classify_error, explain_error
 from braidworks.core.executor import (
     ErrorPolicy,
     ExecutionError,
@@ -130,6 +131,9 @@ __all__ = [
     "UnsupportedCapability",
     "ErrorPolicy",
     "ExecutionError",
+    "ErrorCategory",
+    "classify_error",
+    "explain_error",
     "ExecutionResult",
     "ExpandMode",
     "ExpandPolicy",

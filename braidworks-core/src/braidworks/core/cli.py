@@ -29,6 +29,7 @@ import sys
 from typing import Any, Sequence
 
 from braidworks.core.discovery import build_registry_from_entry_points
+from braidworks.core.errors import explain_error
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.executor import ExpandPolicy, LocalExecutor
 from braidworks.core.planner import Braider
@@ -269,6 +270,24 @@ def _summary(counts: dict[str, int]) -> None:
     _err("→ " + (", ".join(parts) if parts else "nothing produced"))
 
 
+def _report_errors(errors: list[Any]) -> None:
+    """Surface structural errors (e.g. an upstream API 500) loudly on stderr, each with
+    a plain-English explanation of its category.
+
+    Without this they are invisible: the affected entities never reach stdout, so a run
+    that errored otherwise looks like a clean empty result. A ``recovered`` error (the
+    weave rerouted around it) is shown as a note, not a failure."""
+    if not errors:
+        return
+    _err(f"\n{len(errors)} error(s):")
+    for e in errors:
+        where = f" at {e.capability_id}" if e.capability_id else ""
+        source = e.capability_id.split(".")[0] if e.capability_id else None
+        tag = " (recovered via another route)" if getattr(e, "recovered", False) else ""
+        _err(f"  ✗ {e.strand_set.entity_id}{where}{tag}: {explain_error(e.category, source=source)}")
+        _err(f"      ↳ {e.message}")
+
+
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
@@ -361,8 +380,15 @@ def _cmd_weave(args: argparse.Namespace) -> int:
             "resolved": len(result.resolved),
             "unresolved": len(result.unresolved),
             "review": len(result.review_queue),
+            "errors": len(result.errors),
         }
     )
+    _report_errors(result.errors)
+    # A *fatal* structural error (blocked an entity, not rerouted) fails the run; a
+    # failure on one branch of an otherwise-resolved entity is reported but not fatal.
+    # --strict also fails on unresolved/review.
+    if result.fatal_errors():
+        return 1
     if args.strict and (result.unresolved or result.review_queue):
         return 1
     return 0
@@ -447,8 +473,12 @@ def _weave_traversed(
             "resolved": len(result.resolved),
             "unresolved": len(result.unresolved),
             "review": len(result.review_queue),
+            "errors": len(result.errors),
         }
     )
+    _report_errors(result.errors)
+    if result.errors:
+        return 1
     if args.strict and (result.unresolved or result.review_queue):
         return 1
     return 0
