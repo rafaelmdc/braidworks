@@ -1,6 +1,6 @@
 [project]
 name = "uniprot_weaver"
-version = "0.1.2"
+version = "0.2.0"
 description = "UniProt protein identity (gene/protein query -> accession + taxid + annotation) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

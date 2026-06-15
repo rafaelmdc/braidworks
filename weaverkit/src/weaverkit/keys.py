@@ -24,6 +24,11 @@ SHARED_KEYS: dict[str, str] = {
     "protein.uniprot.accession": "UniProt accession — the primary protein join key.",
     "gene.ncbi.id": "NCBI Gene id.",
     "gene.ensembl.id": "Ensembl gene id.",
+    "gene.symbol": "Official gene symbol (e.g. TP53) — a cross-database gene join key.",
+    "gene.hgnc.id": "HGNC id — HUGO human gene nomenclature join key.",
+    "protein.ensembl.id": "Ensembl protein id.",
+    "refseq.protein.id": "NCBI RefSeq protein accession (NP_/XP_).",
+    "nucleotide.insdc.accession": "INSDC nucleotide accession (EMBL/GenBank/DDBJ).",
     "go.term": "Gene Ontology term id.",
     "enzyme.ec": "Enzyme Commission (EC) number.",
     "chem.chebi.id": "ChEBI chemical entity id.",
@@ -60,7 +65,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "genome.assembly.detail": "Full assembly detail — submitter, dates, stats (length/GC/N50), gene counts.",
     "genome.sequence.records": "Per-sequence reports of a genome — name, role, length, RefSeq/GenBank accession.",
     # NCBI gene outputs (ncbi_weaver resolve_gene / describe_gene / list_orthologs)
-    "gene.symbol": "Official gene symbol (NCBI Gene).",
+    # (gene.symbol is a shared join key — see SHARED_KEYS — consumed by uniprot map_to_accession)
     "gene.name": "Gene description / full name (NCBI Gene).",
     "gene.type": "Gene type (protein_coding, ncRNA, pseudo, …).",
     "gene.organism": "Source organism of a gene (NCBI Gene taxname).",
@@ -91,6 +96,14 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.function": "Curated function summary (UniProt FUNCTION comment).",
     "protein.length": "Sequence length in amino acids.",
     "protein.reviewed": "Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL).",
+    # UniProt ID-mapping outputs (uniprot_weaver map_to/from_accession)
+    "protein.uniprot.mapping.count": "Number of ids a UniProt ID-mapping produced.",
+    "protein.uniprot.mapping.records": "Mapped ids from UniProt ID-mapping — id + reviewed/db.",
+    "orthodb.group": "OrthoDB orthologous-group id (UniProt ID-mapping target).",
+    "eggnog.group": "eggNOG orthologous-group id (UniProt ID-mapping target).",
+    "chembl.id": "ChEMBL target/molecule id (UniProt ID-mapping target).",
+    "drugbank.id": "DrugBank id (UniProt ID-mapping target).",
+    "string.id": "STRING protein id (UniProt ID-mapping target).",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "Names of a protein's interaction partners (STRING).",
     "protein.interaction.count": "Number of interaction partners returned (STRING).",

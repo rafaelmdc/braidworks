@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from braidworks.core import Capability, OutputGroup, Parameter, Provenance, WeaverManifest
 
+from uniprot_weaver import mapping
+
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -78,5 +80,39 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=25,
                 always_computed_groups=frozenset({"identity"}),
             ),
+            _map_to_accession(backends),
+            _map_from_accession(backends),
         ),
+    )
+
+
+def _map_to_accession(backends: tuple[str, ...]) -> Capability:
+    """Any supported id -> protein.uniprot.accession (alternative-input, into the hub)."""
+    produces = frozenset({mapping.ACCESSION, mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS})
+    return Capability(
+        id=mapping.TO_ACCESSION,
+        consumes=frozenset(mapping.FROM_DB),  # alternatives
+        produces=produces,
+        output_groups=(OutputGroup(id="mapping", outputs=produces),),
+        backends=backends,
+        max_batch_size=1000,
+        set_outputs=frozenset({mapping.ACCESSION}),
+        consumes_any=True,
+        always_computed_groups=frozenset({"mapping"}),
+    )
+
+
+def _map_from_accession(backends: tuple[str, ...]) -> Capability:
+    """protein.uniprot.accession -> any supported id (routes by requested output)."""
+    targets = frozenset(mapping.TO_DB)
+    produces = targets | {mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS}
+    return Capability(
+        id=mapping.FROM_ACCESSION,
+        consumes=frozenset({mapping.ACCESSION}),
+        produces=produces,
+        output_groups=(OutputGroup(id="mapping", outputs=produces),),
+        backends=backends,
+        max_batch_size=1000,
+        set_outputs=targets,
+        always_computed_groups=frozenset({"mapping"}),
     )
