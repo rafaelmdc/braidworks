@@ -90,10 +90,18 @@ def test_max_batch_size_zero_rejected():
         reg.register(make_weaver(cap, weaver_id="w"))
 
 
-def test_lower_cost_edge_wins_on_collision():
+def test_parallel_edges_kept_lower_cost_routes():
+    """Interchangeable sources for the same A→B edge are both retained (a multigraph);
+    routing takes the cheaper one, but the alternate survives for reroute fallback."""
+    from braidworks.core.planner import Braider
+
     reg = BraidRegistry()
     reg.register(make_weaver(simple_capability("c.hi", {"a"}, {"b"}, cost=5.0), weaver_id="hi"))
     reg.register(make_weaver(simple_capability("c.lo", {"a"}, {"b"}, cost=1.0), weaver_id="lo"))
     graph = reg.build_graph()
-    assert graph["a"]["b"]["capability_id"] == "c.lo"
-    assert graph["a"]["b"]["cost"] == 1.0
+    # both parallel edges are present (not collapsed)
+    caps = {d["capability_id"] for d in graph.get_edge_data("a", "b").values()}
+    assert caps == {"c.hi", "c.lo"}
+    # the planner still picks the cheapest as the primary route
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"b"}))
+    assert braid.steps[0].capability_id == "c.lo"

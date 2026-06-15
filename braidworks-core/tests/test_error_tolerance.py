@@ -113,6 +113,27 @@ async def test_reroutes_around_failed_node():
     assert res.fatal_errors() == []
 
 
+async def test_reroutes_onto_interchangeable_source():
+    """Two weavers offer the SAME a->c edge (e.g. NCBI vs Ensembl taxonomy). The cheaper
+    one is chosen; when it fails, reroute falls back onto the other producer."""
+    reg = BraidRegistry()
+    reg.register(ScriptedWeaver(
+        lambda ss, b, r: _err("primary", "Server error '503'"),
+        capability=simple_capability("primary", {"a"}, {"c"}, cost=1.0), weaver_id="ncbi"))
+    reg.register(ScriptedWeaver(
+        lambda ss, b, r: _ok("backup", Strand("c", "C-from-ensembl")),
+        capability=simple_capability("backup", {"a"}, {"c"}, cost=2.0), weaver_id="ensembl"))
+
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
+    assert braid.steps[0].weaver_id == "ncbi"  # cheaper primary chosen
+
+    res = await LocalExecutor(reg).execute(braid, _input())
+    assert len(res.resolved) == 1
+    assert res.resolved[0].get("c").value == "C-from-ensembl"  # fell back to the alternate source
+    assert res.errors[0].recovered is True
+    assert res.fatal_errors() == []
+
+
 async def test_reroute_disabled_leaves_entity_blocked():
     reg = _reroute_registry()
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
