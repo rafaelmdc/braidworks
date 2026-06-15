@@ -222,8 +222,9 @@ def create_app():
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
-    # The page, with the network blob already injected (graph reads it; no /api/network).
-    _page = render_html(build_data())
+    # The page, with the network blob injected (graph reads it; no /api/network) and the
+    # interactive builder/run/results UI slotted in (interactive=True).
+    _page = render_html(build_data(), interactive=True)
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
