@@ -28,10 +28,13 @@ weaver reliably instead of vibe-coding it. Three pieces:
   No CDN, opens offline.
 - **serve** (`weaverkit serve`) — the *interactive* counterpart to `view`: a localhost
   GUI to **build** a braid (enter a have-type and a want-type, autocompleted from the
-  network), plan the route live, and copy the generated `braidworks weave` line / Python
-  snippet / braid JSON, with the route's source citations. Requires the optional extra
-  (`pip install 'weaverkit[serve]'` — FastAPI + uvicorn); the base package stays
-  stdlib-only. Localhost-only; the static `view` export is unaffected.
+  network), plan the route live, copy the generated `braidworks weave` line / Python
+  snippet / braid JSON (with the route's source citations), then **run** it with real
+  values and watch the braid **light up wave-by-wave** (green per step, red + reroute on
+  failure), with a results table and CSV/TSV/JSON export and a fan-out control
+  (`top`/`top-k`/`all`). Requires the optional extra (`pip install 'weaverkit[serve]'` —
+  FastAPI + uvicorn); the base package stays stdlib-only. Localhost-only; the static
+  `view` export is unaffected.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
 the `--strict` regimes, dispatcher/backend split) live in

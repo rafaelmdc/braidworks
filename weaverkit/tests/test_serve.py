@@ -12,10 +12,10 @@ from braidworks.core import Provenance
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
-from braidworks.core.strand import StrandSet
+from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
 
-from weaverkit.serve import plan_response
+from weaverkit.serve import plan_response, run_response
 
 
 def _weaver(weaver_id, cap_id, consumes, produces, *, provenance=None):
@@ -90,6 +90,73 @@ def test_plan_response_no_path_is_human_error(registry):
 def test_plan_response_requires_both_ends(registry):
     assert plan_response(registry, [], ["pdb.id"])["ok"] is False
     assert plan_response(registry, ["organism.name"], [])["ok"] is False
+
+
+# --- run_response (executes a braid; deterministic, no network) --------------
+
+
+def _producer(weaver_id, cap_id, consumes, produces, value):
+    """A weaver whose execute deterministically emits ``produces -> value`` (no network)."""
+    manifest = WeaverManifest(
+        weaver_id=weaver_id,
+        version="0.1.0",
+        capabilities=(
+            Capability(
+                id=cap_id,
+                consumes=frozenset(consumes),
+                produces=frozenset(produces),
+                output_groups=(OutputGroup(id="g", outputs=frozenset(produces)),),
+                backends=("local",),
+            ),
+        ),
+    )
+
+    class _W(BaseWeaver):
+        MANIFEST = manifest
+
+        def backend_fingerprint(self, backend: str) -> str:
+            return f"{weaver_id}-{backend}-v1"
+
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
+            return WeaveResult(
+                capability_id=capability_id,
+                weaver_version="0.1.0",
+                backend_used=backend,
+                computed_groups=frozenset({"g"}),
+                status=WeaveStatus.OK,
+                strands=tuple(Strand(t, value) for t in produces),
+            )
+
+    return _W()
+
+
+@pytest.fixture
+def run_registry():
+    reg = BraidRegistry()
+    reg.register(_producer("up", "resolve", {"protein.query"}, {"protein.uniprot.accession"}, "P04637"))
+    return reg
+
+
+def test_run_response_executes_and_returns_rows(run_registry):
+    out = run_response(run_registry, {"protein.query": "TP53"}, ["protein.uniprot.accession"])
+    assert out["ok"] is True
+    assert out["summary"]["resolved"] == 1
+    # the resolved row carries both the input and the produced accession
+    (row,) = out["rows"]
+    assert row["protein.uniprot.accession"] == "P04637"
+    assert "protein.uniprot.accession" in out["columns"]
+    # result carries per-step completion metadata (drives the front-end light-up)
+    assert out["result"]["resolved"]
+
+
+def test_run_response_no_path_is_error(run_registry):
+    out = run_response(run_registry, {"protein.query": "TP53"}, ["pdb.id"])
+    assert out["ok"] is False and out["error"]
+
+
+def test_run_response_requires_have_and_want(run_registry):
+    assert run_response(run_registry, {}, ["pdb.id"])["ok"] is False
+    assert run_response(run_registry, {"protein.query": "TP53"}, [])["ok"] is False
 
 
 # --- FastAPI smoke test (optional extra) -------------------------------------

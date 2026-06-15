@@ -196,6 +196,32 @@ HTML_TEMPLATE = r"""<!doctype html>
     border: 1px solid var(--panel-edge); border-radius: 6px; padding: 1px 6px; margin: -2px 0 4px 6px; }
   .bcite { font-size: 10.5px; color: var(--ink-dim); line-height: 1.5; margin-top: 10px; }
   .bcite b { color: var(--ink); }
+  .brun { margin-top: 14px; border-top: 1px solid var(--panel-edge); padding-top: 12px; }
+  .brun .brow { margin-top: 8px; }
+  .brun input[type=number] { width: 56px; }
+  /* Results — bottom panel spanning the stage */
+  .results {
+    position: fixed; left: 18px; right: 18px; bottom: 16px; z-index: 11;
+    max-height: 38vh; overflow: auto;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-edge); border-radius: 14px; padding: 12px 14px;
+    box-shadow: 0 22px 54px rgba(0,0,0,0.42); font-size: 12px;
+  }
+  .results .rhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .results .rhead h2 {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim); margin: 0; flex: 1;
+  }
+  .results table { border-collapse: collapse; width: 100%; }
+  .results th, .results td {
+    text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--panel-edge);
+    white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .results th { color: var(--ink-dim); font-weight: 600; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.06em; }
+  .results td { color: var(--ink); }
+  .rclose { cursor: pointer; color: var(--ink-dim); border: 1px solid var(--panel-edge);
+    border-radius: 6px; padding: 1px 7px; }
 </style>
 </head>
 <body>
@@ -247,6 +273,8 @@ HTML_TEMPLATE = r"""<!doctype html>
   <div class="note">Comma-separate multiple types. Autocomplete from the network.</div>
   <div id="b-out"></div>
 </div>
+
+<div class="results" id="results" style="display:none"></div>
 
 <div class="card" id="card" style="display:none"></div>
 
@@ -562,14 +590,21 @@ function frame(now) {
   L.nodes.forEach((n) => {
     const [sx, sy] = toScreen(n.x, n.y);
     const w = n.w * cam.scale, h = n.h * cam.scale;
-    const lit = !focus || focusNodes.has(n.id);
+    let lit = !focus || focusNodes.has(n.id);
     const isOp = n.kind === "op";
-    const base = isOp ? weaverColor(n.weaver, 60) : (TYPE_COLOR[n.io] || TYPE_IN);
+    let base = isOp ? weaverColor(n.weaver, 60) : (TYPE_COLOR[n.io] || TYPE_IN);
+    // Run light-up: op nodes reveal wave-by-wave — green when the step ran, red on error.
+    const rs = isOp ? runStatusOf(n.id, now) : null;
+    let glow = 0;
+    if (rs === "pending") { lit = false; }
+    else if (rs === "ok") { base = "#5fd0a0"; glow = 16; }
+    else if (rs === "error") { base = "#e0706e"; glow = 20; }
     ctx.globalAlpha = lit ? 1 : 0.26;
 
     if (isOp) {
-      drawLegs(sx, sy, w, h, weaverColor(n.weaver, 60), cam.scale, lit);
-      ctx.shadowColor = base; ctx.shadowBlur = (n.id === focus ? 16 : 8) * Math.max(cam.scale, 0.4);
+      drawLegs(sx, sy, w, h, base, cam.scale, lit);
+      ctx.shadowColor = base;
+      ctx.shadowBlur = ((n.id === focus ? 16 : 8) + glow) * Math.max(cam.scale, 0.4);
       roundRect(sx - w/2, sy - h/2, w, h, 10);
       ctx.fillStyle = "rgba(13,18,32,0.97)"; ctx.fill();
       ctx.shadowBlur = 0;
@@ -858,11 +893,135 @@ function renderArtifacts(d) {
   if (d.citations && d.citations.length) {
     h += `<div class="bcite"><b>Cite</b><br>` + d.citations.map(esc).join("<br>") + `</div>`;
   }
-  return h;
+  return h + runControlsHTML(p);
 }
 
 function whyNoPath(msg) {
   return `<div class="berr"><b>No route.</b><br>${esc(msg)}</div>`;
+}
+
+// ---- run: execute the planned braid, light it up, tabulate ------------------
+let lastPlan = null;   // {from, to, policy} of the current built route
+let lastRun = null;    // {columns, rows} for export
+let runAnim = null;    // {start, perNode:{nodeId:{wave,status}}, waveMs}
+
+function runStatusOf(nodeId, now) {
+  if (!runAnim) return null;
+  const info = runAnim.perNode[nodeId];
+  if (!info) return null;
+  return (now - runAnim.start) < info.wave * runAnim.waveMs ? "pending" : info.status;
+}
+
+function startRunAnim(path, result) {
+  const status = {};                                   // capability_id -> ok | error
+  const scan = (leaves) => (leaves || []).forEach((l) =>
+    (l.completion || []).forEach((o) => {
+      const cur = status[o.capability_id];
+      status[o.capability_id] =
+        (o.status === "error" || cur === "error") ? "error"
+        : (o.status === "ok" || cur === "ok") ? "ok" : (cur || o.status);
+    }));
+  scan(result.resolved);
+  (result.unresolved || []).forEach((pair) => scan([pair[0]]));
+  const waveOf = {};
+  (path.waves || []).forEach((w, wi) => w.forEach((si) => { waveOf["op:" + si] = wi; }));
+  const perNode = {};
+  (path.nodes || []).forEach((n) => {
+    if (n.kind === "op") perNode[n.id] = { wave: waveOf[n.id] || 0, status: status[n.capability] || "ok" };
+  });
+  runAnim = { start: performance.now(), perNode, waveMs: 650 };
+}
+
+function parseValues(types, raw) {
+  raw = (raw || "").trim();
+  if (types.length === 1) return raw ? { [types[0]]: raw } : {};
+  const have = {};
+  raw.split(",").forEach((pair) => {
+    const i = pair.indexOf("=");
+    if (i > 0) have[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+  });
+  return have;
+}
+
+function runControlsHTML(path) {
+  const hint = path.from_types.length === 1
+    ? `value for <b>${esc(path.from_types[0])}</b>`
+    : `<code>type=value</code> pairs, comma-separated`;
+  return `<div class="brun">
+    <label>Run — ${hint}
+      <input id="r-values" placeholder="${esc(path.from_types.join("="))}=…" autocomplete="off"></label>
+    <div class="brow">
+      <select id="r-expand" title="fan-out policy">
+        <option value="top">top 1</option><option value="top_k">top k</option><option value="all">all</option>
+      </select>
+      <input id="r-k" type="number" min="1" value="3" title="k for top-k">
+      <button class="go" id="r-run">Run ▶</button>
+    </div></div>`;
+}
+
+async function runBraid() {
+  if (!lastPlan) return;
+  const out = document.getElementById("b-out");
+  const have = parseValues(lastPlan.from, document.getElementById("r-values").value);
+  if (!Object.keys(have).length) { return; }
+  const expand = document.getElementById("r-expand").value;
+  const k = parseInt(document.getElementById("r-k").value, 10) || 3;
+  const btn = document.getElementById("r-run"); btn.textContent = "running…"; btn.disabled = true;
+  try {
+    const r = await fetch("/api/run", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ have, want: lastPlan.to, policy: lastPlan.policy, expand, k }),
+    });
+    const d = await r.json();
+    if (!d.ok) { renderResults(null, d.error); return; }
+    addPlanView(d.path);
+    startRunAnim(d.path, d.result);
+    renderResults(d);
+  } catch (e) { renderResults(null, String(e)); }
+  finally { btn.textContent = "Run ▶"; btn.disabled = false; }
+}
+
+function renderResults(d, err) {
+  const box = document.getElementById("results");
+  box.style.display = "block";
+  if (err) { box.innerHTML = `<div class="rhead"><h2>Run failed</h2><span class="rclose" onclick="this.closest('.results').style.display='none'">✕</span></div><div class="berr">${esc(err)}</div>`; return; }
+  lastRun = { columns: d.columns, rows: d.rows };
+  const s = d.summary;
+  const head = `<div class="rhead">
+    <h2>Results — ${s.resolved} resolved${s.unresolved ? ", " + s.unresolved + " unresolved" : ""}${s.errors ? ", " + s.errors + " error(s)" : ""}</h2>
+    <span class="btab" onclick="exportRows('csv')">CSV</span>
+    <span class="btab" onclick="exportRows('tsv')">TSV</span>
+    <span class="btab" onclick="exportRows('json')">JSON</span>
+    <span class="rclose" onclick="this.closest('.results').style.display='none'">✕</span></div>`;
+  if (!d.rows.length) { box.innerHTML = head + `<div class="note">No resolved rows.</div>`; return; }
+  const th = d.columns.map((c) => `<th>${esc(c)}</th>`).join("");
+  const trs = d.rows.map((row) =>
+    "<tr>" + d.columns.map((c) => `<td title="${esc(fmtCell(row[c]))}">${esc(fmtCell(row[c]))}</td>`).join("") + "</tr>").join("");
+  box.innerHTML = head + `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function fmtCell(v) {
+  if (v == null) return "";
+  if (Array.isArray(v)) return v.join("; ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function exportRows(fmt) {
+  if (!lastRun) return;
+  const { columns, rows } = lastRun;
+  let text, mime;
+  if (fmt === "json") { text = JSON.stringify(rows, null, 2); mime = "application/json"; }
+  else {
+    const sep = fmt === "tsv" ? "\t" : ",";
+    const q = (v) => { const s = fmtCell(v); return (fmt === "csv" && /[",\n]/.test(s)) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    text = [columns.join(sep), ...rows.map((r) => columns.map((c) => q(r[c])).join(sep))].join("\n");
+    mime = fmt === "tsv" ? "text/tab-separated-values" : "text/csv";
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = "braidworks-results." + fmt;
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
 async function runPlan() {
@@ -879,16 +1038,24 @@ async function runPlan() {
     });
     const d = await r.json();
     if (!d.ok) { out.innerHTML = whyNoPath(d.error || "unroutable"); return; }
+    runAnim = null;  // clear any prior run light-up when re-planning
     setHash(from, to);
     addPlanView(d.path);
+    lastPlan = { from: d.path.from_types, to: d.path.to_types, policy };
     out.innerHTML = renderArtifacts(d);
-    out.querySelectorAll(".btab").forEach((tab) => {
+    out.querySelectorAll(".btab[data-i]").forEach((tab) => {
       tab.onclick = () => {
         const i = tab.dataset.i;
-        out.querySelectorAll(".btab").forEach((t) => t.classList.toggle("on", t === tab));
+        out.querySelectorAll(".btab[data-i]").forEach((t) => t.classList.toggle("on", t === tab));
         out.querySelectorAll(".bpane").forEach((p) => { p.style.display = p.dataset.i === i ? "block" : "none"; });
       };
     });
+    const runBtn = document.getElementById("r-run");
+    if (runBtn) {
+      runBtn.onclick = runBraid;
+      const rv = document.getElementById("r-values");
+      rv.addEventListener("keydown", (e) => { if (e.key === "Enter") runBraid(); });
+    }
   } catch (e) { out.innerHTML = whyNoPath(String(e)); }
 }
 
