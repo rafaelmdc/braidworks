@@ -21,16 +21,31 @@ from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.registry import BraidRegistry
 
 
-def _without(graph: nx.DiGraph, exclude: frozenset[tuple[str, str]]) -> nx.DiGraph:
-    """A copy of ``graph`` with every edge of an excluded ``(weaver, capability)`` removed."""
+def _without(
+    graph: nx.MultiDiGraph, exclude: frozenset[tuple[str, str]]
+) -> nx.MultiDiGraph:
+    """A copy of ``graph`` with every excluded ``(weaver, capability)`` edge removed.
+
+    On the multigraph this drops only the matching parallel edge(s); an interchangeable
+    source on the same ``A→B`` pair survives, which is what lets a reroute switch onto it."""
     pruned = graph.copy()
     doomed = [
-        (u, v)
-        for u, v, data in graph.edges(data=True)
+        (u, v, key)
+        for u, v, key, data in graph.edges(keys=True, data=True)
         if (data["weaver_id"], data["capability_id"]) in exclude
     ]
     pruned.remove_edges_from(doomed)
     return pruned
+
+
+def _best_edge(graph: nx.MultiDiGraph, u: str, v: str) -> dict:
+    """The cheapest parallel ``u→v`` edge's data, ties broken stably by weaver then
+    capability id, so a plan over interchangeable sources is deterministic."""
+    parallels = graph.get_edge_data(u, v)  # {key: data}
+    return min(
+        parallels.values(),
+        key=lambda d: (d["cost"], d["weaver_id"], d["capability_id"]),
+    )
 
 
 @dataclass
@@ -74,7 +89,7 @@ class Braider:
                 continue  # already satisfied; no step needed
             path = self._route(graph, sources, target)
             for u, v in zip(path, path[1:]):
-                data = graph.get_edge_data(u, v)
+                data = _best_edge(graph, u, v)
                 key = (data["weaver_id"], data["capability_id"], u)
                 spec = specs.get(key)
                 if spec is None:
@@ -130,7 +145,7 @@ class Braider:
         )
 
     def _route(
-        self, graph: nx.DiGraph, sources: frozenset[str], target: str
+        self, graph: nx.MultiDiGraph, sources: frozenset[str], target: str
     ) -> list[str]:
         if target not in graph:
             raise NoPathError(f"no capability produces {target!r}")

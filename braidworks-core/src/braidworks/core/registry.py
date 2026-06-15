@@ -80,7 +80,7 @@ class BraidRegistry:
     def __init__(self) -> None:
         self._weavers: dict[str, BaseWeaver] = {}
         self._manifests: dict[str, WeaverManifest] = {}
-        self._graph: nx.DiGraph | None = None
+        self._graph: nx.MultiDiGraph | None = None
 
     def register(self, weaver: BaseWeaver) -> None:
         """Validate and register a weaver instance. Raises ``InvalidManifestError``."""
@@ -109,27 +109,29 @@ class BraidRegistry:
             raise KeyError(f"{weaver_id} has no capability {capability_id!r}")
         return cap
 
-    def build_graph(self) -> nx.DiGraph:
+    def build_graph(self) -> nx.MultiDiGraph:
         """Project single-input capabilities into a directed type→type graph.
 
         Each single-input capability ``consumes={A}, produces={B, C}`` adds edges
         ``A→B`` and ``A→C``, annotated with ``(weaver_id, capability_id, cost)``.
-        Multi-input capabilities are skipped. On a collision for the same
-        ``(A, B)`` edge, the lower-cost capability wins.
+        Multi-input capabilities are skipped. The graph is a **multigraph**: when two
+        capabilities offer the *same* ``A→B`` edge (interchangeable sources — e.g. two
+        taxonomy resolvers ``organism.name → taxon.id``), both are kept as parallel
+        edges. Routing takes the cheapest (Dijkstra minimizes over parallels), but the
+        alternates survive so the executor can **reroute** onto one when the chosen
+        source fails. (A single source is the common case; this is free until a second
+        producer of the same edge appears.)
         """
         if self._graph is not None:
             return self._graph
 
-        graph = nx.DiGraph()
+        graph = nx.MultiDiGraph()
         for weaver_id, manifest in self._manifests.items():
             for cap in manifest.capabilities:
                 if len(cap.consumes) != 1:
                     continue  # multi-input capabilities are not in the MVP graph
                 (source,) = tuple(cap.consumes)
                 for target in cap.produces:
-                    existing = graph.get_edge_data(source, target)
-                    if existing is not None and existing["cost"] <= cap.cost:
-                        continue
                     graph.add_edge(
                         source,
                         target,
