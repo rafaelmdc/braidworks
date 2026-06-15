@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a branch cancels its still-running CI — no wasted minutes on stale commits.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
