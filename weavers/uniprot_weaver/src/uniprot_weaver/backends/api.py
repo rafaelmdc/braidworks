@@ -163,17 +163,20 @@ class UniprotApiBackend(BackendBase):
     ) -> list[LookupRecord]:
         # One search per query; the whole entry arrives at once, so we compute every
         # field and let the shared mapper filter to requested_outputs.
+        organism = str((params or {}).get("organism") or "").strip() or None
         records: list[LookupRecord] = []
         for query in queries:
             term = str(query.get("protein.query", "")).strip()
-            records.append(await self._resolve_one(query, term))
+            records.append(await self._resolve_one(query, term, organism))
         return records
 
-    async def _resolve_one(self, query: dict[str, Any], term: str) -> LookupRecord:
+    async def _resolve_one(
+        self, query: dict[str, Any], term: str, organism: str | None = None
+    ) -> LookupRecord:
         if not term:
             return LookupRecord(query=query, found=False)
         try:
-            entry = await self._best_hit(term)
+            entry = await self._best_hit(term, organism)
         except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
             logger.warning("UniProt lookup failed for %r: %s", term, exc)
             return LookupRecord(query=query, error=f"UniProt API error: {exc}")
@@ -182,26 +185,34 @@ class UniprotApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_extract(entry))
 
-    async def _best_hit(self, term: str) -> dict[str, Any] | None:
+    async def _best_hit(
+        self, term: str, organism: str | None = None
+    ) -> dict[str, Any] | None:
         """Deterministic hit: prefer reviewed, escalate accession -> gene -> free text.
 
         The first variant that returns any results wins; ``_pick`` then chooses the
         representative from that page by a fixed total order (so the result is stable).
+        ``organism`` (an NCBI taxid) constrains the species — without it a bare gene
+        symbol resolves to whichever species UniProt ranks first (e.g. TP53 -> hamster).
         """
         for reviewed in (True, False):
             for base in _query_variants(term):
-                results = await self._search(base, reviewed=reviewed)
+                results = await self._search(base, reviewed=reviewed, organism=organism)
                 if results:
                     return _pick(results)
         return None
 
-    async def _search(self, base: str, *, reviewed: bool) -> list[dict[str, Any]]:
+    async def _search(
+        self, base: str, *, reviewed: bool, organism: str | None = None
+    ) -> list[dict[str, Any]]:
         """A ranked page of UniProtKB hits for one query clause (reviewed-only if asked).
 
         Sorted by annotation score so the highest-curated candidates lead even when the
         page is truncated; ``_pick`` applies the final deterministic selection.
         """
         q = f"({base}) AND reviewed:true" if reviewed else f"({base})"
+        if organism:
+            q = f"{q} AND organism_id:{organism}"
         resp = await self._http().get(
             "/uniprotkb/search",
             params={

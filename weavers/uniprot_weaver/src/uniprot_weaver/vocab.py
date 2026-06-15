@@ -7,10 +7,10 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core import Capability, OutputGroup, Parameter, Provenance, WeaverManifest
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.1.1"
+WEAVER_VERSION = "0.1.2"
 WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -61,6 +61,17 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(id="taxonomy", outputs=frozenset({"ncbi.taxon.id"})),
                     OutputGroup(
                         id="function", outputs=frozenset({"protein.function", "protein.length"})
+                    ),
+                ),
+                parameters=(
+                    Parameter(
+                        name="organism",
+                        type="string",
+                        description=(
+                            "NCBI taxid to constrain the species (e.g. 9606 human, "
+                            "10090 mouse). A bare gene symbol like TP53 otherwise "
+                            "resolves to whichever species ranks first; unset = any."
+                        ),
                     ),
                 ),
                 backends=backends,
