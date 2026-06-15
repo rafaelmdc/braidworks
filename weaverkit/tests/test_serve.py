@@ -159,6 +159,29 @@ def test_run_response_requires_have_and_want(run_registry):
     assert run_response(run_registry, {"protein.query": "TP53"}, [])["ok"] is False
 
 
+# --- template split: interactive UI is served-only ---------------------------
+
+
+def test_static_render_omits_serve_ui():
+    """A static `view` export carries none of the builder/run/results JS."""
+    from weaverkit.view import build_data, render_html
+
+    html = render_html(build_data())  # interactive defaults to False
+    for token in ('id="builder"', "runControlsHTML", "exportRows", "function setupBuilder"):
+        assert token not in html, token
+    # ...but the render-side light-up hook stays in the base template.
+    assert "function runStatusOf" in html
+
+
+def test_interactive_render_injects_serve_ui():
+    from weaverkit.view import build_data, render_html
+
+    html = render_html(build_data(), interactive=True)
+    for token in ('id="builder"', "runControlsHTML", "exportRows", "function setupBuilder",
+                  'class="results"'):
+        assert token in html, token
+
+
 # --- FastAPI smoke test (optional extra) -------------------------------------
 
 

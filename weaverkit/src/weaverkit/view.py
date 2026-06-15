@@ -485,9 +485,25 @@ def build_data(
     return data
 
 
-def render_html(data: dict) -> str:
-    """Inject the data payload into the self-contained HTML template."""
-    return HTML_TEMPLATE.replace(_DATA_PLACEHOLDER, json.dumps(data))
+def render_html(data: dict, *, interactive: bool = False) -> str:
+    """Inject the data payload into the self-contained HTML template.
+
+    With ``interactive=True`` (``weaverkit serve``), also inject the builder/run/results UI
+    (from ``weaverkit._serve_ui``) into the page's ``__SERVE_*__`` slots. The default static
+    export leaves those slots empty, so a ``weaverkit view`` file carries none of that JS.
+    """
+    html = HTML_TEMPLATE.replace(_DATA_PLACEHOLDER, json.dumps(data))
+    if interactive:
+        from weaverkit._serve_ui import SERVE_CSS, SERVE_HTML, SERVE_JS
+
+        css, body, js = SERVE_CSS, SERVE_HTML, SERVE_JS
+    else:
+        css = body = js = ""
+    return (
+        html.replace("/* __SERVE_CSS__ */", css)
+        .replace("<!-- __SERVE_HTML__ -->", body)
+        .replace("/* __SERVE_JS__ */", js)
+    )
 
 
 def write_view(
