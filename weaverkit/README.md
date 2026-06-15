@@ -62,7 +62,11 @@ optional `backends` / `max_batch_size` / `cost`, optional `always_computed_group
 (group ids always computed internally, e.g. `["core"]`), optional `set_outputs`
 (produced join keys that are one→many — the weaver emits a *list* and the executor
 may fan out one child per value under `ExpandPolicy`; must be a subset of `produces`,
-e.g. `["pathway.reactome.id"]`), one or more `[[capability.group]]`
+e.g. `["pathway.reactome.id"]`), optional `consumes_any` (bool — interpret `consumes`
+as *alternatives*: any one input suffices and the planner routes from each one
+independently, rather than the default *conjunction* of all inputs; the backend
+dispatches on whichever input is present — e.g. a UniProt ID-mapping
+`{gene id, ensembl id, pdb id, …} → accession`), one or more `[[capability.group]]`
 (`id` + `outputs`, disjoint across groups), and optional `[[capability.parameter]]`
 blocks (per-query knobs — filters/sort/thresholds — `name`, `type` ∈
 `string|int|float|bool`, optional `enum`/`default`/`description`; surfaced as
