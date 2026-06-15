@@ -167,7 +167,8 @@ def test_static_render_omits_serve_ui():
     from weaverkit.view import build_data, render_html
 
     html = render_html(build_data())  # interactive defaults to False
-    for token in ('id="builder"', "runControlsHTML", "exportRows", "function setupBuilder"):
+    for token in ('id="builder"', "buildResultHTML", "exportRows", "function setupBuilder",
+                  'id="sheet"'):
         assert token not in html, token
     # ...but the render-side light-up hook stays in the base template.
     assert "function runStatusOf" in html
@@ -177,11 +178,13 @@ def test_interactive_render_injects_serve_ui():
     from weaverkit.view import build_data, render_html
 
     html = render_html(build_data(), interactive=True)
-    for token in ('id="builder"', "runControlsHTML", "exportRows", "function setupBuilder",
-                  'class="results"',
+    for token in ('id="builder"', "buildResultHTML", "exportRows", "function setupBuilder",
+                  'id="sheet"', "function showResults", "function showCite",  # modal pages
                   'id="b-search"', "function applySearch",       # graph search
                   'id="b-recipes"', "function saveRecipe"):      # save/load recipes
         assert token in html, token
+    # no emoji in the served UI
+    assert "\U0001f50d" not in html and "▶" not in html
 
 
 # --- FastAPI smoke test (optional extra) -------------------------------------

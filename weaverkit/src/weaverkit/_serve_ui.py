@@ -1,132 +1,152 @@
 """The interactive (``weaverkit serve``-only) UI, split out of the static template.
 
 ``_view_template.py`` is the self-contained *static* network picture. The builder / run /
-results / light-up controls are only meaningful when served (they call ``/api/plan`` and
+results controls are only meaningful when served (they call ``/api/plan`` and
 ``/api/run``), so they live here and are injected into the page **only when serving**
 (``render_html(..., interactive=True)``). A ``file://`` export of ``weaverkit view`` carries
 none of this — it stays lean.
 
+Layout (kept deliberately uncluttered): a compact **Build** dock (top-left) for the
+plan/run form, and full-screen **sheets** (modal pages) for the heavier output — generated
+code, citations, and the results table — so they never overlap the graph or balloon. The
+graph itself is the page; the dock drives it; sheets are summoned on demand.
+
 Three fragments, slotted into the template's ``__SERVE_CSS__`` / ``__SERVE_HTML__`` /
 ``__SERVE_JS__`` markers. The JS runs in the template's ``<script>`` scope, so it freely
 references the base globals (``DATA``, ``VIEWS``, ``layouts``, ``particles``,
-``computeLayout``, ``selectView``, ``esc``) and the base light-up state (``runAnim`` —
-written here, read by the draw loop's ``runStatusOf``).
+``computeLayout``, ``selectView``, ``esc``) and the base light-up / search state
+(``runAnim`` / ``searchHits`` — written here, read by the draw loop).
 """
 
 from __future__ import annotations
 
 SERVE_CSS = """
-  /* Builder (weaverkit serve only) — top-left, mirrors .panel */
+  /* --- Build dock (top-left) --- */
   .builder {
-    position: fixed; top: 80px; left: 18px; z-index: 10; width: 300px;
+    position: fixed; top: 80px; left: 18px; z-index: 12; width: 304px;
     max-height: calc(100vh - 112px); overflow-y: auto;
     background: var(--panel); backdrop-filter: blur(14px);
     border: 1px solid var(--panel-edge); border-radius: 14px;
-    padding: 16px 16px 18px; font-size: 12.5px;
+    padding: 16px; font-size: 12.5px;
     box-shadow: 0 22px 54px rgba(0,0,0,0.42);
   }
   .builder h2 {
     font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--ink-dim); margin: 0 0 12px;
   }
-  .builder label { display: block; margin-bottom: 9px; color: var(--ink-dim); font-size: 11px; }
+  .bgroup { margin-bottom: 11px; }
+  .blabel { display: block; color: var(--ink-dim); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.07em; margin-bottom: 4px; }
   .builder input, .builder select {
-    width: 100%; margin-top: 4px; box-sizing: border-box;
-    background: rgba(10,16,30,0.6); color: var(--ink);
-    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 7px 9px; font-size: 12.5px;
+    width: 100%; box-sizing: border-box; background: rgba(10,16,30,0.6); color: var(--ink);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
   }
-  .builder .brow { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
-  .builder .brow select { width: auto; flex: 1; }
-  .builder button.go {
-    background: rgba(120,150,220,0.18); color: var(--ink); cursor: pointer;
-    border: 1px solid rgba(120,150,220,0.4); border-radius: 8px; padding: 7px 14px; font-size: 12.5px;
-  }
-  .builder button.go:hover { background: rgba(120,150,220,0.3); }
-  .bsearch { margin-bottom: 12px; }
-  #b-out { margin-top: 14px; }
-  #b-out .berr { color: #e6a3a3; font-size: 11.5px; line-height: 1.45; }
-  #b-out .bsum { color: var(--ink); margin-bottom: 10px; }
-  .btabs { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-  .btab { cursor: pointer; font-size: 10.5px; color: var(--ink-dim);
-    border: 1px solid var(--panel-edge); border-radius: 7px; padding: 3px 8px; }
-  .btab.on { color: var(--ink); border-color: rgba(120,150,220,0.4); }
-  #b-out pre {
-    background: rgba(8,12,24,0.7); border: 1px solid var(--panel-edge); border-radius: 8px;
-    padding: 9px; font-size: 10.5px; line-height: 1.4; overflow-x: auto; white-space: pre-wrap;
-    word-break: break-word; margin: 0;
-  }
-  .bcopy { cursor: pointer; float: right; font-size: 10px; color: var(--ink-dim);
-    border: 1px solid var(--panel-edge); border-radius: 6px; padding: 1px 6px; margin: -2px 0 4px 6px; }
-  .bcite { font-size: 10.5px; color: var(--ink-dim); line-height: 1.5; margin-top: 10px; }
-  .bcite b { color: var(--ink); }
-  .brun { margin-top: 14px; border-top: 1px solid var(--panel-edge); padding-top: 12px; }
-  .brun .brow { margin-top: 8px; }
-  .brun input[type=number] { width: 56px; }
-  /* Results — bottom panel spanning the stage */
-  .results {
-    position: fixed; left: 18px; right: 18px; bottom: 16px; z-index: 11;
-    max-height: 38vh; overflow: auto;
-    background: var(--panel); backdrop-filter: blur(14px);
-    border: 1px solid var(--panel-edge); border-radius: 14px; padding: 12px 14px;
-    box-shadow: 0 22px 54px rgba(0,0,0,0.42); font-size: 12px;
-  }
-  .results .rhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .results .rhead h2 {
-    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--ink-dim); margin: 0; flex: 1;
-  }
-  .results table { border-collapse: collapse; width: 100%; }
-  .results th, .results td {
-    text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--panel-edge);
-    white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis;
-  }
-  .results th { color: var(--ink-dim); font-weight: 600; font-size: 10.5px;
-    text-transform: uppercase; letter-spacing: 0.06em; }
-  .results td { color: var(--ink); }
-  .rclose { cursor: pointer; color: var(--ink-dim); border: 1px solid var(--panel-edge);
-    border-radius: 6px; padding: 1px 7px; }
+  .builder input:focus, .builder select:focus { outline: none; border-color: rgba(120,150,220,0.55); }
+  .brow { display: flex; gap: 8px; align-items: center; }
+  .brow .grow { flex: 1; }
+  .btn { cursor: pointer; border-radius: 8px; padding: 8px 14px; font-size: 12.5px;
+    border: 1px solid var(--panel-edge); background: transparent; color: var(--ink);
+    white-space: nowrap; }
+  .btn:hover { border-color: rgba(120,150,220,0.45); }
+  .btn.primary { background: rgba(120,150,220,0.22); border-color: rgba(120,150,220,0.5); }
+  .btn.primary:hover { background: rgba(120,150,220,0.34); }
+  .btn.ghost { color: var(--ink-dim); padding: 6px 11px; font-size: 11px; }
+  .btn.ghost:hover { color: var(--ink); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .bdiv { border-top: 1px solid var(--panel-edge); margin: 14px 0 12px; }
+  .note { color: var(--ink-dim); font-size: 10.5px; line-height: 1.4; }
+  .berr { color: #e6a3a3; font-size: 11.5px; line-height: 1.45; }
+  /* post-plan summary + actions */
+  .summary { background: rgba(120,150,220,0.09); border: 1px solid var(--panel-edge);
+    border-radius: 10px; padding: 10px 12px; margin: 4px 0 12px; }
+  .summary .route { color: var(--ink); font-size: 12.5px; line-height: 1.4; word-break: break-word; }
+  .summary .steps { color: var(--ink-dim); font-size: 10.5px; margin-top: 3px; }
+  .bactions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+
+  /* --- Sheets (modal pages: code / citations / results) --- */
+  .sheet-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(4,7,14,0.62);
+    backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; }
+  .sheet-backdrop[hidden] { display: none; }
+  .sheet { width: min(92vw, 980px); max-height: 85vh; display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 16px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+  .sheet-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+    border-bottom: 1px solid var(--panel-edge); }
+  .sheet-head h3 { margin: 0; flex: 1; font-size: 12px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink); }
+  .sheet-x { cursor: pointer; background: transparent; border: 1px solid var(--panel-edge);
+    border-radius: 8px; color: var(--ink-dim); font-size: 15px; line-height: 1; padding: 3px 9px; }
+  .sheet-x:hover { color: var(--ink); }
+  .sheet-body { padding: 16px 18px; overflow: auto; }
+  .sheet-body pre { background: rgba(8,12,24,0.7); border: 1px solid var(--panel-edge);
+    border-radius: 8px; padding: 11px; font-size: 11px; line-height: 1.45; overflow-x: auto;
+    white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tab { cursor: pointer; font-size: 11px; color: var(--ink-dim);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 5px 11px; }
+  .tab.on { color: var(--ink); border-color: rgba(120,150,220,0.5); background: rgba(120,150,220,0.12); }
+  .copyrow { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+  .rcounts { color: var(--ink-dim); font-size: 11px; margin-bottom: 12px; }
+  .rtable { border-collapse: collapse; width: 100%; font-size: 12px; }
+  .rtable th, .rtable td { text-align: left; padding: 7px 10px;
+    border-bottom: 1px solid var(--panel-edge); white-space: nowrap; max-width: 360px;
+    overflow: hidden; text-overflow: ellipsis; }
+  .rtable th { position: sticky; top: -16px; background: var(--panel); color: var(--ink-dim);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .rtable td { color: var(--ink); }
 """
 
 SERVE_HTML = """
 <div class="builder" id="builder" style="display:none">
-  <h2>Build a braid</h2>
-  <input id="b-search" class="bsearch" placeholder="🔍 filter the graph…" autocomplete="off">
-  <label>Have (input types)
-    <input id="b-have" list="b-types" placeholder="e.g. protein.query" autocomplete="off">
-  </label>
-  <label>Want (target types)
-    <input id="b-want" list="b-types" placeholder="e.g. pdb.id" autocomplete="off">
-  </label>
+  <h2>Build</h2>
+  <div class="bgroup"><input id="b-search" placeholder="Filter graph" autocomplete="off"></div>
+  <div class="bgroup">
+    <span class="blabel">Have</span>
+    <input id="b-have" list="b-types" placeholder="protein.query" autocomplete="off">
+  </div>
+  <div class="bgroup">
+    <span class="blabel">Want</span>
+    <input id="b-want" list="b-types" placeholder="pdb.id" autocomplete="off">
+  </div>
   <datalist id="b-types"></datalist>
   <div class="brow">
-    <select id="b-policy" title="backend policy">
-      <option value="local_first">local_first</option>
-      <option value="api_first">api_first</option>
-      <option value="local_only">local_only</option>
-      <option value="api_only">api_only</option>
+    <button class="btn primary" id="b-plan">Plan</button>
+    <select id="b-policy" class="grow" title="backend policy">
+      <option value="local_first">local first</option>
+      <option value="api_first">api first</option>
+      <option value="local_only">local only</option>
+      <option value="api_only">api only</option>
     </select>
-    <button class="go" id="b-plan">Plan ▶</button>
   </div>
-  <div class="note">Comma-separate multiple types. Autocomplete from the network.</div>
-  <div class="brun" id="b-recipes-wrap">
-    <label>Recipes
-      <select id="b-recipes"><option value="">— load saved —</option></select>
-    </label>
-    <div class="brow">
-      <input id="b-recipe-name" placeholder="name to save" autocomplete="off">
-      <button class="go" id="b-save">Save</button>
-    </div>
-  </div>
+  <div class="note" style="margin-top:8px">Comma-separate multiple types. Autocomplete from the network.</div>
+
   <div id="b-out"></div>
+
+  <div class="bdiv"></div>
+  <span class="blabel">Recipes</span>
+  <select id="b-recipes"><option value="">load saved…</option></select>
+  <div class="brow" style="margin-top:8px">
+    <input id="b-recipe-name" class="grow" placeholder="name">
+    <button class="btn" id="b-save">Save</button>
+  </div>
 </div>
 
-<div class="results" id="results" style="display:none"></div>
+<div class="sheet-backdrop" id="sheet" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="sheet-title"></h3><button class="sheet-x" id="sheet-x">&times;</button></div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </div>
+</div>
 """
 
 SERVE_JS = r"""
 // ---- builder (weaverkit serve only) ----------------------------------------
 // Interactive only when served over HTTP; a file:// export stays the static picture.
 const SERVED = location.protocol === "http:" || location.protocol === "https:";
+
+let lastPlan = null;   // {from, to, policy, path} of the current built route
+let lastDoc = null;    // the /api/plan response (artifacts + citations)
+let lastRun = null;    // {columns, rows} for export
 
 function newParticles(L) {
   return L.edges.map(() => Array.from({ length: 3 }, (_, i) => i / 3 + Math.random() * 0.04));
@@ -152,40 +172,62 @@ function setHash(from, to) {
     "&want=" + encodeURIComponent(to.join(","));
 }
 
-function copyBtn(text) {
-  return `<span class="bcopy" onclick='navigator.clipboard.writeText(this.nextSibling.textContent)'>copy</span>`;
+// ---- sheets (modal pages) --------------------------------------------------
+function openSheet(title, html) {
+  document.getElementById("sheet-title").textContent = title;
+  document.getElementById("sheet-body").innerHTML = html;
+  document.getElementById("sheet").hidden = false;
+}
+function closeSheet() { document.getElementById("sheet").hidden = true; }
+
+// A copyable code/text block (copy button copies the following <pre>'s text).
+function copyBlock(text) {
+  return `<div class="copyrow"><button class="btn ghost copy">copy</button></div><pre>${esc(text)}</pre>`;
+}
+function wireCopies() {
+  document.querySelectorAll("#sheet-body .copy").forEach((b) => {
+    b.onclick = () => navigator.clipboard.writeText(b.parentElement.nextElementSibling.textContent);
+  });
 }
 
-function renderArtifacts(d) {
-  const a = d.artifacts, p = d.path;
+function showCode() {
+  if (!lastDoc) return;
+  const a = lastDoc.artifacts;
   const tabs = [
-    ["weave", "CLI (run)", a.cli_weave],
-    ["path", "CLI (route)", a.cli_path],
+    ["weave", "Run (CLI)", a.cli_weave],
+    ["path", "Route (CLI)", a.cli_path],
     ["python", "Python", a.python],
-    ["json", "JSON", JSON.stringify(a.braid, null, 2)],
+    ["json", "Braid JSON", JSON.stringify(a.braid, null, 2)],
   ];
-  let h = `<div class="bsum"><b>${esc(String(p.step_count))}</b> step(s): ` +
-    esc(p.from_types.join(", ")) + " → " + esc(p.to_types.join(", ")) + "</div>";
-  h += `<div class="btabs">` +
-    tabs.map((t, i) => `<span class="btab${i === 0 ? " on" : ""}" data-i="${i}">${esc(t[1])}</span>`).join("") +
+  const head = `<div class="tabs">` +
+    tabs.map((t, i) => `<span class="tab${i === 0 ? " on" : ""}" data-i="${i}">${esc(t[1])}</span>`).join("") +
     `</div>`;
-  h += tabs.map((t, i) =>
-    `<div class="bpane" data-i="${i}" style="display:${i === 0 ? "block" : "none"}">` +
-    copyBtn() + `<pre>${esc(t[2])}</pre></div>`).join("");
-  if (d.citations && d.citations.length) {
-    h += `<div class="bcite"><b>Cite</b><br>` + d.citations.map(esc).join("<br>") + `</div>`;
-  }
-  return h + runControlsHTML(p);
+  const panes = tabs.map((t, i) =>
+    `<div class="pane" data-i="${i}" style="display:${i === 0 ? "block" : "none"}">${copyBlock(t[2])}</div>`
+  ).join("");
+  openSheet("Generated code", head + panes);
+  wireCopies();
+  document.querySelectorAll("#sheet-body .tab").forEach((tab) => {
+    tab.onclick = () => {
+      const i = tab.dataset.i;
+      document.querySelectorAll("#sheet-body .tab").forEach((t) => t.classList.toggle("on", t === tab));
+      document.querySelectorAll("#sheet-body .pane").forEach((p) => { p.style.display = p.dataset.i === i ? "block" : "none"; });
+      wireCopies();
+    };
+  });
 }
 
-function whyNoPath(msg) {
-  return `<div class="berr"><b>No route.</b><br>${esc(msg)}</div>`;
+function showCite() {
+  const cites = (lastDoc && lastDoc.citations) || [];
+  const body = cites.length
+    ? `<div class="note" style="margin-bottom:8px">Sources for this braid — copy into your methods / references.</div>`
+      + copyBlock(cites.join("\n"))
+    : `<div class="note">No source citations for this route.</div>`;
+  openSheet("Citations", body);
+  wireCopies();
 }
 
 // ---- run: execute the planned braid, light it up, tabulate ------------------
-let lastPlan = null;   // {from, to, policy} of the current built route
-let lastRun = null;    // {columns, rows} for export
-
 // runAnim + runStatusOf live in the base template (the draw loop reads them); we write
 // runAnim here from a run result.
 function startRunAnim(path, result) {
@@ -219,20 +261,30 @@ function parseValues(types, raw) {
   return have;
 }
 
-function runControlsHTML(path) {
-  const hint = path.from_types.length === 1
-    ? `value for <b>${esc(path.from_types[0])}</b>`
-    : `<code>type=value</code> pairs, comma-separated`;
-  return `<div class="brun">
-    <label>Run — ${hint}
-      <input id="r-values" placeholder="${esc(path.from_types.join("="))}=…" autocomplete="off"></label>
-    <div class="brow">
-      <select id="r-expand" title="fan-out policy">
+// The post-plan section of the dock: route summary, run controls, and links to the
+// code / citations / results sheets. Kept compact — the heavy output lives in sheets.
+function buildResultHTML(p) {
+  const single = p.from_types.length === 1;
+  const ph = single ? esc(p.from_types[0]) + " value" : esc(p.from_types.join("=")) + "=value, …";
+  return `
+    <div class="summary">
+      <div class="route">${esc(p.from_types.join(", "))} &rarr; ${esc(p.to_types.join(", "))}</div>
+      <div class="steps">${esc(String(p.step_count))} step(s)</div>
+    </div>
+    <span class="blabel">Run</span>
+    <input id="r-values" placeholder="${ph}" autocomplete="off">
+    <div class="brow" style="margin-top:8px">
+      <button class="btn primary" id="r-run">Run</button>
+      <select id="r-expand" class="grow" title="fan-out">
         <option value="top">top 1</option><option value="top_k">top k</option><option value="all">all</option>
       </select>
-      <input id="r-k" type="number" min="1" value="3" title="k for top-k">
-      <button class="go" id="r-run">Run ▶</button>
-    </div></div>`;
+      <input id="r-k" type="number" min="1" value="3" style="width:48px" title="k">
+    </div>
+    <div class="bactions">
+      <button class="btn ghost" id="b-code">Code</button>
+      <button class="btn ghost" id="b-cite">Citations</button>
+      <button class="btn ghost" id="b-results" style="display:none">Results</button>
+    </div>`;
 }
 
 // Provisional live light-up: reveal the planned route wave-by-wave as SSE events arrive
@@ -248,7 +300,7 @@ function initLiveAnim(path) {
 }
 
 // Run via Server-Sent Events: the braid lights up live, wave by wave, as the executor's
-// on_event fires server-side. (POST /api/run remains for non-streaming callers.)
+// on_event fires server-side. The results open in the Results sheet.
 function runBraid() {
   if (!lastPlan) return;
   const have = parseValues(lastPlan.from, document.getElementById("r-values").value);
@@ -256,7 +308,7 @@ function runBraid() {
   const expand = document.getElementById("r-expand").value;
   const k = parseInt(document.getElementById("r-k").value, 10) || 3;
   const btn = document.getElementById("r-run"); btn.textContent = "running…"; btn.disabled = true;
-  const done = () => { btn.textContent = "Run ▶"; btn.disabled = false; };
+  const done = () => { btn.textContent = "Run"; btn.disabled = false; };
   initLiveAnim(lastPlan.path);
   const qs = new URLSearchParams({
     have: JSON.stringify(have), want: lastPlan.to.join(","),
@@ -268,29 +320,12 @@ function runBraid() {
     if (ev.event === "wave") { runAnim.revealedWave = ev.wave; }
     else if (ev.event === "done") {
       es.close(); done();
-      addPlanView(ev.path); startRunAnim(ev.path, ev.result); renderResults(ev);
-    } else if (ev.event === "error") { es.close(); done(); renderResults(null, ev.error); }
+      addPlanView(ev.path); startRunAnim(ev.path, ev.result); showResults(ev);
+      const rb = document.getElementById("b-results");
+      if (rb) { rb.style.display = ""; rb.onclick = () => showResults(); }
+    } else if (ev.event === "error") { es.close(); done(); showError(ev.error); }
   };
   es.onerror = () => { es.close(); done(); };
-}
-
-function renderResults(d, err) {
-  const box = document.getElementById("results");
-  box.style.display = "block";
-  if (err) { box.innerHTML = `<div class="rhead"><h2>Run failed</h2><span class="rclose" onclick="this.closest('.results').style.display='none'">✕</span></div><div class="berr">${esc(err)}</div>`; return; }
-  lastRun = { columns: d.columns, rows: d.rows };
-  const s = d.summary;
-  const head = `<div class="rhead">
-    <h2>Results — ${s.resolved} resolved${s.unresolved ? ", " + s.unresolved + " unresolved" : ""}${s.errors ? ", " + s.errors + " error(s)" : ""}</h2>
-    <span class="btab" onclick="exportRows('csv')">CSV</span>
-    <span class="btab" onclick="exportRows('tsv')">TSV</span>
-    <span class="btab" onclick="exportRows('json')">JSON</span>
-    <span class="rclose" onclick="this.closest('.results').style.display='none'">✕</span></div>`;
-  if (!d.rows.length) { box.innerHTML = head + `<div class="note">No resolved rows.</div>`; return; }
-  const th = d.columns.map((c) => `<th>${esc(c)}</th>`).join("");
-  const trs = d.rows.map((row) =>
-    "<tr>" + d.columns.map((c) => `<td title="${esc(fmtCell(row[c]))}">${esc(fmtCell(row[c]))}</td>`).join("") + "</tr>").join("");
-  box.innerHTML = head + `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
 }
 
 function fmtCell(v) {
@@ -298,6 +333,35 @@ function fmtCell(v) {
   if (Array.isArray(v)) return v.join("; ");
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
+}
+
+function showError(msg) {
+  openSheet("Run failed", `<div class="berr">${esc(msg)}</div>`);
+}
+
+// Results as a modal page (never overlaps the graph; bounded + scrolls).
+function showResults(d) {
+  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary };
+  if (!lastRun) return;
+  const { columns, rows, summary } = lastRun;
+  const s = summary || { resolved: rows.length, unresolved: 0, errors: 0 };
+  let body = `<div class="rcounts">${s.resolved} resolved` +
+    (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
+    (s.errors ? `, ${s.errors} error(s)` : "") + `</div>`;
+  body += `<div class="bactions" style="margin:0 0 12px">` +
+    `<button class="btn ghost" onclick="exportRows('csv')">Export CSV</button>` +
+    `<button class="btn ghost" onclick="exportRows('tsv')">Export TSV</button>` +
+    `<button class="btn ghost" onclick="exportRows('json')">Export JSON</button></div>`;
+  if (!rows.length) {
+    body += `<div class="note">No resolved rows.</div>`;
+  } else {
+    const th = columns.map((c) => `<th>${esc(c)}</th>`).join("");
+    const trs = rows.map((row) =>
+      "<tr>" + columns.map((c) => `<td title="${esc(fmtCell(row[c]))}">${esc(fmtCell(row[c]))}</td>`).join("") + "</tr>"
+    ).join("");
+    body += `<table class="rtable"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+  }
+  openSheet("Results", body);
 }
 
 function exportRows(fmt) {
@@ -322,34 +386,26 @@ async function runPlan() {
   const from = splitTypes(document.getElementById("b-have").value);
   const to = splitTypes(document.getElementById("b-want").value);
   const policy = document.getElementById("b-policy").value;
-  if (!from.length || !to.length) { out.innerHTML = whyNoPath("pick a Have and a Want type"); return; }
-  out.innerHTML = `<div class="bsum">planning…</div>`;
+  if (!from.length || !to.length) { out.innerHTML = `<div class="berr">Pick a Have and a Want type.</div>`; return; }
+  out.innerHTML = `<div class="note">planning…</div>`;
   try {
     const r = await fetch("/api/plan", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ from_types: from, to_types: to, policy }),
     });
     const d = await r.json();
-    if (!d.ok) { out.innerHTML = whyNoPath(d.error || "unroutable"); return; }
-    runAnim = null;  // clear any prior run light-up when re-planning
+    if (!d.ok) { out.innerHTML = `<div class="berr"><b>No route.</b><br>${esc(d.error || "unroutable")}</div>`; return; }
+    runAnim = null; lastRun = null;        // clear any prior run state when re-planning
+    lastDoc = d;
+    lastPlan = { from: d.path.from_types, to: d.path.to_types, policy, path: d.path };
     setHash(from, to);
     addPlanView(d.path);
-    lastPlan = { from: d.path.from_types, to: d.path.to_types, policy, path: d.path };
-    out.innerHTML = renderArtifacts(d);
-    out.querySelectorAll(".btab[data-i]").forEach((tab) => {
-      tab.onclick = () => {
-        const i = tab.dataset.i;
-        out.querySelectorAll(".btab[data-i]").forEach((t) => t.classList.toggle("on", t === tab));
-        out.querySelectorAll(".bpane").forEach((p) => { p.style.display = p.dataset.i === i ? "block" : "none"; });
-      };
-    });
-    const runBtn = document.getElementById("r-run");
-    if (runBtn) {
-      runBtn.onclick = runBraid;
-      const rv = document.getElementById("r-values");
-      rv.addEventListener("keydown", (e) => { if (e.key === "Enter") runBraid(); });
-    }
-  } catch (e) { out.innerHTML = whyNoPath(String(e)); }
+    out.innerHTML = buildResultHTML(d.path);
+    document.getElementById("r-run").onclick = runBraid;
+    document.getElementById("r-values").addEventListener("keydown", (e) => { if (e.key === "Enter") runBraid(); });
+    document.getElementById("b-code").onclick = showCode;
+    document.getElementById("b-cite").onclick = showCite;
+  } catch (e) { out.innerHTML = `<div class="berr">${esc(String(e))}</div>`; }
 }
 
 // ---- graph search (filter) -------------------------------------------------
@@ -377,7 +433,7 @@ function refreshRecipes() {
   const sel = document.getElementById("b-recipes");
   if (!sel) return;
   const recipes = loadRecipes();
-  sel.innerHTML = '<option value="">— load saved —</option>' +
+  sel.innerHTML = '<option value="">load saved…</option>' +
     Object.keys(recipes).sort().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
 }
 
@@ -413,12 +469,14 @@ function setupBuilder() {
   document.getElementById("b-plan").onclick = runPlan;
   ["b-have", "b-want"].forEach((id) =>
     document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") runPlan(); }));
-  // Graph search filter.
   document.getElementById("b-search").addEventListener("input", (e) => applySearch(e.target.value));
-  // Recipes: save current build / load a saved one.
   document.getElementById("b-save").onclick = saveRecipe;
   document.getElementById("b-recipes").onchange = (e) => { if (e.target.value) loadRecipe(e.target.value); };
   refreshRecipes();
+  // Sheet dismissal: the close button, backdrop click, and Escape.
+  document.getElementById("sheet-x").onclick = closeSheet;
+  document.getElementById("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
+  addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
   // Deep link: #have=...&want=... pre-fills and auto-plans (shareable braid).
   const m = new URLSearchParams(location.hash.slice(1));
   if (m.get("have") || m.get("want")) {
