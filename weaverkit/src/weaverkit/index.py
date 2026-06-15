@@ -79,7 +79,12 @@ def build_rows(specs: list[WeaverSpec]) -> list[IndexRow]:
     rows: list[IndexRow] = []
     for spec in sorted(specs, key=lambda s: s.resolved_weaver_id):
         for cap in spec.capabilities:
-            unmet = tuple(k for k in cap.consumes if k not in met)
+            # consumes_any: reachable if ANY one alternative is met, so it's "unmet"
+            # only when none are. Conjunctive consumes need them all.
+            if cap.consumes_any:
+                unmet = () if any(k in met for k in cap.consumes) else tuple(cap.consumes)
+            else:
+                unmet = tuple(k for k in cap.consumes if k not in met)
             rows.append(
                 IndexRow(
                     weaver=spec.resolved_weaver_id,

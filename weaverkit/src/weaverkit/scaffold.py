@@ -82,6 +82,12 @@ def _api_key_tokens(api_key: str, env_var: str) -> dict[str, str]:
     }
 
 
+def _sample_consumes(cap) -> tuple[str, ...]:
+    """Consumed keys to put in a generated sample input: one alternative when the
+    capability is ``consumes_any`` (any one input suffices), else all consumed keys."""
+    return (sorted(cap.consumes)[:1] if cap.consumes_any else tuple(cap.consumes))
+
+
 def _vocab_source(spec: WeaverSpec) -> str:
     """Generate ``vocab.py`` from the spec — the manifest matches the spec exactly."""
     lines: list[str] = [
@@ -162,6 +168,9 @@ def _vocab_source(spec: WeaverSpec) -> str:
             lines.append(
                 f"                set_outputs={_frozenset_literal(cap.set_outputs)},"
             )
+        # Alternative inputs: consumes is a set of alternatives (any one suffices).
+        if cap.consumes_any:
+            lines.append("                consumes_any=True,")
         # Per-query knobs (filters/sort/thresholds) the caller may pass at run time.
         if cap.parameters:
             lines.append("                parameters=(")
@@ -204,7 +213,7 @@ def _contract_test_source(spec: WeaverSpec) -> str:
     samples: list[dict] = list(golden_by_cap.get(first_cap.id, []))
     n = 0
     while len(samples) < 5:
-        samples.append({k: f"sample-{n}" for k in first_cap.consumes})
+        samples.append({k: f"sample-{n}" for k in _sample_consumes(first_cap)})
         n += 1
 
     lines: list[str] = [
@@ -277,10 +286,10 @@ def _contract_test_source(spec: WeaverSpec) -> str:
                 "# (which exercise group subset/superset cache lookups) are not generated for it.",
             ]
             continue
-        values_a = {k: f"sample-a-{k}" for k in cap.consumes}
+        values_a = {k: f"sample-a-{k}" for k in _sample_consumes(cap)}
         for golden_input in golden_by_cap.get(cap.id, [])[:1]:
             values_a.update(golden_input)
-        values_b = {k: f"sample-b-{k}" for k in cap.consumes}
+        values_b = {k: f"sample-b-{k}" for k in _sample_consumes(cap)}
         lines += [
             "",
             "",
