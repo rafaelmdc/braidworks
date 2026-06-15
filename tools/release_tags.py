@@ -44,11 +44,41 @@ def expected_tags(root: Path = ROOT) -> list[tuple[str, Path]]:
     return tags
 
 
-def _existing_tags() -> set[str]:
+def _local_tags() -> set[str]:
     out = subprocess.run(
         ["git", "tag", "-l"], cwd=ROOT, capture_output=True, text=True, check=True
     )
     return set(out.stdout.split())
+
+
+def _parse_ls_remote(text: str) -> set[str]:
+    """Tag names from ``git ls-remote --tags`` output (drops ``^{}`` peeled refs)."""
+    tags: set[str] = set()
+    for line in text.splitlines():
+        ref = line.split()[-1] if line.split() else ""
+        if ref.startswith("refs/tags/"):
+            name = ref[len("refs/tags/") :]
+            tags.add(name[:-3] if name.endswith("^{}") else name)
+    return tags
+
+
+def _remote_tags() -> set[str]:
+    """Tags already on ``origin``. Tolerant: returns empty if the remote is unreachable
+    (offline / no remote), so the caller falls back to local-only behaviour."""
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", "--tags", "origin"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+    except subprocess.CalledProcessError:
+        return set()
+    return _parse_ls_remote(out.stdout)
+
+
+def _existing_tags() -> set[str]:
+    """Tags that exist locally *or* on the remote — so an already-pushed tag from a
+    prior run is never re-created (the idempotency the CI workflow needs)."""
+    return _local_tags() | _remote_tags()
 
 
 def _missing() -> list[str]:
@@ -72,12 +102,25 @@ def main(argv: list[str]) -> int:
         if not missing:
             print("all package versions are already tagged")
             return 0
+        local = _local_tags()
         for tag in missing:
-            subprocess.run(
-                ["git", "tag", "-a", tag, "-m", tag.replace("-v", " ")],
-                cwd=ROOT, check=True,
+            if tag not in local:
+                subprocess.run(
+                    ["git", "tag", "-a", tag, "-m", tag.replace("-v", " ")],
+                    cwd=ROOT, check=True,
+                )
+            push = subprocess.run(
+                ["git", "push", "origin", tag], cwd=ROOT, capture_output=True, text=True
             )
-            subprocess.run(["git", "push", "origin", tag], cwd=ROOT, check=True)
+            if push.returncode != 0:
+                # A concurrent merge may have pushed it between our check and now — that
+                # is success, not failure. Anything else is a real error.
+                blob = push.stderr + push.stdout
+                if "already exists" in blob or "[rejected]" in blob:
+                    print(f"{tag} already on remote; skipping")
+                    continue
+                print(blob.strip(), file=sys.stderr)
+                raise SystemExit(f"failed to push {tag}")
             print(f"created + pushed {tag}")
         return 0
     print(f"unknown command {cmd!r}; use list | missing | create", file=sys.stderr)
