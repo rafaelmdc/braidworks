@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from bacdive_weaver import build_bacdive_weaver
 
@@ -38,6 +38,7 @@ async def _resolve(weaver, name: str):
 async def test_live_ecoli_type_strain_traits():
     weaver = build_bacdive_weaver(max_strains_scanned=2000)
     result = await _resolve(weaver, "Escherichia coli")
+    skip_if_transient(result)  # a BacDive timeout/throttle is green-lightable, not a regression
     assert result.status is WeaveStatus.OK
     values = {s.type_id: s.value for s in result.strands}
     assert values.get("microbe.trait.gram_stain") == "negative"
@@ -47,4 +48,5 @@ async def test_live_ecoli_type_strain_traits():
 async def test_live_unknown_name_is_no_match():
     weaver = build_bacdive_weaver()
     result = await _resolve(weaver, "Notarealus fakenamei")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH

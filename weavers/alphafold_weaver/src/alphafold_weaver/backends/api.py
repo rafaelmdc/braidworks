@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 
 logger = logging.getLogger("alphafold_weaver.api")
 
@@ -116,10 +116,10 @@ class AlphafoldApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("AlphaFold lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"AlphaFold API error: {exc}")
+            return LookupRecord(query=query, error=f"AlphaFold API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
             logger.warning("AlphaFold lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"AlphaFold API error: {exc}")
+            return LookupRecord(query=query, error=f"AlphaFold API error: {format_exc(exc)}")
 
         if not isinstance(entries, list) or not entries:
             return LookupRecord(query=query, found=False)

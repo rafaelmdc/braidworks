@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from disbiome_weaver.backends.local import DisbiomeLocalBackend
 from disbiome_weaver.setup import ensure_disbiome_db
@@ -39,6 +39,7 @@ async def test_live_build_and_resolve(tmp_path: Path):
         backend="local",
     )
     r = out[0]
+    skip_if_transient(r)
     assert r.status is WeaveStatus.OK
     sm = {s.type_id: s.value for s in r.strands}
     assert sm["microbe.disease.count"] >= 1
@@ -53,4 +54,5 @@ async def test_live_build_and_resolve(tmp_path: Path):
         requested_outputs=frozenset({"microbe.disease.names"}),
         backend="local",
     )
+    skip_if_transient(miss[0])
     assert miss[0].status is WeaveStatus.NO_MATCH

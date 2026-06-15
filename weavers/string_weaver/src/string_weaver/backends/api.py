@@ -26,7 +26,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 
 logger = logging.getLogger("string_weaver.api")
 
@@ -146,10 +146,10 @@ class StringApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("STRING lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"STRING API error: {exc}")
+            return LookupRecord(query=query, error=f"STRING API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
             logger.warning("STRING lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"STRING API error: {exc}")
+            return LookupRecord(query=query, error=f"STRING API error: {format_exc(exc)}")
 
         if not isinstance(payload, list) or not payload:
             return LookupRecord(query=query, found=False)

@@ -25,7 +25,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, format_exc
 
 logger = logging.getLogger("uniprot_weaver.api")
 
@@ -179,7 +179,7 @@ class UniprotApiBackend(BackendBase):
             entry = await self._best_hit(term, organism)
         except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
             logger.warning("UniProt lookup failed for %r: %s", term, exc)
-            return LookupRecord(query=query, error=f"UniProt API error: {exc}")
+            return LookupRecord(query=query, error=f"UniProt API error: {format_exc(exc)}")
 
         if entry is None:
             return LookupRecord(query=query, found=False)

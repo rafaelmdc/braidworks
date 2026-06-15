@@ -29,4 +29,21 @@ jobs:
       - name: Live E2E (real network calls)
         env:
           BRAIDWORKS_RUN_LIVE: "1"
-        run: make test
+          PYTEST_ADDOPTS: "-rs"  # report skip reasons so green-lightable skips surface
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee live.log
+      - name: Surface green-lightable upstream warnings
+        if: always()  # run even when a real (hard) failure red-lined the job
+        run: |
+          if grep -q "green-light if expected" live.log; then
+            {
+              echo "### ⚠️ Upstream availability warnings (green-light if expected)"
+              echo "Transient connectivity (timeout / connection / rate-limit) — not a code"
+              echo "regression. A 5xx / schema / auth error would have *failed* the job instead."
+              echo
+              grep -oE "upstream .*green-light if expected:.*" live.log | sort -u | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+            grep -oE "upstream .*green-light if expected:.*" live.log | sort -u \
+              | while IFS= read -r line; do echo "::warning::$line"; done
+          fi

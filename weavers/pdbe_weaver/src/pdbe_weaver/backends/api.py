@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 
 logger = logging.getLogger("pdbe_weaver.api")
 
@@ -153,10 +153,10 @@ class PdbeApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("PDBe detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:
             logger.warning("PDBe detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
         # Response is {pdb_id: [summary]}; casing can differ, so fall back to the sole value.
         rows = body.get(pid) or (next(iter(body.values()), []) if body else [])
         if not rows:
@@ -176,10 +176,10 @@ class PdbeApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("PDBe lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
             logger.warning("PDBe lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {exc}")
+            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
 
         # Response is {accession: [rows]}; the key casing can differ, so fall back to the
         # sole value if the exact key is absent.

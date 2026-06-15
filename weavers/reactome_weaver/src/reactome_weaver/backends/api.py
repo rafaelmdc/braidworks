@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 
 logger = logging.getLogger("reactome_weaver.api")
 
@@ -135,10 +135,10 @@ class ReactomeApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("Reactome detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:
             logger.warning("Reactome detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
         if not isinstance(obj, dict) or not obj.get("stId"):
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_describe(obj))
@@ -155,10 +155,10 @@ class ReactomeApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("Reactome lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
             logger.warning("Reactome lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {exc}")
+            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
 
         if not isinstance(rows, list) or not rows:
             return LookupRecord(query=query, found=False)

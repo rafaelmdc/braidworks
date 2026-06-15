@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from alphafold_weaver import build_alphafold_weaver
 
@@ -45,6 +45,7 @@ async def test_live_tp53_canonical_model():
     """
     weaver = build_alphafold_weaver()
     result = await _model(weaver, "P04637")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert produced["structure.alphafold.entry_id"] == "AF-P04637-F1"
@@ -57,4 +58,5 @@ async def test_live_malformed_accession_is_no_match():
     # a malformed identifier (400) is the reliable NO_MATCH case.
     weaver = build_alphafold_weaver()
     result = await _model(weaver, "NOTAREALACC")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
