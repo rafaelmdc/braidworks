@@ -159,6 +159,49 @@ def test_scaffold_round_trips_set_outputs(tmp_path):
     assert check_manifest(weaver.MANIFEST, spec) == []
 
 
+_CONSUMES_ANY_SPEC = '''
+[weaver]
+db_name = "mapdemo"
+weaver_id = "mapdemo"
+title = "Alternative-input demo"
+version = "0.1.0"
+license = "CC0-1.0"
+source_url = "https://example.org/demo"
+fingerprint_source = "release-tag"
+backends = ["local"]
+source_sample = """
+from,to
+7157,P04637
+"""
+
+[[capability]]
+id = "map.to_acc"
+consumes = ["gene.ncbi.id", "pdb.id"]
+consumes_any = true
+backends = ["local"]
+set_outputs = ["protein.uniprot.accession"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["protein.uniprot.accession"]
+'''
+
+
+def test_scaffold_round_trips_consumes_any(tmp_path):
+    """A consumes_any declaration survives scaffold → manifest, and conformance agrees."""
+    spec_path = tmp_path / "map.weaver.spec.toml"
+    spec_path.write_text(_CONSUMES_ANY_SPEC)
+    spec = load_spec(spec_path)
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=_CONSUMES_ANY_SPEC)
+    mod = _import_generated(dest, spec.package)
+    weaver = mod.build_mapdemo_weaver()
+    cap = weaver.MANIFEST.capabilities[0]
+    assert cap.consumes_any is True
+    assert cap.consumes == frozenset({"gene.ncbi.id", "pdb.id"})
+    assert check_manifest(weaver.MANIFEST, spec) == []
+
+
 def test_generated_register_wires_into_factory(tmp_path):
     from braidworks.core import WeaverFactory
 

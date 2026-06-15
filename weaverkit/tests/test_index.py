@@ -77,6 +77,45 @@ def test_island_input_is_reported_unmet() -> None:
     assert row.unmet_inputs == "gene.ncbi.id"
 
 
+def test_consumes_any_unmet_only_when_no_alternative_is_met() -> None:
+    # An alternative-input capability is reachable if ANY one input is produced.
+    producer = _spec("prod", ("organism.name",), ("ncbi.taxon.id",))
+    any_cap = WeaverSpec(
+        db_name="mapper", title="m", version="0.1.0", license="CC0-1.0",
+        source_url="https://example.org", fingerprint_source="t", source_sample="a\n1\n",
+        backends=("local",),
+        capabilities=(
+            CapabilitySpec(
+                id="map.to_acc",
+                consumes=("ncbi.taxon.id", "pdb.id", "gene.hgnc.id"),
+                consumes_any=True,
+                groups=(GroupSpec(id="g", outputs=("protein.uniprot.accession",)),),
+            ),
+        ),
+    )
+    rows = {r.weaver: r for r in build_rows([producer, any_cap])}
+    # ncbi.taxon.id is produced -> the whole OR-capability is met (pdb/hgnc not flagged).
+    assert rows["mapper"].unmet_inputs == ""
+
+
+def test_consumes_any_unmet_lists_all_when_none_met() -> None:
+    any_cap = WeaverSpec(
+        db_name="mapper", title="m", version="0.1.0", license="CC0-1.0",
+        source_url="https://example.org", fingerprint_source="t", source_sample="a\n1\n",
+        backends=("local",),
+        capabilities=(
+            CapabilitySpec(
+                id="map.to_acc",
+                consumes=("pdb.id", "gene.hgnc.id"),
+                consumes_any=True,
+                groups=(GroupSpec(id="g", outputs=("protein.uniprot.accession",)),),
+            ),
+        ),
+    )
+    (row,) = build_rows([any_cap])
+    assert set(row.unmet_inputs.split(";")) == {"pdb.id", "gene.hgnc.id"}
+
+
 def test_api_key_column_carried_through() -> None:
     spec = _spec("api", ("ncbi.taxon.id",), ("go.term",), backends=("api",), api_key="required")
     (row,) = build_rows([spec])
