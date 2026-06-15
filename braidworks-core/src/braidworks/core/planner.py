@@ -21,6 +21,18 @@ from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.registry import BraidRegistry
 
 
+def _without(graph: nx.DiGraph, exclude: frozenset[tuple[str, str]]) -> nx.DiGraph:
+    """A copy of ``graph`` with every edge of an excluded ``(weaver, capability)`` removed."""
+    pruned = graph.copy()
+    doomed = [
+        (u, v)
+        for u, v, data in graph.edges(data=True)
+        if (data["weaver_id"], data["capability_id"]) in exclude
+    ]
+    pruned.remove_edges_from(doomed)
+    return pruned
+
+
 @dataclass
 class _InvocationSpec:
     """Mutable accumulator before a CapabilityInvocation is finalized."""
@@ -41,8 +53,18 @@ class Braider:
         target_types: frozenset[str],
         *,
         backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+        exclude: frozenset[tuple[str, str]] = frozenset(),
     ) -> Braid:
+        """Route from ``available_types`` to ``target_types`` across the capability graph.
+
+        ``exclude`` drops specific ``(weaver_id, capability_id)`` edges before routing —
+        used to **re-plan around a failed node**: when a step errors mid-braid, the
+        executor calls ``plan`` again with that capability excluded, so the planner finds
+        an alternate path to the still-missing targets if the graph offers one.
+        """
         graph = self._registry.build_graph()
+        if exclude:
+            graph = _without(graph, exclude)
 
         # 2–3. Route to each not-yet-available target and collect edges used.
         specs: dict[tuple[str, str, str], _InvocationSpec] = {}

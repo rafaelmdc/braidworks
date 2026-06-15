@@ -57,8 +57,17 @@ consumes (e.g. `orthologs`: gene → genes), which the planner can't auto-route;
 implies `--expand all`. `--traverse <capability-id>` is the explicit form for an
 ambiguous or unnamed relationship.
 Data goes to **stdout**, progress + a resolved/unresolved/review count to **stderr**,
-so pipes stay clean. Exit code is non-zero only on a structural error (a `NO_MATCH` is
-valid data) — add `--strict` to also fail on any unresolved/review input.
+so pipes stay clean. Exit code is non-zero only on a *fatal* structural error (a
+`NO_MATCH` is valid data) — add `--strict` to also fail on any unresolved/review input.
+
+**Error tolerance.** A node failing (e.g. one database returns a 500) is *branch-local*:
+the weave records it, **keeps the data its other branches already produced**, and tries
+to **reroute** around the failed node to the still-missing targets if the graph offers
+an alternate path. So a six-database dossier where one source is down still returns the
+other five. Each failure is reported on stderr with a category and a plain-English reason
+(`upstream unavailable`, `rate limited`, `timeout`, …). An error that left an entity
+with *some* of its targets (or was rerouted) is reported but does **not** fail the run;
+only an entity left with **no** targets and no alternate route makes the exit non-zero.
 
 The same thing from Python:
 

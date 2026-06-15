@@ -329,6 +329,31 @@ def test_for_each_unknown_relationship_errors(capsys):
     assert "no traversal" in capsys.readouterr().err
 
 
+# --- structural errors are reported, not silent -------------------------------------
+
+def test_weave_reports_structural_error_and_exits_nonzero(monkeypatch, capsys):
+    """A node that 5xx's must not vanish into an empty result with exit 0."""
+    boom_cap = Capability(
+        id="boom", consumes=frozenset({"protein.query"}),
+        produces=frozenset({"protein.name"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"protein.name"})),),
+        backends=("api",))
+
+    def boom(ss, b, r):
+        return WeaveResult("boom", "1.0.0", b, frozenset({"g"}),
+                           status=WeaveStatus.ERROR, errors=("Server error '503'",))
+
+    reg = BraidRegistry()
+    reg.register(ScriptedWeaver(boom, capability=boom_cap, weaver_id="boomw"))
+    monkeypatch.setattr(cli, "build_registry_from_entry_points", lambda only=None: reg)
+
+    code = _run("weave", "--have", "protein.query=X", "--want", "protein.name")
+    err = capsys.readouterr().err
+    assert code == 1  # fatal structural error → non-zero (was: silent exit 0)
+    assert "error(s)" in err
+    assert "unavailable" in err  # the plain-English category explanation
+
+
 def test_run_rejects_bad_param(capsys):
     code = _run("run", "pdbe", "list_structures",
                 "--have", "protein.uniprot.accession=ACC_X", "--param", "level=nope")
