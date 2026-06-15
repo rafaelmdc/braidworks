@@ -4,7 +4,7 @@ version = "0.1.5"
 description = "Reactome pathways (accession -> pathways) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.8.0", "httpx>=0.27"]
+dependencies = ["braidworks-core>=0.7.1", "httpx>=0.27"]
 
 [project.entry-points."braidworks.weavers"]
 reactome = "reactome_weaver.factory:build_reactome_weaver"

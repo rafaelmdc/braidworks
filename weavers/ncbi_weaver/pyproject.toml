@@ -5,7 +5,7 @@ description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "braidworks-core>=0.8.0",
+  "braidworks-core>=0.7.1",
   "rapidfuzz>=3.0,<4.0",
   "httpx>=0.27",
   "platformdirs>=4.0",
