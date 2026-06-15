@@ -19,16 +19,19 @@ exactly which source and license they're dealing with.
 
 ---
 
-## 0. Current priority & deferred breadth (2026-06)
+## 0. Current priority & deferred breadth (updated 2026-06-15)
 
 The protein hub is built out (uniprot → pdbe / alphafold / quickgo / reactome /
 string), each `list_*` set key has its `describe_*` consumer, and cardinality
-fan-out ships. The next investment is **depth-for-everyone, not breadth**: a
-first-class `braidworks` **CLI** (query + inspect from bash) so researchers can use
-the whole network without writing Python. Weaver breadth is **deferred below it**.
+fan-out ships. **Shipped since:** the `braidworks` CLI, traversal fan-out
+(`--for-each`), error-tolerant weaving + reroute, interchangeable-source fallback,
+classified errors, and CI hardening (live E2E, CodeQL, Dependabot). core `0.7.1`.
 
-Deferred-breadth weavers/capabilities (valuable, but each only deepens one corner —
-pick up after the CLI):
+**▶ Current top priority is the first item below — `uniprot resolve_mapping`** —
+because it completes the molecular flagship demo (orthologs → structures). See
+**[NEXT.md](NEXT.md)** for the start-here plan, scope, and the coverage caveat.
+
+Deferred-breadth weavers/capabilities (valuable, but each only deepens one corner):
 
 - **`uniprot resolve_mapping`** — accession → cross-reference ids (KEGG, InterPro,
   Pfam, Ensembl, …). Turns UniProt into the intermediate edge that unlocks the
