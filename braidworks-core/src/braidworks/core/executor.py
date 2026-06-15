@@ -7,7 +7,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Callable
 
 from braidworks.core.braid import (
     BackendPolicy,
@@ -265,6 +265,7 @@ class LocalExecutor:
         max_expansion: int = 10_000,
         backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
         reroute: bool = True,
+        on_event: Callable[[dict], None] | None = None,
     ) -> ExecutionResult:
         result = ExecutionResult()
         # Citations for every source this braid draws on (issue #1). Computed from the
@@ -311,6 +312,7 @@ class LocalExecutor:
                 confidence_threshold=confidence_threshold,
                 max_expansion=max_expansion,
                 reroute_out=reroute_out,
+                on_event=on_event,
             )
 
         if reroute_out:
@@ -389,6 +391,7 @@ class LocalExecutor:
         confidence_threshold: float,
         max_expansion: int,
         reroute_out: list[tuple[StrandSet, frozenset[tuple[str, str]]]] | None = None,
+        on_event: Callable[[dict], None] | None = None,
     ) -> None:
         live = list(chunk)  # entities still progressing (not terminally bucketed)
         terminal: set[int] = set()  # id(entity) already placed in errors/review_queue
@@ -410,6 +413,13 @@ class LocalExecutor:
             # in deterministic step order (no shared-state hazard across the gather).
             jobs = [self._run_step_over(braid, si, live, params) for si in wave]
             wave_results = await asyncio.gather(*jobs)
+            # Live progress hook (e.g. weaverkit serve's light-up): one event per wave as
+            # its steps finish, naming the capabilities that ran. Off by default.
+            if on_event is not None:
+                on_event({
+                    "wave": wi,
+                    "capabilities": [inv.capability_id for _si, inv, _outs in wave_results],
+                })
             remaining_steps = tuple(
                 braid.steps[si] for later in waves[wi + 1 :] for si in later
             )

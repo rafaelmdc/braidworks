@@ -759,7 +759,11 @@ function runStatusOf(nodeId, now) {
   if (!runAnim) return null;
   const info = runAnim.perNode[nodeId];
   if (!info) return null;
-  return (now - runAnim.start) < info.wave * runAnim.waveMs ? "pending" : info.status;
+  // live: reveal as wave events arrive (revealedWave); else timed replay.
+  const reached = runAnim.live
+    ? info.wave <= runAnim.revealedWave
+    : (now - runAnim.start) >= info.wave * runAnim.waveMs;
+  return reached ? info.status : "pending";
 }
 /* __SERVE_JS__ */
 

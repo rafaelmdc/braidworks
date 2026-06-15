@@ -17,6 +17,9 @@ from braidworks.core.executor import ErrorPolicy, LocalExecutor, ReviewPolicy
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.strand import Strand, StrandSet
 
+from braidworks.core.planner import Braider
+from braidworks.core.result import WeaveResult, WeaveStatus
+
 from helpers import (
     ScriptedWeaver,
     ambiguous_result,
@@ -25,8 +28,39 @@ from helpers import (
     no_match_result,
     ok_result,
     resolve_name_capability,
+    simple_capability,
     single_step_braid,
 )
+
+
+def _ok2(cap_id, *strands):
+    return WeaveResult(cap_id, "1.0.0", "local", frozenset({"g"}),
+                       status=WeaveStatus.OK, strands=tuple(strands))
+
+
+async def test_on_event_fires_per_wave_and_is_optional():
+    """The optional on_event hook reports each wave's capabilities; omitting it is a no-op."""
+    reg = BraidRegistry()
+    reg.register(ScriptedWeaver(
+        lambda ss, b, r: _ok2("s1", Strand("b", "B")),
+        capability=simple_capability("s1", {"a"}, {"b"}), weaver_id="w1"))
+    reg.register(ScriptedWeaver(
+        lambda ss, b, r: _ok2("s2", Strand("c", "C")),
+        capability=simple_capability("s2", {"b"}, {"c"}), weaver_id="w2"))
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
+    inp = [StrandSet.from_strands("e0", [Strand("a", "A")])]
+
+    events = []
+    res = await LocalExecutor(reg).execute(braid, inp, on_event=events.append)
+    assert res.resolved[0].get("c").value == "C"
+    # two waves (a→b, then b→c), each reported with the capability that ran
+    assert [e["wave"] for e in events] == [0, 1]
+    assert events[0]["capabilities"] == ["s1"]
+    assert events[1]["capabilities"] == ["s2"]
+
+    # omitting the hook changes nothing (no crash, same result)
+    res2 = await LocalExecutor(reg).execute(braid, inp)
+    assert res2.resolved[0].get("c").value == "C"
 
 ID = "ncbi.taxon.id"
 LINEAGE = "ncbi.taxon.lineage"
