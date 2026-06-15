@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 from braidworks.testing.contract import WeaverOrderContractTests
 
 from ncbi_weaver import build_ncbi_weaver, vocab
@@ -131,6 +131,7 @@ async def test_e2e_known_lineage_homo_sapiens(real_db_path):
     out = await _resolve_names(weaver, ["Homo sapiens"], {vocab.TAXON_ID, vocab.LINEAGE})
     sm = _strand_map(out[0])
 
+    skip_if_transient(out[0])
     assert out[0].status is WeaveStatus.OK
     assert sm[vocab.TAXON_ID] == 9606
     assert sm[vocab.PARENT_ID] == 9605  # genus Homo
@@ -188,6 +189,7 @@ async def test_live_list_children_genus_to_species():
         backend="api",
     )
     r = out[0]
+    skip_if_transient(r)
     assert r.status is WeaveStatus.OK
     sm = {s.type_id: s.value for s in r.strands}
     ids = sm[vocab.TAXON_ID]
@@ -208,6 +210,7 @@ async def test_live_list_genomes_and_describe():
         params={"reference_only": True},
     )
     r = lst[0]
+    skip_if_transient(r)
     assert r.status is WeaveStatus.OK
     sm = {s.type_id: s.value for s in r.strands}
     accs = sm[vocab.GENOME_ACCESSION]

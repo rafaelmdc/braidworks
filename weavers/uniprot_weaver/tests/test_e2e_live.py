@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from uniprot_weaver import build_uniprot_weaver
 
@@ -42,6 +42,7 @@ async def test_live_gene_symbol_resolves_with_bridge():
             backend="api",
         )
     )[0]
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert produced.get("protein.gene", "").upper() == "TP53"
@@ -63,6 +64,7 @@ async def test_live_accession_is_deterministic():
             backend="api",
         )
     )[0]
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert produced.get("protein.uniprot.accession") == "P04637"
@@ -80,4 +82,5 @@ async def test_live_unknown_query_is_no_match():
             backend="api",
         )
     )[0]
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH

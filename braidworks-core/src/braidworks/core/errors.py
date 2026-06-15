@@ -66,6 +66,79 @@ def classify_error(message: str | None) -> ErrorCategory:
     return ErrorCategory.UNKNOWN
 
 
+# Transient / availability failures: not a sign the integration is broken, and they can
+# happen from anywhere (a slow network, a throttled IP), so a live test treats them as a
+# *green-lightable warning* rather than a hard failure. A 5xx (UPSTREAM_UNAVAILABLE), an
+# auth error, or a bad response shape is deliberately NOT here — those mean something is
+# actually wrong and should fail loudly.
+GREENLIGHTABLE_CATEGORIES = frozenset(
+    {ErrorCategory.TIMEOUT, ErrorCategory.NETWORK, ErrorCategory.RATE_LIMITED}
+)
+
+
+def is_greenlightable(category: ErrorCategory) -> bool:
+    """True for transient connectivity failures a human can wave through (timeout /
+    connection / rate-limit) — as opposed to a real contract or server error."""
+    return category in GREENLIGHTABLE_CATEGORIES
+
+
+def classify_status(status_code: int) -> ErrorCategory:
+    """Map an HTTP status to a category (429 → rate-limit, 5xx → upstream, 401/3 → auth)."""
+    if status_code == 429:
+        return ErrorCategory.RATE_LIMITED
+    if status_code in (401, 403):
+        return ErrorCategory.AUTH
+    if status_code == 404:
+        return ErrorCategory.NOT_FOUND
+    if 500 <= status_code < 600:
+        return ErrorCategory.UPSTREAM_UNAVAILABLE
+    return ErrorCategory.UNKNOWN
+
+
+def classify_exception(exc: BaseException) -> ErrorCategory:
+    """Classify an exception by its *type* (and HTTP status if it carries one) — robust
+    where the message is empty, which is exactly how httpx raises timeouts (``str()`` is
+    ``''``). Inspects the class name so core needs no ``httpx`` dependency; falls back to
+    the message text. ``ReadTimeout`` → TIMEOUT, ``ConnectError`` → NETWORK,
+    ``HTTPStatusError`` → by ``response.status_code``."""
+    name = type(exc).__name__.lower()
+    if "timeout" in name:
+        return ErrorCategory.TIMEOUT
+    if "connect" in name or "network" in name:
+        return ErrorCategory.NETWORK
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int):
+        return classify_status(status)
+    return classify_error(str(exc) or name)
+
+
+def format_exc(exc: BaseException) -> str:
+    """A never-empty, classifiable message for an exception. httpx timeouts stringify to
+    ``''``; this prefixes the type name so the failure is legible and ``classify_error``
+    can bucket it (``ReadTimeout`` contains 'timeout', etc.)."""
+    text = str(exc)
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+
+
+def skip_if_transient(result: object) -> None:
+    """For live (network) tests: skip with a green-lightable note when ``result`` is an
+    ERROR caused by a transient connectivity failure (timeout / connection / rate-limit),
+    so a flaky upstream doesn't read as a code regression. A 5xx / schema / auth error is
+    left alone — the test's own assertions fail it loudly. Duck-typed on
+    ``result.status``/``result.errors``; imports pytest lazily so core stays test-free."""
+    import pytest
+
+    status = getattr(result, "status", None)
+    if getattr(status, "name", "") != "ERROR":
+        return
+    message = "; ".join(getattr(result, "errors", ()) or ())
+    category = classify_error(message)
+    if is_greenlightable(category):
+        pytest.skip(
+            f"upstream {category.value} — green-light if expected: {message or category.value}"
+        )
+
+
 def explain_error(category: ErrorCategory, *, source: str | None = None) -> str:
     """A one-line, plain-English explanation for a category, naming ``source`` if given."""
     who = source or "the data source"

@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 
 logger = logging.getLogger("quickgo_weaver.api")
 
@@ -145,10 +145,10 @@ class QuickgoApiBackend(BackendBase):
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("QuickGO term detail failed for %r: %s", term, exc)
-            return LookupRecord(query=query, error=f"QuickGO API error: {exc}")
+            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:
             logger.warning("QuickGO term detail failed for %r: %s", term, exc)
-            return LookupRecord(query=query, error=f"QuickGO API error: {exc}")
+            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
         if not results or not results[0].get("id"):
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_describe(results[0]))
@@ -160,7 +160,7 @@ class QuickgoApiBackend(BackendBase):
             rows = await self._all_annotations(accession)
         except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
             logger.warning("QuickGO lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"QuickGO API error: {exc}")
+            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
 
         if not rows:
             return LookupRecord(query=query, found=False)

@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from quickgo_weaver import build_quickgo_weaver
 
@@ -46,6 +46,7 @@ async def test_live_tp53_go_annotations():
     """
     weaver = build_quickgo_weaver()
     result = await _go(weaver, "P04637")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     records = produced["go.records"]
@@ -61,6 +62,7 @@ async def test_live_tp53_go_annotations():
 async def test_live_unknown_accession_is_no_match():
     weaver = build_quickgo_weaver()
     result = await _go(weaver, "X0X0X0")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
 
 
@@ -77,6 +79,7 @@ async def test_live_describe_go_term():
             backend="api",
         )
     )[0]
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert produced["go.term.name"] == "apoptotic process"

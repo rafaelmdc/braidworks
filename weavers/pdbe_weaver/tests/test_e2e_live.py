@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from pdbe_weaver import build_pdbe_weaver
 
@@ -45,6 +45,7 @@ async def test_live_tp53_has_structures():
     """
     weaver = build_pdbe_weaver()
     result = await _structures(weaver, "P04637")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     ids, recs = produced["structure.pdb.ids"], produced["structure.pdb.records"]
@@ -61,6 +62,7 @@ async def test_live_tp53_has_structures():
 async def test_live_unknown_accession_is_no_match():
     weaver = build_pdbe_weaver()
     result = await _structures(weaver, "X0X0X0")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
 
 
@@ -83,6 +85,7 @@ async def test_live_describe_1tup():
     """Drift detector: 1tup (p53/DNA) summary still maps to our describe leaves."""
     weaver = build_pdbe_weaver()
     result = await _describe(weaver, "1tup")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert "P53" in produced["structure.pdb.title"].upper()
@@ -93,4 +96,5 @@ async def test_live_describe_1tup():
 async def test_live_describe_unknown_is_no_match():
     weaver = build_pdbe_weaver()
     result = await _describe(weaver, "9zz9")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH

@@ -28,7 +28,7 @@ from typing import Any
 import httpx
 from rapidfuzz import fuzz
 
-from braidworks.core import LookupRecord, is_not_found_status
+from braidworks.core import LookupRecord, format_exc, is_not_found_status
 
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .. import vocab
@@ -164,11 +164,11 @@ class DatasetsV2Backend:
                     records.append(LookupRecord(query=q, found=False))
                     continue
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(LookupRecord(query=q, error=f"NCBI children error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(LookupRecord(query=q, error=f"NCBI children error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}"))
                 continue
             if not children:
                 records.append(LookupRecord(query=q, found=False))
@@ -241,10 +241,10 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}"))
                 continue
             if not assemblies:
                 records.append(LookupRecord(query=q, found=False))
@@ -307,10 +307,10 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI genome error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI genome error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI genome error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI genome error: {format_exc(exc)}"))
                 continue
             if values is None:
                 records.append(LookupRecord(query=q, found=False))
@@ -426,10 +426,10 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
                 continue
             gene = next((r.get("gene") for r in reports if r.get("gene")), None)
             if not gene or gene.get("gene_id") is None:
@@ -469,10 +469,10 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
                 continue
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
@@ -510,10 +510,10 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}"))
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {exc}"))
+                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}"))
                 continue
             if not orthologs:
                 records.append(LookupRecord(query=q, found=False))

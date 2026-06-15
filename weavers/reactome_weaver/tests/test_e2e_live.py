@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from reactome_weaver import build_reactome_weaver
 
@@ -49,6 +49,7 @@ async def test_live_tp53_pathways():
     """
     weaver = build_reactome_weaver()
     result = await _pathways(weaver, "P04637")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     records = produced["pathway.reactome.records"]
@@ -64,6 +65,7 @@ async def test_live_tp53_pathways():
 async def test_live_malformed_accession_is_no_match():
     weaver = build_reactome_weaver()
     result = await _pathways(weaver, "NOTAREALACC")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
 
 
@@ -81,6 +83,7 @@ async def test_live_describe_pathway():
             backend="api",
         )
     )[0]
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     assert produced["pathway.reactome.display_name"] == "Stabilization of p53"

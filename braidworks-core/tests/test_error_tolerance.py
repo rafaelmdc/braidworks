@@ -180,3 +180,72 @@ async def test_execution_error_json_roundtrip():
     restored = ExecutionError.from_json(res.errors[0].to_json())
     assert restored.category is ErrorCategory.UPSTREAM_UNAVAILABLE
     assert restored.recovered is False
+
+
+# --- exception classification + transient green-lighting -------------------------
+
+class _FakeResp:
+    def __init__(self, code):
+        self.status_code = code
+
+
+class _StatusErr(Exception):
+    def __init__(self, code):
+        self.response = _FakeResp(code)
+        super().__init__("")
+
+
+def test_classify_exception_by_type_even_with_empty_message():
+    from braidworks.core import classify_exception, ErrorCategory
+
+    class ReadTimeout(Exception):
+        def __str__(self): return ""  # httpx timeouts stringify empty
+
+    class ConnectError(Exception):
+        def __str__(self): return ""
+
+    assert classify_exception(ReadTimeout()) is ErrorCategory.TIMEOUT
+    assert classify_exception(ConnectError()) is ErrorCategory.NETWORK
+    assert classify_exception(_StatusErr(503)) is ErrorCategory.UPSTREAM_UNAVAILABLE
+    assert classify_exception(_StatusErr(429)) is ErrorCategory.RATE_LIMITED
+    assert classify_exception(_StatusErr(403)) is ErrorCategory.AUTH
+
+
+def test_format_exc_is_never_empty_and_classifies():
+    from braidworks.core import format_exc, classify_error, ErrorCategory
+
+    class ReadTimeout(Exception):
+        def __str__(self): return ""
+
+    msg = format_exc(ReadTimeout())
+    assert msg == "ReadTimeout"  # not empty
+    assert classify_error(msg) is ErrorCategory.TIMEOUT  # the empty-message bug, fixed
+
+
+def test_greenlightable_set_excludes_server_and_schema_errors():
+    from braidworks.core import is_greenlightable, ErrorCategory as E
+
+    assert is_greenlightable(E.TIMEOUT)
+    assert is_greenlightable(E.NETWORK)
+    assert is_greenlightable(E.RATE_LIMITED)
+    assert not is_greenlightable(E.UPSTREAM_UNAVAILABLE)  # 5xx → hard fail
+    assert not is_greenlightable(E.BAD_RESPONSE)          # schema drift → hard fail
+    assert not is_greenlightable(E.AUTH)
+
+
+def test_skip_if_transient_skips_timeout_but_not_5xx():
+    import pytest
+    from braidworks.core import skip_if_transient
+    from braidworks.core.result import WeaveResult, WeaveStatus
+
+    timeout = WeaveResult("c", "1", "api", frozenset(),
+                          status=WeaveStatus.ERROR, errors=("BacDive API error: ReadTimeout",))
+    with pytest.raises(pytest.skip.Exception):
+        skip_if_transient(timeout)
+
+    server = WeaveResult("c", "1", "api", frozenset(),
+                         status=WeaveStatus.ERROR, errors=("Server error '500'",))
+    skip_if_transient(server)  # does NOT skip — a 5xx must fail loudly
+
+    ok = WeaveResult("c", "1", "api", frozenset(), status=WeaveStatus.OK)
+    skip_if_transient(ok)  # no-op

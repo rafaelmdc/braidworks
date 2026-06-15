@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, format_exc
 
 logger = logging.getLogger("bacdive_weaver.api")
 
@@ -157,7 +157,7 @@ class BacdiveApiBackend(BackendBase):
             type_strain = await self._find_type_strain(genus, species)
         except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
             logger.warning("BacDive lookup failed for %r: %s", name, exc)
-            return LookupRecord(query=query, error=f"BacDive API error: {exc}")
+            return LookupRecord(query=query, error=f"BacDive API error: {format_exc(exc)}")
 
         if type_strain is None:
             return LookupRecord(query=query, found=False)

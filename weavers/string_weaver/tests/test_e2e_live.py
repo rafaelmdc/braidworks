@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from braidworks.core import Strand, StrandSet, WeaveStatus
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from string_weaver import build_string_weaver
 
@@ -46,6 +46,7 @@ async def test_live_tp53_has_interaction_partners():
     """
     weaver = build_string_weaver()
     result = await _interactions(weaver, "P04637")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     partners = produced["protein.interaction.partners"]
@@ -61,4 +62,5 @@ async def test_live_tp53_has_interaction_partners():
 async def test_live_unknown_accession_is_no_match():
     weaver = build_string_weaver()
     result = await _interactions(weaver, "X0X0X0")
+    skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
