@@ -1,6 +1,6 @@
 [project]
 name = "weaverkit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Guardrails for building Braidworks weavers: spec, scaffold, and conformance."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,6 +8,9 @@ dependencies = ["braidworks-core>=0.8.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+# Optional GUI server (`weaverkit serve`). Kept out of the base install so weavers,
+# conformance, scaffold, and CI stay stdlib-only.
+serve = ["fastapi>=0.110", "uvicorn>=0.27"]
 
 [project.scripts]
 weaverkit = "weaverkit.cli:main"
