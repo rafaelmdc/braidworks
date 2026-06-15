@@ -12,6 +12,7 @@ comment, sequence.length) so the mapping path is exercised exactly as in product
 from __future__ import annotations
 
 import json
+from urllib.parse import parse_qs
 
 import httpx
 
@@ -45,11 +46,23 @@ _TP53 = {
 
 
 def _handler(request: httpx.Request) -> httpx.Response:
-    if request.url.path.endswith("/uniprotkb/search"):
+    path = request.url.path
+    if path.endswith("/uniprotkb/search"):
         query = request.url.params.get("query", "")
         # Only "TP53" resolves; anything else is a clean empty result (NO_MATCH).
         results = [_TP53] if "TP53" in query else []
         return httpx.Response(200, content=json.dumps({"results": results}))
+    # ID-mapping (resolve_mapping): submit -> poll -> results. The job id echoes the
+    # target db (reviewed vs full); both yield TP53's canonical accession for GeneID
+    # 7157 so the golden is a single, deterministic accession (count = 1).
+    if path.endswith("/idmapping/run"):
+        form = parse_qs(request.content.decode())
+        to_db = (form.get("to") or [""])[0]
+        return httpx.Response(200, content=json.dumps({"jobId": f"job-{to_db}"}))
+    if "/idmapping/status/" in path:
+        return httpx.Response(200, content=json.dumps({"jobStatus": "FINISHED"}))
+    if "/idmapping/results/" in path:
+        return httpx.Response(200, content=json.dumps({"results": [{"from": "7157", "to": "P04637"}]}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

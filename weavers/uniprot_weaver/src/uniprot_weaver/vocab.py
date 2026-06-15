@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Parameter, Provenance, WeaverManifest
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -77,6 +77,36 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=25,
                 always_computed_groups=frozenset({"identity"}),
+            ),
+            Capability(
+                id="resolve_mapping",
+                consumes=frozenset({"gene.ncbi.id"}),
+                produces=frozenset(
+                    {
+                        "protein.uniprot.accession",
+                        "protein.uniprot.mapping.count",
+                        "protein.uniprot.mapping.records",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="mapping",
+                        outputs=frozenset({"protein.uniprot.accession"}),
+                    ),
+                    OutputGroup(
+                        id="mapping_detail",
+                        outputs=frozenset(
+                            {
+                                "protein.uniprot.mapping.count",
+                                "protein.uniprot.mapping.records",
+                            }
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=1000,
+                set_outputs=frozenset({"protein.uniprot.accession"}),
+                always_computed_groups=frozenset({"mapping"}),
             ),
         ),
     )

@@ -19,6 +19,7 @@ keys, since unreviewed entries omit recommendedName / gene / function.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -41,6 +42,30 @@ _FIELDS = (
 _PAGE = 25
 # Official UniProtKB accession syntax (so "P04637" routes to an exact lookup).
 _ACCESSION = re.compile(r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}")
+
+# --- ID-mapping (gene -> protein bridge) -------------------------------------
+# The ID-mapping endpoint is async (submit a job, poll, fetch) and a batch endpoint
+# (many ids per job). resolve_mapping runs two jobs concurrently: Swiss-Prot gives the
+# canonical reviewed accession, full UniProtKB covers non-model genes that lack one.
+_IDMAP_FROM = "GeneID"
+_IDMAP_REVIEWED = "UniProtKB-Swiss-Prot"  # reviewed-only — the canonical accession
+_IDMAP_ALL = "UniProtKB"  # everything, incl. unreviewed isoforms (coverage fallback)
+_IDMAP_RESULT_PAGE = 500  # max page size the results endpoint allows
+_IDMAP_POLL_DELAY = 1.0  # seconds between status polls
+_IDMAP_POLL_TRIES = 60  # ~60s ceiling before giving up on a job
+
+
+def _next_link(resp: httpx.Response) -> str | None:
+    """The ``rel="next"`` URL from a paginated UniProt response's ``Link`` header, if any."""
+    link = resp.headers.get("link")
+    if not link:
+        return None
+    for part in link.split(","):
+        if 'rel="next"' in part:
+            start, end = part.find("<"), part.find(">")
+            if 0 <= start < end:
+                return part[start + 1 : end]
+    return None
 
 
 def _query_variants(term: str) -> list[str]:
@@ -149,7 +174,11 @@ class UniprotApiBackend(BackendBase):
 
     def _http(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
+            # follow_redirects: the ID-mapping results endpoint 303-redirects to its
+            # stream variant when a job finishes.
+            self._client = httpx.AsyncClient(
+                base_url=self._base_url, timeout=30.0, follow_redirects=True
+            )
         return self._client
 
     async def fetch(
@@ -161,14 +190,113 @@ class UniprotApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        # One search per query; the whole entry arrives at once, so we compute every
-        # field and let the shared mapper filter to requested_outputs.
+        if capability_id == "resolve_mapping":
+            return await self._resolve_mapping(queries)
+        # resolve_protein: one search per query; the whole entry arrives at once, so we
+        # compute every field and let the shared mapper filter to requested_outputs.
         organism = str((params or {}).get("organism") or "").strip() or None
         records: list[LookupRecord] = []
         for query in queries:
             term = str(query.get("protein.query", "")).strip()
             records.append(await self._resolve_one(query, term, organism))
         return records
+
+    # --- resolve_mapping: NCBI Gene id -> UniProt accession(s) ----------------
+
+    async def _resolve_mapping(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        """Map a batch of NCBI Gene ids to their UniProt accession(s) in one pass.
+
+        ID-mapping is a batch endpoint, so the whole batch resolves in two jobs (run
+        concurrently): reviewed Swiss-Prot (the canonical accession) and full UniProtKB
+        (coverage for genes without a reviewed entry). Per gene, accessions are ordered
+        reviewed-first so ``ExpandPolicy.top()`` takes the canonical entry while ``ALL``
+        fans every isoform. A whole-job failure becomes a per-query error (branch-local).
+        """
+        gene_ids = [str(q.get("gene.ncbi.id", "") or "").strip() for q in queries]
+        unique_ids = list(dict.fromkeys(g for g in gene_ids if g))
+        if not unique_ids:
+            return [LookupRecord(query=q, found=False) for q in queries]
+
+        try:
+            reviewed_map, all_map = await asyncio.gather(
+                self._idmap(_IDMAP_REVIEWED, unique_ids),
+                self._idmap(_IDMAP_ALL, unique_ids),
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("UniProt ID-mapping failed for %d gene id(s): %s", len(unique_ids), exc)
+            err = f"UniProt ID-mapping error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        records: list[LookupRecord] = []
+        for query, gid in zip(queries, gene_ids):
+            if not gid:
+                records.append(LookupRecord(query=query, found=False))
+                continue
+            reviewed = reviewed_map.get(gid, [])
+            reviewed_set = set(reviewed)
+            ordered = reviewed + [a for a in all_map.get(gid, []) if a not in reviewed_set]
+            if not ordered:
+                records.append(LookupRecord(query=query, found=False))
+                continue
+            records.append(
+                LookupRecord(
+                    query=query,
+                    found=True,
+                    values={
+                        "protein.uniprot.accession": ordered,  # the fan dimension
+                        "protein.uniprot.mapping.count": len(ordered),
+                        "protein.uniprot.mapping.records": [
+                            {"accession": a, "reviewed": a in reviewed_set} for a in ordered
+                        ],
+                    },
+                )
+            )
+        return records
+
+    async def _idmap(self, to_db: str, ids: list[str]) -> dict[str, list[str]]:
+        """Run one ID-mapping job (``GeneID`` -> ``to_db``); return gene id -> accessions.
+
+        Submit the whole batch, poll until the job finishes, then page the results.
+        Accessions are kept in the order the API returns them, preserving per-gene order.
+        """
+        http = self._http()
+        run = await http.post(
+            "/idmapping/run",
+            data={"from": _IDMAP_FROM, "to": to_db, "ids": ",".join(ids)},
+        )
+        run.raise_for_status()
+        job = run.json()["jobId"]
+        await self._await_job(http, job)
+
+        out: dict[str, list[str]] = {}
+        url: str | None = f"/idmapping/results/{job}"
+        params: dict[str, Any] | None = {"format": "json", "size": _IDMAP_RESULT_PAGE}
+        while url:
+            resp = await http.get(url, params=params)
+            resp.raise_for_status()
+            for row in resp.json().get("results", []):
+                to_val = row.get("to")
+                acc = to_val if isinstance(to_val, str) else (to_val or {}).get("primaryAccession")
+                gid = str(row.get("from", ""))
+                if acc and gid:
+                    out.setdefault(gid, []).append(acc)
+            url = _next_link(resp)  # follow paginated results; absolute URL, no params
+            params = None
+        return out
+
+    async def _await_job(self, http: httpx.AsyncClient, job: str) -> None:
+        """Poll ``/idmapping/status/{job}`` until the job finishes (or raise on failure)."""
+        for _ in range(_IDMAP_POLL_TRIES):
+            resp = await http.get(f"/idmapping/status/{job}")
+            resp.raise_for_status()
+            status = resp.json().get("jobStatus")
+            if status is None or status == "FINISHED":  # absent => results inline / ready
+                return
+            if status in ("RUNNING", "NEW", "QUEUED"):
+                await asyncio.sleep(_IDMAP_POLL_DELAY)
+                continue
+            raise httpx.HTTPError(f"ID-mapping job {job} failed with status {status!r}")
+        raise httpx.HTTPError(f"ID-mapping job {job} did not finish in time")
 
     async def _resolve_one(
         self, query: dict[str, Any], term: str, organism: str | None = None

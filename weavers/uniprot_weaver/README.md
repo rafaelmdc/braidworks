@@ -14,6 +14,24 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 | Capability | Consumes | Produces |
 |---|---|---|
 | `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
+| `resolve_mapping` | `gene.ncbi.id` | `protein.uniprot.accession` (set / fan dimension) + leaves: `protein.uniprot.mapping.count`, `protein.uniprot.mapping.records` |
+
+## The gene → protein bridge (`resolve_mapping`)
+
+`resolve_mapping` is the edge that lets the **gene layer flow into the protein hub**: an
+NCBI Gene id (`gene.ncbi.id`) → its UniProt accession(s). Composed with `ncbi_weaver`'s
+`list_orthologs` (a `gene.ncbi.id` fan), it turns *"TP53's orthologs"* into *"TP53 across
+species, each with its 3D structure, pathways, and interactions"* — every ortholog gene
+resolves to an accession, then PDBe / AlphaFold / STRING / Reactome / QuickGO drill off it.
+
+`protein.uniprot.accession` is a **set output** (the fan dimension): one gene can map to a
+reviewed Swiss-Prot entry plus unreviewed isoforms. Accessions are ordered **reviewed-first**,
+so `ExpandPolicy.top()` takes the canonical entry while `ALL` fans every isoform.
+
+It is backed by the UniProt **ID-mapping** REST API (`rest.uniprot.org/idmapping`), which is
+**async** (submit a job, poll, fetch) *and* a **batch** endpoint — so a whole batch of gene
+ids resolves in two concurrent jobs (reviewed Swiss-Prot for the canonical accession, full
+UniProtKB for genes without a reviewed entry), not one call per gene.
 
 ## The bridge
 
@@ -46,6 +64,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 ```bash
 braidworks run uniprot resolve_protein --have protein.query=P04637
 braidworks weave --have protein.query=P04637 --want protein.name,ncbi.taxon.id
+braidworks run uniprot resolve_mapping --have gene.ncbi.id=7157  # GeneID -> accession(s)
 ```
 
 From Python:

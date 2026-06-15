@@ -146,3 +146,128 @@ def test_pick_is_deterministic_best_score_then_accession():
 def test_fingerprint_is_stable_and_real():
     fp = UniprotApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+# --- resolve_mapping (gene -> protein bridge) --------------------------------
+
+MAP_CAP = "resolve_mapping"
+
+
+def _mapping_backend(maps, *, run_calls=None, status="FINISHED", run_status=200, pages=None):
+    """A backend serving the ID-mapping flow from ``maps`` = {to_db: {gene_id: [acc, ...]}}.
+
+    Job ids encode the target db (``job-<to_db>``) so results dispatch per job. ``pages``,
+    if given, is {to_db: [page1_rows, page2_rows]} to exercise Link-header pagination.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/idmapping/run"):
+            if run_calls is not None:
+                run_calls.append(str(request.url))
+            if run_status != 200:
+                return httpx.Response(run_status, content=b"{}")
+            from urllib.parse import parse_qs
+
+            to_db = (parse_qs(request.content.decode()).get("to") or [""])[0]
+            return httpx.Response(200, content=json.dumps({"jobId": f"job-{to_db}"}))
+        if "/idmapping/status/" in path:
+            return httpx.Response(200, content=json.dumps({"jobStatus": status}))
+        if "/idmapping/results/" in path:
+            to_db = path.rsplit("/job-", 1)[-1]
+            if pages and to_db in pages:
+                cursor = request.url.params.get("cursor")
+                rows = pages[to_db][1] if cursor else pages[to_db][0]
+                resp = httpx.Response(200, content=json.dumps({"results": rows}))
+                if not cursor:
+                    resp.headers["link"] = (
+                        f'<https://u/idmapping/results/job-{to_db}?cursor=2>; rel="next"'
+                    )
+                return resp
+            rows = [{"from": g, "to": a} for g, accs in maps.get(to_db, {}).items() for a in accs]
+            return httpx.Response(200, content=json.dumps({"results": rows}))
+        return httpx.Response(404, content=b"{}")
+
+    client = httpx.AsyncClient(base_url="https://u", transport=httpx.MockTransport(handler))
+    return UniprotApiBackend(client=client)
+
+
+async def _map(backend, *gene_ids):
+    return await backend.fetch(
+        MAP_CAP,
+        [{"gene.ncbi.id": g} for g in gene_ids],
+        requested_outputs=frozenset(
+            {"protein.uniprot.accession", "protein.uniprot.mapping.count",
+             "protein.uniprot.mapping.records"}
+        ),
+        groups_to_compute=frozenset(),
+    )
+
+
+async def test_resolve_mapping_orders_reviewed_first():
+    backend = _mapping_backend({
+        "UniProtKB-Swiss-Prot": {"7157": ["P04637"]},
+        "UniProtKB": {"7157": ["A0A087WT22", "P04637", "H2EHT1"]},
+    })
+    rec = (await _map(backend, "7157"))[0]
+    assert rec.found is True
+    # reviewed (P04637) leads; the rest follow in API order, de-duplicated.
+    assert rec.values["protein.uniprot.accession"] == ["P04637", "A0A087WT22", "H2EHT1"]
+    assert rec.values["protein.uniprot.mapping.count"] == 3
+    assert rec.values["protein.uniprot.mapping.records"][0] == {"accession": "P04637", "reviewed": True}
+    assert rec.values["protein.uniprot.mapping.records"][1]["reviewed"] is False
+
+
+async def test_resolve_mapping_falls_back_to_unreviewed_only():
+    # A non-model gene with no reviewed entry still resolves from the full UniProtKB job.
+    backend = _mapping_backend({
+        "UniProtKB-Swiss-Prot": {},
+        "UniProtKB": {"403869": ["A0A8I3Q4A6", "E7FIY6"]},
+    })
+    rec = (await _map(backend, "403869"))[0]
+    assert rec.values["protein.uniprot.accession"] == ["A0A8I3Q4A6", "E7FIY6"]
+    assert all(r["reviewed"] is False for r in rec.values["protein.uniprot.mapping.records"])
+
+
+async def test_resolve_mapping_batches_whole_set_in_two_jobs():
+    run_calls: list[str] = []
+    backend = _mapping_backend(
+        {"UniProtKB-Swiss-Prot": {"7157": ["P04637"], "22059": ["P02340"]},
+         "UniProtKB": {"7157": ["P04637"], "22059": ["P02340"]}},
+        run_calls=run_calls,
+    )
+    recs = await _map(backend, "7157", "22059")
+    # Two jobs total (reviewed + full) for the whole batch — not one per gene.
+    assert len(run_calls) == 2
+    assert [r.values["protein.uniprot.accession"] for r in recs] == [["P04637"], ["P02340"]]
+
+
+async def test_resolve_mapping_miss_and_blank():
+    backend = _mapping_backend({"UniProtKB-Swiss-Prot": {}, "UniProtKB": {}})
+    recs = await _map(backend, "999999", "   ")
+    assert recs[0].found is False and recs[0].error is None
+    assert recs[1].found is False
+
+
+async def test_resolve_mapping_all_blank_makes_no_call():
+    run_calls: list[str] = []
+    backend = _mapping_backend({}, run_calls=run_calls)
+    recs = await _map(backend, "", "  ")
+    assert all(r.found is False for r in recs) and run_calls == []
+
+
+async def test_resolve_mapping_job_failure_is_per_query_error():
+    backend = _mapping_backend({}, run_status=500)
+    recs = await _map(backend, "7157", "22059")
+    assert all(r.error is not None and "ID-mapping" in r.error for r in recs)
+
+
+async def test_resolve_mapping_follows_paginated_results():
+    backend = _mapping_backend(
+        {"UniProtKB-Swiss-Prot": {"7157": ["P04637"]}},
+        pages={"UniProtKB": [[{"from": "7157", "to": "P04637"}],
+                             [{"from": "7157", "to": "K7PPA8"}]]},
+    )
+    rec = (await _map(backend, "7157"))[0]
+    # Page 2 (K7PPA8) is reached only by following the Link header.
+    assert rec.values["protein.uniprot.accession"] == ["P04637", "K7PPA8"]

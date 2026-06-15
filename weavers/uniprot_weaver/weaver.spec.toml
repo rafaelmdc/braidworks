@@ -15,7 +15,7 @@ db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
 title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
-version = "0.1.2"
+version = "0.2.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -79,6 +79,33 @@ always_computed_groups = ["identity"]
   id = "function"
   outputs = ["protein.function", "protein.length"]
 
+# resolve_mapping: an NCBI Gene id -> the UniProt accession(s) for that gene. This is
+# the gene->protein bridge edge — it lets the ortholog fan-out (ncbi list_orthologs,
+# gene.ncbi.id as a set) flow INTO the protein hub: each ortholog gene resolves to an
+# accession, then PDBe/AlphaFold/STRING/Reactome/QuickGO drill off it.
+#
+# protein.uniprot.accession is a set output (the fan dimension): one gene can map to a
+# reviewed Swiss-Prot entry plus unreviewed isoforms. We order reviewed-first, so
+# ExpandPolicy.top() takes the canonical entry while ALL fans every isoform.
+#
+# Backed by the UniProt ID-mapping REST API (rest.uniprot.org/idmapping), which is
+# async (submit a job, poll, fetch) AND a batch endpoint (many ids per job) — so a
+# batch of gene ids resolves in one job, not one call per gene.
+[[capability]]
+id = "resolve_mapping"
+consumes = ["gene.ncbi.id"]
+max_batch_size = 1000
+always_computed_groups = ["mapping"]
+set_outputs = ["protein.uniprot.accession"]
+
+  [[capability.group]]
+  id = "mapping"
+  outputs = ["protein.uniprot.accession"]
+
+  [[capability.group]]
+  id = "mapping_detail"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
+
 # Golden runs against the deterministic fixture (uniprot_weaver.fixture, an
 # httpx.MockTransport serving a canned TP53 search response) so
 # `weaverkit verify --strict` is reproducible offline.
@@ -86,3 +113,10 @@ always_computed_groups = ["identity"]
 capability = "resolve_protein"
 input = { "protein.query" = "TP53" }
 expect = { "protein.uniprot.accession" = "P04637", "protein.gene" = "TP53" }
+
+# resolve_mapping golden: human TP53 GeneID 7157 -> [P04637] (reviewed canonical first).
+# accession is a set output, so the produced strand value is a list.
+[[golden]]
+capability = "resolve_mapping"
+input = { "gene.ncbi.id" = "7157" }
+expect = { "protein.uniprot.accession" = ["P04637"], "protein.uniprot.mapping.count" = 1 }

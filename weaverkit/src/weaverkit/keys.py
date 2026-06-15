@@ -91,6 +91,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.function": "Curated function summary (UniProt FUNCTION comment).",
     "protein.length": "Sequence length in amino acids.",
     "protein.reviewed": "Whether the entry is reviewed (Swiss-Prot) vs unreviewed (TrEMBL).",
+    "protein.uniprot.mapping.count": "Number of UniProt accessions a gene maps to (resolve_mapping).",
+    "protein.uniprot.mapping.records": "UniProt accessions a gene maps to — accession + reviewed flag (resolve_mapping).",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "Names of a protein's interaction partners (STRING).",
     "protein.interaction.count": "Number of interaction partners returned (STRING).",

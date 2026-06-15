@@ -71,6 +71,46 @@ async def test_live_accession_is_deterministic():
     assert produced.get("ncbi.taxon.id") == 9606
 
 
+async def test_live_resolve_mapping_bridges_gene_to_accession():
+    """Drift detector for the async ID-mapping flow: GeneID 7157 (human TP53) -> P04637.
+
+    Exercises submit/poll/fetch against the real ``rest.uniprot.org/idmapping`` and the
+    reviewed-first ordering — the canonical Swiss-Prot accession must lead the set.
+    """
+    weaver = build_uniprot_weaver()
+    ss = StrandSet.from_strands("g1", [Strand("gene.ncbi.id", "7157")])
+    result = (
+        await weaver.execute_batch(
+            "resolve_mapping",
+            [ss],
+            requested_outputs=frozenset(
+                {"protein.uniprot.accession", "protein.uniprot.mapping.count"}
+            ),
+            backend="api",
+        )
+    )[0]
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    accessions = produced.get("protein.uniprot.accession")
+    assert isinstance(accessions, list) and accessions[0] == "P04637"  # reviewed leads
+
+
+async def test_live_resolve_mapping_unknown_gene_is_no_match():
+    weaver = build_uniprot_weaver()
+    ss = StrandSet.from_strands("g1", [Strand("gene.ncbi.id", "999999999")])
+    result = (
+        await weaver.execute_batch(
+            "resolve_mapping",
+            [ss],
+            requested_outputs=frozenset({"protein.uniprot.accession"}),
+            backend="api",
+        )
+    )[0]
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.NO_MATCH
+
+
 async def test_live_unknown_query_is_no_match():
     weaver = build_uniprot_weaver()
     ss = StrandSet.from_strands("e1", [Strand("protein.query", "zzzznotarealprotein9999")])
