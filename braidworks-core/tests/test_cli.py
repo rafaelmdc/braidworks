@@ -301,6 +301,34 @@ def test_run_accepts_param(capsys):
     assert code == 0
 
 
+# --- traversal fan-out (--for-each / --traverse) -----------------------------------
+
+def test_for_each_fans_through_relationship(capsys):
+    # 'structures' = list_structures (a fan capability) minus the list_ prefix.
+    code = _run("weave", "--have", "protein.uniprot.accession=ACC_X",
+                "--for-each", "structures", "--format", "json")
+    out = capsys.readouterr()
+    assert code == 0
+    records = json.loads(out.out)
+    # one child per fanned pdb.id, each re-rooted (parent = original entity), all regroup
+    assert len(records) == 2
+    assert {r["parent"] for r in records} == {"e1"}
+    assert sorted(r["values"]["pdb.id"] for r in records) == ["ACC_X-1", "ACC_X-2"]
+
+
+def test_traverse_accepts_capability_id(capsys):
+    code = _run("weave", "--have", "protein.uniprot.accession=ACC_X",
+                "--traverse", "list_structures", "--format", "json")
+    assert code == 0
+    assert len(json.loads(capsys.readouterr().out)) == 2
+
+
+def test_for_each_unknown_relationship_errors(capsys):
+    code = _run("weave", "--have", "protein.uniprot.accession=ACC_X", "--for-each", "bogus")
+    assert code == 1
+    assert "no traversal" in capsys.readouterr().err
+
+
 def test_run_rejects_bad_param(capsys):
     code = _run("run", "pdbe", "list_structures",
                 "--have", "protein.uniprot.accession=ACC_X", "--param", "level=nope")

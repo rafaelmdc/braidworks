@@ -76,6 +76,37 @@ class Braider:
             to_types=target_types,
         )
 
+    def plan_capability(
+        self,
+        weaver_id: str,
+        capability_id: str,
+        *,
+        backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+    ) -> Braid:
+        """Build a one-step braid for an *explicit* capability, bypassing routing.
+
+        The type planner routes on types and never selects a capability whose
+        produced types are already reachable — in particular a **self-loop**
+        (``consumes == produces``, e.g. ``list_orthologs`` gene id -> gene ids).
+        Traversal/fan-out (``--for-each`` / ``--traverse``) names the capability
+        directly, so this constructs its invocation without going through Dijkstra.
+        Requires a single-input capability (every fan capability is single-input).
+        """
+        cap = self._registry.get_capability(weaver_id, capability_id)
+        if len(cap.consumes) != 1:
+            raise NoPlanError(
+                f"{weaver_id}.{capability_id}: traversal needs a single-input "
+                f"capability, but it consumes {sorted(cap.consumes)}"
+            )
+        (source,) = tuple(cap.consumes)
+        spec = _InvocationSpec(weaver_id, capability_id, source, set(cap.produces))
+        invocation = self._build_invocation(spec, backend_policy)
+        return Braid(
+            steps=(invocation,),
+            from_types=frozenset(cap.consumes),
+            to_types=frozenset(cap.produces),
+        )
+
     def _route(
         self, graph: nx.DiGraph, sources: frozenset[str], target: str
     ) -> list[str]:

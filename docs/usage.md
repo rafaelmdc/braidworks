@@ -31,6 +31,10 @@ cat accessions.txt | braidworks weave --in-file - --in-type protein.query \
 braidworks weave --have protein.query=P04637 \
     --want structure.pdb.title,structure.pdb.method --expand all --format tsv
 
+# fan THROUGH a relationship: describe each of a gene's orthologs (TP53 -> primates)
+braidworks weave --have gene.ncbi.id=7157 --for-each orthologs \
+    --param taxon_filter=9443 --want gene.symbol,gene.organism --format tsv
+
 # call one capability directly (no routing)
 braidworks run pdbe describe_structure --have pdb.id=1tup
 
@@ -47,6 +51,11 @@ file (`--in-file`; a CSV/TSV whose header is type-ids, or one value per line wit
 `--expand none|all|top:K` controls fan-out; `--param name=value` passes a capability's
 filters/options (run `braidworks weavers` to see what each accepts; use
 `capability:name=value` to target one step); `--only weaver,weaver` restricts the set.
+`--for-each <relationship>` fans the weave *through* a list capability and then plans
+`--want` from each result — use it when a relationship returns the **same** id type it
+consumes (e.g. `orthologs`: gene → genes), which the planner can't auto-route; it
+implies `--expand all`. `--traverse <capability-id>` is the explicit form for an
+ambiguous or unnamed relationship.
 Data goes to **stdout**, progress + a resolved/unresolved/review count to **stderr**,
 so pipes stay clean. Exit code is non-zero only on a structural error (a `NO_MATCH` is
 valid data) — add `--strict` to also fail on any unresolved/review input.
