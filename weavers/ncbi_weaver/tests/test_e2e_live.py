@@ -223,6 +223,7 @@ async def test_live_list_genomes_and_describe():
         requested_outputs=vocab.ASSEMBLY_GROUP | vocab.SEQUENCES_GROUP,
         backend="api",
     )
+    skip_if_transient(desc[0])
     d = {s.type_id: s.value for s in desc[0].strands}
     assert d[vocab.ASSEMBLY_LEVEL] == "Complete Genome"
     assert "Escherichia coli" in d[vocab.ASSEMBLY_ORGANISM]
@@ -237,6 +238,7 @@ async def test_live_gene_resolve_describe_orthologs():
         [StrandSet.from_strands("e", [Strand(vocab.PROTEIN_QUERY, "TP53")])],
         requested_outputs=vocab.RESOLVE_GENE_OUTPUTS, backend="api",
     )
+    skip_if_transient(res[0])  # a timeout here is green-lightable, not a data-drift failure
     sm = {s.type_id: s.value for s in res[0].strands}
     assert sm[vocab.GENE_ID] == 7157 and sm[vocab.GENE_ORGANISM] == "Homo sapiens"
 
@@ -245,6 +247,7 @@ async def test_live_gene_resolve_describe_orthologs():
         [StrandSet.from_strands("g", [Strand(vocab.GENE_ID, 7157)])],
         requested_outputs=vocab.GENE_SUMMARY_GROUP | vocab.GENE_PRODUCTS_GROUP, backend="api",
     )
+    skip_if_transient(desc[0])
     d = {s.type_id: s.value for s in desc[0].strands}
     assert d[vocab.GENE_SYMBOL] == "TP53" and d[vocab.GENE_TYPE] == "PROTEIN_CODING"
     assert any("NM_000546" in (p.get("transcript") or "") for p in d[vocab.GENE_PRODUCTS])
@@ -255,6 +258,7 @@ async def test_live_gene_resolve_describe_orthologs():
         requested_outputs=vocab.ORTHOLOG_OUTPUTS, backend="api",
         params={"taxon_filter": "40674"},  # mammals
     )
+    skip_if_transient(orth[0])
     o = {s.type_id: s.value for s in orth[0].strands}
     assert 7157 not in o[vocab.GENE_ID]  # excludes the query gene
     assert o[vocab.ORTHOLOG_COUNT] > 5 and 22059 in o[vocab.GENE_ID]  # mouse Trp53
