@@ -1,0 +1,322 @@
+<mxfile host="app.diagrams.net" modified="2026-06-16T00:00:00.000Z" agent="Claude" version="24.7.17" type="device">
+  <diagram id="have-want-hero" name="Have to want">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1520" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="h-title" value="Braidworks — have to want" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-subtitle" value="You declare the data you have and the types you want; Braidworks finds the route across every installed weaver and runs it." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1300" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h-have" value="You have&#xa;(input Strands)&#xa;&#xa;protein.query = P04637" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.4;" vertex="1" parent="1">
+          <mxGeometry x="80" y="320" width="210" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h-braider" value="Braider · plan (pure)" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="360" y="250" width="300" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-b1" value="Read weaver manifests&#xa;build capability graph" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-braider">
+          <mxGeometry x="30" y="55" width="240" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-b2" value="Dijkstra:&#xa;have-types to want-types" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-braider">
+          <mxGeometry x="30" y="135" width="240" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-b3" value="Serializable Braid&#xa;(the route)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-braider">
+          <mxGeometry x="30" y="215" width="240" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h-exec" value="LocalExecutor · run (batch)" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="730" y="250" width="320" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-e1" value="Batch + StrandCache (reuse)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-exec">
+          <mxGeometry x="30" y="55" width="260" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-e2" value="Backend select + fallback" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-exec">
+          <mxGeometry x="30" y="130" width="260" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-e3" value="Fan-out + review gating" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-exec">
+          <mxGeometry x="30" y="205" width="260" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h-want" value="You want&#xa;(target types)&#xa;&#xa;protein.name&#xa;structure.pdb.ids" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.4;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="320" width="210" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h-ar1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="h-have" target="h-braider"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="h-ar2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="h-braider" target="h-exec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="h-ar3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="h-exec" target="h-want"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="h-l1" value="braid" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1"><mxGeometry x="662" y="380" width="66" height="20" as="geometry"/></mxCell>
+        <mxCell id="h-l2" value="results" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1"><mxGeometry x="1052" y="380" width="66" height="20" as="geometry"/></mxCell>
+
+        <mxCell id="h-ex" value="Worked example — one question, two databases crossed automatically" style="swimlane;whiteSpace=wrap;html=1;startSize=30;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="630" width="1250" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="h-x1" value="protein.query&#xa;P04637" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Courier New;" vertex="1" parent="h-ex"><mxGeometry x="30" y="55" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="h-x2" value="uniprot to entry&#xa;(+ name, taxid)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-ex"><mxGeometry x="250" y="55" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="h-x3" value="pdbe to list&#xa;PDB structures" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="h-ex"><mxGeometry x="500" y="55" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="h-x4" value="structure.pdb.ids = 9r2q; 9r2m; 8r1f; … (25)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Courier New;" vertex="1" parent="h-ex"><mxGeometry x="740" y="55" width="470" height="50" as="geometry"/></mxCell>
+        <mxCell id="h-xa1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="h-ex" source="h-x1" target="h-x2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="h-xa2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="h-ex" source="h-x2" target="h-x3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="h-xa3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="h-ex" source="h-x3" target="h-x4"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="weaver-network" name="Weaver network">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1660" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="n-title" value="The weaver network" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-subtitle" value="Two hubs — organism (NCBI taxid) and protein (UniProt accession) — bridged by UniProt, so one question can cross databases. Each edge is a typed capability." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1400" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n-org" value="Organism hub&#xa;NCBI taxid" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=14;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.6;" vertex="1" parent="1">
+          <mxGeometry x="340" y="430" width="200" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-prot" value="Protein hub&#xa;UniProt accession" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=14;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.6;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="430" width="200" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n-uni" value="uniprot — the hinge&#xa;query to UniProt entry&#xa;(+ name, gene, organism, taxid)&#xa;resolve · describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.6;" vertex="1" parent="1">
+          <mxGeometry x="650" y="290" width="260" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n-taxon" value="taxon (ncbi)&#xa;organism name to taxid + lineage&#xa;resolve · describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="300" y="200" width="250" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-bac" value="bacdive&#xa;organism to type-strain phenotypes&#xa;list" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="470" width="230" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-dis" value="disbiome&#xa;taxid to microbe–disease&#xa;list" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="240" y="650" width="230" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-ex" value="example&#xa;taxid to traits (CSV)&#xa;list — reference weaver" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontStyle=3;fontFamily=Helvetica;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="660" width="230" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n-pdbe" value="pdbe&#xa;protein to PDB structures&#xa;list · describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="150" width="250" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-af" value="alphafold&#xa;protein to predicted model&#xa;describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="260" width="250" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-go" value="quickgo&#xa;protein to GO terms&#xa;list · describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="370" width="250" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-re" value="reactome&#xa;protein to pathways&#xa;list · describe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="480" width="250" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-str" value="string&#xa;protein to interaction partners&#xa;list" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="590" width="250" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n-e-uni-prot" value="resolve query to accession" style="endArrow=classicThin;startArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;fontStyle=2;" edge="1" parent="1" source="n-uni" target="n-prot"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-uni-org" value="produces taxid" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;fontStyle=2;" edge="1" parent="1" source="n-uni" target="n-org"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-tax" value="name to taxid" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;fontStyle=2;" edge="1" parent="1" source="n-taxon" target="n-org"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-bac" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-org" target="n-bac"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-dis" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-org" target="n-dis"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-ex" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;dashed=1;" edge="1" parent="1" source="n-org" target="n-ex"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-pdbe" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-prot" target="n-pdbe"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-af" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-prot" target="n-af"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-go" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-prot" target="n-go"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-re" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-prot" target="n-re"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="n-e-str" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;" edge="1" parent="1" source="n-prot" target="n-str"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="n-legend" value="Capability verbs" style="swimlane;whiteSpace=wrap;html=1;startSize=28;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="760" width="720" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="n-lg1" value="resolve_*  —  fuzzy input to an identifier (messy name to accession/taxid)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="n-legend"><mxGeometry x="20" y="32" width="680" height="22" as="geometry"/></mxCell>
+        <mxCell id="n-lg2" value="list_*  —  one id to a set of related ids (the fan-out point)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="n-legend"><mxGeometry x="20" y="56" width="680" height="22" as="geometry"/></mxCell>
+        <mxCell id="n-lg3" value="describe_*  —  one id to that entity's own attributes" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="n-legend"><mxGeometry x="20" y="80" width="680" height="22" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="data-model" name="Data model and contract">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="d-title" value="Data model and the contract" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="d-subtitle" value="Every value is a typed Strand; weavers declare typed Capabilities. Nothing flows implicitly — and every input lands in exactly one result bucket." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1300" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="d-lane" value="The contract (braidworks-core)" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="70" y="150" width="440" height="580" as="geometry"/>
+        </mxCell>
+        <mxCell id="d-strand" value="Strand — a single known fact&#xa;one typed value, with how confident we are and where it came from" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-lane"><mxGeometry x="40" y="55" width="360" height="75" as="geometry"/></mxCell>
+        <mxCell id="d-set" value="StrandSet — all we know about one thing&#xa;every fact gathered for a single entity" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="d-lane"><mxGeometry x="40" y="155" width="360" height="60" as="geometry"/></mxCell>
+        <mxCell id="d-cap" value="Capability — one thing a data source can do&#xa;takes the facts it needs, returns new ones (a typed step)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-lane"><mxGeometry x="40" y="240" width="360" height="75" as="geometry"/></mxCell>
+        <mxCell id="d-man" value="WeaverManifest — a data source's menu&#xa;what it offers, so the planner can route to it without running it" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="d-lane"><mxGeometry x="40" y="340" width="360" height="60" as="geometry"/></mxCell>
+        <mxCell id="d-res" value="WeaveResult — the outcome of one lookup&#xa;always exactly one: worked · nothing found · needs review · error" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-lane"><mxGeometry x="40" y="425" width="360" height="95" as="geometry"/></mxCell>
+        <mxCell id="d-da1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="d-lane" source="d-strand" target="d-set"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="d-da2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="d-lane" source="d-set" target="d-cap"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="d-da3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="d-lane" source="d-cap" target="d-man"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="d-da4" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="d-lane" source="d-man" target="d-res"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="d-buckets" value="ExecutionResult — four exhaustive buckets" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="600" y="150" width="820" height="580" as="geometry"/>
+        </mxCell>
+        <mxCell id="d-res-ok" value="resolved&#xa;targets produced — it worked" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-buckets"><mxGeometry x="40" y="60" width="350" height="110" as="geometry"/></mxCell>
+        <mxCell id="d-res-un" value="unresolved&#xa;route ran, NO_MATCH&#xa;a valid 'nothing here'" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-buckets"><mxGeometry x="430" y="60" width="350" height="110" as="geometry"/></mxCell>
+        <mxCell id="d-res-rev" value="review_queue&#xa;ambiguous — a human should pick&#xa;(carries remaining steps to resume)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="d-buckets"><mxGeometry x="40" y="200" width="350" height="110" as="geometry"/></mxCell>
+        <mxCell id="d-res-err" value="errors&#xa;structural — no route / backend exhausted" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontFamily=Helvetica;strokeWidth=1.2;dashed=1;" vertex="1" parent="d-buckets"><mxGeometry x="430" y="200" width="350" height="110" as="geometry"/></mxCell>
+        <mxCell id="d-inv" value="Invariant:  len(resolved) + len(unresolved) + len(review_queue) + len(errors)  ==  len(inputs).&#xa;Failures are values, not exceptions — nothing is silently dropped." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontStyle=2;fontFamily=Helvetica;" vertex="1" parent="d-buckets"><mxGeometry x="40" y="350" width="740" height="80" as="geometry"/></mxCell>
+        <mxCell id="d-cache" value="StrandCache de-duplicates lookups: a result is keyed by weaver, version, backend fingerprint and consumed-input hash, so the same value is never fetched twice." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="d-buckets"><mxGeometry x="40" y="450" width="740" height="80" as="geometry"/></mxCell>
+
+        <mxCell id="d-bridge" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.25;" edge="1" parent="1" source="d-lane" target="d-buckets"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="engine" name="Plan and execute">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1660" pageHeight="880" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="e-title" value="Plan first, execute second" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-subtitle" value="Planning is pure graph search; execution is the only side-effectful stage. They are separate objects, so an execution backend can be swapped without touching the planner." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1450" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e-plan" value="Braider — pure planning" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="70" y="150" width="660" height="620" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-have" value="have-types&#xa;{ protein.query }" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-plan"><mxGeometry x="40" y="55" width="270" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-want" value="want-types&#xa;{ protein.name, structure.pdb.ids }" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-plan"><mxGeometry x="350" y="55" width="270" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-graph" value="Capability graph&#xa;projected from every weaver manifest" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="e-plan"><mxGeometry x="40" y="170" width="580" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-dij" value="Dijkstra route&#xa;have to want, least cost" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="e-plan"><mxGeometry x="40" y="290" width="580" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-braid" value="Braid&#xa;ordered, serializable steps&#xa;BackendPolicy.LOCAL_FIRST · fallbacks assigned" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-plan"><mxGeometry x="40" y="410" width="580" height="90" as="geometry"/></mxCell>
+        <mxCell id="e-pa1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.3;entryY=0;" edge="1" parent="e-plan" source="e-have" target="e-graph"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-pa2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.7;entryY=0;" edge="1" parent="e-plan" source="e-want" target="e-graph"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-pa3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-plan" source="e-graph" target="e-dij"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-pa4" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-plan" source="e-dij" target="e-braid"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-trav" value="Pinned path — --traverse / --for-each&#xa;Dijkstra skips self-loops (e.g. list_orthologs: one gene id → more gene ids). Name the relationship to force the route THROUGH it; re-root on each child, then plan --want from each. Builds a Braid directly (plan_capability) — bypasses graph search." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=11;fontFamily=Helvetica;dashed=1;" vertex="1" parent="e-plan"><mxGeometry x="40" y="515" width="580" height="90" as="geometry"/></mxCell>
+        <mxCell id="e-pa5" value="bypasses Dijkstra" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;fontStyle=2;dashed=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="e-plan" source="e-trav" target="e-braid"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e-exec" value="LocalExecutor — batch execution (per step)" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="800" y="150" width="780" height="620" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-guard" value="Guard — skip already-satisfied entities" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="e-exec"><mxGeometry x="40" y="50" width="320" height="50" as="geometry"/></mxCell>
+        <mxCell id="e-cache" value="StrandCache — hit / miss (group-superset reuse)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="e-exec"><mxGeometry x="40" y="120" width="320" height="50" as="geometry"/></mxCell>
+        <mxCell id="e-batch" value="execute_batch on miss&#xa;backend + fallback (NO_MATCH / ERROR / unavailable)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-exec"><mxGeometry x="40" y="190" width="320" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-fan" value="Fan-out (ExpandPolicy)&#xa;one to many children, each carries parent_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="e-exec"><mxGeometry x="410" y="190" width="320" height="70" as="geometry"/></mxCell>
+        <mxCell id="e-status" value="result status?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-exec"><mxGeometry x="110" y="290" width="180" height="80" as="geometry"/></mxCell>
+        <mxCell id="e-bk1" value="resolved" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-exec"><mxGeometry x="40" y="430" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="e-bk2" value="unresolved" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-exec"><mxGeometry x="220" y="430" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="e-bk3" value="review_queue" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="e-exec"><mxGeometry x="400" y="430" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="e-bk4" value="errors" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;dashed=1;" vertex="1" parent="e-exec"><mxGeometry x="580" y="430" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="e-ea1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-guard" target="e-cache"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-ea2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-cache" target="e-batch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-ea3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="e-exec" source="e-batch" target="e-fan"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-ea4" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-batch" target="e-status"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-eb1" value="OK" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.2;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-status" target="e-bk1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-eb2" value="NO_MATCH" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.2;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-status" target="e-bk2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-eb3" value="AMBIGUOUS" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.2;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-status" target="e-bk3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-eb4" value="ERROR" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.2;strokeColor=#1A1A1A;fontColor=#555555;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="e-exec" source="e-status" target="e-bk4"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e-handoff" value="serializable Braid" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.4;strokeColor=#1A1A1A;fontColor=#555555;fontSize=11;fontStyle=2;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="e-plan" target="e-exec"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="interfaces" name="Interfaces">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1660" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="i-title" value="Four front doors, one core" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="i-subtitle" value="The same planning core (braidworks-core) drives a CLI, a Python API, a browser GUI, and an optional distributed executor — all over the identical Braid and ExecutionResult." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1450" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="i-core" value="braidworks-core&#xa;registry · braider · executor · cache" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=14;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.6;" vertex="1" parent="1">
+          <mxGeometry x="690" y="400" width="280" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="i-cli" value="CLI — braidworks weave" style="swimlane;whiteSpace=wrap;html=1;startSize=30;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="90" y="150" width="500" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="i-cli-cmd" value="braidworks weave \&#xa;  --have protein.query=P04637 \&#xa;  --want protein.name,structure.pdb.ids \&#xa;  --format tsv --expand all" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontFamily=Courier New;" vertex="1" parent="i-cli"><mxGeometry x="20" y="45" width="460" height="100" as="geometry"/></mxCell>
+        <mxCell id="i-cli-note" value="also: weavers · keys · path · run · references     ·     stdout = data, stderr = progress (pipes stay clean)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="i-cli"><mxGeometry x="20" y="155" width="460" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="i-py" value="Python API" style="swimlane;whiteSpace=wrap;html=1;startSize=30;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="150" width="500" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="i-py-cmd" value="registry.register(build_uniprot_weaver())&#xa;registry.register(build_pdbe_weaver())&#xa;braid = Braider(registry).plan(have, want)&#xa;await LocalExecutor(registry).execute(braid, sets)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontFamily=Courier New;" vertex="1" parent="i-py"><mxGeometry x="20" y="45" width="460" height="100" as="geometry"/></mxCell>
+        <mxCell id="i-py-note" value="register weavers, plan once, execute a whole batch; read the four result buckets." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="i-py"><mxGeometry x="20" y="155" width="460" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="i-gui" value="weaverkit GUI — make serve" style="swimlane;whiteSpace=wrap;html=1;startSize=30;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="90" y="540" width="500" height="250" as="geometry"/>
+        </mxCell>
+        <mxCell id="i-gui-1" value="FastAPI (optional [serve] extra) · localhost app" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-gui"><mxGeometry x="20" y="45" width="460" height="45" as="geometry"/></mxCell>
+        <mxCell id="i-gui-2" value="Pick have/want to see the route to run to watch the braid light up live (SSE)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-gui"><mxGeometry x="20" y="105" width="460" height="45" as="geometry"/></mxCell>
+        <mxCell id="i-gui-3" value="Results table · CSV/TSV/JSON export · graph search · saved recipes" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-gui"><mxGeometry x="20" y="165" width="460" height="45" as="geometry"/></mxCell>
+
+        <mxCell id="i-arq" value="Distributed — braidworks-arq" style="swimlane;whiteSpace=wrap;html=1;startSize=30;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="540" width="500" height="250" as="geometry"/>
+        </mxCell>
+        <mxCell id="i-arq-1" value="arq + Redis worker pool" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-arq"><mxGeometry x="20" y="45" width="460" height="45" as="geometry"/></mxCell>
+        <mxCell id="i-arq-2" value="Same Braid + ExecutionResult — both are serializable" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-arq"><mxGeometry x="20" y="105" width="460" height="45" as="geometry"/></mxCell>
+        <mxCell id="i-arq-3" value="Rate-limited fan-out across many inputs" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="i-arq"><mxGeometry x="20" y="165" width="460" height="45" as="geometry"/></mxCell>
+
+        <mxCell id="i-c1" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=1;entryX=0;entryY=0.2;" edge="1" parent="1" source="i-cli" target="i-core"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i-c2" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0;exitY=1;entryX=1;entryY=0.2;" edge="1" parent="1" source="i-py" target="i-core"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i-c3" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0;entryX=0;entryY=0.8;" edge="1" parent="1" source="i-gui" target="i-core"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="i-c4" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0;exitY=0;entryX=1;entryY=0.8;" edge="1" parent="1" source="i-arq" target="i-core"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="stack" name="Stack and adding a weaver">
+    <mxGraphModel dx="1420" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1660" pageHeight="860" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="s-title" value="Stack choices and adding a weaver" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;fontColor=#1A1A1A;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="44" width="900" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="s-subtitle" value="Lightweight by default — every heavy dependency is optional and swappable. New data sources are added deterministically, not hand-glued." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=13;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="70" y="78" width="1450" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="s-stack" value="Stack — foundation (wide base) up to optional (narrow top)" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="70" y="150" width="740" height="640" as="geometry"/>
+        </mxCell>
+        <mxCell id="s-s6" value="Distributed task queue (arq · Redis)&#xa;optional — distributed execution" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontStyle=3;fontFamily=Helvetica;dashed=1;" vertex="1" parent="s-stack"><mxGeometry x="240" y="55" width="260" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-s5" value="Web API layer (FastAPI)&#xa;optional [serve] extra — base stays stdlib-only" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontStyle=3;fontFamily=Helvetica;dashed=1;" vertex="1" parent="s-stack"><mxGeometry x="200" y="135" width="340" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-s4" value="Embedded database + fuzzy match&#xa;SQLite · rapidfuzz — offline taxonomy, messy-name lookup" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="s-stack"><mxGeometry x="160" y="215" width="420" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-s3" value="Keyless public data APIs&#xa;UniProt · PDBe · Reactome · QuickGO · STRING · AlphaFold · NCBI — zero setup" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="s-stack"><mxGeometry x="120" y="295" width="500" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-s2" value="Async batch I/O (asyncio)&#xa;many public APIs called concurrently, not one at a time" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="s-stack"><mxGeometry x="80" y="375" width="580" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-s1" value="Monorepo workspace (uv)&#xa;the foundation — per-package isolation · one lockfile · auto-discovered weavers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="s-stack"><mxGeometry x="30" y="455" width="680" height="65" as="geometry"/></mxCell>
+        <mxCell id="s-foot" value="Wider = more foundational; the narrow top layers (dashed) are optional and never touch the core import path. Install and run with nothing but the base package." style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="s-stack"><mxGeometry x="30" y="540" width="680" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="s-loop" value="Adding a weaver — the weaverkit loop" style="swimlane;whiteSpace=wrap;html=1;startSize=32;rounded=0;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=13;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;swimlaneFillColor=#FAFAFA;" vertex="1" parent="1">
+          <mxGeometry x="870" y="150" width="720" height="500" as="geometry"/>
+        </mxCell>
+        <mxCell id="s-l1" value="Spec&#xa;weaver.spec.toml&#xa;typed keys + capabilities" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="s-loop"><mxGeometry x="40" y="60" width="290" height="90" as="geometry"/></mxCell>
+        <mxCell id="s-l2" value="Scaffold&#xa;make new-weaver&#xa;generated package + manifest" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="s-loop"><mxGeometry x="390" y="60" width="290" height="90" as="geometry"/></mxCell>
+        <mxCell id="s-l3" value="Implement&#xa;backend logic only&#xa;(the contract is generated)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="s-loop"><mxGeometry x="40" y="240" width="290" height="90" as="geometry"/></mxCell>
+        <mxCell id="s-l4" value="Verify&#xa;make verify-weaver&#xa;conformance + manifest validation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F2F2F2;strokeColor=#1A1A1A;fontColor=#1A1A1A;fontSize=12;fontStyle=1;fontFamily=Helvetica;strokeWidth=1.2;" vertex="1" parent="s-loop"><mxGeometry x="390" y="240" width="290" height="90" as="geometry"/></mxCell>
+        <mxCell id="s-la1" value="" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="s-loop" source="s-l1" target="s-l2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="s-la2" value="" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="s-loop" source="s-l2" target="s-l4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="s-la3" value="" style="endArrow=classicThin;html=1;rounded=0;strokeWidth=1.3;strokeColor=#1A1A1A;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="s-loop" source="s-l4" target="s-l3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="s-lnote" value="The framework, the planner, and every other weaver are untouched. A new source is a typed spec plus its backend — the registry discovers it automatically." style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;fontStyle=2;fontColor=#555555;fontFamily=Helvetica;" vertex="1" parent="s-loop"><mxGeometry x="40" y="370" width="640" height="90" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
