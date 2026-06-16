@@ -42,9 +42,15 @@ index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-in
 
 # Where `make view` writes the interactive network view; override with VIEW_OUT=path.html.
 VIEW_OUT ?= docs/braidworks-network.html
-view:  ## Render the weaver-network view -> $(VIEW_OUT) (VIEW_OUT=.. to override; FROM=.. TO=.. adds a braid path)
+# The hero braid embedded in the view by default: a gene name -> what it does
+# (Reactome pathways + GO biological processes). Two wants, both human-readable
+# descriptors — not a raw id dump. Override with FROM=.. TO=...
+VIEW_FROM ?= protein.query
+VIEW_TO ?= pathway.reactome.names go.biological_process
+view:  ## Render the weaver-network view -> $(VIEW_OUT) (VIEW_OUT=.. to override; FROM=.. TO=.. swaps the braid path)
 	uv run weaverkit view --out $(VIEW_OUT) \
-		$(if $(FROM),$(foreach k,$(FROM),--from $(k))) $(if $(TO),$(foreach k,$(TO),--to $(k)))
+		$(foreach k,$(or $(FROM),$(VIEW_FROM)),--from $(k)) \
+		$(foreach k,$(or $(TO),$(VIEW_TO)),--to $(k))
 
 serve:  ## Run the interactive GUI (weaverkit serve; needs the [serve] extra: fastapi+uvicorn)
 	uv run --with fastapi --with uvicorn weaverkit serve $(if $(PORT),--port $(PORT))
