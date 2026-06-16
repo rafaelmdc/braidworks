@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index view serve lint fmt clean tags tags-check
+.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -48,6 +48,14 @@ view:  ## Render the weaver-network view -> $(VIEW_OUT) (VIEW_OUT=.. to override
 
 serve:  ## Run the interactive GUI (weaverkit serve; needs the [serve] extra: fastapi+uvicorn)
 	uv run --with fastapi --with uvicorn weaverkit serve $(if $(PORT),--port $(PORT))
+
+serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override 8765)
+	@port=$(or $(PORT),8765); \
+	pid=$$(lsof -ti tcp:$$port 2>/dev/null || true); \
+	if [ -n "$$pid" ]; then kill $$pid 2>/dev/null; echo "stopped serve on port $$port (pid $$pid)"; \
+	elif command -v fuser >/dev/null 2>&1 && fuser -k $$port/tcp >/dev/null 2>&1; then echo "stopped serve on port $$port"; \
+	elif pkill -f "weaverkit serve" 2>/dev/null; then echo "stopped weaverkit serve"; \
+	else echo "nothing to stop on port $$port"; fi
 
 # Lint every package and its tests. Weaver src/tests are derived from WEAVER_DIRS,
 # so a new weaver is linted automatically.
