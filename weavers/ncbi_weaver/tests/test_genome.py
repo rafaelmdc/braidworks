@@ -52,9 +52,9 @@ def _handler(calls):
                 rows = [r for r in rows if r["assembly_info"].get("refseq_category") == "reference genome"]
             return httpx.Response(200, json={"reports": rows, "total_count": len(rows)})
         if "/genome/accession/" in path and path.endswith("/dataset_report"):
-            acc = path.split("/genome/accession/", 1)[1].split("/")[0]
-            row = next((r for v in ASSEMBLIES.values() for r in v if r["accession"] == acc), None)
-            return httpx.Response(200, json={"reports": [row] if row else []})
+            accs = path.split("/genome/accession/", 1)[1].split("/")[0].split(",")
+            rows = [r for v in ASSEMBLIES.values() for r in v if r["accession"] in accs]
+            return httpx.Response(200, json={"reports": rows})
         if "/genome/accession/" in path and path.endswith("/sequence_reports"):
             acc = path.split("/genome/accession/", 1)[1].split("/")[0]
             return httpx.Response(200, json={"reports": SEQUENCES.get(acc, [])})
@@ -117,6 +117,20 @@ async def test_describe_genome_sequences_group_fetches_sequences():
     sm = {s.type_id: s.value for s in r.strands}
     assert sm[vocab.SEQUENCE_RECORDS][0]["refseq_accession"] == "NC_000913.3"
     assert any(p.endswith("/sequence_reports") for p in calls)
+
+
+async def test_describe_genome_batches_many_into_one_request():
+    """N accessions -> a single multi-accession dataset_report request, not one each."""
+    calls: list[str] = []
+    sets = [StrandSet.from_strands(a, [Strand(vocab.GENOME_ACCESSION, a)])
+            for a in ("GCF_000005845.2", "GCA_000008865.2", "GCF_999999999.9")]
+    out = await _weaver(calls).execute_batch(
+        vocab.DESCRIBE_GENOME, sets, requested_outputs=frozenset(vocab.ASSEMBLY_GROUP),
+        backend="api",
+    )
+    assert [r.status for r in out] == [WeaveStatus.OK, WeaveStatus.OK, WeaveStatus.NO_MATCH]
+    reports = [p for p in calls if p.endswith("/dataset_report")]
+    assert len(reports) == 1  # one bulk request for all three accessions
 
 
 async def test_taxid_fans_into_each_genome_described():

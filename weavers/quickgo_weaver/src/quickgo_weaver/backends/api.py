@@ -29,6 +29,7 @@ from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_
 logger = logging.getLogger("quickgo_weaver.api")
 
 DEFAULT_BASE_URL = "https://www.ebi.ac.uk/QuickGO/services"
+_TERM_CHUNK = 100  # GO ids per multi-id /ontology/go/terms request (keeps the URL bounded)
 _PAGE_SIZE = 200  # QuickGO's max results per page
 _MAX_PAGES = 10  # cap fan-out: 10 pages * 200 = 2000 annotations (covers nearly all proteins)
 # GO aspect (QuickGO value) -> produced type_id for that aspect's term-name list.
@@ -123,35 +124,52 @@ class QuickgoApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        # describe_go_term drills one GO id; list_go_terms lists a protein's terms.
+        # describe_go_term drills GO ids; list_go_terms lists a protein's terms.
         if capability_id == "describe_go_term":
-            return [await self._describe_one(q) for q in queries]
+            return await self._describe_terms(queries)
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
 
-    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
-        """One go.term id -> that term's detail via /ontology/go/terms/{id}."""
-        term = str(query.get("go.term", "")).strip()
-        if not term:
-            return LookupRecord(query=query, found=False)
+    async def _describe_terms(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        """GO ids -> their details via the multi-id ``/ontology/go/terms/{ids}`` endpoint.
+
+        The whole batch is fetched with chunked comma-separated requests (one per
+        ``_TERM_CHUNK`` ids) instead of one request per term.
+        """
+        ids = [str(q.get("go.term", "")).strip() for q in queries]
+        distinct = sorted({t for t in ids if t})
+        terms: dict[str, dict[str, Any]] = {}
         try:
-            resp = await self._http().get(f"/ontology/go/terms/{term}")
-            resp.raise_for_status()
-            results = resp.json().get("results") or []
+            for start in range(0, len(distinct), _TERM_CHUNK):
+                chunk = distinct[start : start + _TERM_CHUNK]
+                if not chunk:
+                    continue
+                resp = await self._http().get(f"/ontology/go/terms/{','.join(chunk)}")
+                resp.raise_for_status()
+                for t in resp.json().get("results") or []:
+                    if t.get("id"):
+                        terms[t["id"]] = t
         except httpx.HTTPStatusError as exc:
-            if is_not_found_status(exc.response.status_code):
-                return LookupRecord(query=query, found=False)
-            logger.warning("QuickGO term detail failed for %r: %s", term, exc)
-            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
+            if not is_not_found_status(exc.response.status_code):
+                logger.warning("QuickGO term detail failed: %s", exc)
+                err = f"QuickGO API error: {format_exc(exc)}"
+                return [LookupRecord(query=q, error=err) for q in queries]
         except httpx.HTTPError as exc:
-            logger.warning("QuickGO term detail failed for %r: %s", term, exc)
-            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
-        if not results or not results[0].get("id"):
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_describe(results[0]))
+            logger.warning("QuickGO term detail failed: %s", exc)
+            err = f"QuickGO API error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        records: list[LookupRecord] = []
+        for query, term_id in zip(queries, ids):
+            term = terms.get(term_id) if term_id else None
+            if term is None:
+                records.append(LookupRecord(query=query, found=False))
+            else:
+                records.append(LookupRecord(query=query, found=True, values=_describe(term)))
+        return records
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

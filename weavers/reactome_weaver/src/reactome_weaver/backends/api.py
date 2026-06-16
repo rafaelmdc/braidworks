@@ -29,6 +29,7 @@ logger = logging.getLogger("reactome_weaver.api")
 
 DEFAULT_BASE_URL = "https://reactome.org/ContentService"
 DEFAULT_LIMIT = 30  # top pathways to surface in names/records (count stays the true total)
+_ID_CHUNK = 100  # pathway ids per POST /data/query/ids request (keeps the body bounded)
 
 
 def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
@@ -113,35 +114,58 @@ class ReactomeApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        # describe_pathway drills one pathway id; list_pathways lists a protein's pathways.
+        # describe_pathway drills pathway ids; list_pathways lists a protein's pathways.
         if capability_id == "describe_pathway":
-            return [await self._describe_one(q) for q in queries]
+            return await self._describe_pathways(queries)
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
 
-    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
-        """One pathway.reactome.id -> that pathway's detail via /data/query/{id}."""
-        pid = str(query.get("pathway.reactome.id", "")).strip()
-        if not pid:
-            return LookupRecord(query=query, found=False)
+    async def _describe_pathways(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        """Pathway ids -> their details via the bulk ``POST /data/query/ids`` endpoint.
+
+        The whole batch is sent as a comma-separated id list (chunked) instead of one
+        ``GET /data/query/{id}`` per pathway; the response is a list of objects keyed
+        back by ``stId``.
+        """
+        pids = [str(q.get("pathway.reactome.id", "")).strip() for q in queries]
+        distinct = sorted({p for p in pids if p})
+        objs: dict[str, dict[str, Any]] = {}
         try:
-            resp = await self._http().get(f"/data/query/{pid}")
-            resp.raise_for_status()
-            obj = resp.json()
+            for start in range(0, len(distinct), _ID_CHUNK):
+                chunk = distinct[start : start + _ID_CHUNK]
+                if not chunk:
+                    continue
+                resp = await self._http().post(
+                    "/data/query/ids", content=",".join(chunk),
+                    headers={"Content-Type": "text/plain"},
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                for obj in body if isinstance(body, list) else []:
+                    st_id = obj.get("stId")
+                    if st_id:
+                        objs[str(st_id)] = obj
         except httpx.HTTPStatusError as exc:
-            if is_not_found_status(exc.response.status_code):
-                return LookupRecord(query=query, found=False)
-            logger.warning("Reactome detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
+            if not is_not_found_status(exc.response.status_code):
+                logger.warning("Reactome detail failed: %s", exc)
+                err = f"Reactome API error: {format_exc(exc)}"
+                return [LookupRecord(query=q, error=err) for q in queries]
         except httpx.HTTPError as exc:
-            logger.warning("Reactome detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
-        if not isinstance(obj, dict) or not obj.get("stId"):
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_describe(obj))
+            logger.warning("Reactome detail failed: %s", exc)
+            err = f"Reactome API error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        records: list[LookupRecord] = []
+        for query, pid in zip(queries, pids):
+            obj = objs.get(pid) if pid else None
+            if not obj:
+                records.append(LookupRecord(query=query, found=False))
+            else:
+                records.append(LookupRecord(query=query, found=True, values=_describe(obj)))
+        return records
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

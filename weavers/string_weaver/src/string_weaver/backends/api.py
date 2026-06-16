@@ -32,6 +32,7 @@ logger = logging.getLogger("string_weaver.api")
 
 DEFAULT_BASE_URL = "https://string-db.org/api"
 DEFAULT_LIMIT = 25  # max partners per protein (most confident first)
+_ID_CHUNK = 100  # identifiers per STRING request (newline-separated; keeps the URL bounded)
 # STRING evidence channels: JSON subscore key -> readable name.
 _CHANNELS = {
     "nscore": "neighborhood",
@@ -118,39 +119,72 @@ class StringApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        # One interaction_partners call per accession; the whole edge list arrives at
-        # once, so we compute every leaf and let the shared mapper filter.
+        # The whole batch is resolved with two bulk calls — get_string_ids (accessions
+        # -> STRING ids) then interaction_partners over the resolved ids — instead of one
+        # interaction_partners call per accession. STRING resolves each identifier's
+        # species on its own, so a single mixed-species batch is safe; partner edges are
+        # grouped back to each query by their ``stringId_A``.
+        accs = [str(q.get("protein.uniprot.accession", "")).strip() for q in queries]
+        distinct = sorted({a for a in accs if a})
+        if not distinct:
+            return [LookupRecord(query=q, found=False) for q in queries]
+        try:
+            idmap = await self._string_ids(distinct)
+            partners = await self._partners(sorted(set(idmap.values())))
+        except httpx.HTTPError as exc:  # network/server problem is a whole-batch error
+            logger.warning("STRING lookup failed: %s", exc)
+            err = f"STRING API error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
         records: list[LookupRecord] = []
-        for query in queries:
-            accession = str(query.get("protein.uniprot.accession", "")).strip()
-            records.append(await self._resolve_one(query, accession))
+        for query, acc in zip(queries, accs):
+            string_id = idmap.get(acc) if acc else None
+            edges = partners.get(string_id) if string_id else None
+            if not edges:
+                records.append(LookupRecord(query=query, found=False))
+            else:
+                records.append(LookupRecord(query=query, found=True, values=_extract(edges)))
         return records
 
-    async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
-        if not accession:
-            return LookupRecord(query=query, found=False)
-        try:
-            resp = await self._http().get(
-                "/json/interaction_partners",
-                params={
-                    "identifiers": accession,
-                    "limit": str(self._limit),
-                    "caller_identity": "braidworks",
-                },
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-        except httpx.HTTPStatusError as exc:
-            # STRING returns 400/404 for an identifier it can't map — that's a normal
-            # data outcome (NO_MATCH), not a system error.
-            if is_not_found_status(exc.response.status_code):
-                return LookupRecord(query=query, found=False)
-            logger.warning("STRING lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"STRING API error: {format_exc(exc)}")
-        except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
-            logger.warning("STRING lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"STRING API error: {format_exc(exc)}")
+    async def _string_ids(self, accessions: list[str]) -> dict[str, str]:
+        """Bulk-resolve accessions to STRING ids, keyed by the echoed ``queryItem``."""
+        out: dict[str, str] = {}
+        for start in range(0, len(accessions), _ID_CHUNK):
+            chunk = accessions[start : start + _ID_CHUNK]
+            if not chunk:
+                continue
+            for row in await self._get("/json/get_string_ids", "\r".join(chunk)):
+                query_item, string_id = row.get("queryItem"), row.get("stringId")
+                if query_item and string_id:
+                    out.setdefault(str(query_item), str(string_id))
+        return out
 
-        if not isinstance(payload, list) or not payload:
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_extract(payload))
+    async def _partners(self, string_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Bulk-fetch interaction partners, grouped by the query protein (``stringId_A``)."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for start in range(0, len(string_ids), _ID_CHUNK):
+            chunk = string_ids[start : start + _ID_CHUNK]
+            if not chunk:
+                continue
+            rows = await self._get(
+                "/json/interaction_partners", "\r".join(chunk), limit=str(self._limit)
+            )
+            for row in rows:
+                a = row.get("stringId_A")
+                if a:
+                    out.setdefault(str(a), []).append(row)
+        return out
+
+    async def _get(self, path: str, identifiers: str, **extra: str) -> list[dict[str, Any]]:
+        """A STRING GET returning the JSON list, mapping the no-match status (400/404)
+        to an empty result so a fully-unmappable batch is a clean miss, not an error."""
+        params = {"identifiers": identifiers, "caller_identity": "braidworks", **extra}
+        resp = await self._http().get(path, params=params)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return []
+            raise
+        payload = resp.json()
+        return payload if isinstance(payload, list) else []

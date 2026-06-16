@@ -60,11 +60,9 @@ def _handler(request: httpx.Request) -> httpx.Response:
         body = {"numberOfHits": len(results), "pageInfo": {"current": 1, "total": 1}, "results": results}
         return httpx.Response(200, content=json.dumps(body))
     if "/ontology/go/terms/" in path:
-        term = path.split("/ontology/go/terms/")[1].split("/")[0]
-        detail = _TERM_DETAIL.get(term)
-        if detail is not None:
-            return httpx.Response(200, content=json.dumps({"results": [detail]}))
-        return httpx.Response(404, content=json.dumps({"results": []}))
+        ids = path.split("/ontology/go/terms/")[1].split("/")[0].split(",")
+        results = [_TERM_DETAIL[t] for t in ids if t in _TERM_DETAIL]
+        return httpx.Response(200, content=json.dumps({"results": results}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

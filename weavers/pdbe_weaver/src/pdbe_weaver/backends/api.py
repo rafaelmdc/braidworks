@@ -29,6 +29,7 @@ logger = logging.getLogger("pdbe_weaver.api")
 
 DEFAULT_BASE_URL = "https://www.ebi.ac.uk/pdbe/api"
 DEFAULT_LIMIT = 25  # top structures to surface in ids/records (count stays the true total)
+_SUMMARY_CHUNK = 200  # pdb ids per POST /pdb/entry/summary request (keeps the body bounded)
 _WORST_RESOLUTION = 1e9  # sort sentinel for entries with no resolution (NMR/EM sometimes)
 
 
@@ -131,37 +132,57 @@ class PdbeApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        # describe_structure drills one PDB id; list_structures lists a protein's structures.
+        # describe_structure drills PDB ids; list_structures lists a protein's structures.
         if capability_id == "describe_structure":
-            return [await self._describe_one(q) for q in queries]
+            return await self._describe_structures(queries)
         records: list[LookupRecord] = []
         for query in queries:
             accession = str(query.get("protein.uniprot.accession", "")).strip()
             records.append(await self._resolve_one(query, accession))
         return records
 
-    async def _describe_one(self, query: dict[str, Any]) -> LookupRecord:
-        """One pdb.id -> that structure's detail via /pdb/entry/summary/{id}."""
-        pid = str(query.get("pdb.id", "")).strip()
-        if not pid:
-            return LookupRecord(query=query, found=False)
+    async def _describe_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        """PDB ids -> their summaries via the bulk ``POST /pdb/entry/summary`` endpoint.
+
+        The whole batch is sent as a comma-separated id list (chunked to keep the body
+        bounded) instead of one ``GET /pdb/entry/summary/{id}`` per structure. PDBe keys
+        the response by pdb id, so results are matched back case-insensitively.
+        """
+        pids = [str(q.get("pdb.id", "")).strip() for q in queries]
+        distinct = sorted({p for p in pids if p})
+        summaries: dict[str, dict[str, Any]] = {}
         try:
-            resp = await self._http().get(f"/pdb/entry/summary/{pid}")
-            resp.raise_for_status()
-            body = resp.json()
+            for start in range(0, len(distinct), _SUMMARY_CHUNK):
+                chunk = distinct[start : start + _SUMMARY_CHUNK]
+                if not chunk:
+                    continue
+                resp = await self._http().post(
+                    "/pdb/entry/summary",
+                    content=",".join(chunk),
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                resp.raise_for_status()
+                for key, rows in (resp.json() or {}).items():
+                    if rows:
+                        summaries[key.lower()] = rows[0]
         except httpx.HTTPStatusError as exc:
-            if is_not_found_status(exc.response.status_code):
-                return LookupRecord(query=query, found=False)
-            logger.warning("PDBe detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
+            if not is_not_found_status(exc.response.status_code):
+                logger.warning("PDBe detail failed: %s", exc)
+                err = f"PDBe API error: {format_exc(exc)}"
+                return [LookupRecord(query=q, error=err) for q in queries]
         except httpx.HTTPError as exc:
-            logger.warning("PDBe detail failed for %r: %s", pid, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
-        # Response is {pdb_id: [summary]}; casing can differ, so fall back to the sole value.
-        rows = body.get(pid) or (next(iter(body.values()), []) if body else [])
-        if not rows:
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_describe(pid, rows[0]))
+            logger.warning("PDBe detail failed: %s", exc)
+            err = f"PDBe API error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        records: list[LookupRecord] = []
+        for query, pid in zip(queries, pids):
+            obj = summaries.get(pid.lower()) if pid else None
+            if obj is None:
+                records.append(LookupRecord(query=query, found=False))
+            else:
+                records.append(LookupRecord(query=query, found=True, values=_describe(pid, obj)))
+        return records
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

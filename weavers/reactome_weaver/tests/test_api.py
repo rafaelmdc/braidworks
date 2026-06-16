@@ -91,12 +91,14 @@ _DETAIL = {
 }
 
 
-def _detail_backend(obj=None, *, status=200):
+def _detail_backend(obj=None, *, status=200, calls=None):
     def handler(request: httpx.Request) -> httpx.Response:
+        if calls is not None:
+            calls.append(str(request.url))
         if status != 200:
             return httpx.Response(status, content=b"{}")
-        if "/data/query/" in request.url.path:
-            return httpx.Response(200, content=json.dumps(obj if obj is not None else {}))
+        if "/data/query/ids" in request.url.path:
+            return httpx.Response(200, content=json.dumps([obj] if obj else []))
         return httpx.Response(404, content=b"{}")
 
     client = httpx.AsyncClient(base_url="https://r/ContentService",
@@ -137,6 +139,34 @@ async def test_describe_pathway_blank_and_404_are_misses():
 async def test_describe_pathway_server_error_is_per_entity_error():
     rec = await _describe(_detail_backend(status=500), "R-HSA-69541")
     assert rec.found is False and rec.error is not None and "Reactome" in rec.error
+
+
+async def test_describe_pathway_batches_many_into_one_request():
+    """N pathway ids -> a single POST /data/query/ids request, not one GET per id."""
+    others = [
+        {"stId": "R-HSA-69541", "displayName": "Stabilization of p53"},
+        {"stId": "R-HSA-69560", "displayName": "Transcriptional activation of p53"},
+    ]
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        ids = (request.content.decode() if request.content else "").split(",")
+        found = [o for o in others if o["stId"] in ids]
+        return httpx.Response(200, content=json.dumps(found))
+
+    client = httpx.AsyncClient(base_url="https://r/ContentService",
+                              transport=httpx.MockTransport(handler))
+    backend = ReactomeApiBackend(client=client)
+    records = await backend.fetch(
+        DESCRIBE,
+        [{"pathway.reactome.id": p} for p in ("R-HSA-69541", "R-HSA-69560", "R-HSA-000")],
+        requested_outputs=frozenset({"pathway.reactome.display_name"}),
+        groups_to_compute=frozenset(),
+    )
+    assert [r.found for r in records] == [True, True, False]
+    assert records[1].values["pathway.reactome.display_name"] == "Transcriptional activation of p53"
+    assert len(calls) == 1  # one bulk request for all three ids
 
 
 async def test_400_and_404_are_misses():
