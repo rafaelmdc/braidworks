@@ -22,6 +22,7 @@ The HTTP client is injectable (``client=``) so tests drive it with an
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -39,6 +40,9 @@ logger = logging.getLogger("ncbi_weaver.api")
 
 DEFAULT_BASE_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2"
 _PAGE_LIMIT = 1000
+_GENE_ID_CHUNK = 250  # gene ids per multi-id dataset_report URL (keeps the path bounded)
+_ACC_CHUNK = 100  # genome accessions per multi-id dataset_report URL
+_SYMBOL_CHUNK = 100  # gene symbols per multi-symbol dataset_report URL
 
 
 def _node_name(node: dict[str, Any]) -> str | None:
@@ -293,40 +297,75 @@ class DatasetsV2Backend:
     async def describe_genome(
         self, queries: list[dict[str, Any]], *, groups: frozenset[str]
     ) -> list[LookupRecord]:
-        """One genome accession -> assembly detail (+ sequences if that group was asked)."""
+        """Genome accessions -> assembly detail (+ sequences if that group was asked).
+
+        Assembly reports for the whole batch are fetched with chunked multi-accession
+        ``dataset_report`` requests; per-sequence reports — a genuinely per-accession
+        endpoint — are then fetched concurrently.
+        """
         want_sequences = "sequences" in groups
+        accs = [str(q.get(vocab.GENOME_ACCESSION, "") or "").strip() for q in queries]
+        distinct = sorted({a for a in accs if a})
+        try:
+            reports = await self._genome_reports(distinct)
+        except httpx.HTTPError as exc:
+            err = f"NCBI genome error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        sequences: dict[str, list[dict[str, Any]]] = {}
+        if want_sequences:
+            found = [a for a in distinct if a in reports]
+            fetched = await asyncio.gather(
+                *(self._fetch_sequences(a) for a in found), return_exceptions=True
+            )
+            sequences = {a: r for a, r in zip(found, fetched) if not isinstance(r, Exception)}
+
         records: list[LookupRecord] = []
-        for q in queries:
-            acc = str(q.get(vocab.GENOME_ACCESSION, "") or "").strip()
-            if not acc:
+        for q, acc in zip(queries, accs):
+            report = reports.get(acc) if acc else None
+            if report is None:
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            try:
-                values = await self._describe_one_genome(acc, want_sequences)
-            except httpx.HTTPStatusError as exc:
-                if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                records.append(LookupRecord(query=q, error=f"NCBI genome error: {format_exc(exc)}"))
-                continue
-            except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI genome error: {format_exc(exc)}"))
-                continue
-            if values is None:
-                records.append(LookupRecord(query=q, found=False))
-                continue
+            values = self._genome_values(report)
+            if want_sequences and acc in sequences:
+                values[vocab.SEQUENCE_RECORDS] = sequences[acc]
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
 
-    async def _describe_one_genome(
-        self, acc: str, want_sequences: bool
-    ) -> dict[str, Any] | None:
-        resp = await self._http().get(f"/genome/accession/{acc}/dataset_report")
-        resp.raise_for_status()
-        reports = resp.json().get("reports") or []
-        if not reports:
-            return None
-        a = reports[0]
+    async def _genome_reports(self, accs: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch-fetch assembly reports by accession, keyed by ``accession`` (the genome
+        analogue of :meth:`_dataset_report`).
+
+        Hits the multi-accession ``genome/accession/{accs}/dataset_report`` endpoint,
+        chunked and paginated — one request per chunk instead of one per accession.
+        """
+        out: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(accs), _ACC_CHUNK):
+            chunk = accs[start : start + _ACC_CHUNK]
+            if not chunk:
+                continue
+            page_token: str | None = None
+            while True:
+                params: dict[str, Any] = {"page_size": _PAGE_LIMIT}
+                if page_token:
+                    params["page_token"] = page_token
+                resp = await self._http().get(
+                    f"/genome/accession/{','.join(chunk)}/dataset_report", params=params
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                for a in body.get("reports") or []:
+                    acc = a.get("accession")
+                    if acc:
+                        out[str(acc)] = a
+                page_token = body.get("next_page_token")
+                if not page_token:
+                    break
+        return out
+
+    @staticmethod
+    def _genome_values(a: dict[str, Any]) -> dict[str, Any]:
+        """One assembly dataset_report entry -> describe_genome assembly outputs."""
         info = a.get("assembly_info") or {}
         stats = a.get("assembly_stats") or {}
         ann = a.get("annotation_info") or {}
@@ -350,8 +389,6 @@ class DatasetsV2Backend:
                 "gene_counts": (ann.get("stats") or {}).get("gene_counts"),
             },
         }
-        if want_sequences:
-            values[vocab.SEQUENCE_RECORDS] = await self._fetch_sequences(acc)
         return values
 
     async def _fetch_sequences(self, acc: str) -> list[dict[str, Any]]:
@@ -408,31 +445,45 @@ class DatasetsV2Backend:
     async def resolve_gene(
         self, queries: list[dict[str, Any]], *, taxon: str
     ) -> list[LookupRecord]:
-        """A gene symbol (in ``taxon``) -> its NCBI gene id + summary."""
+        """Gene symbols (in ``taxon``) -> their NCBI gene ids + summaries.
+
+        All symbols in the batch share one ``taxon`` (a per-call param), so the whole
+        batch is resolved with chunked multi-symbol ``dataset_report`` requests instead
+        of one request per symbol. Each report echoes its input ``query``, so results map
+        back to the requested symbol even when NCBI resolves an alias to a different
+        official symbol.
+        """
         tx = (taxon or "9606").strip()
-        records: list[LookupRecord] = []
-        for q in queries:
-            symbol = str(q.get(vocab.PROTEIN_QUERY, "") or "").strip()
-            if not symbol:
-                records.append(LookupRecord(query=q, found=False))
-                continue
-            try:
+        symbols = [str(q.get(vocab.PROTEIN_QUERY, "") or "").strip() for q in queries]
+        distinct = sorted({s for s in symbols if s})
+        by_symbol: dict[str, dict[str, Any]] = {}
+        try:
+            for start in range(0, len(distinct), _SYMBOL_CHUNK):
+                chunk = distinct[start : start + _SYMBOL_CHUNK]
+                if not chunk:
+                    continue
                 resp = await self._http().get(
-                    f"/gene/symbol/{symbol}/taxon/{tx}/dataset_report"
+                    f"/gene/symbol/{','.join(chunk)}/taxon/{tx}/dataset_report"
                 )
                 resp.raise_for_status()
-                reports = resp.json().get("reports") or []
-            except httpx.HTTPStatusError as exc:
-                if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
-                continue
-            except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
-                continue
-            gene = next((r.get("gene") for r in reports if r.get("gene")), None)
-            if not gene or gene.get("gene_id") is None:
+                for r in resp.json().get("reports") or []:
+                    gene = r.get("gene")
+                    if not gene or gene.get("gene_id") is None:
+                        continue
+                    for echoed in r.get("query") or []:
+                        by_symbol.setdefault(str(echoed), gene)
+        except httpx.HTTPStatusError as exc:
+            if not is_not_found_status(exc.response.status_code):
+                err = f"NCBI gene error: {format_exc(exc)}"
+                return [LookupRecord(query=q, error=err) for q in queries]
+        except httpx.HTTPError as exc:
+            err = f"NCBI gene error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        records: list[LookupRecord] = []
+        for q, symbol in zip(queries, symbols):
+            gene = by_symbol.get(symbol) if symbol else None
+            if gene is None:
                 records.append(LookupRecord(query=q, found=False))
                 continue
             records.append(LookupRecord(query=q, found=True, values={
@@ -446,36 +497,72 @@ class DatasetsV2Backend:
     async def describe_gene(
         self, queries: list[dict[str, Any]], *, groups: frozenset[str]
     ) -> list[LookupRecord]:
-        """One gene id -> summary (+ products if that group was requested)."""
+        """Gene ids -> summaries (+ products if that group was requested).
+
+        The whole batch is resolved with chunked multi-id ``dataset_report`` requests
+        (one per ``_GENE_ID_CHUNK`` genes) instead of one request per gene; product
+        reports — a genuinely per-gene endpoint — are then fetched concurrently.
+        """
         want_products = "products" in groups
+        gids = [str(q.get(vocab.GENE_ID, "") or "").strip() for q in queries]
+        distinct = sorted({g for g in gids if g})
+        try:
+            summaries = await self._gene_reports(distinct)
+        except httpx.HTTPError as exc:
+            err = f"NCBI gene error: {format_exc(exc)}"
+            return [LookupRecord(query=q, error=err) for q in queries]
+
+        products: dict[str, list[dict[str, Any]]] = {}
+        if want_products:
+            found = [g for g in distinct if g in summaries]
+            fetched = await asyncio.gather(
+                *(self._fetch_gene_products(g) for g in found), return_exceptions=True
+            )
+            products = {g: r for g, r in zip(found, fetched) if not isinstance(r, Exception)}
+
         records: list[LookupRecord] = []
-        for q in queries:
-            gid = str(q.get(vocab.GENE_ID, "") or "").strip()
-            if not gid:
+        for q, gid in zip(queries, gids):
+            gene = summaries.get(gid) if gid else None
+            if gene is None:
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            try:
-                resp = await self._http().get(f"/gene/id/{gid}/dataset_report")
-                resp.raise_for_status()
-                reports = resp.json().get("reports") or []
-                gene = next((r.get("gene") for r in reports if r.get("gene")), None)
-                if gene is None:
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                values = self._gene_summary(gene)
-                if want_products:
-                    values[vocab.GENE_PRODUCTS] = await self._fetch_gene_products(gid)
-            except httpx.HTTPStatusError as exc:
-                if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
-                continue
-            except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI gene error: {format_exc(exc)}"))
-                continue
+            values = self._gene_summary(gene)
+            if want_products and gid in products:
+                values[vocab.GENE_PRODUCTS] = products[gid]
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
+
+    async def _gene_reports(self, gids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch-fetch gene summaries by id, keyed by ``gene_id`` (the gene analogue
+        of :meth:`_dataset_report`).
+
+        Hits the multi-id ``gene/id/{ids}/dataset_report`` endpoint with a
+        comma-separated id list, chunked to keep the URL bounded and paginated via
+        ``next_page_token`` — one request per chunk instead of one per gene.
+        """
+        out: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(gids), _GENE_ID_CHUNK):
+            chunk = gids[start : start + _GENE_ID_CHUNK]
+            if not chunk:
+                continue
+            page_token: str | None = None
+            while True:
+                params: dict[str, Any] = {"page_size": _PAGE_LIMIT}
+                if page_token:
+                    params["page_token"] = page_token
+                resp = await self._http().get(
+                    f"/gene/id/{','.join(chunk)}/dataset_report", params=params
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                for r in body.get("reports") or []:
+                    gene = r.get("gene")
+                    if gene and gene.get("gene_id") is not None:
+                        out[str(gene["gene_id"])] = gene
+                page_token = body.get("next_page_token")
+                if not page_token:
+                    break
+        return out
 
     async def _fetch_gene_products(self, gid: str) -> list[dict[str, Any]]:
         """Transcript + protein products of a gene (compact rows)."""

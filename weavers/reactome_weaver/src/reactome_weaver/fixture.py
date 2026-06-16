@@ -40,12 +40,11 @@ def _handler(request: httpx.Request) -> httpx.Response:
         if acc == "P04637":
             return httpx.Response(200, content=json.dumps(_PATHWAYS))
         return httpx.Response(404, content=json.dumps({"messages": ["no pathways"]}))
-    if "/data/query/" in path:
-        pid = path.split("/data/query/")[1].split("/")[0]
-        detail = _PATHWAY_DETAIL.get(pid)
-        if detail is not None:
-            return httpx.Response(200, content=json.dumps(detail))
-        return httpx.Response(404, content=json.dumps({"code": 404}))
+    if "/data/query/ids" in path:
+        # bulk POST: ids arrive comma-separated in the body; return a list of objects.
+        ids = [p.strip() for p in (request.content.decode() if request.content else "").split(",")]
+        found = [_PATHWAY_DETAIL[p] for p in ids if p in _PATHWAY_DETAIL]
+        return httpx.Response(200, content=json.dumps(found))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

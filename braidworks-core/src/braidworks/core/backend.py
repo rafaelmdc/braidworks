@@ -44,4 +44,14 @@ class BackendBase(ABC):
         ``requested_outputs``); gate expensive paths on membership in it. ``params`` is
         the effective per-query parameter map (validated + defaulted by the capability);
         ``None``/empty means no options were given — behave exactly as before.
+
+        **Honor the batch — bulk the upstream calls.** ``queries`` is the whole batch
+        the executor grouped for you (fan-outs included; see ``Capability.max_batch_size``).
+        If the upstream API has a multi-id / POST-a-list endpoint, send the batch in one
+        (chunked) request — do **not** loop one HTTP call per query, or a fan over N
+        entities becomes N serial round-trips. Collect the inputs, issue the bulk
+        request(s), then map the response back to one record per query (by id, or by an
+        echoed query field). When the upstream is single-id only, run the per-query calls
+        concurrently with ``asyncio.gather`` rather than awaiting them in a loop. The
+        ncbi backend's ``_dataset_report`` / ``_gene_reports`` are the reference pattern.
         """

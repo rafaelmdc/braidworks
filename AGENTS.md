@@ -218,6 +218,19 @@ description = "Assembly completeness filter"
 - **Failures are values, not exceptions.** Return `WeaveStatus.NO_MATCH` / `ERROR`,
   not raised exceptions, except for structural problems (`BackendConfigurationError`,
   `UnsupportedCapability`, `BackendUnavailable`).
+- **Backends must honor the batch — bulk the upstream calls.** A backend's `fetch`
+  receives the *whole* batch of queries (the executor already groups them, fan-outs
+  included, up to `max_batch_size`). If the source API has a multi-id / POST-a-list
+  endpoint, issue **one (chunked) request for the batch** and map the response back to
+  one record per query — never loop one HTTP call per query, or a fan over N entities
+  silently becomes N serial round-trips (e.g. one ortholog gene → 600+ describe calls).
+  Map results back by id, or by an echoed query field when the API returns one (NCBI's
+  `dataset_report` echoes `query`; STRING's `get_string_ids` echoes `queryItem`). When
+  the upstream is genuinely single-id only, fire the per-query calls concurrently with
+  `asyncio.gather` instead of awaiting in a loop. Reference: `ncbi_weaver`'s
+  `_dataset_report` / `_gene_reports` / `_genome_reports`. Every API backend that does a
+  per-query lookup ships a `test_..._batches_many_into_one_request` test asserting a
+  single upstream call for N inputs — add one.
 - **Keep `braidworks-core` domain-neutral.** No taxonomy/protein/etc. assumptions
   leak into core; weaver-specific types stay in the weaver package.
 - **Never commit data artifacts.** Databases, dumps, and archives are multi-GB and

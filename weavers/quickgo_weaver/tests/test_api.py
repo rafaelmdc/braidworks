@@ -158,3 +158,32 @@ async def test_describe_go_term_blank_and_empty_are_misses():
 async def test_describe_go_term_server_error_is_per_entity_error():
     rec = await _describe(_term_backend(status=500), "GO:0006915")
     assert rec.found is False and rec.error is not None and "QuickGO" in rec.error
+
+
+async def test_describe_go_term_batches_many_into_one_request():
+    """N GO ids -> a single multi-id /ontology/go/terms request, not one per term."""
+    terms = {
+        "GO:0006915": {"id": "GO:0006915", "name": "apoptotic process",
+                       "aspect": "biological_process"},
+        "GO:0003700": {"id": "GO:0003700", "name": "DNA-binding TF activity",
+                       "aspect": "molecular_function"},
+    }
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        ids = request.url.path.split("/ontology/go/terms/")[1].split(",")
+        return httpx.Response(200, content=json.dumps(
+            {"results": [terms[i] for i in ids if i in terms]}))
+
+    client = httpx.AsyncClient(base_url="https://q/services",
+                              transport=httpx.MockTransport(handler))
+    backend = QuickgoApiBackend(client=client)
+    records = await backend.fetch(
+        "describe_go_term",
+        [{"go.term": "GO:0006915"}, {"go.term": "GO:0003700"}, {"go.term": "GO:9999999"}],
+        requested_outputs=frozenset({"go.term.name"}), groups_to_compute=frozenset(),
+    )
+    assert [r.found for r in records] == [True, True, False]
+    assert records[1].values["go.term.name"] == "DNA-binding TF activity"
+    assert len(calls) == 1  # one bulk request for all three ids

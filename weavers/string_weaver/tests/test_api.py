@@ -20,17 +20,24 @@ ALL = frozenset(
 )
 
 
+STRING_ID = "9606.ENSP_TP53"  # the resolved STRING id partners are grouped under
+
+
 def _edge(name, score, **channels):
-    return {"preferredName_A": "TP53", "preferredName_B": name, "stringId_B": f"id_{name}",
-            "score": score, **channels}
+    return {"preferredName_A": "TP53", "preferredName_B": name, "stringId_A": STRING_ID,
+            "stringId_B": f"id_{name}", "score": score, **channels}
 
 
-def _backend(payload, *, status=200, calls=None):
+def _backend(payload, *, status=200, calls=None, idmap=None):
     def handler(request: httpx.Request) -> httpx.Response:
         if calls is not None:
             calls.append(str(request.url))
         if status != 200:
             return httpx.Response(status, content=b"{}")
+        ids = [i for i in request.url.params.get("identifiers", "").split("\r") if i]
+        if request.url.path.endswith("/get_string_ids"):
+            rows = [{"queryItem": i, "stringId": (idmap or {}).get(i, STRING_ID)} for i in ids]
+            return httpx.Response(200, content=json.dumps(rows))
         if request.url.path.endswith("/interaction_partners"):
             return httpx.Response(200, content=json.dumps(payload))
         return httpx.Response(404, content=b"{}")
@@ -93,6 +100,27 @@ async def test_unmappable_identifier_404_is_a_miss():
 async def test_server_error_becomes_per_entity_error():
     record = await _one(_backend([], status=500), "P04637")
     assert record.found is False and record.error is not None and "STRING" in record.error
+
+
+async def test_resolves_batch_in_two_bulk_calls():
+    """N accessions -> get_string_ids + interaction_partners (two calls total), with
+    partner edges grouped back to each query by stringId_A."""
+    payload = [
+        _edge("MDM2", 0.99),  # stringId_A = STRING_ID (P04637/TP53)
+        {"preferredName_A": "BRCA1", "preferredName_B": "BARD1",
+         "stringId_A": "9606.ENSP_BRCA1", "stringId_B": "id_BARD1", "score": 0.9},
+    ]
+    calls: list[str] = []
+    backend = _backend(payload, calls=calls,
+                       idmap={"P04637": STRING_ID, "P38398": "9606.ENSP_BRCA1"})
+    records = await backend.fetch(
+        CAP, [{"protein.uniprot.accession": "P04637"}, {"protein.uniprot.accession": "P38398"}],
+        requested_outputs=ALL, groups_to_compute=frozenset(),
+    )
+    assert [r.found for r in records] == [True, True]
+    assert records[0].values["protein.interaction.partners"] == ["MDM2"]
+    assert records[1].values["protein.interaction.partners"] == ["BARD1"]
+    assert len(calls) == 2  # one get_string_ids + one interaction_partners for the whole batch
 
 
 def test_fingerprint_is_stable_and_real():

@@ -41,10 +41,16 @@ _P04637_PARTNERS = [
 ]
 
 
+_TP53_STRING_ID = "9606.ENSP00000269305"  # what get_string_ids resolves P04637 to
+
+
 def _handler(request: httpx.Request) -> httpx.Response:
+    ids = request.url.params.get("identifiers", "")
+    if request.url.path.endswith("/get_string_ids"):
+        rows = [{"queryItem": "P04637", "stringId": _TP53_STRING_ID}] if "P04637" in ids else []
+        return httpx.Response(200, content=json.dumps(rows))
     if request.url.path.endswith("/interaction_partners"):
-        ids = request.url.params.get("identifiers", "")
-        partners = _P04637_PARTNERS if "P04637" in ids else []
+        partners = _P04637_PARTNERS if _TP53_STRING_ID in ids else []
         return httpx.Response(200, content=json.dumps(partners))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 

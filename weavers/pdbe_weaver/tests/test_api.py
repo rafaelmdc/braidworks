@@ -124,7 +124,7 @@ def _describe_backend(detail=None, *, status=200, calls=None):
             calls.append(str(request.url))
         if status != 200:
             return httpx.Response(status, content=b"{}")
-        if "/pdb/entry/summary/" in request.url.path:
+        if "/pdb/entry/summary" in request.url.path:
             return httpx.Response(200, content=json.dumps(detail or {}))
         return httpx.Response(404, content=b"{}")
 
@@ -177,6 +177,20 @@ async def test_describe_blank_id_makes_no_call():
 async def test_describe_server_error_becomes_per_entity_error():
     record = await _describe(_describe_backend(status=500), "1tup")
     assert record.found is False and record.error is not None and "PDBe" in record.error
+
+
+async def test_describe_batches_many_into_one_request():
+    """N pdb ids -> a single POST /pdb/entry/summary request, not one GET per id."""
+    detail = {"1tup": [_DETAIL_1TUP], "2ahi": [dict(_DETAIL_1TUP, title="EM STRUCTURE")]}
+    calls: list[str] = []
+    records = await _describe_backend(detail, calls=calls).fetch(
+        DESCRIBE,
+        [{"pdb.id": "1tup"}, {"pdb.id": "2ahi"}, {"pdb.id": "9zzz"}],
+        requested_outputs=DESCRIBE_ALL, groups_to_compute=frozenset(),
+    )
+    assert [r.found for r in records] == [True, True, False]
+    assert records[1].values["structure.pdb.title"] == "EM STRUCTURE"
+    assert len(calls) == 1  # one bulk request for all three ids
 
 
 def test_fingerprint_is_stable_and_real():

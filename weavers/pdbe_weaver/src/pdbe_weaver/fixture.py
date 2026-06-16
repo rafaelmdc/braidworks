@@ -45,11 +45,12 @@ def _handler(request: httpx.Request) -> httpx.Response:
         if acc in _BEST_STRUCTURES:
             return httpx.Response(200, content=json.dumps({acc: _BEST_STRUCTURES[acc]}))
         return httpx.Response(404, content=json.dumps({"detail": "no structures"}))
-    if "/pdb/entry/summary/" in request.url.path:
-        pid = request.url.path.rsplit("/", 1)[1]
-        if pid in _STRUCTURE_DETAIL:
-            return httpx.Response(200, content=json.dumps({pid: [_STRUCTURE_DETAIL[pid]]}))
-        return httpx.Response(404, content=json.dumps({"detail": "no entry"}))
+    if "/pdb/entry/summary" in request.url.path:
+        # bulk POST: ids arrive comma-separated in the body (fall back to the path id).
+        body = request.content.decode() if request.content else request.url.path.rsplit("/", 1)[1]
+        ids = [p.strip() for p in body.split(",") if p.strip()]
+        found = {p: [_STRUCTURE_DETAIL[p]] for p in ids if p in _STRUCTURE_DETAIL}
+        return httpx.Response(200, content=json.dumps(found))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 
