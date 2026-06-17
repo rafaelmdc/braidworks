@@ -130,6 +130,7 @@ def build_network(registry: BraidRegistry) -> dict:
             weaver_leaves.update(leaf_out)
             # Cardinality fan-out: produced join keys the executor can expand one→many.
             set_outputs = sorted(getattr(cap, "set_outputs", frozenset()))
+            params = [p.to_json() for p in getattr(cap, "parameters", ())]
             op_id = f"op:{manifest.weaver_id}:{cap.id}"
             nodes[op_id] = {
                 "id": op_id,
@@ -142,6 +143,7 @@ def build_network(registry: BraidRegistry) -> dict:
                 "output_types": shared_out,  # only shared keys are graph nodes
                 "output_leaves": leaf_out,  # descriptive payload (card only)
                 "set_outputs": set_outputs,  # one→many fan dimensions (card + edge badge)
+                "parameters": params,  # per-run refinements (name/type/enum/default/description)
             }
             for source in sorted(cap.consumes):
                 ensure_type(source)

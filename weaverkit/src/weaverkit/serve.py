@@ -179,6 +179,7 @@ def run_response(
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
     expand: str = "top",
     k: int = 1,
+    params: dict | None = None,
 ) -> dict:
     """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
 
@@ -200,7 +201,8 @@ def run_response(
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
     result = asyncio.run(
         LocalExecutor(registry).execute(
-            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy
+            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy,
+            params=params or None,
         )
     )
     return _run_payload(registry, result, have, want, policy=policy)
@@ -215,6 +217,7 @@ def run_traversed_response(
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
     expand: str = "all",
     k: int = 5,
+    params: dict | None = None,
 ) -> dict:
     """Fan *through* one or more relationships (the GUI's "pass through" = --for-each).
 
@@ -240,6 +243,7 @@ def run_traversed_response(
             run_traversed(
                 registry, [ss], traversals, frozenset(want),
                 backend_policy=policy, expand_policy=_expand_policy(expand, k),
+                params=params or None,
             )
         )
     except (NoPathError, NoPlanError) as exc:
@@ -295,6 +299,7 @@ def create_app():
         expand: str = "top"  # top | top_k | all
         k: int = 3
         traverse: list[str] = Field(default_factory=list)  # fan capabilities to pass through
+        params: dict[str, dict[str, str]] = Field(default_factory=dict)  # {cap_id: {name: value}}
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
@@ -325,10 +330,11 @@ def create_app():
         if req.traverse:
             return run_traversed_response(
                 registry, req.have, req.want, req.traverse,
-                policy=policy, expand=req.expand, k=req.k,
+                policy=policy, expand=req.expand, k=req.k, params=req.params,
             )
         return run_response(
-            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k
+            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k,
+            params=req.params,
         )
 
     @app.get("/api/run/stream")

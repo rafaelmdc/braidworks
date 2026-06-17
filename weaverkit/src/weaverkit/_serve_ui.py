@@ -115,6 +115,13 @@ SERVE_CSS = """
     padding: 7px 9px; border-radius: 7px; }
   .picker .pk:hover { background: rgba(120,150,220,0.18); }
   .picker .pk.fan { color: #f0d18a; }
+
+  /* --- Refine (per-capability params on the built route) --- */
+  .refine .rf-cap { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-dim); margin: 9px 0 5px; }
+  .refine .rf-row { margin-bottom: 9px; }
+  .refine label.rf-l { display: block; font-size: 11.5px; color: var(--ink); margin-bottom: 3px; }
+  .refine .rf-desc { font-size: 10px; color: var(--ink-dim); margin-top: 3px; line-height: 1.35; }
 """
 
 SERVE_HTML = """
@@ -137,6 +144,7 @@ SERVE_HTML = """
     <div class="bgroup">
       <span class="blabel">Want</span><div id="bg-want" class="chips"></div>
     </div>
+    <div id="bg-refine" class="refine"></div>
     <input id="bg-value" placeholder="value, e.g. TP53" autocomplete="off">
     <div class="brow" style="margin-top:8px">
       <button class="btn primary" id="bg-run">Run</button>
@@ -537,6 +545,8 @@ function loadRecipe(name) {
 // build.have/want hold type keys; build.through holds fan capability ids (--for-each).
 const build = { have: [], through: [], want: [] };
 let pickerEl = null;
+let lastRoutePath = null;   // last previewed plan (its op nodes name the route's capabilities)
+let paramVals = {};         // {capability_id: {name: value}} — persists across re-renders
 
 function netNodeById(id) { return (DATA.network.nodes || []).find((n) => n.id === id); }
 
@@ -575,7 +585,76 @@ function renderBuild() {
   build.through.forEach((cid) =>
     (DATA.network.nodes || []).forEach((n) => { if (n.kind === "op" && n.capability === cid) sel[n.id] = "through"; }));
   buildSel = sel;
+  renderRefine();
   schedulePreview();
+}
+
+// Only a few capabilities take params, so this shows nothing for most routes. Collects the
+// param-bearing capabilities actually on the built route (pass-through caps + the previewed
+// plan's steps) and renders a typed control per param: enum/bool -> dropdown, int/float ->
+// number, else text. Values live in paramVals so they survive re-renders; default is shown
+// as the placeholder (omitting a value reproduces the historical behaviour).
+function refineCaps() {
+  const caps = new Map();
+  const add = (capId) => {
+    if (!capId || caps.has(capId)) return;
+    const n = (DATA.network.nodes || []).find(
+      (x) => x.kind === "op" && x.capability === capId && (x.parameters || []).length);
+    if (n) caps.set(capId, { weaver: n.weaver, capability: capId, parameters: n.parameters });
+  };
+  build.through.forEach(add);
+  if (lastRoutePath) (lastRoutePath.nodes || []).forEach((n) => { if (n.kind === "op") add(n.capability); });
+  return [...caps.values()];
+}
+
+function renderRefine() {
+  const box = document.getElementById("bg-refine"); if (!box) return;
+  const caps = refineCaps();
+  if (!caps.length) { box.innerHTML = ""; return; }
+  const n = caps.reduce((a, c) => a + c.parameters.length, 0);
+  let h = `<div class="blabel" style="margin-top:4px">Refine (${n}) · optional</div>`;
+  caps.forEach((c) => {
+    h += `<div class="rf-cap">${esc(c.weaver)} · ${esc(c.capability)}</div>`;
+    c.parameters.forEach((p) => {
+      const v = (paramVals[c.capability] && paramVals[c.capability][p.name]) || "";
+      const attr = `class="rf-i" data-cap="${esc(c.capability)}" data-name="${esc(p.name)}"`;
+      const defOpt = p.default != null ? ` (${esc(String(p.default))})` : "";
+      let ctrl;
+      if (p.enum && p.enum.length) {
+        ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+          p.enum.map((o) => `<option value="${esc(String(o))}"${String(o) === v ? " selected" : ""}>${esc(String(o))}</option>`).join("") + `</select>`;
+      } else if (p.type === "bool") {
+        ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+          `<option value="true"${v === "true" ? " selected" : ""}>true</option>` +
+          `<option value="false"${v === "false" ? " selected" : ""}>false</option></select>`;
+      } else {
+        const t = (p.type === "int" || p.type === "float") ? "number" : "text";
+        const ph = p.default != null ? "default: " + p.default : "";
+        ctrl = `<input ${attr} type="${t}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off">`;
+      }
+      h += `<div class="rf-row"><label class="rf-l">${esc(p.name)}</label>${ctrl}` +
+        (p.description ? `<div class="rf-desc">${esc(p.description)}</div>` : "") + `</div>`;
+    });
+  });
+  box.innerHTML = h;
+  box.querySelectorAll(".rf-i").forEach((el) => {
+    const cap = el.getAttribute("data-cap"), name = el.getAttribute("data-name");
+    el.oninput = el.onchange = () => {
+      paramVals[cap] = paramVals[cap] || {};
+      if (el.value === "") delete paramVals[cap][name];
+      else paramVals[cap][name] = el.value;
+    };
+  });
+}
+
+function collectParams() {
+  const out = {};
+  Object.keys(paramVals).forEach((cap) => {
+    const inner = {};
+    Object.keys(paramVals[cap]).forEach((nm) => { if (paramVals[cap][nm] !== "") inner[nm] = paramVals[cap][nm]; });
+    if (Object.keys(inner).length) out[cap] = inner;
+  });
+  return out;
 }
 
 // Live A→B route preview: plan have→want and dim the network to just that path (off-route
@@ -599,13 +678,14 @@ async function previewRoute() {
     });
     const d = await r.json();
     if (seq !== previewSeq) return;                         // superseded by a newer selection
-    if (!d.ok || !d.path) { routeFocus = null; return; }    // no path → no highlight
+    if (!d.ok || !d.path) { routeFocus = null; lastRoutePath = null; renderRefine(); return; }
     const p = d.path, idmap = {};
     (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
     const nodes = new Set(), edgeKeys = new Set();
     (p.nodes || []).forEach((n) => nodes.add(n.kind === "op" ? idmap[n.id] : n.id));
     (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
     routeFocus = { nodes, edgeKeys };
+    lastRoutePath = p; renderRefine();   // surface any param-bearing steps on this route
   } catch (e) { if (seq === previewSeq) routeFocus = null; }
 }
 
@@ -614,7 +694,7 @@ function clearBuild() {
   build.have = []; build.through = []; build.want = [];
   const v = document.getElementById("bg-value"); if (v) v.value = "";
   previewSeq++; clearTimeout(previewTimer);
-  routeFocus = null; buildSel = null;
+  routeFocus = null; buildSel = null; lastRoutePath = null; paramVals = {};
   renderBuild();
 }
 
@@ -694,6 +774,7 @@ async function runBuild() {
         have: { [build.have[0]]: value },
         want: build.want,
         traverse: build.through,
+        params: collectParams(),
         policy: document.getElementById("b-policy").value,
         expand: build.through.length ? "all" : "top", k: 5,
       }),
