@@ -116,12 +116,22 @@ SERVE_CSS = """
   .picker .pk:hover { background: rgba(120,150,220,0.18); }
   .picker .pk.fan { color: #f0d18a; }
 
-  /* --- Refine (per-capability params on the built route) --- */
-  .refine .rf-cap { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--ink-dim); margin: 9px 0 5px; }
-  .refine .rf-row { margin-bottom: 9px; }
-  .refine label.rf-l { display: block; font-size: 11.5px; color: var(--ink); margin-bottom: 3px; }
-  .refine .rf-desc { font-size: 10px; color: var(--ink-dim); margin-top: 3px; line-height: 1.35; }
+  /* --- Floating per-weaver param cards (anchored to the node on the graph) --- */
+  #paramcards { position: fixed; inset: 0; z-index: 13; pointer-events: none; }
+  .paramcard { position: absolute; pointer-events: auto; width: 208px;
+    background: var(--panel); backdrop-filter: blur(14px); border: 1px solid rgba(232,192,105,0.5);
+    border-radius: 11px; padding: 9px 11px; font-size: 12px;
+    box-shadow: 0 16px 42px rgba(0,0,0,0.5); }
+  .paramcard .pc-h { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #f0d18a; margin-bottom: 7px; }
+  .paramcard .rf-row { margin-bottom: 8px; }
+  .paramcard .rf-row:last-child { margin-bottom: 0; }
+  .paramcard label.rf-l { display: block; font-size: 11px; color: var(--ink); margin-bottom: 3px; }
+  .paramcard input, .paramcard select { width: 100%; box-sizing: border-box;
+    background: rgba(10,16,30,0.6); color: var(--ink); border: 1px solid var(--panel-edge);
+    border-radius: 7px; padding: 6px 8px; font-size: 12px; }
+  .paramcard input:focus, .paramcard select:focus { outline: none; border-color: rgba(232,192,105,0.6); }
+  .paramcard .rf-desc { font-size: 9.5px; color: var(--ink-dim); margin-top: 3px; line-height: 1.32; }
 """
 
 SERVE_HTML = """
@@ -144,7 +154,6 @@ SERVE_HTML = """
     <div class="bgroup">
       <span class="blabel">Want</span><div id="bg-want" class="chips"></div>
     </div>
-    <div id="bg-refine" class="refine"></div>
     <input id="bg-value" placeholder="value, e.g. TP53" autocomplete="off">
     <div class="brow" style="margin-top:8px">
       <button class="btn primary" id="bg-run">Run</button>
@@ -190,6 +199,9 @@ SERVE_HTML = """
     <button class="btn" id="b-save">Save</button>
   </div>
 </div>
+
+<!-- Floating per-weaver param cards, anchored to the route's param-bearing nodes. -->
+<div id="paramcards"></div>
 
 <div class="sheet-backdrop" id="sheet" hidden>
   <div class="sheet">
@@ -585,7 +597,7 @@ function renderBuild() {
   build.through.forEach((cid) =>
     (DATA.network.nodes || []).forEach((n) => { if (n.kind === "op" && n.capability === cid) sel[n.id] = "through"; }));
   buildSel = sel;
-  renderRefine();
+  renderParamCards();
   schedulePreview();
 }
 
@@ -607,45 +619,80 @@ function refineCaps() {
   return [...caps.values()];
 }
 
-function renderRefine() {
-  const box = document.getElementById("bg-refine"); if (!box) return;
+// One control's HTML for a param (value pulled from paramVals so it survives re-renders).
+function paramControlHTML(capId, p) {
+  const v = (paramVals[capId] && paramVals[capId][p.name]) || "";
+  const attr = `class="rf-i" data-cap="${esc(capId)}" data-name="${esc(p.name)}"`;
+  const defOpt = p.default != null ? ` (${esc(String(p.default))})` : "";
+  let ctrl;
+  if (p.enum && p.enum.length) {
+    ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+      p.enum.map((o) => `<option value="${esc(String(o))}"${String(o) === v ? " selected" : ""}>${esc(String(o))}</option>`).join("") + `</select>`;
+  } else if (p.type === "bool") {
+    ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+      `<option value="true"${v === "true" ? " selected" : ""}>true</option>` +
+      `<option value="false"${v === "false" ? " selected" : ""}>false</option></select>`;
+  } else {
+    const t = (p.type === "int" || p.type === "float") ? "number" : "text";
+    const ph = p.default != null ? "default: " + p.default : "";
+    ctrl = `<input ${attr} type="${t}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off">`;
+  }
+  return `<div class="rf-row"><label class="rf-l">${esc(p.name)}</label>${ctrl}` +
+    (p.description ? `<div class="rf-desc">${esc(p.description)}</div>` : "") + `</div>`;
+}
+
+// Floating param cards, one per param-bearing capability on the route, anchored next to
+// that weaver's node on the graph (positionParamCards keeps them glued on pan/zoom).
+let paramCardEls = {};   // capability_id -> {el, nodeId}
+function renderParamCards() {
+  const host = document.getElementById("paramcards"); if (!host) return;
   const caps = refineCaps();
-  if (!caps.length) { box.innerHTML = ""; return; }
-  const n = caps.reduce((a, c) => a + c.parameters.length, 0);
-  let h = `<div class="blabel" style="margin-top:4px">Refine (${n}) · optional</div>`;
+  const live = new Set(caps.map((c) => c.capability));
+  // Drop cards no longer on the route.
+  Object.keys(paramCardEls).forEach((cid) => {
+    if (!live.has(cid)) { paramCardEls[cid].el.remove(); delete paramCardEls[cid]; }
+  });
+  // Create/refresh a card per param-bearing cap.
   caps.forEach((c) => {
-    h += `<div class="rf-cap">${esc(c.weaver)} · ${esc(c.capability)}</div>`;
-    c.parameters.forEach((p) => {
-      const v = (paramVals[c.capability] && paramVals[c.capability][p.name]) || "";
-      const attr = `class="rf-i" data-cap="${esc(c.capability)}" data-name="${esc(p.name)}"`;
-      const defOpt = p.default != null ? ` (${esc(String(p.default))})` : "";
-      let ctrl;
-      if (p.enum && p.enum.length) {
-        ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
-          p.enum.map((o) => `<option value="${esc(String(o))}"${String(o) === v ? " selected" : ""}>${esc(String(o))}</option>`).join("") + `</select>`;
-      } else if (p.type === "bool") {
-        ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
-          `<option value="true"${v === "true" ? " selected" : ""}>true</option>` +
-          `<option value="false"${v === "false" ? " selected" : ""}>false</option></select>`;
-      } else {
-        const t = (p.type === "int" || p.type === "float") ? "number" : "text";
-        const ph = p.default != null ? "default: " + p.default : "";
-        ctrl = `<input ${attr} type="${t}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off">`;
-      }
-      h += `<div class="rf-row"><label class="rf-l">${esc(p.name)}</label>${ctrl}` +
-        (p.description ? `<div class="rf-desc">${esc(p.description)}</div>` : "") + `</div>`;
+    let entry = paramCardEls[c.capability];
+    if (!entry) {
+      const el = document.createElement("div");
+      el.className = "paramcard";
+      host.appendChild(el);
+      entry = paramCardEls[c.capability] = { el, nodeId: "op:" + c.weaver + ":" + c.capability };
+    }
+    entry.el.innerHTML = `<div class="pc-h">${esc(c.weaver)} · ${esc(c.capability)}</div>` +
+      c.parameters.map((p) => paramControlHTML(c.capability, p)).join("");
+    entry.el.querySelectorAll(".rf-i").forEach((inp) => {
+      const cap = inp.getAttribute("data-cap"), name = inp.getAttribute("data-name");
+      inp.oninput = inp.onchange = () => {
+        paramVals[cap] = paramVals[cap] || {};
+        if (inp.value === "") delete paramVals[cap][name];
+        else paramVals[cap][name] = inp.value;
+      };
     });
   });
-  box.innerHTML = h;
-  box.querySelectorAll(".rf-i").forEach((el) => {
-    const cap = el.getAttribute("data-cap"), name = el.getAttribute("data-name");
-    el.oninput = el.onchange = () => {
-      paramVals[cap] = paramVals[cap] || {};
-      if (el.value === "") delete paramVals[cap][name];
-      else paramVals[cap][name] = el.value;
-    };
+  positionParamCards();
+}
+
+// Glue each card beside its node; hide when off the network view, not building, or off-screen.
+function positionParamCards() {
+  const L = layouts[current];
+  Object.values(paramCardEls).forEach(({ el, nodeId }) => {
+    const n = (buildMode && current === 0 && L) ? L.nodes.get(nodeId) : null;
+    if (!n) { el.style.display = "none"; return; }
+    const [sx, sy] = toScreen(n.x, n.y);
+    if (sx < -260 || sx > innerWidth + 40 || sy < -40 || sy > innerHeight + 40) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.style.left = Math.round(sx + (n.w * cam.scale) / 2 + 12) + "px";
+    el.style.top = Math.round(sy - 18) + "px";
   });
 }
+function clearParamCards() {
+  Object.values(paramCardEls).forEach(({ el }) => el.remove());
+  paramCardEls = {};
+}
+function paramTick() { positionParamCards(); requestAnimationFrame(paramTick); }
 
 function collectParams() {
   const out = {};
@@ -678,14 +725,14 @@ async function previewRoute() {
     });
     const d = await r.json();
     if (seq !== previewSeq) return;                         // superseded by a newer selection
-    if (!d.ok || !d.path) { routeFocus = null; lastRoutePath = null; renderRefine(); return; }
+    if (!d.ok || !d.path) { routeFocus = null; lastRoutePath = null; renderParamCards(); return; }
     const p = d.path, idmap = {};
     (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
     const nodes = new Set(), edgeKeys = new Set();
     (p.nodes || []).forEach((n) => nodes.add(n.kind === "op" ? idmap[n.id] : n.id));
     (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
     routeFocus = { nodes, edgeKeys };
-    lastRoutePath = p; renderRefine();   // surface any param-bearing steps on this route
+    lastRoutePath = p; renderParamCards();   // surface any param-bearing steps on this route
   } catch (e) { if (seq === previewSeq) routeFocus = null; }
 }
 
@@ -753,7 +800,7 @@ function enterBuild() {
 
 function exitBuild() {
   buildMode = false; onBuildClick = null; buildSel = null; routeFocus = null;
-  previewSeq++; clearTimeout(previewTimer); closePicker();
+  previewSeq++; clearTimeout(previewTimer); closePicker(); clearParamCards();
   document.getElementById("bg-panel").style.display = "none";
   document.getElementById("b-build").textContent = "Build on the graph";
 }
@@ -798,6 +845,7 @@ function setupBuilder() {
   // Dismiss the output picker on any outside click (capture phase: runs before the
   // canvas click that opens a new one, so opening doesn't immediately close it).
   addEventListener("click", (e) => { if (pickerEl && !pickerEl.contains(e.target)) closePicker(); }, true);
+  paramTick();   // keep floating param cards glued to their nodes on pan/zoom
   const dl = document.getElementById("b-types");
   (DATA.network.nodes || []).filter((n) => n.kind === "type")
     .map((n) => n.key).sort()
