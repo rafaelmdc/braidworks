@@ -158,7 +158,7 @@ def write_index(root: str | Path, out_path: str | Path) -> list[IndexRow]:
 # does this weaver do", the key map answers "which weavers touch this key", which
 # is what you scan when wiring a new weaver in.
 
-ENTRY_DESCRIPTION = "Free-text organism name — the user-supplied entry input."
+ENTRY_DESCRIPTION = "The text you start from — an organism name or a gene/protein query."
 
 # role -> (Markdown section heading, lead sentence). Order here is render order.
 _KEY_SECTIONS: tuple[tuple[str, str, str], ...] = (
