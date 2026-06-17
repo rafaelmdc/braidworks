@@ -418,8 +418,9 @@ function visibleCols() {
   if (!lastRun) return [];
   const { columns, want } = lastRun;
   if (resultsShowAll || !(want && want.length)) return columns;
-  const shown = want.filter((c) => columns.includes(c));
-  return shown.length ? shown : columns;   // fall back to all if none of the wants resolved
+  // Always show EVERY requested want as a column (blank where a row didn't produce it),
+  // so a want that resolved for no/some rows still appears — never collapses to one.
+  return want.slice();
 }
 function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
 
@@ -429,7 +430,7 @@ function showResults(d) {
   if (!lastRun) return;
   const { rows, summary, want } = lastRun;
   const columns = visibleCols();
-  const hidden = (lastRun.columns || []).length - columns.length;
+  const hidden = (lastRun.columns || []).filter((c) => !columns.includes(c)).length;
   const s = summary || { resolved: rows.length, unresolved: 0, errors: 0 };
   let body = `<div class="rcounts">${s.resolved} resolved` +
     (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
