@@ -87,6 +87,12 @@ SERVE_CSS = """
   .tab.on { color: var(--ink); border-color: rgba(120,150,220,0.5); background: rgba(120,150,220,0.12); }
   .copyrow { display: flex; justify-content: flex-end; margin-bottom: 6px; }
   .rcounts { color: var(--ink-dim); font-size: 11px; margin-bottom: 12px; }
+  .rerrs { margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+  .rerr { background: rgba(224,112,110,0.10); border: 1px solid rgba(224,112,110,0.4);
+    border-radius: 9px; padding: 9px 11px; font-size: 11.5px; line-height: 1.45; color: #f0c2c0; }
+  .rerr b { color: #e6a3a3; }
+  .rerr .dim { color: var(--ink-dim); font-weight: 400; }
+  .rerr > div { color: var(--ink); margin-top: 3px; word-break: break-word; }
   .rtable { border-collapse: collapse; width: 100%; font-size: 12px; }
   .rtable th, .rtable td { text-align: left; padding: 7px 10px;
     border-bottom: 1px solid var(--panel-edge); white-space: nowrap; max-width: 360px;
@@ -426,7 +432,7 @@ function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
 
 // Results as a modal page (never overlaps the graph; bounded + scrolls).
 function showResults(d) {
-  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [] };
+  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [], errors: d.errors || [] };
   if (!lastRun) return;
   const { rows, summary, want } = lastRun;
   const columns = visibleCols();
@@ -435,6 +441,16 @@ function showResults(d) {
   let body = `<div class="rcounts">${s.resolved} resolved` +
     (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
     (s.errors ? `, ${s.errors} error(s)` : "") + `</div>`;
+  // Surface the actual error messages so a 0-results run is diagnosable.
+  const errs = lastRun.errors || [];
+  if (errs.length) {
+    body += `<div class="rerrs">` + errs.map((e) => {
+      const where = [e.capability, e.entity].filter(Boolean).join(" · ");
+      const tag = e.type ? `<b>${esc(e.type)}</b>` : "";
+      return `<div class="rerr">${tag}${where ? ` <span class="dim">(${esc(where)})</span>` : ""}` +
+        `<div>${esc(e.message || "(no message)")}</div></div>`;
+    }).join("") + `</div>`;
+  }
   body += `<div class="bactions" style="margin:0 0 10px;align-items:center">` +
     `<button class="btn ghost" onclick="exportRows('csv')">Export CSV</button>` +
     `<button class="btn ghost" onclick="exportRows('tsv')">Export TSV</button>` +
