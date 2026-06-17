@@ -1,0 +1,12 @@
+# A column of human gene symbols — one per line (blank lines and `#` comments
+# are ignored). Feed it to `braidworks weave --in-file examples/genes.txt
+# --in-type protein.query --param organism=9606 --want <types>`.
+#
+# These are well-studied human cancer genes, so every public weaver has data
+# for them — a good first batch to confirm your install works end to end.
+TP53
+BRCA1
+EGFR
+KRAS
+MYC
+PTEN

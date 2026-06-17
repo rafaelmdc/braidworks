@@ -19,8 +19,9 @@ Most weavers are **keyless and need zero setup** — they call free public APIs
 
 ## For biologists: the bare minimum
 
-Goal: start from a UniProt accession and get the protein's name and its experimental
-PDB structures — crossing two databases (UniProt → PDBe) automatically.
+Goal: start from a gene symbol and get the biological processes it drives plus the
+proteins it interacts with — crossing two databases (QuickGO + STRING, reached via
+UniProt) automatically, in one command.
 
 ### 1. Install
 
@@ -35,32 +36,38 @@ script inside the environment.)
 
 ### 2. Ask a question — from the shell
 
-A value you have is a **Strand** (a typed fact, e.g. `protein.query = "P04637"`).
+A value you have is a **Strand** (a typed fact, e.g. `protein.query = "TP53"`).
 You tell Braidworks the strands you *have* and the strand *types* you *want*; it
 finds the route across all installed weavers and runs it. From bash:
 
 ```bash
-braidworks weave --have protein.query=P04637 --want protein.name,structure.pdb.ids
+braidworks weave --have protein.query=TP53 --param organism=9606 \
+    --want go.biological_process,protein.interaction.partners
 ```
 
 ```
-p53 (P04637)
-  protein.name       Cellular tumor antigen p53
-  structure.pdb.ids  9r2q; 9r2m; 8r1f; ... (25)
+TP53
+  go.biological_process         apoptotic process; DNA damage response; cellular senescence; … (72)
+  protein.interaction.partners  MDM2; BRCA1; ATM; BCL2; CDKN1A; … (25)
 ```
 
-`"P04637"` is human p53; `"TP53"`, `"insulin"`, or any UniProt accession work too.
+A bare gene symbol like `TP53` exists in many species, so `--param organism=9606`
+pins it to human (`9606` is the human NCBI taxid) — without it you may get the mouse
+or hamster ortholog. Any UniProt accession (`P04637`), protein name, or `"insulin"`
+works as the query too.
 
-**Run a whole column of IDs** (one per line), and get a table back for your
-spreadsheet/pandas:
+**Run a whole column of genes** (one per line) and get a table back for your
+spreadsheet/pandas. A ready-to-run sample list lives at
+[`examples/genes.txt`](examples/genes.txt) — no need to make your own:
 
 ```bash
-braidworks weave --in-file accessions.txt --in-type protein.query \
-    --want protein.name,protein.gene --format tsv > out.tsv
+braidworks weave --in-file examples/genes.txt --in-type protein.query \
+    --param organism=9606 --want go.biological_process,protein.interaction.partners \
+    --format tsv > out.tsv
 
 # or stream from a pipe straight into jq:
-cat accessions.txt | braidworks weave --in-file - --in-type protein.query \
-    --want structure.pdb.ids --format jsonl | jq .
+cat examples/genes.txt | braidworks weave --in-file - --in-type protein.query \
+    --param organism=9606 --want protein.interaction.partners --format jsonl | jq .
 ```
 
 **Drill every result** — fan one protein out into each of its structures, each then
@@ -83,23 +90,28 @@ so pipes stay clean.
 import asyncio
 from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
 from uniprot_weaver import build_uniprot_weaver
-from pdbe_weaver import build_pdbe_weaver
+from quickgo_weaver import build_quickgo_weaver
+from string_weaver import build_string_weaver
 
 async def main():
     registry = BraidRegistry()
-    registry.register(build_uniprot_weaver())   # gene/name/accession -> protein entry
-    registry.register(build_pdbe_weaver())      # protein -> experimental structures
+    registry.register(build_uniprot_weaver())   # gene/name/accession -> protein entry (+ accession)
+    registry.register(build_quickgo_weaver())   # protein -> GO terms by aspect
+    registry.register(build_string_weaver())    # protein -> interaction partners
 
     braid = Braider(registry).plan(
         available_types=frozenset({"protein.query"}),
-        target_types=frozenset({"protein.name", "structure.pdb.ids"}),
+        target_types=frozenset({"go.biological_process", "protein.interaction.partners"}),
     )
-    inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "P04637")])]
-    result = await LocalExecutor(registry).execute(braid, inputs)
+    inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "TP53")])]
+    result = await LocalExecutor(registry).execute(
+        braid, inputs,
+        params={"resolve_protein": {"organism": "9606"}},   # pin TP53 to human
+    )
 
     for entity in result.resolved:
-        print(entity.get("protein.name").value)        # Cellular tumor antigen p53
-        print(entity.get("structure.pdb.ids").value)   # ['9r2q', '9r2m', '8r1f', ...]
+        print(entity.get("go.biological_process").value)        # ['apoptotic process', ...]
+        print(entity.get("protein.interaction.partners").value) # ['MDM2', 'BRCA1', 'ATM', ...]
 
 asyncio.run(main())
 ```
