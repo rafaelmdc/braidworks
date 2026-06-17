@@ -87,6 +87,12 @@ SERVE_CSS = """
   .tab.on { color: var(--ink); border-color: rgba(120,150,220,0.5); background: rgba(120,150,220,0.12); }
   .copyrow { display: flex; justify-content: flex-end; margin-bottom: 6px; }
   .rcounts { color: var(--ink-dim); font-size: 11px; margin-bottom: 12px; }
+  .rerrs { margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+  .rerr { background: rgba(224,112,110,0.10); border: 1px solid rgba(224,112,110,0.4);
+    border-radius: 9px; padding: 9px 11px; font-size: 11.5px; line-height: 1.45; color: #f0c2c0; }
+  .rerr b { color: #e6a3a3; }
+  .rerr .dim { color: var(--ink-dim); font-weight: 400; }
+  .rerr > div { color: var(--ink); margin-top: 3px; word-break: break-word; }
   .rtable { border-collapse: collapse; width: 100%; font-size: 12px; }
   .rtable th, .rtable td { text-align: left; padding: 7px 10px;
     border-bottom: 1px solid var(--panel-edge); white-space: nowrap; max-width: 360px;
@@ -115,6 +121,23 @@ SERVE_CSS = """
     padding: 7px 9px; border-radius: 7px; }
   .picker .pk:hover { background: rgba(120,150,220,0.18); }
   .picker .pk.fan { color: #f0d18a; }
+
+  /* --- Floating per-weaver param cards (anchored to the node on the graph) --- */
+  #paramcards { position: fixed; inset: 0; z-index: 13; pointer-events: none; }
+  .paramcard { position: absolute; pointer-events: auto; width: 208px;
+    background: var(--panel); backdrop-filter: blur(14px); border: 1px solid rgba(232,192,105,0.5);
+    border-radius: 11px; padding: 9px 11px; font-size: 12px;
+    box-shadow: 0 16px 42px rgba(0,0,0,0.5); }
+  .paramcard .pc-h { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #f0d18a; margin-bottom: 7px; }
+  .paramcard .rf-row { margin-bottom: 8px; }
+  .paramcard .rf-row:last-child { margin-bottom: 0; }
+  .paramcard label.rf-l { display: block; font-size: 11px; color: var(--ink); margin-bottom: 3px; }
+  .paramcard input, .paramcard select { width: 100%; box-sizing: border-box;
+    background: rgba(10,16,30,0.6); color: var(--ink); border: 1px solid var(--panel-edge);
+    border-radius: 7px; padding: 6px 8px; font-size: 12px; }
+  .paramcard input:focus, .paramcard select:focus { outline: none; border-color: rgba(232,192,105,0.6); }
+  .paramcard .rf-desc { font-size: 9.5px; color: var(--ink-dim); margin-top: 3px; line-height: 1.32; }
 """
 
 SERVE_HTML = """
@@ -182,6 +205,9 @@ SERVE_HTML = """
     <button class="btn" id="b-save">Save</button>
   </div>
 </div>
+
+<!-- Floating per-weaver param cards, anchored to the route's param-bearing nodes. -->
+<div id="paramcards"></div>
 
 <div class="sheet-backdrop" id="sheet" hidden>
   <div class="sheet">
@@ -398,22 +424,33 @@ function visibleCols() {
   if (!lastRun) return [];
   const { columns, want } = lastRun;
   if (resultsShowAll || !(want && want.length)) return columns;
-  const shown = want.filter((c) => columns.includes(c));
-  return shown.length ? shown : columns;   // fall back to all if none of the wants resolved
+  // Always show EVERY requested want as a column (blank where a row didn't produce it),
+  // so a want that resolved for no/some rows still appears — never collapses to one.
+  return want.slice();
 }
 function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
 
 // Results as a modal page (never overlaps the graph; bounded + scrolls).
 function showResults(d) {
-  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [] };
+  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [], errors: d.errors || [] };
   if (!lastRun) return;
   const { rows, summary, want } = lastRun;
   const columns = visibleCols();
-  const hidden = (lastRun.columns || []).length - columns.length;
+  const hidden = (lastRun.columns || []).filter((c) => !columns.includes(c)).length;
   const s = summary || { resolved: rows.length, unresolved: 0, errors: 0 };
   let body = `<div class="rcounts">${s.resolved} resolved` +
     (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
     (s.errors ? `, ${s.errors} error(s)` : "") + `</div>`;
+  // Surface the actual error messages so a 0-results run is diagnosable.
+  const errs = lastRun.errors || [];
+  if (errs.length) {
+    body += `<div class="rerrs">` + errs.map((e) => {
+      const where = [e.capability, e.entity].filter(Boolean).join(" · ");
+      const tag = e.type ? `<b>${esc(e.type)}</b>` : "";
+      return `<div class="rerr">${tag}${where ? ` <span class="dim">(${esc(where)})</span>` : ""}` +
+        `<div>${esc(e.message || "(no message)")}</div></div>`;
+    }).join("") + `</div>`;
+  }
   body += `<div class="bactions" style="margin:0 0 10px;align-items:center">` +
     `<button class="btn ghost" onclick="exportRows('csv')">Export CSV</button>` +
     `<button class="btn ghost" onclick="exportRows('tsv')">Export TSV</button>` +
@@ -537,6 +574,8 @@ function loadRecipe(name) {
 // build.have/want hold type keys; build.through holds fan capability ids (--for-each).
 const build = { have: [], through: [], want: [] };
 let pickerEl = null;
+let lastRoutePath = null;   // last previewed plan (its op nodes name the route's capabilities)
+let paramVals = {};         // {capability_id: {name: value}} — persists across re-renders
 
 function netNodeById(id) { return (DATA.network.nodes || []).find((n) => n.id === id); }
 
@@ -575,7 +614,111 @@ function renderBuild() {
   build.through.forEach((cid) =>
     (DATA.network.nodes || []).forEach((n) => { if (n.kind === "op" && n.capability === cid) sel[n.id] = "through"; }));
   buildSel = sel;
+  renderParamCards();
   schedulePreview();
+}
+
+// Only a few capabilities take params, so this shows nothing for most routes. Collects the
+// param-bearing capabilities actually on the built route (pass-through caps + the previewed
+// plan's steps) and renders a typed control per param: enum/bool -> dropdown, int/float ->
+// number, else text. Values live in paramVals so they survive re-renders; default is shown
+// as the placeholder (omitting a value reproduces the historical behaviour).
+function refineCaps() {
+  const caps = new Map();
+  const add = (capId) => {
+    if (!capId || caps.has(capId)) return;
+    const n = (DATA.network.nodes || []).find(
+      (x) => x.kind === "op" && x.capability === capId && (x.parameters || []).length);
+    if (n) caps.set(capId, { weaver: n.weaver, capability: capId, parameters: n.parameters });
+  };
+  build.through.forEach(add);
+  if (lastRoutePath) (lastRoutePath.nodes || []).forEach((n) => { if (n.kind === "op") add(n.capability); });
+  return [...caps.values()];
+}
+
+// One control's HTML for a param (value pulled from paramVals so it survives re-renders).
+function paramControlHTML(capId, p) {
+  const v = (paramVals[capId] && paramVals[capId][p.name]) || "";
+  const attr = `class="rf-i" data-cap="${esc(capId)}" data-name="${esc(p.name)}"`;
+  const defOpt = p.default != null ? ` (${esc(String(p.default))})` : "";
+  let ctrl;
+  if (p.enum && p.enum.length) {
+    ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+      p.enum.map((o) => `<option value="${esc(String(o))}"${String(o) === v ? " selected" : ""}>${esc(String(o))}</option>`).join("") + `</select>`;
+  } else if (p.type === "bool") {
+    ctrl = `<select ${attr}><option value="">default${defOpt}</option>` +
+      `<option value="true"${v === "true" ? " selected" : ""}>true</option>` +
+      `<option value="false"${v === "false" ? " selected" : ""}>false</option></select>`;
+  } else {
+    const t = (p.type === "int" || p.type === "float") ? "number" : "text";
+    const ph = p.default != null ? "default: " + p.default : "";
+    ctrl = `<input ${attr} type="${t}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off">`;
+  }
+  return `<div class="rf-row"><label class="rf-l">${esc(p.name)}</label>${ctrl}` +
+    (p.description ? `<div class="rf-desc">${esc(p.description)}</div>` : "") + `</div>`;
+}
+
+// Floating param cards, one per param-bearing capability on the route, anchored next to
+// that weaver's node on the graph (positionParamCards keeps them glued on pan/zoom).
+let paramCardEls = {};   // capability_id -> {el, nodeId}
+function renderParamCards() {
+  const host = document.getElementById("paramcards"); if (!host) return;
+  const caps = refineCaps();
+  const live = new Set(caps.map((c) => c.capability));
+  // Drop cards no longer on the route.
+  Object.keys(paramCardEls).forEach((cid) => {
+    if (!live.has(cid)) { paramCardEls[cid].el.remove(); delete paramCardEls[cid]; }
+  });
+  // Create/refresh a card per param-bearing cap.
+  caps.forEach((c) => {
+    let entry = paramCardEls[c.capability];
+    if (!entry) {
+      const el = document.createElement("div");
+      el.className = "paramcard";
+      host.appendChild(el);
+      entry = paramCardEls[c.capability] = { el, nodeId: "op:" + c.weaver + ":" + c.capability };
+    }
+    entry.el.innerHTML = `<div class="pc-h">${esc(c.weaver)} · ${esc(c.capability)}</div>` +
+      c.parameters.map((p) => paramControlHTML(c.capability, p)).join("");
+    entry.el.querySelectorAll(".rf-i").forEach((inp) => {
+      const cap = inp.getAttribute("data-cap"), name = inp.getAttribute("data-name");
+      inp.oninput = inp.onchange = () => {
+        paramVals[cap] = paramVals[cap] || {};
+        if (inp.value === "") delete paramVals[cap][name];
+        else paramVals[cap][name] = inp.value;
+      };
+    });
+  });
+  positionParamCards();
+}
+
+// Glue each card beside its node; hide when off the network view, not building, or off-screen.
+function positionParamCards() {
+  const L = layouts[current];
+  Object.values(paramCardEls).forEach(({ el, nodeId }) => {
+    const n = (buildMode && current === 0 && L) ? L.nodes.get(nodeId) : null;
+    if (!n) { el.style.display = "none"; return; }
+    const [sx, sy] = toScreen(n.x, n.y);
+    if (sx < -260 || sx > innerWidth + 40 || sy < -40 || sy > innerHeight + 40) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.style.left = Math.round(sx + (n.w * cam.scale) / 2 + 12) + "px";
+    el.style.top = Math.round(sy - 18) + "px";
+  });
+}
+function clearParamCards() {
+  Object.values(paramCardEls).forEach(({ el }) => el.remove());
+  paramCardEls = {};
+}
+function paramTick() { positionParamCards(); requestAnimationFrame(paramTick); }
+
+function collectParams() {
+  const out = {};
+  Object.keys(paramVals).forEach((cap) => {
+    const inner = {};
+    Object.keys(paramVals[cap]).forEach((nm) => { if (paramVals[cap][nm] !== "") inner[nm] = paramVals[cap][nm]; });
+    if (Object.keys(inner).length) out[cap] = inner;
+  });
+  return out;
 }
 
 // Live A→B route preview: plan have→want and dim the network to just that path (off-route
@@ -599,13 +742,14 @@ async function previewRoute() {
     });
     const d = await r.json();
     if (seq !== previewSeq) return;                         // superseded by a newer selection
-    if (!d.ok || !d.path) { routeFocus = null; return; }    // no path → no highlight
+    if (!d.ok || !d.path) { routeFocus = null; lastRoutePath = null; renderParamCards(); return; }
     const p = d.path, idmap = {};
     (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
     const nodes = new Set(), edgeKeys = new Set();
     (p.nodes || []).forEach((n) => nodes.add(n.kind === "op" ? idmap[n.id] : n.id));
     (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
     routeFocus = { nodes, edgeKeys };
+    lastRoutePath = p; renderParamCards();   // surface any param-bearing steps on this route
   } catch (e) { if (seq === previewSeq) routeFocus = null; }
 }
 
@@ -614,7 +758,7 @@ function clearBuild() {
   build.have = []; build.through = []; build.want = [];
   const v = document.getElementById("bg-value"); if (v) v.value = "";
   previewSeq++; clearTimeout(previewTimer);
-  routeFocus = null; buildSel = null;
+  routeFocus = null; buildSel = null; lastRoutePath = null; paramVals = {};
   renderBuild();
 }
 
@@ -673,7 +817,7 @@ function enterBuild() {
 
 function exitBuild() {
   buildMode = false; onBuildClick = null; buildSel = null; routeFocus = null;
-  previewSeq++; clearTimeout(previewTimer); closePicker();
+  previewSeq++; clearTimeout(previewTimer); closePicker(); clearParamCards();
   document.getElementById("bg-panel").style.display = "none";
   document.getElementById("b-build").textContent = "Build on the graph";
 }
@@ -694,6 +838,7 @@ async function runBuild() {
         have: { [build.have[0]]: value },
         want: build.want,
         traverse: build.through,
+        params: collectParams(),
         policy: document.getElementById("b-policy").value,
         expand: build.through.length ? "all" : "top", k: 5,
       }),
@@ -717,6 +862,7 @@ function setupBuilder() {
   // Dismiss the output picker on any outside click (capture phase: runs before the
   // canvas click that opens a new one, so opening doesn't immediately close it).
   addEventListener("click", (e) => { if (pickerEl && !pickerEl.contains(e.target)) closePicker(); }, true);
+  paramTick();   // keep floating param cards glued to their nodes on pan/zoom
   const dl = document.getElementById("b-types");
   (DATA.network.nodes || []).filter((n) => n.kind === "type")
     .map((n) => n.key).sort()

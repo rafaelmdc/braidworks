@@ -141,6 +141,20 @@ def _rows(result_json: dict) -> tuple[list[str], list[dict]]:
     return sorted(columns), rows
 
 
+def _error_list(result_json: dict) -> list[dict]:
+    """Flatten the errors bucket into compact rows the GUI can show (message + context)."""
+    out: list[dict] = []
+    for e in result_json.get("errors", []):
+        out.append({
+            "entity": (e.get("strand_set") or {}).get("entity_id"),
+            "type": e.get("error_type"),
+            "category": e.get("category"),
+            "capability": e.get("capability_id"),
+            "message": e.get("message"),
+        })
+    return out
+
+
 def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
     """Normalize have/want; return ``(have, want, error)`` (error set if either is empty)."""
     have = {str(t): v for t, v in (have or {}).items() if str(t).strip()}
@@ -163,6 +177,7 @@ def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPol
         "columns": columns,
         "rows": rows,
         "want": list(want),  # the requested targets — GUI defaults the table to these
+        "errors": _error_list(rj),
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
@@ -179,6 +194,7 @@ def run_response(
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
     expand: str = "top",
     k: int = 1,
+    params: dict | None = None,
 ) -> dict:
     """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
 
@@ -200,7 +216,8 @@ def run_response(
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
     result = asyncio.run(
         LocalExecutor(registry).execute(
-            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy
+            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy,
+            params=params or None,
         )
     )
     return _run_payload(registry, result, have, want, policy=policy)
@@ -215,6 +232,7 @@ def run_traversed_response(
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
     expand: str = "all",
     k: int = 5,
+    params: dict | None = None,
 ) -> dict:
     """Fan *through* one or more relationships (the GUI's "pass through" = --for-each).
 
@@ -233,6 +251,7 @@ def run_traversed_response(
         traversals = [resolve_traversal(registry, t) for t in tokens]
     except (NoPathError, NoPlanError) as exc:
         return {"ok": False, "error": str(exc)}
+    traverse_ids = [cid for _wid, cid in traversals]
 
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
     try:
@@ -240,11 +259,17 @@ def run_traversed_response(
             run_traversed(
                 registry, [ss], traversals, frozenset(want),
                 backend_policy=policy, expand_policy=_expand_policy(expand, k),
+                params=params or None,
             )
         )
     except (NoPathError, NoPlanError) as exc:
         return {"ok": False, "error": str(exc)}
 
+    return _traverse_payload(registry, result, want, traverse_ids)
+
+
+def _traverse_payload(registry, result, want: list, traverse_ids: list) -> dict:
+    """Shape a traversal ExecutionResult like run_response (no single ``path``)."""
     rj = result.to_json()
     runs, _dropped = build_run_views(rj, registry)
     columns, rows = _rows(rj)
@@ -256,7 +281,8 @@ def run_traversed_response(
         "columns": columns,
         "rows": rows,
         "want": list(want),
-        "traverse": [cid for _wid, cid in traversals],
+        "traverse": traverse_ids,
+        "errors": _error_list(rj),
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
@@ -295,6 +321,7 @@ def create_app():
         expand: str = "top"  # top | top_k | all
         k: int = 3
         traverse: list[str] = Field(default_factory=list)  # fan capabilities to pass through
+        params: dict[str, dict[str, str]] = Field(default_factory=dict)  # {cap_id: {name: value}}
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
@@ -325,10 +352,11 @@ def create_app():
         if req.traverse:
             return run_traversed_response(
                 registry, req.have, req.want, req.traverse,
-                policy=policy, expand=req.expand, k=req.k,
+                policy=policy, expand=req.expand, k=req.k, params=req.params,
             )
         return run_response(
-            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k
+            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k,
+            params=req.params,
         )
 
     @app.get("/api/run/stream")
