@@ -553,6 +553,34 @@ function renderBuild() {
   build.through.forEach((cid) =>
     (DATA.network.nodes || []).forEach((n) => { if (n.kind === "op" && n.capability === cid) sel[n.id] = "through"; }));
   buildSel = sel;
+  schedulePreview();
+}
+
+// Live A→B route preview: plan have→want and dim the network to just that path (off-route
+// particles freeze) — like clicking one node. No path → routeFocus stays null, so the gap
+// itself shows there's no route. Skipped while a pass-through (traversal) is staged.
+let previewTimer = null;
+function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(previewRoute, 130); }
+
+async function previewRoute() {
+  if (build.through.length || !build.have.length || !build.want.length) { routeFocus = null; return; }
+  try {
+    const r = await fetch("/api/plan", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        from_types: build.have, to_types: build.want,
+        policy: document.getElementById("b-policy").value,
+      }),
+    });
+    const d = await r.json();
+    if (!d.ok || !d.path) { routeFocus = null; return; }   // no path → no highlight
+    const p = d.path, idmap = {};
+    (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
+    const nodes = new Set(), edgeKeys = new Set();
+    (p.nodes || []).forEach((n) => nodes.add(n.kind === "op" ? idmap[n.id] : n.id));
+    (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
+    routeFocus = { nodes, edgeKeys };
+  } catch (e) { routeFocus = null; }
 }
 
 function closePicker() { if (pickerEl) { pickerEl.remove(); pickerEl = null; } }
@@ -609,7 +637,7 @@ function enterBuild() {
 }
 
 function exitBuild() {
-  buildMode = false; onBuildClick = null; buildSel = null; closePicker();
+  buildMode = false; onBuildClick = null; buildSel = null; routeFocus = null; closePicker();
   document.getElementById("bg-panel").style.display = "none";
   document.getElementById("b-build").textContent = "Build on the graph";
 }
