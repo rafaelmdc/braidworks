@@ -391,19 +391,38 @@ function showError(msg) {
   openSheet("Run failed", `<div class="berr">${esc(msg)}</div>`);
 }
 
+// Which columns to show: by default just the requested wants (the rest — intermediate
+// join keys + the whole output group the weaver computed — are hidden behind the toggle).
+let resultsShowAll = false;
+function visibleCols() {
+  if (!lastRun) return [];
+  const { columns, want } = lastRun;
+  if (resultsShowAll || !(want && want.length)) return columns;
+  const shown = want.filter((c) => columns.includes(c));
+  return shown.length ? shown : columns;   // fall back to all if none of the wants resolved
+}
+function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
+
 // Results as a modal page (never overlaps the graph; bounded + scrolls).
 function showResults(d) {
-  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary };
+  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [] };
   if (!lastRun) return;
-  const { columns, rows, summary } = lastRun;
+  const { rows, summary, want } = lastRun;
+  const columns = visibleCols();
+  const hidden = (lastRun.columns || []).length - columns.length;
   const s = summary || { resolved: rows.length, unresolved: 0, errors: 0 };
   let body = `<div class="rcounts">${s.resolved} resolved` +
     (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
     (s.errors ? `, ${s.errors} error(s)` : "") + `</div>`;
-  body += `<div class="bactions" style="margin:0 0 12px">` +
+  body += `<div class="bactions" style="margin:0 0 10px;align-items:center">` +
     `<button class="btn ghost" onclick="exportRows('csv')">Export CSV</button>` +
     `<button class="btn ghost" onclick="exportRows('tsv')">Export TSV</button>` +
-    `<button class="btn ghost" onclick="exportRows('json')">Export JSON</button></div>`;
+    `<button class="btn ghost" onclick="exportRows('json')">Export JSON</button>`;
+  if (want && want.length)
+    body += `<label class="note" style="margin-left:auto;cursor:pointer;user-select:none">` +
+      `<input type="checkbox" id="r-showall"${resultsShowAll ? " checked" : ""}> show all braid results` +
+      (hidden > 0 ? ` (+${hidden} hidden)` : "") + `</label>`;
+  body += `</div>`;
   if (!rows.length) {
     body += `<div class="note">No resolved rows.</div>`;
   } else {
@@ -414,11 +433,14 @@ function showResults(d) {
     body += `<table class="rtable"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
   }
   openSheet("Results", body);
+  const cb = document.getElementById("r-showall");
+  if (cb) cb.onchange = toggleShowAll;
 }
 
 function exportRows(fmt) {
   if (!lastRun) return;
-  const { columns, rows } = lastRun;
+  const { rows } = lastRun;
+  const columns = visibleCols();
   let text, mime;
   if (fmt === "json") { text = JSON.stringify(rows, null, 2); mime = "application/json"; }
   else {

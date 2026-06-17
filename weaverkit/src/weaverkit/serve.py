@@ -162,6 +162,7 @@ def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPol
         "runs": runs,
         "columns": columns,
         "rows": rows,
+        "want": list(want),  # the requested targets — GUI defaults the table to these
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
@@ -254,6 +255,7 @@ def run_traversed_response(
         "runs": runs,
         "columns": columns,
         "rows": rows,
+        "want": list(want),
         "traverse": [cid for _wid, cid in traversals],
         "summary": {
             "resolved": len(rj.get("resolved", [])),
