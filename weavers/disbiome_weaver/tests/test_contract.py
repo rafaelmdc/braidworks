@@ -31,14 +31,14 @@ class TestLocalOrder(WeaverOrderContractTests):
         # valid result), so this exercises length + ordering across hits and misses.
         samples = [1591, 1350, 562, 9606, 99999]
         return [
-            StrandSet.from_strands(f"e{i}", [Strand("ncbi.taxon.id", taxid)])
+            StrandSet.from_strands(f"e{i}", [Strand("ncbi.taxon.species_id", taxid)])
             for i, taxid in enumerate(samples)
         ]
 
 
 class TestDisbiomeResolveDiseasesCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("disbiome.list_diseases")
-    consumed_values_a = {"ncbi.taxon.id": 1591}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a = {"ncbi.taxon.species_id": 1591}
+    consumed_values_b = {"ncbi.taxon.species_id": "sample-b-ncbi.taxon.species_id"}
     group_subset = "summary"
     group_superset = "associations"

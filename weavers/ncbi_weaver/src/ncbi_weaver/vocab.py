@@ -25,6 +25,7 @@ PARENT_ID = "ncbi.taxon.parent_id"
 MATCH_TYPE = "ncbi.taxon.match_type"
 REVIEW_REQUIRED = "ncbi.taxon.review_required"
 LINEAGE = "ncbi.taxon.lineage"
+SPECIES_ID = "ncbi.taxon.species_id"  # species-rank ancestor taxid, derived from lineage
 CHILDREN_COUNT = "ncbi.taxon.children_count"  # list_children leaf
 CHILDREN_RECORDS = "ncbi.taxon.children_records"  # list_children leaf
 
@@ -53,13 +54,16 @@ ORTHOLOG_RECORDS = "gene.ortholog.records"
 NAME_CORE_OUTPUTS = frozenset(
     {TAXON_ID, SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID, MATCH_TYPE, REVIEW_REQUIRED}
 )
-LINEAGE_OUTPUTS = frozenset({LINEAGE})
+# species_id is derived from the lineage, so it rides in the same group: requesting it
+# triggers the lineage fetch. It lets a species-keyed consumer (e.g. disbiome) be fed a
+# strain/subspecies taxid — the planner climbs to the species rank automatically.
+LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 
 # describe_taxon consumes the taxid, so it does not re-produce ncbi.taxon.id.
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.1.8"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

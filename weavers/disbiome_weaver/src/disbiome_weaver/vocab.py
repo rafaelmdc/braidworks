@@ -10,7 +10,7 @@ from __future__ import annotations
 from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
 
 WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -32,7 +32,10 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         capabilities=(
             Capability(
                 id="disbiome.list_diseases",
-                consumes=frozenset({"ncbi.taxon.id"}),
+                # Disbiome data is species-level: consume the species-rank taxid so the
+                # planner climbs a strain/subspecies taxid up to its species (via NCBI)
+                # before lookup, instead of missing on a too-specific id.
+                consumes=frozenset({"ncbi.taxon.species_id"}),
                 produces=frozenset(
                     {
                         "microbe.disease.associations",

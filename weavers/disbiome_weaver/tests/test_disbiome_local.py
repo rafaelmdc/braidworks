@@ -14,7 +14,7 @@ RECORDS = "microbe.disease.records"
 
 
 def _ss(taxid):
-    return StrandSet.from_strands("e", [Strand("ncbi.taxon.id", taxid)])
+    return StrandSet.from_strands("e", [Strand("ncbi.taxon.species_id", taxid)])
 
 
 async def _resolve(weaver, taxid, outputs):

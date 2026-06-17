@@ -41,6 +41,13 @@ def _lineage_value(lineage: list[LineageEntry]) -> list[dict]:
     return [{"taxid": e.taxid, "rank": e.rank, "name": e.name} for e in lineage]
 
 
+def _species_id(lineage: list[LineageEntry]) -> int | None:
+    """The species-rank ancestor's taxid (the taxon itself when it *is* a species, which
+    appears as the last species entry in its own lineage). ``None`` above the species
+    rank (e.g. a genus), so a species-keyed consumer simply doesn't route from there."""
+    return next((e.taxid for e in lineage if e.rank == "species"), None)
+
+
 def _candidate_result(candidate: CandidateMatch, provenance: tuple[str, ...]) -> CandidateResult:
     conf = confidence_from_score(candidate.score)
     strands = (
@@ -88,6 +95,8 @@ def map_taxon_match(
         add(vocab.REVIEW_REQUIRED, match.requires_review)
         if vocab.LINEAGE in allowed:
             add(vocab.LINEAGE, _lineage_value(match.lineage))
+        if vocab.SPECIES_ID in allowed:
+            add(vocab.SPECIES_ID, _species_id(match.lineage))
     elif status is WeaveStatus.AMBIGUOUS:
         candidates = tuple(_candidate_result(c, provenance) for c in match.candidates)
         requires_review = True

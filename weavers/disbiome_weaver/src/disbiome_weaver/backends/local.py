@@ -108,7 +108,7 @@ class DisbiomeLocalBackend(BackendBase):
         return [self._lookup_one(con, q) for q in queries]
 
     def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
-        taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
+        taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))
         if taxid is None:
             return LookupRecord(query=query, found=False)
         rows = con.execute(
