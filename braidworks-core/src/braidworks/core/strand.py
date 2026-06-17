@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from braidworks.core.keytypes import canonicalize
@@ -141,6 +142,19 @@ class StrandSet:
             completion=list(self.completion),
             parent_id=parent_id if parent_id is not None else self.parent_id,
         )
+
+    def restricted_to(self, type_ids: Iterable[str]) -> StrandSet:
+        """A clone carrying only the named strands (lineage/metadata preserved).
+
+        Traversal uses this to feed a fan a *bare* join key after a resolution
+        prelude: ``resolve_name`` produces ``ncbi.taxon.id`` *and* the seed's
+        ``organism.scientific_name``, but the fanned children are different
+        organisms — letting the seed's attributes ride along would stale-fill
+        them (every child reported as the parent). Keep only the fan's input."""
+        keep = frozenset(type_ids)
+        out = self.clone()
+        out._strands = {t: s for t, s in self._strands.items() if t in keep}
+        return out
 
     def has(self, type_id: str) -> bool:
         return type_id in self._strands

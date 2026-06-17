@@ -30,7 +30,7 @@ from typing import Any
 
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.cache import InMemoryStrandCache, StrandCache
-from braidworks.core.exceptions import NoPlanError
+from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.executor import (
     ErrorPolicy,
     ExecutionResult,
@@ -73,7 +73,7 @@ def resolve_traversal(registry: BraidRegistry, token: str) -> tuple[str, str]:
     matches = [
         (wid, cid)
         for rel, wid, cid in fans
-        if token == rel or token == cid
+        if token == rel or token == cid or token == f"{wid}.{cid}"
     ]
     if not matches:
         # Distinguish "names a real capability but it doesn't fan" from "unknown".
@@ -144,6 +144,32 @@ async def run_traversed(
     for weaver_id, capability_id in traversals:
         if not current:
             break
+        # The fan consumes one type (e.g. ncbi.taxon.id); the user's --have may be a
+        # higher-level strand (organism.name) that has to be *resolved* down to it
+        # first. The type planner does that for plain `weave`; do the same here by
+        # running a resolution prelude before the fan, so `--traverse` accepts the
+        # same natural inputs `weave` does. Re-root onto the prelude's resolved values.
+        (source,) = tuple(registry.get_capability(weaver_id, capability_id).consumes)
+        available = frozenset().union(*(s.available_types() for s in current))
+        if source not in available:
+            try:
+                prelude = braider.plan(
+                    available_types=available,
+                    target_types=frozenset({source}),
+                    backend_policy=backend_policy,
+                )
+            except (NoPlanError, NoPathError):
+                prelude = None  # let the fan raise the precise missing-input error
+            if prelude is not None and prelude.steps:
+                # Resolution should not be truncated by a fan's --expand top:K.
+                res = await _run(prelude, current, expand=ExpandPolicy.all())
+                _absorb_dead_ends(final, res)
+                # Feed the fan only the resolved join key — the prelude's byproduct
+                # strands (e.g. the seed's scientific_name) must not ride into the
+                # fanned children and stale-fill them.
+                current = [s.restricted_to({source}) for s in res.resolved]
+                if not current:
+                    break
         braid = braider.plan_capability(
             weaver_id, capability_id, backend_policy=backend_policy
         )
