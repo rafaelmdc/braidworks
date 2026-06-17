@@ -94,31 +94,83 @@ SERVE_CSS = """
   .rtable th { position: sticky; top: -16px; background: var(--panel); color: var(--ink-dim);
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
   .rtable td { color: var(--ink); }
+
+  /* --- click-to-build mode --- */
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; min-height: 22px; align-items: center; }
+  .chip-sel { display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    border-radius: 7px; padding: 3px 8px; border: 1px solid var(--panel-edge); color: var(--ink); }
+  .chip-have { background: rgba(95,208,160,0.16); border-color: rgba(95,208,160,0.55); }
+  .chip-through { background: rgba(232,192,105,0.16); border-color: rgba(232,192,105,0.55); }
+  .chip-want { background: rgba(111,155,255,0.16); border-color: rgba(111,155,255,0.55); }
+  .chip-sel .x { cursor: pointer; color: var(--ink-dim); font-size: 12px; }
+  .chip-sel .x:hover { color: var(--ink); }
+  .bg-empty { color: var(--ink-dim); font-size: 10.5px; }
+  .picker { position: fixed; z-index: 40; background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-edge); border-radius: 11px; padding: 6px; min-width: 210px;
+    max-width: 320px; max-height: 56vh; overflow-y: auto; box-shadow: 0 22px 54px rgba(0,0,0,0.5); }
+  .picker .pkhead { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--ink-dim); padding: 5px 9px 6px; }
+  .picker .pk { display: block; width: 100%; box-sizing: border-box; text-align: left;
+    cursor: pointer; background: transparent; border: 0; color: var(--ink); font-size: 12px;
+    padding: 7px 9px; border-radius: 7px; }
+  .picker .pk:hover { background: rgba(120,150,220,0.18); }
+  .picker .pk.fan { color: #f0d18a; }
 """
 
 SERVE_HTML = """
 <div class="builder" id="builder" style="display:none">
   <h2>Build</h2>
   <div class="bgroup"><input id="b-search" placeholder="Filter graph" autocomplete="off"></div>
-  <div class="bgroup">
-    <span class="blabel">Have</span>
-    <input id="b-have" list="b-types" placeholder="protein.query" autocomplete="off">
-  </div>
-  <div class="bgroup">
-    <span class="blabel">Want</span>
-    <input id="b-want" list="b-types" placeholder="pdb.id" autocomplete="off">
-  </div>
-  <datalist id="b-types"></datalist>
+
+  <!-- Click-to-build: pick nodes on the graph instead of typing types. -->
   <div class="brow">
-    <button class="btn primary" id="b-plan">Plan</button>
-    <select id="b-policy" class="grow" title="backend policy">
+    <button class="btn primary grow" id="b-build">Build on the graph</button>
+  </div>
+  <div id="bg-panel" style="display:none; margin-top:11px">
+    <div class="note" id="bg-hint"></div>
+    <div class="bgroup" style="margin-top:9px">
+      <span class="blabel">Have (start)</span><div id="bg-have" class="chips"></div>
+    </div>
+    <div class="bgroup">
+      <span class="blabel">Pass through · for-each</span><div id="bg-through" class="chips"></div>
+    </div>
+    <div class="bgroup">
+      <span class="blabel">Want</span><div id="bg-want" class="chips"></div>
+    </div>
+    <input id="bg-value" placeholder="value, e.g. TP53" autocomplete="off">
+    <div class="brow" style="margin-top:8px">
+      <button class="btn primary" id="bg-run">Run</button>
+      <button class="btn ghost" id="bg-reset">Reset</button>
+      <button class="btn ghost" id="bg-exit">Exit</button>
+    </div>
+  </div>
+
+  <details style="margin-top:12px">
+    <summary class="blabel" style="cursor:pointer">Type it instead (advanced)</summary>
+    <div class="bgroup" style="margin-top:8px">
+      <span class="blabel">Have</span>
+      <input id="b-have" list="b-types" placeholder="protein.query" autocomplete="off">
+    </div>
+    <div class="bgroup">
+      <span class="blabel">Want</span>
+      <input id="b-want" list="b-types" placeholder="pdb.id" autocomplete="off">
+    </div>
+    <datalist id="b-types"></datalist>
+    <div class="brow">
+      <button class="btn primary" id="b-plan">Plan</button>
+    </div>
+    <div class="note" style="margin-top:8px">Comma-separate multiple types. Autocomplete from the network.</div>
+  </details>
+
+  <div class="bgroup" style="margin-top:11px">
+    <span class="blabel">Backend</span>
+    <select id="b-policy" title="backend policy">
       <option value="local_first">local first</option>
       <option value="api_first">api first</option>
       <option value="local_only">local only</option>
       <option value="api_only">api only</option>
     </select>
   </div>
-  <div class="note" style="margin-top:8px">Comma-separate multiple types. Autocomplete from the network.</div>
 
   <div id="b-out"></div>
 
@@ -459,9 +511,151 @@ function loadRecipe(name) {
   runPlan();
 }
 
+// ---- click-to-build: pick have / pass-through / want on the graph ----------
+// build.have/want hold type keys; build.through holds fan capability ids (--for-each).
+const build = { have: [], through: [], want: [] };
+let pickerEl = null;
+
+function netNodeById(id) { return (DATA.network.nodes || []).find((n) => n.id === id); }
+
+function buildChip(role, label, onRemove) {
+  const c = document.createElement("span");
+  c.className = "chip-sel chip-" + role;
+  c.innerHTML = `<span>${esc(label)}</span><span class="x" title="remove">&times;</span>`;
+  c.querySelector(".x").onclick = onRemove;
+  return c;
+}
+
+function renderBuild() {
+  const fill = (id, role, items, remove) => {
+    const box = document.getElementById(id); if (!box) return;
+    box.innerHTML = "";
+    if (!items.length) { box.innerHTML = `<span class="bg-empty">— none —</span>`; return; }
+    items.forEach((it, i) => box.appendChild(buildChip(role, it, () => { remove(i); renderBuild(); })));
+  };
+  fill("bg-have", "have", build.have, (i) => build.have.splice(i, 1));
+  fill("bg-through", "through", build.through, (i) => build.through.splice(i, 1));
+  fill("bg-want", "want", build.want, (i) => build.want.splice(i, 1));
+
+  const hint = !build.have.length
+    ? "Click your starting data — a rounded type node (e.g. protein.query)."
+    : (!build.want.length && !build.through.length)
+      ? "Now click what you want: a type node, or a weaver to pick one of its outputs. Click a weaver that fans out to pass THROUGH it (for-each)."
+      : "Add more, set a value below, then Run. Click &times; on a chip to remove it.";
+  const h = document.getElementById("bg-hint"); if (h) h.innerHTML = hint;
+  const v = document.getElementById("bg-value");
+  if (v && build.have.length) v.placeholder = "value for " + build.have[0] + ", e.g. TP53";
+
+  // Highlight map read by the draw loop.
+  const sel = {};
+  build.have.forEach((k) => { sel["type:" + k] = "have"; });
+  build.want.forEach((k) => { sel["type:" + k] = "want"; });
+  build.through.forEach((cid) =>
+    (DATA.network.nodes || []).forEach((n) => { if (n.kind === "op" && n.capability === cid) sel[n.id] = "through"; }));
+  buildSel = sel;
+}
+
+function closePicker() { if (pickerEl) { pickerEl.remove(); pickerEl = null; } }
+
+// Op node clicked in build mode: offer "pass through (for-each)" if it fans, plus each
+// of its outputs as a Want (shared join keys + descriptive leaf outputs).
+function openPicker(node, x, y) {
+  closePicker();
+  const items = [];
+  if ((node.set_outputs || []).length)
+    items.push(["⤜ pass through (for-each)", true, () => {
+      if (!build.through.includes(node.capability)) build.through.push(node.capability);
+    }]);
+  [...new Set([...(node.output_types || []), ...(node.output_leaves || [])])].forEach((t) =>
+    items.push(["want: " + t, false, () => { if (!build.want.includes(t)) build.want.push(t); }]));
+  if (!items.length) return;
+  const el = document.createElement("div");
+  el.className = "picker";
+  el.innerHTML = `<div class="pkhead">${esc(node.weaver)} · ${esc(node.capability)}</div>`;
+  items.forEach(([label, fan, act]) => {
+    const b = document.createElement("button");
+    b.className = "pk" + (fan ? " fan" : "");
+    b.textContent = label;
+    b.onclick = () => { act(); closePicker(); renderBuild(); };
+    el.appendChild(b);
+  });
+  document.body.appendChild(el);
+  el.style.left = Math.min(x, innerWidth - el.offsetWidth - 12) + "px";
+  el.style.top = Math.min(y, innerHeight - el.offsetHeight - 12) + "px";
+  pickerEl = el;
+}
+
+function handleBuildClick(node, x, y) {
+  closePicker();
+  if (!node) return;
+  const full = netNodeById(node.id) || node;
+  if (full.kind === "type") {
+    const k = full.key;
+    if (!build.have.length) build.have = [k];
+    else if (!build.have.includes(k) && !build.want.includes(k)) build.want.push(k);
+    renderBuild();
+  } else if (full.kind === "op") {
+    openPicker(full, x, y);
+  }
+}
+
+function enterBuild() {
+  buildMode = true; onBuildClick = handleBuildClick;
+  if (current !== 0) selectView(0);   // build happens on the network view
+  document.getElementById("bg-panel").style.display = "block";
+  const b = document.getElementById("b-build");
+  b.textContent = "Building — click nodes"; b.classList.add("primary");
+  renderBuild();
+}
+
+function exitBuild() {
+  buildMode = false; onBuildClick = null; buildSel = null; closePicker();
+  document.getElementById("bg-panel").style.display = "none";
+  document.getElementById("b-build").textContent = "Build on the graph";
+}
+
+async function runBuild() {
+  if (!build.have.length) { document.getElementById("bg-hint").textContent = "Pick a starting type first."; return; }
+  if (!build.want.length && !build.through.length) {
+    document.getElementById("bg-hint").textContent = "Pick at least one Want, or a pass-through step."; return;
+  }
+  const value = document.getElementById("bg-value").value.trim();
+  if (!value) { document.getElementById("bg-hint").textContent = "Enter a value for " + build.have[0] + "."; return; }
+  const btn = document.getElementById("bg-run"); btn.textContent = "running…"; btn.disabled = true;
+  const done = () => { btn.textContent = "Run"; btn.disabled = false; };
+  try {
+    const r = await fetch("/api/run", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        have: { [build.have[0]]: value },
+        want: build.want,
+        traverse: build.through,
+        policy: document.getElementById("b-policy").value,
+        expand: build.through.length ? "all" : "top", k: 5,
+      }),
+    });
+    const d = await r.json(); done();
+    if (!d.ok) { showError(d.error || "no route"); return; }
+    lastRun = { columns: d.columns, rows: d.rows, summary: d.summary };
+    if (d.path) { addPlanView(d.path); startRunAnim(d.path, d.result); }  // light up the route
+    showResults(d);
+  } catch (e) { done(); showError(String(e)); }
+}
+
 function setupBuilder() {
   if (!SERVED) return;
   document.getElementById("builder").style.display = "block";
+  document.getElementById("b-build").onclick = () => (buildMode ? exitBuild() : enterBuild());
+  document.getElementById("bg-run").onclick = runBuild;
+  document.getElementById("bg-exit").onclick = exitBuild;
+  document.getElementById("bg-reset").onclick = () => {
+    build.have = []; build.through = []; build.want = [];
+    document.getElementById("bg-value").value = ""; renderBuild();
+  };
+  document.getElementById("bg-value").addEventListener("keydown", (e) => { if (e.key === "Enter") runBuild(); });
+  // Dismiss the output picker on any outside click (capture phase: runs before the
+  // canvas click that opens a new one, so opening doesn't immediately close it).
+  addEventListener("click", (e) => { if (pickerEl && !pickerEl.contains(e.target)) closePicker(); }, true);
   const dl = document.getElementById("b-types");
   (DATA.network.nodes || []).filter((n) => n.kind === "type")
     .map((n) => n.key).sort()

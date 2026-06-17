@@ -332,6 +332,10 @@ const ctx = canvas.getContext("2d");
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 const cam = { x: 0, y: 0, scale: 1 };
 let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0;
+// Click-to-build (weaverkit serve only): when buildMode is on, canvas clicks are routed
+// to onBuildClick instead of opening the info card; buildSel ({nodeId: "have"|"through"|
+// "want"}) is read by the draw loop to ring the chosen nodes. All null in a static export.
+let buildMode = false, buildSel = null, onBuildClick = null;
 
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -532,6 +536,19 @@ function frame(now) {
       ctx.fillStyle = base; ctx.fill();
     }
 
+    // Build-mode selection ring: have (green) / through (amber) / want (blue).
+    if (buildSel && buildSel[n.id]) {
+      const role = buildSel[n.id];
+      const rc = role === "have" ? "#5fd0a0" : role === "through" ? "#e8c069" : "#6f9bff";
+      ctx.save();
+      ctx.globalAlpha = 1; ctx.shadowColor = rc;
+      ctx.shadowBlur = 20 * Math.max(cam.scale, 0.5);
+      ctx.lineWidth = 3; ctx.strokeStyle = rc;
+      const pad = 4 * cam.scale;
+      roundRect(sx - w/2 - pad, sy - h/2 - pad, w + 2*pad, h + 2*pad, isOp ? 12 : (h/2 + pad));
+      ctx.stroke(); ctx.restore();
+    }
+
     if (cam.scale > 0.32 || n.id === focus) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const lines = (n.label || n.id).split("\n");
@@ -574,6 +591,7 @@ addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("d
 canvas.addEventListener("click", (e) => {
   if (moved) return;
   const n = nodeAt(e.clientX, e.clientY);
+  if (buildMode && onBuildClick) { onBuildClick(n, e.clientX, e.clientY); return; }
   pinned = n ? n.id : null;
   showCard(n, e.clientX, e.clientY);
 });
