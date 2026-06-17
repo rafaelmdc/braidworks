@@ -15,6 +15,7 @@ SHARED_KEYS: dict[str, str] = {
     "organism.name": "The text you start from — an organism name.",
     # Organism layer (ncbi_weaver / gtdb_weaver)
     "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "ncbi.taxon.species_id": "The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets.",
     "organism.scientific_name": "An organism's canonical scientific name — joins clade-keyed datasets.",
     "ncbi.taxon.lineage": "An organism's ranked lineage, from species up to root.",
     "ncbi.taxon.rank": "An organism's taxonomic rank, e.g. species or genus.",

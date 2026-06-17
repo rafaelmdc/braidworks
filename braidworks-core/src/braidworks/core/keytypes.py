@@ -28,6 +28,7 @@ from typing import Any
 CANONICAL_TYPES: dict[str, type] = {
     "organism.name": str,
     "ncbi.taxon.id": int,
+    "ncbi.taxon.species_id": int,
     "organism.scientific_name": str,
     "ncbi.taxon.lineage": list,
     "ncbi.taxon.rank": str,

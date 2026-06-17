@@ -32,7 +32,7 @@ async def test_live_build_and_resolve(tmp_path: Path):
     # 1591 = Lactobacillus, present in Disbiome with disease associations.
     out = await weaver.execute_batch(
         "disbiome.list_diseases",
-        [StrandSet.from_strands("e", [Strand("ncbi.taxon.id", 1591)])],
+        [StrandSet.from_strands("e", [Strand("ncbi.taxon.species_id", 1591)])],
         requested_outputs=frozenset(
             {"microbe.disease.names", "microbe.disease.count", "microbe.disease.records"}
         ),
@@ -50,7 +50,7 @@ async def test_live_build_and_resolve(tmp_path: Path):
     # a taxid Disbiome does not track resolves to NO_MATCH, not an error
     miss = await weaver.execute_batch(
         "disbiome.list_diseases",
-        [StrandSet.from_strands("e", [Strand("ncbi.taxon.id", 999999999)])],
+        [StrandSet.from_strands("e", [Strand("ncbi.taxon.species_id", 999999999)])],
         requested_outputs=frozenset({"microbe.disease.names"}),
         backend="local",
     )

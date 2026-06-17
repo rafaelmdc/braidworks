@@ -1,10 +1,10 @@
 weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
 alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.records	
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph	
-disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
+disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
-ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage	
-ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage	
+ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage;ncbi.taxon.species_id	
+ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.list_children	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.id;ncbi.taxon.children_count;ncbi.taxon.children_records	
 ncbi	ncbi.list_genomes	resolver	optional	local;api	ncbi.taxon.id	genome.accession;genome.assembly.count;genome.assembly.records	
 ncbi	ncbi.describe_genome	resolver	optional	local;api	genome.accession	genome.assembly.title;genome.assembly.level;genome.assembly.organism;genome.assembly.detail;genome.sequence.records	

@@ -59,6 +59,17 @@ async def test_lineage_request_adds_lineage_group(mini_db_path):
     assert r.computed_groups == frozenset({"core", "lineage"})
 
 
+async def test_species_id_derived_from_lineage(mini_db_path):
+    # F. prausnitzii IS a species, so its species-rank ancestor is itself (853). The
+    # species_id rides in the lineage group; it lets a species-keyed consumer be fed a
+    # strain/subspecies taxid (the planner climbs to the species rank automatically).
+    w = build_ncbi_weaver(db_path=mini_db_path)
+    r = await _resolve_one(w, "Faecalibacterium prausnitzii", {vocab.SPECIES_ID})
+    sm = _strand_map(r)
+    assert sm[vocab.SPECIES_ID] == 853
+    assert r.computed_groups == frozenset({"core", "lineage"})
+
+
 async def test_synonym_resolves(mini_db_path):
     w = build_ncbi_weaver(db_path=mini_db_path)
     r = await _resolve_one(w, "F. prausnitzii", {vocab.TAXON_ID})

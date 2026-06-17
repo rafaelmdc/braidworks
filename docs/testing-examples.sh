@@ -144,14 +144,16 @@ printf '\n\033[1;32mdone.\033[0m\n'
 #   exactly that for P0DTC2 (its synthetic id for the SARS-CoV-2 reference proteome).
 #   Braidworks passes the real pdbUrl through faithfully — correct behavior, no fix.
 #
-# SMELL 5 [KNOWN GAP, not hacked] (braid 1): the bridge uniprot.resolve_protein(
-#   "Akkermansia muciniphila") returns taxid 349741 = the STRAIN (ATCC BAA-835), but
-#   disbiome is SPECIES-keyed (239935, which has T2D/UC/Crohn's/Parkinson's...). disbiome
-#   correctly returns *unresolved* for the strain. Two real items, both features not bugs:
-#   (a) taxonomy normalization — climb a strain taxid to its species rank before a
-#       species-keyed lookup; (b) routing — two producers of ncbi.taxon.id, and the
-#   cheapest pick (uniprot=strain) is wrong-granularity here vs ncbi.resolve_name=species.
-#   Workaround today: resolve the taxid via ncbi.resolve_name, or pass the species taxid.
+# SMELL 5 [FIXED] (braid 1): the bridge uniprot.resolve_protein("Akkermansia muciniphila")
+#   returns taxid 349741 = the STRAIN (ATCC BAA-835), but disbiome is SPECIES-level
+#   (239935 has T2D/UC/Crohn's/Parkinson's...), so it missed. Fix: NCBI now derives
+#   ncbi.taxon.species_id from the lineage (the species-rank ancestor) on resolve_name/
+#   describe_taxon, and disbiome consumes ncbi.taxon.species_id instead of ncbi.taxon.id.
+#   The planner now auto-inserts the strain->species climb:
+#     protein.query -> uniprot -> ncbi.taxon.id(strain) -> describe_taxon -> species_id
+#       -> disbiome  => full association list. A genus (no species rank) simply doesn't
+#   route to disbiome, which is correct (species-level data). New shared key registered
+#   in weaverkit/keys.py; ncbi 0.1.8->0.2.0, disbiome 0.1.4->0.2.0, weaverkit 0.4.1->0.4.2.
 #
 # FOOTGUN 6 [KNOWN, by design] (braid 10): "MTOR" w/o --param organism=9606 resolves to
 #   Drosophila Megator, not human MTOR kinase. Pin the species (see demo.sh).

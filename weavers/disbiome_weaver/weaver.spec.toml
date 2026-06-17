@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.1.4"
+version = "0.2.0"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -45,7 +45,9 @@ source_sample = """
 
 [[capability]]
 id = "disbiome.list_diseases"
-consumes = ["ncbi.taxon.id"]
+# Species-level data: consume the species-rank taxid so the planner climbs a
+# strain/subspecies taxid (e.g. from the UniProt bridge) up to its species first.
+consumes = ["ncbi.taxon.species_id"]
 
   # Lightest slice — "what diseases is this microbe linked to, and how many records?"
   [[capability.group]]
@@ -67,5 +69,5 @@ consumes = ["ncbi.taxon.id"]
 # reproducible offline.
 [[golden]]
 capability = "disbiome.list_diseases"
-input = { "ncbi.taxon.id" = 1591 }
+input = { "ncbi.taxon.species_id" = 1591 }
 expect = { "microbe.disease.count" = 1, "microbe.disease.names" = ["Autism"] }

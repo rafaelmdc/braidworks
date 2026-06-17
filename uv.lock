@@ -143,7 +143,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.9.0"
+version = "0.10.0"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "disbiome-weaver"
-version = "0.1.4"
+version = "0.2.0"
 source = { editable = "weavers/disbiome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -380,7 +380,7 @@ wheels = [
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.1.8"
+version = "0.2.0"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -838,7 +838,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
