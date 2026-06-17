@@ -331,7 +331,16 @@ const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 const cam = { x: 0, y: 0, scale: 1 };
-let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0;
+let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0, downX = 0, downY = 0;
+// Click-to-build (weaverkit serve only): when buildMode is on, canvas clicks are routed
+// to onBuildClick instead of opening the info card; buildSel ({nodeId: "have"|"through"|
+// "want"}) is read by the draw loop to ring the chosen nodes. All null in a static export.
+let buildMode = false, buildSel = null, onBuildClick = null;
+// Live route preview (build mode): {nodes:Set<id>, edgeKeys:Set<"src>tgt">} for the
+// planned A→B path on the network; when set, the draw loop dims everything else and
+// freezes off-route particles — exactly like clicking a single node. null = no preview
+// (also what "no path" sets, so the absence of a highlight is itself the signal).
+let routeFocus = null;
 
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -431,12 +440,20 @@ function frame(now) {
   const focus = hover || pinned;
   const focusEdges = new Set();
   const focusNodes = new Set();
+  // A hovered/pinned node wins; otherwise a build-mode route preview dims to its path.
+  const useRoute = !focus && routeFocus && current === 0;
+  const active = !!focus || useRoute;
   if (focus) {
     focusNodes.add(focus);
     L.edges.forEach((e, i) => {
       if (e.source === focus || e.target === focus) {
         focusEdges.add(i); focusNodes.add(e.source); focusNodes.add(e.target);
       }
+    });
+  } else if (useRoute) {
+    routeFocus.nodes.forEach((id) => focusNodes.add(id));
+    L.edges.forEach((e, i) => {
+      if (routeFocus.edgeKeys.has(e.source + ">" + e.target)) focusEdges.add(i);
     });
   }
 
@@ -452,7 +469,7 @@ function frame(now) {
     const s = L.nodes.get(e.source), t = L.nodes.get(e.target);
     if (!s || !t) return;
     const a = edgeAnchors(s, t);
-    const lit = !focus || focusEdges.has(i);
+    const lit = !active || focusEdges.has(i);
     ctx.beginPath();
     ctx.moveTo(...toScreen(a[0], a[1]));
     const c1 = toScreen(a[2], a[3]), c2 = toScreen(a[4], a[5]), p3 = toScreen(a[6], a[7]);
@@ -465,7 +482,7 @@ function frame(now) {
 
     // flowing particles
     ctx.globalCompositeOperation = "lighter";
-    const speed = (focus && !focusEdges.has(i)) ? 0 : (lit ? 0.30 : 0.14);
+    const speed = (active && !focusEdges.has(i)) ? 0 : (lit ? 0.30 : 0.14);
     parts[i].forEach((ph, k) => {
       ph = (ph + speed * dt) % 1; parts[i][k] = ph;
       const [wx, wy] = bezier(a, ph);
@@ -501,7 +518,7 @@ function frame(now) {
   L.nodes.forEach((n) => {
     const [sx, sy] = toScreen(n.x, n.y);
     const w = n.w * cam.scale, h = n.h * cam.scale;
-    let lit = !focus || focusNodes.has(n.id);
+    let lit = !active || focusNodes.has(n.id);
     if (searchHits && !searchHits.has(n.id)) lit = false;  // search filter dims non-matches
     const isOp = n.kind === "op";
     let base = isOp ? weaverColor(n.weaver, 60) : (TYPE_COLOR[n.io] || TYPE_IN);
@@ -532,6 +549,19 @@ function frame(now) {
       ctx.fillStyle = base; ctx.fill();
     }
 
+    // Build-mode selection ring: have (green) / through (amber) / want (blue).
+    if (buildSel && buildSel[n.id]) {
+      const role = buildSel[n.id];
+      const rc = role === "have" ? "#5fd0a0" : role === "through" ? "#e8c069" : "#6f9bff";
+      ctx.save();
+      ctx.globalAlpha = 1; ctx.shadowColor = rc;
+      ctx.shadowBlur = 20 * Math.max(cam.scale, 0.5);
+      ctx.lineWidth = 3; ctx.strokeStyle = rc;
+      const pad = 4 * cam.scale;
+      roundRect(sx - w/2 - pad, sy - h/2 - pad, w + 2*pad, h + 2*pad, isOp ? 12 : (h/2 + pad));
+      ctx.stroke(); ctx.restore();
+    }
+
     if (cam.scale > 0.32 || n.id === focus) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const lines = (n.label || n.id).split("\n");
@@ -560,7 +590,11 @@ function nodeAt(sx, sy) {
 canvas.addEventListener("mousemove", (e) => {
   if (dragging) {
     cam.x += e.clientX - lastX; cam.y += e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY; moved = true; return;
+    lastX = e.clientX; lastY = e.clientY;
+    // Only count it as a drag past a small threshold, so a click with tiny jitter still
+    // registers (otherwise a 1px wobble between down and up would swallow the click).
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) moved = true;
+    return;
   }
   const n = nodeAt(e.clientX, e.clientY);
   hover = n ? n.id : null;
@@ -568,12 +602,14 @@ canvas.addEventListener("mousemove", (e) => {
 });
 canvas.addEventListener("mousedown", (e) => {
   dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+  downX = e.clientX; downY = e.clientY;
   canvas.classList.add("dragging");
 });
 addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("dragging"); });
 canvas.addEventListener("click", (e) => {
   if (moved) return;
   const n = nodeAt(e.clientX, e.clientY);
+  if (buildMode && onBuildClick) { onBuildClick(n, e.clientX, e.clientY); return; }
   pinned = n ? n.id : null;
   showCard(n, e.clientX, e.clientY);
 });

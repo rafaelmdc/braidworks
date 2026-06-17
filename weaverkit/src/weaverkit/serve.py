@@ -28,6 +28,7 @@ from braidworks.core.executor import ExpandPolicy, LocalExecutor
 from braidworks.core.planner import Braider
 from braidworks.core.references import references_for
 from braidworks.core.strand import Strand, StrandSet
+from braidworks.core.traverse import resolve_traversal, run_traversed
 
 from weaverkit.view import (
     build_data,
@@ -161,6 +162,7 @@ def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPol
         "runs": runs,
         "columns": columns,
         "rows": rows,
+        "want": list(want),  # the requested targets — GUI defaults the table to these
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
@@ -204,6 +206,65 @@ def run_response(
     return _run_payload(registry, result, have, want, policy=policy)
 
 
+def run_traversed_response(
+    registry,
+    have: dict,
+    want: list,
+    traverse: list,
+    *,
+    policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+    expand: str = "all",
+    k: int = 5,
+) -> dict:
+    """Fan *through* one or more relationships (the GUI's "pass through" = --for-each).
+
+    ``traverse`` is a list of fan capability tokens (relationship noun or capability id,
+    e.g. ``ncbi.list_orthologs``). Each is run in order, re-rooting on every produced
+    value, then ``want`` is planned from each child (``want`` may be empty — you just get
+    the fanned entities). Returns the same shape as :func:`run_response` minus ``path``
+    (a traversal is not a single Dijkstra route, so there is no one route view).
+    """
+    have = {str(t): v for t, v in (have or {}).items() if str(t).strip()}
+    want = [str(t) for t in (want or [])]
+    tokens = [str(t) for t in (traverse or []) if str(t).strip()]
+    if not have or not tokens:
+        return {"ok": False, "error": "pass-through needs a Have value and at least one step"}
+    try:
+        traversals = [resolve_traversal(registry, t) for t in tokens]
+    except (NoPathError, NoPlanError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
+    try:
+        result = asyncio.run(
+            run_traversed(
+                registry, [ss], traversals, frozenset(want),
+                backend_policy=policy, expand_policy=_expand_policy(expand, k),
+            )
+        )
+    except (NoPathError, NoPlanError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    rj = result.to_json()
+    runs, _dropped = build_run_views(rj, registry)
+    columns, rows = _rows(rj)
+    return {
+        "ok": True,
+        "path": None,  # a traversal is not a single route; the results table is the payload
+        "result": rj,
+        "runs": runs,
+        "columns": columns,
+        "rows": rows,
+        "want": list(want),
+        "traverse": [cid for _wid, cid in traversals],
+        "summary": {
+            "resolved": len(rj.get("resolved", [])),
+            "unresolved": len(rj.get("unresolved", [])),
+            "errors": len(rj.get("errors", [])),
+        },
+    }
+
+
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
 
 
@@ -233,6 +294,7 @@ def create_app():
         policy: str = "local_first"
         expand: str = "top"  # top | top_k | all
         k: int = 3
+        traverse: list[str] = Field(default_factory=list)  # fan capabilities to pass through
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
@@ -260,6 +322,11 @@ def create_app():
             policy = parse_policy(req.policy)
         except ValueError as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        if req.traverse:
+            return run_traversed_response(
+                registry, req.have, req.want, req.traverse,
+                policy=policy, expand=req.expand, k=req.k,
+            )
         return run_response(
             registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k
         )
