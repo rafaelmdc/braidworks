@@ -31,8 +31,11 @@ cd braidworks
 uv sync --all-extras       # creates the environment and installs every weaver
 ```
 
-(That uses [`uv`](https://docs.astral.sh/uv/). `uv run python yourscript.py` runs a
-script inside the environment.)
+(That uses [`uv`](https://docs.astral.sh/uv/). The `braidworks` command lives inside
+the project environment `uv` just created, so run it as **`uv run braidworks …`**
+from the repo root — that's what the examples below do. Prefer a bare `braidworks`?
+Activate the venv once with `source .venv/bin/activate` (then drop the `uv run`).
+Same idea for scripts: `uv run python yourscript.py`.)
 
 ### 2. Ask a question — from the shell
 
@@ -41,7 +44,7 @@ You tell Braidworks the strands you *have* and the strand *types* you *want*; it
 finds the route across all installed weavers and runs it. From bash:
 
 ```bash
-braidworks weave --have protein.query=TP53 --param organism=9606 \
+uv run braidworks weave --have protein.query=TP53 --param organism=9606 \
     --want go.biological_process,protein.interaction.partners
 ```
 
@@ -61,12 +64,12 @@ spreadsheet/pandas. A ready-to-run sample list lives at
 [`examples/genes.txt`](examples/genes.txt) — no need to make your own:
 
 ```bash
-braidworks weave --in-file examples/genes.txt --in-type protein.query \
+uv run braidworks weave --in-file examples/genes.txt --in-type protein.query \
     --param organism=9606 --want go.biological_process,protein.interaction.partners \
     --format tsv > out.tsv
 
 # or stream from a pipe straight into jq:
-cat examples/genes.txt | braidworks weave --in-file - --in-type protein.query \
+cat examples/genes.txt | uv run braidworks weave --in-file - --in-type protein.query \
     --param organism=9606 --want protein.interaction.partners --format jsonl | jq .
 ```
 
@@ -74,15 +77,15 @@ cat examples/genes.txt | braidworks weave --in-file - --in-type protein.query \
 described:
 
 ```bash
-braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want structure.pdb.title,structure.pdb.method --expand all --format tsv
 ```
 
-Other commands: `braidworks weavers` (what's installed), `braidworks keys` (what
-each weaver produces/consumes), `braidworks path --from … --to …` (preview a route),
-`braidworks run <weaver> <capability>` (call one capability directly). Add `--help`
-to any. Data goes to stdout; progress and a resolved/unresolved count go to stderr,
-so pipes stay clean.
+Other commands (same `uv run` prefix): `uv run braidworks weavers` (what's installed),
+`uv run braidworks keys` (what each weaver produces/consumes), `uv run braidworks path
+--from … --to …` (preview a route), `uv run braidworks run <weaver> <capability>` (call
+one capability directly). Add `--help` to any. Data goes to stdout; progress and a
+resolved/unresolved count go to stderr, so pipes stay clean.
 
 ### 2b. …or from Python
 
@@ -194,21 +197,22 @@ fanned leaves by the question that produced them. See
 ## Command-line tools
 
 The **`braidworks`** command (installed with `braidworks-core`) is the query/inspect
-front door — see [§2 above](#2-ask-a-question--from-the-shell):
+front door — see [§2 above](#2-ask-a-question--from-the-shell). Run it as `uv run
+braidworks …` from the repo root, or `source .venv/bin/activate` once and drop the prefix:
 
 ```bash
-braidworks weave --have TYPE=VALUE --want TYPE[,TYPE…]   # plan a route and run it
-braidworks run <weaver> <capability> --have TYPE=VALUE   # call one capability directly
-braidworks weavers                                       # list installed weavers + capabilities
-braidworks keys [--produces TYPE | --consumes TYPE]      # what flows between weavers
-braidworks path --from TYPE --to TYPE                    # preview a route, don't run it
-braidworks references                                    # source citations
+uv run braidworks weave --have TYPE=VALUE --want TYPE[,TYPE…]   # plan a route and run it
+uv run braidworks run <weaver> <capability> --have TYPE=VALUE   # call one capability directly
+uv run braidworks weavers                                       # list installed weavers + capabilities
+uv run braidworks keys [--produces TYPE | --consumes TYPE]      # what flows between weavers
+uv run braidworks path --from TYPE --to TYPE                    # preview a route, don't run it
+uv run braidworks references                                    # source citations
 ```
 
 Inputs from flags, a file (`--in-file`, one value per line with `--in-type`, or a
 CSV/TSV with type-id columns), or stdin (`--in-file -`). Output `--format
 human|json|jsonl|tsv|csv`; `--expand all|top:K` to fan one→many; `--param name=value`
-to pass a capability's filters/options (see `braidworks weavers` for what each accepts).
+to pass a capability's filters/options (see `uv run braidworks weavers` for what each accepts).
 
 `weaverkit` (a separate CLI) is the *build/inspect* toolkit:
 

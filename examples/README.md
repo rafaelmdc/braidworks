@@ -12,7 +12,9 @@ From the repo root (after `uv sync --all-extras`):
 
 ```bash
 # What each gene does + who it interacts with -> a TSV for your spreadsheet.
-braidworks weave --in-file examples/genes.txt --in-type protein.query \
+# `uv run` runs the command inside the project env; or `source .venv/bin/activate`
+# once and drop the prefix.
+uv run braidworks weave --in-file examples/genes.txt --in-type protein.query \
     --param organism=9606 --want go.biological_process,protein.interaction.partners \
     --format tsv > out.tsv
 ```
