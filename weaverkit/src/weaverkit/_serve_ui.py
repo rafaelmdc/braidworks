@@ -559,11 +559,14 @@ function renderBuild() {
 // Live A→B route preview: plan have→want and dim the network to just that path (off-route
 // particles freeze) — like clicking one node. No path → routeFocus stays null, so the gap
 // itself shows there's no route. Skipped while a pass-through (traversal) is staged.
-let previewTimer = null;
+// previewSeq invalidates in-flight plans: only the newest request may apply (or clear)
+// routeFocus, so a stale response can't re-dim the graph after Reset / a later edit.
+let previewTimer = null, previewSeq = 0;
 function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(previewRoute, 130); }
 
 async function previewRoute() {
-  if (build.through.length || !build.have.length || !build.want.length) { routeFocus = null; return; }
+  const seq = ++previewSeq;
+  if (!buildMode || build.through.length || !build.have.length || !build.want.length) { routeFocus = null; return; }
   try {
     const r = await fetch("/api/plan", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -573,14 +576,24 @@ async function previewRoute() {
       }),
     });
     const d = await r.json();
-    if (!d.ok || !d.path) { routeFocus = null; return; }   // no path → no highlight
+    if (seq !== previewSeq) return;                         // superseded by a newer selection
+    if (!d.ok || !d.path) { routeFocus = null; return; }    // no path → no highlight
     const p = d.path, idmap = {};
     (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
     const nodes = new Set(), edgeKeys = new Set();
     (p.nodes || []).forEach((n) => nodes.add(n.kind === "op" ? idmap[n.id] : n.id));
     (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
     routeFocus = { nodes, edgeKeys };
-  } catch (e) { routeFocus = null; }
+  } catch (e) { if (seq === previewSeq) routeFocus = null; }
+}
+
+// Clear all build selection + highlight state synchronously and invalidate any pending plan.
+function clearBuild() {
+  build.have = []; build.through = []; build.want = [];
+  const v = document.getElementById("bg-value"); if (v) v.value = "";
+  previewSeq++; clearTimeout(previewTimer);
+  routeFocus = null; buildSel = null;
+  renderBuild();
 }
 
 function closePicker() { if (pickerEl) { pickerEl.remove(); pickerEl = null; } }
@@ -633,11 +646,12 @@ function enterBuild() {
   document.getElementById("bg-panel").style.display = "block";
   const b = document.getElementById("b-build");
   b.textContent = "Building — click nodes"; b.classList.add("primary");
-  renderBuild();
+  clearBuild();   // always start fresh (also renders the empty panel)
 }
 
 function exitBuild() {
-  buildMode = false; onBuildClick = null; buildSel = null; routeFocus = null; closePicker();
+  buildMode = false; onBuildClick = null; buildSel = null; routeFocus = null;
+  previewSeq++; clearTimeout(previewTimer); closePicker();
   document.getElementById("bg-panel").style.display = "none";
   document.getElementById("b-build").textContent = "Build on the graph";
 }
@@ -676,10 +690,7 @@ function setupBuilder() {
   document.getElementById("b-build").onclick = () => (buildMode ? exitBuild() : enterBuild());
   document.getElementById("bg-run").onclick = runBuild;
   document.getElementById("bg-exit").onclick = exitBuild;
-  document.getElementById("bg-reset").onclick = () => {
-    build.have = []; build.through = []; build.want = [];
-    document.getElementById("bg-value").value = ""; renderBuild();
-  };
+  document.getElementById("bg-reset").onclick = clearBuild;
   document.getElementById("bg-value").addEventListener("keydown", (e) => { if (e.key === "Enter") runBuild(); });
   // Dismiss the output picker on any outside click (capture phase: runs before the
   // canvas click that opens a new one, so opening doesn't immediately close it).

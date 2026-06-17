@@ -331,7 +331,7 @@ const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 const cam = { x: 0, y: 0, scale: 1 };
-let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0;
+let hover = null, pinned = null, dragging = false, moved = false, lastX = 0, lastY = 0, downX = 0, downY = 0;
 // Click-to-build (weaverkit serve only): when buildMode is on, canvas clicks are routed
 // to onBuildClick instead of opening the info card; buildSel ({nodeId: "have"|"through"|
 // "want"}) is read by the draw loop to ring the chosen nodes. All null in a static export.
@@ -590,7 +590,11 @@ function nodeAt(sx, sy) {
 canvas.addEventListener("mousemove", (e) => {
   if (dragging) {
     cam.x += e.clientX - lastX; cam.y += e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY; moved = true; return;
+    lastX = e.clientX; lastY = e.clientY;
+    // Only count it as a drag past a small threshold, so a click with tiny jitter still
+    // registers (otherwise a 1px wobble between down and up would swallow the click).
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) moved = true;
+    return;
   }
   const n = nodeAt(e.clientX, e.clientY);
   hover = n ? n.id : null;
@@ -598,6 +602,7 @@ canvas.addEventListener("mousemove", (e) => {
 });
 canvas.addEventListener("mousedown", (e) => {
   dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+  downX = e.clientX; downY = e.clientY;
   canvas.classList.add("dragging");
 });
 addEventListener("mouseup", () => { dragging = false; canvas.classList.remove("dragging"); });
