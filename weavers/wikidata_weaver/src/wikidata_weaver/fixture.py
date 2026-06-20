@@ -9,6 +9,7 @@ reproducibly. The canned payload is a real response shape for ``Ursus arctos``.
 from __future__ import annotations
 
 import json
+from urllib.parse import unquote_plus
 
 import httpx
 
@@ -39,7 +40,11 @@ _EMPTY = {"head": {"vars": ["sname", "item", "article", "vn"]}, "results": {"bin
 
 def _handler(request: httpx.Request) -> httpx.Response:
     if request.url.path.endswith("/sparql"):
-        query = request.url.params.get("query", "")
+        # The query is POSTed as form data (large batches exceed a GET URL);
+        # unquote_plus so "Ursus+arctos" reads back as "Ursus arctos".
+        query = request.url.params.get("query", "") + unquote_plus(
+            request.content.decode("utf-8", "ignore")
+        )
         payload = _URSUS_ARCTOS if "Ursus arctos" in query else _EMPTY
         return httpx.Response(
             200,

@@ -56,6 +56,11 @@ def _sparql_literal(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# Names per SPARQL request. The batch is POSTed (no URL-length limit) and split into
+# chunks so a single query stays well within the query service's time/size budget.
+_CHUNK = 200
+
+
 class WikidataApiBackend(BackendBase):
     """api backend — calls the keyless Wikidata Query Service."""
 
@@ -97,12 +102,14 @@ class WikidataApiBackend(BackendBase):
         rows_by_name: dict[str, dict[str, dict[str, Any]]] = {n: {} for n in distinct}
         error: str | None = None
 
-        if distinct:
-            query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in distinct))
+        for start in range(0, len(distinct), _CHUNK):
+            chunk = distinct[start : start + _CHUNK]
+            query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in chunk))
             try:
-                resp = await self._http().get(
+                # POST (not GET) so a large VALUES batch isn't capped by URL length.
+                resp = await self._http().post(
                     "/sparql",
-                    params={"query": query, "format": "json"},
+                    data={"query": query, "format": "json"},
                     headers={
                         "Accept": "application/sparql-results+json",
                         "User-Agent": _USER_AGENT,
