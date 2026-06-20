@@ -31,14 +31,20 @@ from braidworks.core import (
 BASE_URL = "https://query.wikidata.org"
 _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gmail.com)"
 
-# Resolve P225 (taxon name) -> item, optional enwiki sitelink, optional English P1843.
+# Resolve P225 (taxon name) -> item, optional enwiki sitelink, and every English
+# name we can use for the alias index: rdfs:label, skos:altLabel, and P1843 taxon
+# common names — UNIONed into ?vn so there's no label×alias cross-product.
 # ?sname is echoed so we can align rows back to the input batch.
 _SPARQL = """
 SELECT ?sname ?item ?article ?vn WHERE {{
   VALUES ?sname {{ {values} }}
   ?item wdt:P225 ?sname .
   OPTIONAL {{ ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }}
-  OPTIONAL {{ ?item wdt:P1843 ?vn . FILTER(LANG(?vn) = "en") }}
+  OPTIONAL {{
+    {{ ?item rdfs:label ?vn . }} UNION {{ ?item skos:altLabel ?vn . }}
+    UNION {{ ?item wdt:P1843 ?vn . }}
+    FILTER(LANG(?vn) = "en")
+  }}
 }}
 """
 
