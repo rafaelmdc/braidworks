@@ -32,8 +32,11 @@ BASE_URL = "https://query.wikidata.org"
 _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gmail.com)"
 
 # Resolve P225 (taxon name) -> item, optional enwiki sitelink, and every English
-# name we can use for the alias index: rdfs:label, skos:altLabel, and P1843 taxon
-# common names — UNIONed into ?vn so there's no label×alias cross-product.
+# name we can use for the alias index, UNIONed into ?vn (no label×alias cross-product):
+#   rdfs:label, skos:altLabel, P1843 taxon common names, and the label of any separate
+#   "common name of a group of organisms" item that points here via P13176 ("taxon
+#   known by this common name") — the latter is how "seal"/"monkey"/"kangaroo" resolve,
+#   since they live on a vernacular item, not the family.
 # ?sname is echoed so we can align rows back to the input batch.
 _SPARQL = """
 SELECT ?sname ?item ?article ?vn WHERE {{
@@ -43,6 +46,7 @@ SELECT ?sname ?item ?article ?vn WHERE {{
   OPTIONAL {{
     {{ ?item rdfs:label ?vn . }} UNION {{ ?item skos:altLabel ?vn . }}
     UNION {{ ?item wdt:P1843 ?vn . }}
+    UNION {{ ?cn wdt:P13176 ?item . ?cn rdfs:label ?vn . }}
     FILTER(LANG(?vn) = "en")
   }}
 }}
