@@ -37,12 +37,17 @@ _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gm
 #   "common name of a group of organisms" item that points here via P13176 ("taxon
 #   known by this common name") — the latter is how "seal"/"monkey"/"kangaroo" resolve,
 #   since they live on a vernacular item, not the family.
+# ?rank (P105 taxon rank, English label) is pulled so a caller can disambiguate a
+# cross-code homonym — the same scientific name on several items (e.g. "Pholidota" is
+# both an orchid genus and the pangolin order) — by the expected rank. It's a direct
+# property (cheap), unlike a P171* kingdom-closure (which times out at batch scale).
 # ?sname is echoed so we can align rows back to the input batch.
 _SPARQL = """
-SELECT ?sname ?item ?article ?vn WHERE {{
+SELECT ?sname ?item ?article ?vn ?rankLabel WHERE {{
   VALUES ?sname {{ {values} }}
   ?item wdt:P225 ?sname .
   OPTIONAL {{ ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }}
+  OPTIONAL {{ ?item wdt:P105 ?rank . ?rank rdfs:label ?rankLabel . FILTER(LANG(?rankLabel) = "en") }}
   OPTIONAL {{
     {{ ?item rdfs:label ?vn . }} UNION {{ ?item skos:altLabel ?vn . }}
     UNION {{ ?item wdt:P1843 ?vn . }}
@@ -133,6 +138,10 @@ class WikidataApiBackend(BackendBase):
             except httpx.HTTPError as exc:
                 error = f"Wikidata query failed: {exc}"
 
+        # Optional disambiguator: when a name resolves to several items, prefer the one
+        # whose taxon rank (P105) matches this. Omitted (default) → historical behaviour.
+        expected_rank = str((params or {}).get("expected_rank") or "").strip().lower()
+
         records: list[ResolverRecord] = []
         for name, query in zip(names, queries):
             if error is not None:
@@ -142,6 +151,17 @@ class WikidataApiBackend(BackendBase):
                 )
                 continue
             items = rows_by_name.get(name, {})
+            # Homonym across nomenclature codes ("Pholidota" = orchid genus + pangolin
+            # order): if the caller told us the expected rank and exactly one candidate
+            # has it, collapse to that one — a single RESOLVED instead of AMBIGUOUS.
+            if len(items) > 1 and expected_rank:
+                ranked = {
+                    qid: fields
+                    for qid, fields in items.items()
+                    if (fields.get("rank") or "").lower() == expected_rank
+                }
+                if len(ranked) == 1:
+                    items = ranked
             if not items:
                 records.append(
                     ResolverRecord(query=query, status=MatchStatus.NO_MATCH, values={},
@@ -170,16 +190,20 @@ class WikidataApiBackend(BackendBase):
 def _accumulate(
     payload: dict[str, Any], rows_by_name: dict[str, dict[str, dict[str, Any]]]
 ) -> None:
-    """Fold SPARQL bindings into name -> qid -> {title, vernaculars}."""
+    """Fold SPARQL bindings into name -> qid -> {title, vernaculars, rank}."""
     for binding in payload.get("results", {}).get("bindings", []):
         sname = binding.get("sname", {}).get("value")
         item = binding.get("item", {}).get("value")
         if not sname or not item or sname not in rows_by_name:
             continue
         qid = _qid(item)
-        fields = rows_by_name[sname].setdefault(qid, {"title": None, "vernaculars": []})
+        fields = rows_by_name[sname].setdefault(
+            qid, {"title": None, "vernaculars": [], "rank": None}
+        )
         if "article" in binding and fields["title"] is None:
             fields["title"] = _title(binding["article"]["value"])
+        if "rankLabel" in binding and fields["rank"] is None:
+            fields["rank"] = binding["rankLabel"]["value"]
         if "vn" in binding:
             vn = binding["vn"]["value"]
             if vn not in fields["vernaculars"]:

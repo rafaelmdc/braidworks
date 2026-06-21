@@ -6,7 +6,7 @@ db_name = "wikidata"
 weaver_id = "wikidata"
 kind = "resolver"
 title = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
-version = "0.1.0"
+version = "0.1.1"
 license = "CC0-1.0"
 source_url = "https://www.wikidata.org/"
 citation = "Wikidata, the free knowledge base. https://www.wikidata.org/"
@@ -37,6 +37,11 @@ always_computed_groups = ["core"]   # name -> QID is always resolved first
   [[capability.group]]
   id = "names"
   outputs = ["organism.vernacular_names"]
+
+  [[capability.parameter]]
+  name = "expected_rank"
+  type = "string"
+  description = "Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour)."
 
 [[golden]]
 capability = "resolve_taxon"

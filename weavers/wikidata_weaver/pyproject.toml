@@ -1,6 +1,6 @@
 [project]
 name = "wikidata_weaver"
-version = "0.1.0"
+version = "0.1.1"
 description = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
