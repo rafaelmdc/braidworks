@@ -13,6 +13,7 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import unquote
@@ -75,6 +76,18 @@ def _sparql_literal(value: str) -> str:
 # chunks so a single query stays well within the query service's time/size budget.
 _CHUNK = 200
 
+# WDQS is flaky under batch load — it intermittently times out, 429/503s, or (the nasty
+# one) returns HTTP 200 with a truncated/garbled body that isn't valid JSON. Retry a chunk a
+# few times with exponential backoff before giving up, so a transient hiccup neither crashes
+# the build nor silently drops a whole chunk's enrichment.
+_MAX_ATTEMPTS = 4
+_BACKOFF_BASE = 0.5  # seconds: 0.5, 1, 2 between attempts
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+class _ChunkFailed(Exception):
+    """A chunk that exhausted its retries — its names are marked ERROR, others are unaffected."""
+
 
 class WikidataApiBackend(BackendBase):
     """api backend — calls the keyless Wikidata Query Service."""
@@ -101,6 +114,41 @@ class WikidataApiBackend(BackendBase):
         # refresh monthly (matches the spec's "query-month" source of truth).
         return "wikidata-api-" + datetime.now(timezone.utc).strftime("%Y-%m")
 
+    async def _post_chunk(self, query: str) -> dict[str, Any]:
+        """POST one chunk and return the parsed SPARQL JSON, retrying transient failures.
+
+        A genuine not-found status returns an empty result (not an error). A non-transient
+        client error (e.g. a malformed query → 400) is not retried. Raises ``_ChunkFailed``
+        once the attempts are exhausted."""
+        last = "unknown error"
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                # POST (not GET) so a large VALUES batch isn't capped by URL length.
+                resp = await self._http().post(
+                    "/sparql",
+                    data={"query": query, "format": "json"},
+                    headers={
+                        "Accept": "application/sparql-results+json",
+                        "User-Agent": _USER_AGENT,
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json()  # may raise ValueError (JSONDecodeError) on a bad body
+            except httpx.HTTPStatusError as exc:
+                code = exc.response.status_code
+                if is_not_found_status(code):
+                    return {"results": {"bindings": []}}  # nothing matched — not an error
+                last = f"HTTP {code}"
+                if code not in _RETRY_STATUS:
+                    break  # client error (e.g. 400) won't fix on retry
+            except httpx.HTTPError as exc:  # timeouts, connection resets, …
+                last = str(exc)
+            except ValueError as exc:  # JSONDecodeError ⊂ ValueError: 200 with a bad/partial body
+                last = f"malformed response: {exc}"
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_BASE * (2**attempt))
+        raise _ChunkFailed(last)
+
     async def fetch(
         self,
         capability_id: str,
@@ -115,28 +163,17 @@ class WikidataApiBackend(BackendBase):
         # Distinct, non-empty names for the VALUES clause (dedup the wire request).
         distinct = sorted({n for n in names if n})
         rows_by_name: dict[str, dict[str, dict[str, Any]]] = {n: {} for n in distinct}
-        error: str | None = None
+        # A chunk that exhausts its retries marks ONLY its own names ERROR — a transient WDQS
+        # failure must not nuke the enrichment of every other name in the batch.
+        failed: set[str] = set()
 
         for start in range(0, len(distinct), _CHUNK):
             chunk = distinct[start : start + _CHUNK]
             query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in chunk))
             try:
-                # POST (not GET) so a large VALUES batch isn't capped by URL length.
-                resp = await self._http().post(
-                    "/sparql",
-                    data={"query": query, "format": "json"},
-                    headers={
-                        "Accept": "application/sparql-results+json",
-                        "User-Agent": _USER_AGENT,
-                    },
-                )
-                resp.raise_for_status()
-                _accumulate(resp.json(), rows_by_name)
-            except httpx.HTTPStatusError as exc:
-                if not is_not_found_status(exc.response.status_code):
-                    error = f"Wikidata query failed: HTTP {exc.response.status_code}"
-            except httpx.HTTPError as exc:
-                error = f"Wikidata query failed: {exc}"
+                _accumulate(await self._post_chunk(query), rows_by_name)
+            except _ChunkFailed:
+                failed.update(chunk)
 
         # Optional disambiguator: when a name resolves to several items, prefer the one
         # whose taxon rank (P105) matches this. Omitted (default) → historical behaviour.
@@ -144,10 +181,10 @@ class WikidataApiBackend(BackendBase):
 
         records: list[ResolverRecord] = []
         for name, query in zip(names, queries):
-            if error is not None:
+            if name in failed:
                 records.append(
                     ResolverRecord(query=query, status=MatchStatus.ERROR, values={},
-                                   candidates=[], error=error)
+                                   candidates=[], error="Wikidata query failed after retries")
                 )
                 continue
             items = rows_by_name.get(name, {})

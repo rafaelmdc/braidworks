@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "wikidata"
-WEAVER_VERSION = "0.1.1"
+WEAVER_VERSION = "0.1.2"
 WEAVER_TITLE = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
