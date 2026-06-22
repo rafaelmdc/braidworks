@@ -33,7 +33,7 @@ Registered bridge keys — what links weavers together.
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
 | `nucleotide.insdc.accession` | INSDC nucleotide accession (GenBank/EMBL/DDBJ). | — | `uniprot:map_to_accession` |
-| `organism.scientific_name` | An organism's canonical scientific name — joins clade-keyed datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits` |
+| `organism.scientific_name` | An organism's canonical scientific name — joins clade-keyed datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits`, `wikidata:resolve_taxon` |
 | `pathway.kegg.id` | A KEGG pathway id. | `uniprot:map_from_accession` | — |
 | `pathway.reactome.id` | A Reactome pathway id. | `reactome:list_pathways`, `uniprot:map_from_accession` | `reactome:describe_pathway` |
 | `pdb.id` | A PDB / PDBe structure id. | `pdbe:list_structures`, `uniprot:map_from_accession` | `pdbe:describe_structure`, `uniprot:map_to_accession` |
@@ -43,6 +43,8 @@ Registered bridge keys — what links weavers together.
 | `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:map_from_accession` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
+| `wikidata.qid` | Wikidata item id (Qxxxx) for one taxon — joins Wikidata/Wikipedia datasets. | `wikidata:resolve_taxon` | — |
+| `wikipedia.title` | English Wikipedia article title for one taxon — the pageviews join key. | `wikidata:resolve_taxon` | `wikipedia:describe_pageviews` |
 
 ## Leaf outputs
 
@@ -93,6 +95,7 @@ Descriptive payload fields; nothing joins on them.
 | `ncbi.taxon.match_type` | How the name resolved to this taxid — exact, synonym, fuzzy, or taxid. | `ncbi:ncbi.resolve_name` | — |
 | `ncbi.taxon.parent_id` | The parent taxon of this organism. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.review_required` | Flag: the name match was ambiguous. | `ncbi:ncbi.resolve_name` | — |
+| `organism.vernacular_names` | Common (vernacular) names for one taxon, from Wikidata. | `wikidata:resolve_taxon` | — |
 | `orthodb.group` | This protein's OrthoDB orthologous-group id. | `uniprot:map_from_accession` | — |
 | `pathway.reactome.count` | How many Reactome pathways this protein is in. | `reactome:list_pathways` | — |
 | `pathway.reactome.detail` | Full detail of one Reactome pathway — name, species, disease flag, type. | `reactome:describe_pathway` | — |
@@ -126,3 +129,4 @@ Descriptive payload fields; nothing joins on them.
 | `structure.pdb.records` | This protein's PDB structures — id, method, resolution, coverage. | `pdbe:list_structures` | — |
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
+| `wikipedia.pageviews` | Recent English-Wikipedia pageview count for one article — a popularity proxy. | `wikipedia:describe_pageviews` | — |

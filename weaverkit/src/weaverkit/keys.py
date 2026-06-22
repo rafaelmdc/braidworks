@@ -20,6 +20,8 @@ SHARED_KEYS: dict[str, str] = {
     "ncbi.taxon.lineage": "An organism's ranked lineage, from species up to root.",
     "ncbi.taxon.rank": "An organism's taxonomic rank, e.g. species or genus.",
     "gtdb.taxon.id": "GTDB genome-based taxonomy id for one organism.",
+    "wikidata.qid": "Wikidata item id (Qxxxx) for one taxon — joins Wikidata/Wikipedia datasets.",
+    "wikipedia.title": "English Wikipedia article title for one taxon — the pageviews join key.",
     # Molecular layer (uniprot_weaver hinge + hubs)
     "protein.query": "The text you start from — a gene symbol, protein name, or accession.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
@@ -51,6 +53,9 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    # wikidata_weaver / wikipedia_weaver leaf outputs
+    "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
+    "wikipedia.pageviews": "Recent English-Wikipedia pageview count for one article — a popularity proxy.",
     # ncbi_weaver leaf outputs
     "ncbi.taxon.parent_id": "The parent taxon of this organism.",
     "ncbi.taxon.match_type": "How the name resolved to this taxid — exact, synonym, fuzzy, or taxid.",

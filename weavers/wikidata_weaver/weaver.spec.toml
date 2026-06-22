@@ -1,0 +1,49 @@
+# wikidata_weaver — taxon scientific name -> Wikidata QID, vernacular names, and the
+# English Wikipedia article title. The names + title feed Cladewright's pool
+# enrichment (common names) and chain into wikipedia_weaver for pageviews (fame).
+[weaver]
+db_name = "wikidata"
+weaver_id = "wikidata"
+kind = "resolver"
+title = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
+version = "0.1.2"
+license = "CC0-1.0"
+source_url = "https://www.wikidata.org/"
+citation = "Wikidata, the free knowledge base. https://www.wikidata.org/"
+attribution = "Wikidata contributors (CC0)"
+fingerprint_source = "query-month"
+backends = ["api"]
+# Real SPARQL JSON bindings for ?item wdt:P225 "Ursus arctos" (taxon name),
+# OPTIONAL enwiki sitelink + OPTIONAL English vernacular (P1843).
+source_sample = """
+{ "head": { "vars": ["item", "article", "vn"] },
+  "results": { "bindings": [
+    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q36341" },
+      "article": { "type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear" },
+      "vn": { "xml:lang": "en", "type": "literal", "value": "Brown Bear" } }
+  ] } }
+"""
+
+[[capability]]
+id = "resolve_taxon"
+consumes = ["organism.scientific_name"]
+backends = ["api"]
+always_computed_groups = ["core"]   # name -> QID is always resolved first
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["wikidata.qid", "wikipedia.title"]
+
+  [[capability.group]]
+  id = "names"
+  outputs = ["organism.vernacular_names"]
+
+  [[capability.parameter]]
+  name = "expected_rank"
+  type = "string"
+  description = "Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour)."
+
+[[golden]]
+capability = "resolve_taxon"
+input = { "organism.scientific_name" = "Ursus arctos" }
+expect = { "wikidata.qid" = "Q36341" }

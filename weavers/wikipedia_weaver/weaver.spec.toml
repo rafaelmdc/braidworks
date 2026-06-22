@@ -1,0 +1,40 @@
+# wikipedia_weaver — English Wikipedia article title -> recent pageview count, a
+# popularity proxy. Cladewright uses it as the "fame" score that ranks the playable
+# pool. Chains off wikidata_weaver (which produces wikipedia.title).
+[weaver]
+db_name = "wikipedia"
+weaver_id = "wikipedia"
+kind = "lookup"
+title = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
+version = "0.1.0"
+license = "CC0-1.0"
+source_url = "https://wikimedia.org/api/rest_v1/"
+citation = "Wikimedia REST API — pageviews. https://wikimedia.org/api/rest_v1/"
+attribution = "Wikimedia Foundation"
+fingerprint_source = "window-month"
+backends = ["api"]
+# Real Wikimedia pageviews JSON for article "Brown_bear" (monthly granularity).
+source_sample = """
+{"items":[
+  {"project":"en.wikipedia","article":"Brown_bear","granularity":"monthly",
+   "timestamp":"2025010100","access":"all-access","agent":"all-agents","views":94587},
+  {"project":"en.wikipedia","article":"Brown_bear","granularity":"monthly",
+   "timestamp":"2025020100","access":"all-access","agent":"all-agents","views":84187}
+]}
+"""
+
+[[capability]]
+id = "describe_pageviews"
+consumes = ["wikipedia.title"]
+backends = ["api"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["wikipedia.pageviews"]
+
+[[golden]]
+capability = "describe_pageviews"
+input = { "wikipedia.title" = "Brown_bear" }
+# Sum of the two canned fixture months (94587 + 84187). Golden runs against the
+# offline fixture under --strict, so this is deterministic.
+expect = { "wikipedia.pageviews" = 178774 }

@@ -21,3 +21,5 @@ string	list_interactions	lookup	none	api	protein.uniprot.accession	protein.query
 uniprot	resolve_protein	lookup	none	api	protein.query	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length	
 uniprot	map_to_accession	lookup	none	api	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;gene.symbol;refseq.protein.id;gene.hgnc.id;nucleotide.insdc.accession;pdb.id	protein.uniprot.accession;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
 uniprot	map_from_accession	lookup	none	api	protein.uniprot.accession	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;pathway.kegg.id;pathway.reactome.id;refseq.protein.id;orthodb.group;eggnog.group;chembl.id;drugbank.id;pdb.id;string.id;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
+wikidata	resolve_taxon	resolver	none	api	organism.scientific_name	wikidata.qid;wikipedia.title;organism.vernacular_names	
+wikipedia	describe_pageviews	lookup	none	api	wikipedia.title	wikipedia.pageviews	
