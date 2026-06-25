@@ -10,7 +10,6 @@ from __future__ import annotations
 from braidworks.core import (
     Capability,
     OutputGroup,
-    Parameter,
     Provenance,
     WeaverManifest,
 )

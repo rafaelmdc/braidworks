@@ -13,6 +13,7 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import unquote
@@ -39,13 +40,18 @@ _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gm
 #   since they live on a vernacular item, not the family.
 # wikibase:sitelinks is the item's total sitelink count — a language-reach proxy used
 # as the FALLBACK "fame" signal for taxa with no enwiki article (so no pageviews).
+# ?rank (P105 taxon rank, English label) is pulled so a caller can disambiguate a
+# cross-code homonym — the same scientific name on several items (e.g. "Pholidota" is
+# both an orchid genus and the pangolin order) — by the expected rank. It's a direct
+# property (cheap), unlike a P171* kingdom-closure (which times out at batch scale).
 # ?sname is echoed so we can align rows back to the input batch.
 _SPARQL = """
-SELECT ?sname ?item ?article ?sitelinks ?vn WHERE {{
+SELECT ?sname ?item ?article ?sitelinks ?vn ?rankLabel WHERE {{
   VALUES ?sname {{ {values} }}
   ?item wdt:P225 ?sname .
   OPTIONAL {{ ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }}
   OPTIONAL {{ ?item wikibase:sitelinks ?sitelinks . }}
+  OPTIONAL {{ ?item wdt:P105 ?rank . ?rank rdfs:label ?rankLabel . FILTER(LANG(?rankLabel) = "en") }}
   OPTIONAL {{
     {{ ?item rdfs:label ?vn . }} UNION {{ ?item skos:altLabel ?vn . }}
     UNION {{ ?item wdt:P1843 ?vn . }}
@@ -73,6 +79,18 @@ def _sparql_literal(value: str) -> str:
 # chunks so a single query stays well within the query service's time/size budget.
 _CHUNK = 200
 
+# WDQS is flaky under batch load — it intermittently times out, 429/503s, or (the nasty
+# one) returns HTTP 200 with a truncated/garbled body that isn't valid JSON. Retry a chunk a
+# few times with exponential backoff before giving up, so a transient hiccup neither crashes
+# the build nor silently drops a whole chunk's enrichment.
+_MAX_ATTEMPTS = 4
+_BACKOFF_BASE = 0.5  # seconds: 0.5, 1, 2 between attempts
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+class _ChunkFailed(Exception):
+    """A chunk that exhausted its retries — its names are marked ERROR, others are unaffected."""
+
 
 class WikidataApiBackend(BackendBase):
     """api backend — calls the keyless Wikidata Query Service."""
@@ -99,6 +117,41 @@ class WikidataApiBackend(BackendBase):
         # refresh monthly (matches the spec's "query-month" source of truth).
         return "wikidata-api-" + datetime.now(timezone.utc).strftime("%Y-%m")
 
+    async def _post_chunk(self, query: str) -> dict[str, Any]:
+        """POST one chunk and return the parsed SPARQL JSON, retrying transient failures.
+
+        A genuine not-found status returns an empty result (not an error). A non-transient
+        client error (e.g. a malformed query → 400) is not retried. Raises ``_ChunkFailed``
+        once the attempts are exhausted."""
+        last = "unknown error"
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                # POST (not GET) so a large VALUES batch isn't capped by URL length.
+                resp = await self._http().post(
+                    "/sparql",
+                    data={"query": query, "format": "json"},
+                    headers={
+                        "Accept": "application/sparql-results+json",
+                        "User-Agent": _USER_AGENT,
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json()  # may raise ValueError (JSONDecodeError) on a bad body
+            except httpx.HTTPStatusError as exc:
+                code = exc.response.status_code
+                if is_not_found_status(code):
+                    return {"results": {"bindings": []}}  # nothing matched — not an error
+                last = f"HTTP {code}"
+                if code not in _RETRY_STATUS:
+                    break  # client error (e.g. 400) won't fix on retry
+            except httpx.HTTPError as exc:  # timeouts, connection resets, …
+                last = str(exc)
+            except ValueError as exc:  # JSONDecodeError ⊂ ValueError: 200 with a bad/partial body
+                last = f"malformed response: {exc}"
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_BASE * (2**attempt))
+        raise _ChunkFailed(last)
+
     async def fetch(
         self,
         capability_id: str,
@@ -113,38 +166,42 @@ class WikidataApiBackend(BackendBase):
         # Distinct, non-empty names for the VALUES clause (dedup the wire request).
         distinct = sorted({n for n in names if n})
         rows_by_name: dict[str, dict[str, dict[str, Any]]] = {n: {} for n in distinct}
-        error: str | None = None
+        # A chunk that exhausts its retries marks ONLY its own names ERROR — a transient WDQS
+        # failure must not nuke the enrichment of every other name in the batch.
+        failed: set[str] = set()
 
         for start in range(0, len(distinct), _CHUNK):
             chunk = distinct[start : start + _CHUNK]
             query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in chunk))
             try:
-                # POST (not GET) so a large VALUES batch isn't capped by URL length.
-                resp = await self._http().post(
-                    "/sparql",
-                    data={"query": query, "format": "json"},
-                    headers={
-                        "Accept": "application/sparql-results+json",
-                        "User-Agent": _USER_AGENT,
-                    },
-                )
-                resp.raise_for_status()
-                _accumulate(resp.json(), rows_by_name)
-            except httpx.HTTPStatusError as exc:
-                if not is_not_found_status(exc.response.status_code):
-                    error = f"Wikidata query failed: HTTP {exc.response.status_code}"
-            except httpx.HTTPError as exc:
-                error = f"Wikidata query failed: {exc}"
+                _accumulate(await self._post_chunk(query), rows_by_name)
+            except _ChunkFailed:
+                failed.update(chunk)
+
+        # Optional disambiguator: when a name resolves to several items, prefer the one
+        # whose taxon rank (P105) matches this. Omitted (default) → historical behaviour.
+        expected_rank = str((params or {}).get("expected_rank") or "").strip().lower()
 
         records: list[ResolverRecord] = []
         for name, query in zip(names, queries):
-            if error is not None:
+            if name in failed:
                 records.append(
                     ResolverRecord(query=query, status=MatchStatus.ERROR, values={},
-                                   candidates=[], error=error)
+                                   candidates=[], error="Wikidata query failed after retries")
                 )
                 continue
             items = rows_by_name.get(name, {})
+            # Homonym across nomenclature codes ("Pholidota" = orchid genus + pangolin
+            # order): if the caller told us the expected rank and exactly one candidate
+            # has it, collapse to that one — a single RESOLVED instead of AMBIGUOUS.
+            if len(items) > 1 and expected_rank:
+                ranked = {
+                    qid: fields
+                    for qid, fields in items.items()
+                    if (fields.get("rank") or "").lower() == expected_rank
+                }
+                if len(ranked) == 1:
+                    items = ranked
             if not items:
                 records.append(
                     ResolverRecord(query=query, status=MatchStatus.NO_MATCH, values={},
@@ -173,7 +230,7 @@ class WikidataApiBackend(BackendBase):
 def _accumulate(
     payload: dict[str, Any], rows_by_name: dict[str, dict[str, dict[str, Any]]]
 ) -> None:
-    """Fold SPARQL bindings into name -> qid -> {title, vernaculars}."""
+    """Fold SPARQL bindings into name -> qid -> {title, sitelinks, vernaculars, rank}."""
     for binding in payload.get("results", {}).get("bindings", []):
         sname = binding.get("sname", {}).get("value")
         item = binding.get("item", {}).get("value")
@@ -181,7 +238,7 @@ def _accumulate(
             continue
         qid = _qid(item)
         fields = rows_by_name[sname].setdefault(
-            qid, {"title": None, "sitelinks": None, "vernaculars": []}
+            qid, {"title": None, "sitelinks": None, "vernaculars": [], "rank": None}
         )
         if "article" in binding and fields["title"] is None:
             fields["title"] = _title(binding["article"]["value"])
@@ -190,6 +247,8 @@ def _accumulate(
                 fields["sitelinks"] = int(binding["sitelinks"]["value"])
             except (ValueError, KeyError):
                 pass
+        if "rankLabel" in binding and fields["rank"] is None:
+            fields["rank"] = binding["rankLabel"]["value"]
         if "vn" in binding:
             vn = binding["vn"]["value"]
             if vn not in fields["vernaculars"]:

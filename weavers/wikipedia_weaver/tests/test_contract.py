@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from braidworks.core import Strand, StrandSet
-from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
+from braidworks.testing.contract import WeaverOrderContractTests
 
 from wikipedia_weaver import factory, vocab
 

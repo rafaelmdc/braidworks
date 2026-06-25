@@ -31,7 +31,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Iterable
 
-from braidworks.core import BackendConfigurationError
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
 from braidworks.core.localdb import ensure_local_db
