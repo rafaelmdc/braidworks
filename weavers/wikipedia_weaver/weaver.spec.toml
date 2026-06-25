@@ -11,9 +11,11 @@ license = "CC0-1.0"
 source_url = "https://wikimedia.org/api/rest_v1/"
 citation = "Wikimedia REST API — pageviews. https://wikimedia.org/api/rest_v1/"
 attribution = "Wikimedia Foundation"
-fingerprint_source = "window-month"
-backends = ["api"]
-# Real Wikimedia pageviews JSON for article "Brown_bear" (monthly granularity).
+fingerprint_source = "window-month (api) / dump-month recorded at DB build (local)"
+backends = ["api", "local"]
+# Two source shapes. api: Wikimedia REST pageviews JSON (per-article, monthly).
+# local: a line of a pageview_complete monthly dump (space-separated; the field
+# before the trailing hourly-distribution code is the month total).
 source_sample = """
 {"items":[
   {"project":"en.wikipedia","article":"Brown_bear","granularity":"monthly",
@@ -21,12 +23,21 @@ source_sample = """
   {"project":"en.wikipedia","article":"Brown_bear","granularity":"monthly",
    "timestamp":"2025020100","access":"all-access","agent":"all-agents","views":84187}
 ]}
+en.wikipedia Brown_bear 4623963 desktop 94587 J1K2…
+en.m.wikipedia Brown_bear 4623963 mobile-web 84187 G3H4…
 """
+
+# The local backend's bulk artifact: a monthly pageview_complete dump, built into a
+# title->views SQLite. archive_url is month-templated at build time (see setup.py).
+[bulk]
+backend = "local"
+archive_url = "https://dumps.wikimedia.org/other/pageview_complete/monthly/"
+filename = "wikipedia_pageviews.sqlite"
 
 [[capability]]
 id = "describe_pageviews"
 consumes = ["wikipedia.title"]
-backends = ["api"]
+backends = ["api", "local"]
 
   [[capability.group]]
   id = "core"

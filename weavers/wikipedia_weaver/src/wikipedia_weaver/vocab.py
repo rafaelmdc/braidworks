@@ -29,7 +29,12 @@ PROVENANCE = Provenance(
 
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
-    """Declare every capability for the wired-in backends."""
+    """Declare every capability for the wired-in backends.
+
+    ``describe_pageviews`` is served by either backend — the live REST api or the
+    dump-built local SQLite — so it's declared for whichever are wired.
+    """
+    served = tuple(b for b in ("api", "local") if b in backends)
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
@@ -41,7 +46,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"wikipedia.title"}),
                 produces=frozenset({"wikipedia.pageviews"}),
                 output_groups=(OutputGroup(id="core", outputs=frozenset({"wikipedia.pageviews"})),),
-                backends=("api",),
+                backends=served,
             ),
         ),
     )
