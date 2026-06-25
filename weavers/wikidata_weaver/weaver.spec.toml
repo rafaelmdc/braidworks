@@ -14,12 +14,13 @@ attribution = "Wikidata contributors (CC0)"
 fingerprint_source = "query-month"
 backends = ["api"]
 # Real SPARQL JSON bindings for ?item wdt:P225 "Ursus arctos" (taxon name),
-# OPTIONAL enwiki sitelink + OPTIONAL English vernacular (P1843).
+# OPTIONAL enwiki sitelink, OPTIONAL sitelink count (fame fallback) + vernacular (P1843).
 source_sample = """
-{ "head": { "vars": ["item", "article", "vn"] },
+{ "head": { "vars": ["item", "article", "sitelinks", "vn"] },
   "results": { "bindings": [
     { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q36341" },
       "article": { "type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear" },
+      "sitelinks": { "type": "literal", "datatype": "http://www.w3.org/2001/XMLSchema#integer", "value": "142" },
       "vn": { "xml:lang": "en", "type": "literal", "value": "Brown Bear" } }
   ] } }
 """
@@ -32,7 +33,7 @@ always_computed_groups = ["core"]   # name -> QID is always resolved first
 
   [[capability.group]]
   id = "core"
-  outputs = ["wikidata.qid", "wikipedia.title"]
+  outputs = ["wikidata.qid", "wikipedia.title", "wikidata.sitelinks"]
 
   [[capability.group]]
   id = "names"

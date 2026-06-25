@@ -37,12 +37,15 @@ _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gm
 #   "common name of a group of organisms" item that points here via P13176 ("taxon
 #   known by this common name") — the latter is how "seal"/"monkey"/"kangaroo" resolve,
 #   since they live on a vernacular item, not the family.
+# wikibase:sitelinks is the item's total sitelink count — a language-reach proxy used
+# as the FALLBACK "fame" signal for taxa with no enwiki article (so no pageviews).
 # ?sname is echoed so we can align rows back to the input batch.
 _SPARQL = """
-SELECT ?sname ?item ?article ?vn WHERE {{
+SELECT ?sname ?item ?article ?sitelinks ?vn WHERE {{
   VALUES ?sname {{ {values} }}
   ?item wdt:P225 ?sname .
   OPTIONAL {{ ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }}
+  OPTIONAL {{ ?item wikibase:sitelinks ?sitelinks . }}
   OPTIONAL {{
     {{ ?item rdfs:label ?vn . }} UNION {{ ?item skos:altLabel ?vn . }}
     UNION {{ ?item wdt:P1843 ?vn . }}
@@ -177,9 +180,16 @@ def _accumulate(
         if not sname or not item or sname not in rows_by_name:
             continue
         qid = _qid(item)
-        fields = rows_by_name[sname].setdefault(qid, {"title": None, "vernaculars": []})
+        fields = rows_by_name[sname].setdefault(
+            qid, {"title": None, "sitelinks": None, "vernaculars": []}
+        )
         if "article" in binding and fields["title"] is None:
             fields["title"] = _title(binding["article"]["value"])
+        if "sitelinks" in binding and fields["sitelinks"] is None:
+            try:
+                fields["sitelinks"] = int(binding["sitelinks"]["value"])
+            except (ValueError, KeyError):
+                pass
         if "vn" in binding:
             vn = binding["vn"]["value"]
             if vn not in fields["vernaculars"]:
@@ -190,6 +200,8 @@ def _values(qid: str, fields: dict[str, Any]) -> dict[str, Any]:
     values: dict[str, Any] = {"wikidata.qid": qid}
     if fields.get("title"):
         values["wikipedia.title"] = fields["title"]
+    if fields.get("sitelinks") is not None:
+        values["wikidata.sitelinks"] = fields["sitelinks"]
     if fields.get("vernaculars"):
         values["organism.vernacular_names"] = list(fields["vernaculars"])
     return values

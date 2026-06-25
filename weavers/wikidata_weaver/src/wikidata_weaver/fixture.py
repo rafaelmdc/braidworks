@@ -23,19 +23,26 @@ _URSUS_ARCTOS = {
                 "sname": {"type": "literal", "value": "Ursus arctos"},
                 "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q36341"},
                 "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear"},
+                "sitelinks": {"type": "literal",
+                              "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+                              "value": "142"},
                 "vn": {"xml:lang": "en", "type": "literal", "value": "Brown Bear"},
             },
             {
                 "sname": {"type": "literal", "value": "Ursus arctos"},
                 "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q36341"},
                 "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear"},
+                "sitelinks": {"type": "literal",
+                              "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+                              "value": "142"},
                 "vn": {"xml:lang": "en", "type": "literal", "value": "grizzly bear"},
             },
         ]
     },
 }
 
-_EMPTY = {"head": {"vars": ["sname", "item", "article", "vn"]}, "results": {"bindings": []}}
+_EMPTY = {"head": {"vars": ["sname", "item", "article", "sitelinks", "vn"]},
+          "results": {"bindings": []}}
 
 
 def _handler(request: httpx.Request) -> httpx.Response:

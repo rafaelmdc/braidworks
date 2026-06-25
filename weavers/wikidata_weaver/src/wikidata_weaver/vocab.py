@@ -40,10 +40,16 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 id="resolve_taxon",
                 consumes=frozenset({"organism.scientific_name"}),
                 produces=frozenset(
-                    {"organism.vernacular_names", "wikidata.qid", "wikipedia.title"}
+                    {"organism.vernacular_names", "wikidata.qid", "wikipedia.title",
+                     "wikidata.sitelinks"}
                 ),
                 output_groups=(
-                    OutputGroup(id="core", outputs=frozenset({"wikidata.qid", "wikipedia.title"})),
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikidata.qid", "wikipedia.title", "wikidata.sitelinks"}
+                        ),
+                    ),
                     OutputGroup(id="names", outputs=frozenset({"organism.vernacular_names"})),
                 ),
                 backends=("api",),
