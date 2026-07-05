@@ -11,6 +11,7 @@ members = [
     "disbiome-weaver",
     "example-weaver",
     "faprotax-weaver",
+    "gtdb-weaver",
     "ncbi-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
@@ -285,6 +286,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/d5/b1/e5b92c59d2c37817e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/35/380b9a5922f4340e51c309cde09e5bd32e62f02302971bee30dc15aa0624/fastapi-0.137.1-py3-none-any.whl", hash = "sha256:64f6983c59e45c4b9fdc44e57cb8035c2451ee91ea8e8ec042aca37de7cf6b69", size = 121877, upload-time = "2026-06-15T11:28:19.523Z" },
 ]
+
+[[package]]
+name = "gtdb-weaver"
+version = "0.1.0"
+source = { editable = "weavers/gtdb_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "h11"
@@ -865,7 +892,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.4.3"
+version = "0.4.4"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
