@@ -3,6 +3,7 @@ alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alp
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph	
 disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
+faprotax	describe_ecology	lookup	none	local	ncbi.taxon.lineage	microbe.ecology.functional_groups	
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.list_children	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.id;ncbi.taxon.children_count;ncbi.taxon.children_records	
@@ -21,5 +22,5 @@ string	list_interactions	lookup	none	api	protein.uniprot.accession	protein.query
 uniprot	resolve_protein	lookup	none	api	protein.query	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length	
 uniprot	map_to_accession	lookup	none	api	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;gene.symbol;refseq.protein.id;gene.hgnc.id;nucleotide.insdc.accession;pdb.id	protein.uniprot.accession;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
 uniprot	map_from_accession	lookup	none	api	protein.uniprot.accession	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;pathway.kegg.id;pathway.reactome.id;refseq.protein.id;orthodb.group;eggnog.group;chembl.id;drugbank.id;pdb.id;string.id;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
-wikidata	resolve_taxon	resolver	none	api	organism.scientific_name	wikidata.qid;wikipedia.title;organism.vernacular_names	
-wikipedia	describe_pageviews	lookup	none	api	wikipedia.title	wikipedia.pageviews	
+wikidata	resolve_taxon	resolver	none	api	organism.scientific_name	wikidata.qid;wikipedia.title;wikidata.sitelinks;organism.vernacular_names	
+wikipedia	describe_pageviews	lookup	none	api;local	wikipedia.title	wikipedia.pageviews	
