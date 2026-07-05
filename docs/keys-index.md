@@ -28,7 +28,7 @@ Registered bridge keys — what links weavers together.
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
-| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `example:describe_traits`, `gtdb:describe_gtdb_taxonomy`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
+| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `agora:describe_metabolic_reconstruction`, `example:describe_traits`, `gtdb:describe_gtdb_taxonomy`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
@@ -84,6 +84,8 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.ecology.functional_groups` | FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration). | `faprotax:describe_ecology` | — |
+| `microbe.metabolism.reactions` | The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}. | `agora:describe_metabolic_reconstruction` | — |
+| `microbe.metabolism.reconstruction` | This organism's AGORA2 genome-scale metabolic reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome). | `agora:describe_metabolic_reconstruction` | — |
 | `microbe.trait.cell_shape` | This microbe's cell shape — rod, coccus, … | `bacdive:describe_traits` | — |
 | `microbe.trait.gram_stain` | This microbe's Gram stain — positive or negative. | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.metabolism` | How this microbe gets energy — aerobe, anaerobe, … | — | — |

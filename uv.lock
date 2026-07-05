@@ -4,6 +4,7 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
+    "agora-weaver",
     "alphafold-weaver",
     "bacdive-weaver",
     "braidworks-arq",
@@ -22,6 +23,30 @@ members = [
     "wikidata-weaver",
     "wikipedia-weaver",
 ]
+
+[[package]]
+name = "agora-weaver"
+version = "0.1.0"
+source = { editable = "weavers/agora_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "alphafold-weaver"
@@ -892,7 +917,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.4.4"
+version = "0.4.5"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
