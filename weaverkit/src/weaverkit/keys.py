@@ -101,6 +101,11 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, "
     "method, sample, host.",
     "microbe.disease.records": "Full Disbiome experiment rows linking this microbe to diseases.",
+    # AGORA2 metabolic-reconstruction outputs (agora_weaver)
+    "microbe.metabolism.reconstruction": "This organism's AGORA2 genome-scale metabolic "
+    "reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome).",
+    "microbe.metabolism.reactions": "The reaction repertoire of this organism's AGORA2 "
+    "reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}.",
     # uniprot_weaver leaf outputs (descriptive protein-entry fields)
     "protein.name": "This protein's recommended name.",
     "protein.gene": "The gene that codes for this protein.",

@@ -1,0 +1,62 @@
+# agora_weaver — AGORA2 genome-scale metabolic reconstructions (VMH).
+# A lookup weaver: an organism (by NCBI taxid) -> its AGORA2 reconstruction(s)
+# (id + source genome) and, on request, the reaction repertoire of those models.
+# One local backend:
+#   local: core = a bundled taxid -> {reconstruction_id, gcf} crosswalk (all 7,302
+#          AGORA2 strains, offline); reactions = the per-model reaction repertoire
+#          built by `agora ensure` from the AGORA2 SBML archive (consent-gated).
+# Consumes only taxid — name->taxid is ncbi_weaver's job; the braider chains them.
+[weaver]
+db_name = "agora"
+weaver_id = "agora"
+kind = "lookup"
+title = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
+version = "0.1.0"
+license = "CC-BY-NC-4.0"
+citation = "https://doi.org/10.1038/s41587-022-01628-0"
+attribution = "AGORA2 / Virtual Metabolic Human (VMH), Heinken et al., Nat Biotechnol 2023 (data CC BY-NC 4.0)"
+source_url = "https://www.vmh.life"
+fingerprint_source = "AGORA2 release tag for the bundled crosswalk (v2.01); reaction DB: content hash of the parsed SBML archive"
+backends = ["local"]
+# Real excerpts. (1) The bundled crosswalk row (from AGORA2 Supplementary Table S1):
+# ncbi_taxid -> reconstruction id (MicrobeID) + source RefSeq assembly (GCF).
+# (2) A reaction from that model's SBML (id 'R_<VMH abbreviation>'), enriched with the
+# VMH /_api/reactions/ crosswalk (subsystem / EC / KEGG / Rhea).
+source_sample = """
+# AGORA2 Supplementary Table S1 (selected columns)
+ncbi_taxid	microbe_id	gcf
+592010	Abiotrophia_defectiva_ATCC_49176	GCF_000160075.2
+
+# AGORA2_SBML.zip :: Abiotrophia_defectiva_ATCC_49176.xml  (reaction element)
+<reaction id="R_ACGAMK" name="N-Acetylglucosamine kinase" ...>
+# VMH /_api/reactions/?abbreviation=ACGAMK -> {"subsystem":"Aminosugar metabolism","ecnumber":"2.7.1.59","keggId":"R02326"}
+"""
+
+# One organism (by taxid) -> its AGORA2 reconstruction(s) + optional reaction repertoire.
+[[capability]]
+id = "describe_metabolic_reconstruction"
+consumes = ["ncbi.taxon.id"]
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["microbe.metabolism.reconstruction"]
+
+  [[capability.group]]
+  id = "reactions"
+  outputs = ["microbe.metabolism.reactions"]
+
+# Goldens run against build_agora_weaver_fixture (bundled crosswalk + a tiny fixture
+# reaction DB), so `verify --strict` is reproducible offline.
+# core: Abiotrophia defectiva (taxid 592010) -> its one AGORA2 reconstruction.
+[[golden]]
+capability = "describe_metabolic_reconstruction"
+input = { "ncbi.taxon.id" = "592010" }
+expect = { "microbe.metabolism.reconstruction" = [ { reconstruction_id = "Abiotrophia_defectiva_ATCC_49176", gcf_id = "GCF_000160075.2" } ] }
+
+# reactions: the same organism's repertoire (from the fixture reaction DB) — two real
+# AGORA2 reactions enriched with their real VMH subsystem/EC.
+[[golden]]
+capability = "describe_metabolic_reconstruction"
+input = { "ncbi.taxon.id" = "592010" }
+expect = { "microbe.metabolism.reactions" = [ { reconstruction_id = "Abiotrophia_defectiva_ATCC_49176", abbreviation = "23DHMPO", subsystem = "Valine, leucine, and isoleucine metabolism", ec = "1.1.1.86" }, { reconstruction_id = "Abiotrophia_defectiva_ATCC_49176", abbreviation = "26DAPLLAT", subsystem = "Lysine metabolism", ec = "2.6.1.83" } ] }
