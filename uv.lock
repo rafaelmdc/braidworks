@@ -10,6 +10,7 @@ members = [
     "braidworks-core",
     "disbiome-weaver",
     "example-weaver",
+    "faprotax-weaver",
     "ncbi-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
@@ -225,6 +226,30 @@ provides-extras = ["test"]
 name = "example-weaver"
 version = "1.0.2"
 source = { editable = "weavers/example_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
+
+[[package]]
+name = "faprotax-weaver"
+version = "0.1.0"
+source = { editable = "weavers/faprotax_weaver" }
 dependencies = [
     { name = "braidworks-core" },
 ]
@@ -840,7 +865,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.4.2"
+version = "0.4.3"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

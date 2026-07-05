@@ -29,7 +29,7 @@ Registered bridge keys — what links weavers together.
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | — | — |
 | `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `example:describe_traits`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
-| `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
+| `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
 | `nucleotide.insdc.accession` | INSDC nucleotide accession (GenBank/EMBL/DDBJ). | — | `uniprot:map_to_accession` |
@@ -82,6 +82,7 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.ecology.functional_groups` | FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration). | `faprotax:describe_ecology` | — |
 | `microbe.trait.cell_shape` | This microbe's cell shape — rod, coccus, … | `bacdive:describe_traits` | — |
 | `microbe.trait.gram_stain` | This microbe's Gram stain — positive or negative. | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.metabolism` | How this microbe gets energy — aerobe, anaerobe, … | — | — |
@@ -130,3 +131,11 @@ Descriptive payload fields; nothing joins on them.
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
 | `wikipedia.pageviews` | Recent English-Wikipedia pageview count for one article — a popularity proxy. | `wikipedia:describe_pageviews` | — |
+
+## Uncatalogued (naming-drift risk)
+
+Produced but in neither registry — catalog in `weaverkit.keys` to keep names stable.
+
+| Key | Description | Produced by | Consumed by |
+| --- | --- | --- | --- |
+| `wikidata.sitelinks` | — | `wikidata:resolve_taxon` | — |

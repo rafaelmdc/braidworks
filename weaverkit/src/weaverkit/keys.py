@@ -88,6 +88,10 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.trait.spore_formation": "Whether this microbe forms spores.",
     "microbe.trait.oxygen_tolerance": "How this microbe relates to oxygen — aerobe, anaerobe, facultative, …",
     "microbe.trait.optimum_ph": "The pH this microbe grows best at.",
+    # microbe ecological-function outputs (faprotax_weaver)
+    "microbe.ecology.functional_groups": "FAPROTAX ecological/metabolic functional "
+    "groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, "
+    "sulfate_respiration).",
     # microbe–disease association outputs (disbiome_weaver)
     "microbe.disease.names": "The diseases this microbe is linked to.",
     "microbe.disease.count": "How many disease-association experiments mention this microbe.",

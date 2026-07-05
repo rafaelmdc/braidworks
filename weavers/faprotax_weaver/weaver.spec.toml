@@ -1,0 +1,53 @@
+# faprotax_weaver — FAPROTAX (Functional Annotation of Prokaryotic Taxa).
+# A lookup weaver: an organism's NCBI lineage -> the ecological/metabolic
+# functional groups its clade is affiliated with (methanotrophy, nitrification,
+# sulfate_respiration, ...). FAPROTAX maps clades (genus/species/higher) to
+# ~90 functions; a taxon inherits a function if any ancestor in its lineage
+# matches one of that function's member patterns. Data ships bundled (local
+# backend, ~950 KB FAPROTAX.txt). A taxon matching zero groups is a miss.
+[weaver]
+db_name = "faprotax"
+weaver_id = "faprotax"
+kind = "lookup"
+title = "FAPROTAX ecological function (organism lineage -> functional groups)"
+version = "0.1.0"
+license = "Open"
+citation = "https://doi.org/10.1126/science.aaf4507"
+attribution = "FAPROTAX (Louca, Parfrey & Doebeli 2016); DB (c) Stilianos Louca"
+source_url = "https://pages.uoregon.edu/slouca/LoucaLab/archive/FAPROTAX/"
+fingerprint_source = "bundled FAPROTAX.txt version (# Version: 1.2.12)"
+backends = ["local"]
+# Real excerpt of FAPROTAX.txt (v1.2.12): a functional-group header line
+# (name<TAB>attributes) followed by member taxon patterns (*Level*Level*, an
+# ordered case-insensitive lineage subsequence; text after # is a comment).
+source_sample = """
+methanotrophy	elements:C,H; main_element:C; electron_donor:C; electron_acceptor:variable; aerobic:variable; exclusively_prokaryotic:yes; light_dependent:no
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+*Archaea*ANME-2D*									# DOI:10.1038/nature12375
+*Methylococcaceae*									# DOI:10.1007/0-387-30745-1_15
+*Methylocystis*										# DOI:10.1099/ijs.0.64541-0
+*Methylothermus*thermalis*							# DOI:10.1099/ijs.0.040568-0
+"""
+
+# One organism's lineage -> the set of FAPROTAX functional groups its clade
+# is affiliated with. Deterministic; the output list is sorted.
+[[capability]]
+id = "describe_ecology"
+consumes = ["ncbi.taxon.lineage"]
+
+  [[capability.group]]
+  id = "ecology"
+  outputs = ["microbe.ecology.functional_groups"]
+
+# Goldens run against the bundled FAPROTAX.txt (no fixture needed — the data is
+# in-package, so `verify --strict` is reproducible offline). Inputs give a
+# minimal lineage (list of {name}); expected groups are the exact sorted match.
+[[golden]]
+capability = "describe_ecology"
+input = { "ncbi.taxon.lineage" = [ { name = "Methylococcaceae" }, { name = "Methylococcus" } ] }
+expect = { "microbe.ecology.functional_groups" = ["chemoheterotrophy", "hydrocarbon_degradation", "methanotrophy", "methylotrophy"] }
+
+[[golden]]
+capability = "describe_ecology"
+input = { "ncbi.taxon.lineage" = [ { name = "Desulfovibrionaceae" }, { name = "Desulfovibrio" } ] }
+expect = { "microbe.ecology.functional_groups" = ["respiration_of_sulfur_compounds", "sulfate_respiration"] }
