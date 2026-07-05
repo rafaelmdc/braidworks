@@ -62,6 +62,9 @@ OUTPUT_KEYS: dict[str, str] = {
     "ncbi.taxon.review_required": "Flag: the name match was ambiguous.",
     "ncbi.taxon.children_count": "How many child taxa this organism has at the requested rank.",
     "ncbi.taxon.children_records": "This organism's child taxa — taxid, name, rank.",
+    # gtdb_weaver leaf output (gtdb.taxon.id is a shared join key — see SHARED_KEYS)
+    "gtdb.lineage": "This organism's GTDB genome-based, rank-normalized lineage — "
+    "an ordered list of {rank, name} from domain to species.",
     # genome assembly outputs (ncbi_weaver list_genomes / describe_genome)
     "genome.assembly.count": "How many genome assemblies exist for this organism.",
     "genome.assembly.records": "Genome assemblies for this organism — accession, organism, level, RefSeq category.",

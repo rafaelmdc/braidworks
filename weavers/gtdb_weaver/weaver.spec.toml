@@ -1,0 +1,57 @@
+# gtdb_weaver — GTDB genome-based, rank-normalized taxonomy.
+# A lookup weaver: an organism (by NCBI taxid or scientific name) -> its GTDB
+# species id + rank-normalized lineage. Two backends (local preferred):
+#   local: authoritative NCBI-taxid / species-name -> GTDB crosswalk, built from
+#          GTDB metadata (bac120 + ar53) into a small SQLite by `gtdb ensure`.
+#   api:   live GTDB API (gtdb-api.ecogenomic.org) name search — online fallback.
+# consumes_any: dispatches on whichever input strand is present.
+[weaver]
+db_name = "gtdb"
+weaver_id = "gtdb"
+kind = "lookup"
+title = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
+version = "0.1.0"
+license = "CC-BY-SA-4.0"
+citation = "https://doi.org/10.1093/nar/gkab776"
+attribution = "GTDB (Genome Taxonomy Database), Parks et al."
+source_url = "https://gtdb.ecogenomic.org"
+fingerprint_source = "GTDB release tag recorded at DB build (e.g. R226); api: GTDB API contract"
+backends = ["local", "api"]
+# Real excerpts. (1) GTDB metadata TSV (selected columns of bac120_metadata.tsv) —
+# the local crosswalk source; gtdb_taxonomy is a ';'-joined rank-prefixed lineage.
+# (2) GTDB API /search/gtdb row — the api-backend source (gtdbTaxonomy field).
+source_sample = """
+# bac120_metadata.tsv (selected columns)
+accession	gtdb_representative	gtdb_taxonomy	ncbi_taxid
+RS_GCF_027889305.1	f	d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;f__Enterobacteriaceae;g__Enterobacter;s__Enterobacter hormaechei_C	158836
+
+# GET https://gtdb-api.ecogenomic.org/search/gtdb?search=Escherichia+coli
+{"rows":[{"accession":"GCA_000155005.1","ncbiOrgName":"Escherichia coli O157:H7 str. EC4024","gtdbTaxonomy":"d__Bacteria; p__Pseudomonadota; c__Gammaproteobacteria; o__Enterobacterales; f__Enterobacteriaceae; g__Escherichia; s__Escherichia coli","isGtdbSpeciesRep":false}]}
+"""
+
+# One organism (taxid OR name) -> GTDB species id + rank-normalized lineage.
+[[capability]]
+id = "describe_gtdb_taxonomy"
+consumes = ["ncbi.taxon.id", "organism.scientific_name"]
+consumes_any = true
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["gtdb.taxon.id"]
+
+  [[capability.group]]
+  id = "lineage"
+  outputs = ["gtdb.lineage"]
+
+# Goldens run against the bundled fixture crosswalk (build_gtdb_weaver_fixture),
+# so `verify --strict` is reproducible offline. E. coli by taxid and by name.
+[[golden]]
+capability = "describe_gtdb_taxonomy"
+input = { "ncbi.taxon.id" = "562" }
+expect = { "gtdb.taxon.id" = "s__Escherichia coli", "gtdb.lineage" = [ { rank = "domain", name = "Bacteria" }, { rank = "phylum", name = "Pseudomonadota" }, { rank = "class", name = "Gammaproteobacteria" }, { rank = "order", name = "Enterobacterales" }, { rank = "family", name = "Enterobacteriaceae" }, { rank = "genus", name = "Escherichia" }, { rank = "species", name = "Escherichia coli" } ] }
+
+[[golden]]
+capability = "describe_gtdb_taxonomy"
+input = { "organism.scientific_name" = "Escherichia coli" }
+expect = { "gtdb.taxon.id" = "s__Escherichia coli" }
