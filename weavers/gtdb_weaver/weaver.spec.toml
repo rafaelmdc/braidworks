@@ -10,7 +10,7 @@ db_name = "gtdb"
 weaver_id = "gtdb"
 kind = "lookup"
 title = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
-version = "0.1.0"
+version = "0.2.0"
 license = "CC-BY-SA-4.0"
 citation = "https://doi.org/10.1093/nar/gkab776"
 attribution = "GTDB (Genome Taxonomy Database), Parks et al."
@@ -18,8 +18,11 @@ source_url = "https://gtdb.ecogenomic.org"
 fingerprint_source = "GTDB release tag recorded at DB build (e.g. R226); api: GTDB API contract"
 backends = ["local", "api"]
 # Real excerpts. (1) GTDB metadata TSV (selected columns of bac120_metadata.tsv) —
-# the local crosswalk source; gtdb_taxonomy is a ';'-joined rank-prefixed lineage.
-# (2) GTDB API /search/gtdb row — the api-backend source (gtdbTaxonomy field).
+# the local crosswalk source; gtdb_taxonomy is a ';'-joined rank-prefixed lineage, and
+# `accession` is the genome id GTDB labels its reference-tree leaves with. (2) GTDB API
+# /search/gtdb row — the api-backend source (gtdbTaxonomy field). (3) GTDB bac120.tree
+# (Newick) — the reference-tree source for tree placement; leaves are representative
+# genome accessions, internal nodes carry rank-prefixed labels + support.
 source_sample = """
 # bac120_metadata.tsv (selected columns)
 accession	gtdb_representative	gtdb_taxonomy	ncbi_taxid
@@ -27,6 +30,10 @@ RS_GCF_027889305.1	f	d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Ent
 
 # GET https://gtdb-api.ecogenomic.org/search/gtdb?search=Escherichia+coli
 {"rows":[{"accession":"GCA_000155005.1","ncbiOrgName":"Escherichia coli O157:H7 str. EC4024","gtdbTaxonomy":"d__Bacteria; p__Pseudomonadota; c__Gammaproteobacteria; o__Enterobacterales; f__Enterobacteriaceae; g__Escherichia; s__Escherichia coli","isGtdbSpeciesRep":false}]}
+
+# bac120.tree (Newick excerpt, GTDB R232) — leaves are representative genome accessions
+# (GB_/RS_ prefix, matching `accession` above); internal nodes carry bootstrap support values.
+(RS_GCF_001579805.1:0.00055,RS_GCF_013385825.1:0.00055)86.0:0.00055
 """
 
 # One organism (taxid OR name) -> GTDB species id + rank-normalized lineage.
@@ -44,6 +51,22 @@ max_batch_size = 50
   id = "lineage"
   outputs = ["gtdb.lineage"]
 
+# One organism (taxid OR name) -> its path on the GTDB reference tree, from the root to
+# its species-representative leaf, as [node_id, cumulative_depth] steps. A per-entity,
+# cacheable value; a consumer turns two paths into a patristic distance via their deepest
+# shared node (gtdb_weaver.cophenetic). local-only — needs the reference tree + accession
+# crosswalk, which the live search API cannot serve.
+[[capability]]
+id = "describe_gtdb_tree_placement"
+consumes = ["ncbi.taxon.id", "organism.scientific_name"]
+consumes_any = true
+backends = ["local"]
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["gtdb.tree.rootpath"]
+
 # Goldens run against the bundled fixture crosswalk (build_gtdb_weaver_fixture),
 # so `verify --strict` is reproducible offline. E. coli by taxid and by name.
 [[golden]]
@@ -55,3 +78,11 @@ expect = { "gtdb.taxon.id" = "s__Escherichia coli", "gtdb.lineage" = [ { rank = 
 capability = "describe_gtdb_taxonomy"
 input = { "organism.scientific_name" = "Escherichia coli" }
 expect = { "gtdb.taxon.id" = "s__Escherichia coli" }
+
+# E. coli's path on the bundled fixture tree: root (id 0, depth 0) -> Pseudomonadota
+# (id 1, depth 0.5) -> the GCA_000005845.2 leaf (id 2, depth 0.75). Dyadic branch lengths
+# keep the depths exact in floating point.
+[[golden]]
+capability = "describe_gtdb_tree_placement"
+input = { "ncbi.taxon.id" = "562" }
+expect = { "gtdb.tree.rootpath" = [[0, 0.0], [1, 0.5], [2, 0.75]] }

@@ -57,23 +57,25 @@ def _species_name(taxonomy: str) -> str | None:
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS taxon (ncbi_taxid INTEGER PRIMARY KEY, gtdb_taxonomy TEXT NOT NULL, is_rep INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS species (name TEXT PRIMARY KEY, gtdb_taxonomy TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS species (name TEXT PRIMARY KEY, gtdb_taxonomy TEXT NOT NULL, rep_accession TEXT);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 
 def build_crosswalk_db(
-    rows: Iterable[tuple[int, str, bool]], db_path: str | Path, *, release: str
+    rows: Iterable[tuple[int, str, bool, str]], db_path: str | Path, *, release: str
 ) -> None:
-    """Build the crosswalk SQLite from ``(ncbi_taxid, gtdb_taxonomy, is_rep)`` rows.
+    """Build the crosswalk SQLite from ``(ncbi_taxid, gtdb_taxonomy, is_rep, accession)`` rows.
 
     One taxonomy per ncbi_taxid (representative rows win over non-rep, else first
     seen — deterministic, never trusting row order for the tiebreak). The species
-    index is keyed by lowercased GTDB species name from representative rows.
+    index is keyed by lowercased GTDB species name from representative rows, and
+    carries that representative genome's ``accession`` — the label of the species' leaf
+    in the GTDB reference tree, the join to tree-placement (see ``tree``).
     """
     best: dict[int, tuple[str, bool]] = {}
-    species: dict[str, str] = {}
-    for taxid, taxonomy, is_rep in rows:
+    species: dict[str, tuple[str, str]] = {}
+    for taxid, taxonomy, is_rep, accession in rows:
         if not taxonomy:
             continue
         prev = best.get(taxid)
@@ -82,7 +84,7 @@ def build_crosswalk_db(
         if is_rep:
             name = _species_name(taxonomy)
             if name and name not in species:
-                species[name] = taxonomy
+                species[name] = (taxonomy, accession)
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,8 +96,8 @@ def build_crosswalk_db(
             ((t, tax, int(rep)) for t, (tax, rep) in best.items()),
         )
         con.executemany(
-            "INSERT OR REPLACE INTO species (name, gtdb_taxonomy) VALUES (?, ?)",
-            species.items(),
+            "INSERT OR REPLACE INTO species (name, gtdb_taxonomy, rep_accession) VALUES (?, ?, ?)",
+            ((name, tax, acc) for name, (tax, acc) in species.items()),
         )
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('release', ?)", (release,))
         con.commit()
@@ -147,3 +149,23 @@ def lookup(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
         if row:
             return row[0]
     return None
+
+
+def rep_accession(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
+    """Resolve one query to its GTDB species representative genome accession.
+
+    That accession is the organism's leaf label in the GTDB reference tree, so it is
+    the join from an input id to :func:`tree.build_rootpaths`. Resolves the query to a
+    GTDB taxonomy (:func:`lookup`), then reads the species' representative accession.
+    Returns None when the organism is unknown or its species has no recorded accession.
+    """
+    taxonomy_str = lookup(con, query)
+    if not taxonomy_str:
+        return None
+    species_name = _species_name(taxonomy_str)
+    if not species_name:
+        return None
+    row = con.execute(
+        "SELECT rep_accession FROM species WHERE name = ?", (species_name,)
+    ).fetchone()
+    return row[0] if row and row[0] else None

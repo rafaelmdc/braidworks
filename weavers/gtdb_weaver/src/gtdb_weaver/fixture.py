@@ -4,6 +4,9 @@ Two substrates, both network-free:
   - ``fixture_db_path()`` — builds a tiny crosswalk SQLite from the bundled
     ``data/fixture_crosswalk.tsv`` (5 real GTDB rows), so the *local* backend (which
     the spec's goldens run against) resolves reproducibly.
+  - ``fixture_tree_path()`` — the bundled tiny Newick tree (``data/fixture_tree.nwk``)
+    whose leaves are those 5 rows' representative accessions, standing in for the real
+    GTDB reference tree so tree-placement goldens run offline.
   - ``mock_client()`` — an ``httpx.AsyncClient`` serving canned ``/search/gtdb``
     responses, so the *api* backend's contract/order tests run offline.
 
@@ -45,16 +48,23 @@ def fixture_db_path() -> Path:
     if _FIXTURE_DB is not None and _FIXTURE_DB.exists():
         return _FIXTURE_DB
     raw = (files("gtdb_weaver") / "data" / "fixture_crosswalk.tsv").read_text(encoding="utf-8")
-    rows: list[tuple[int, str, bool]] = []
+    rows: list[tuple[int, str, bool, str]] = []
     for line in raw.splitlines():
         if not line.strip():
             continue
-        taxid, gtdb_taxonomy, is_rep = line.split("\t")
-        rows.append((int(taxid), gtdb_taxonomy, is_rep.strip().lower() in {"t", "true", "1"}))
+        taxid, gtdb_taxonomy, is_rep, accession = line.split("\t")
+        rows.append(
+            (int(taxid), gtdb_taxonomy, is_rep.strip().lower() in {"t", "true", "1"}, accession)
+        )
     target = Path(tempfile.mkdtemp(prefix="gtdb_weaver-fixture-")) / "crosswalk.sqlite"
     taxonomy.build_crosswalk_db(rows, target, release="fixture")
     _FIXTURE_DB = target
     return target
+
+
+def fixture_tree_path() -> Path:
+    """The bundled tiny Newick reference tree (leaves = the fixture rep accessions)."""
+    return Path(str(files("gtdb_weaver") / "data" / "fixture_tree.nwk"))
 
 
 def _handler(request: httpx.Request) -> httpx.Response:

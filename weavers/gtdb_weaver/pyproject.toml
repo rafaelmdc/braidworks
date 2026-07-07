@@ -1,6 +1,6 @@
 [project]
 name = "gtdb_weaver"
-version = "0.1.0"
+version = "0.2.0"
 description = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"

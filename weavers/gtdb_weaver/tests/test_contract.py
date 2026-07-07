@@ -53,6 +53,33 @@ class TestLocalOrder(WeaverOrderContractTests):
         ]
 
 
+class TestLocalTreePlacementOrder(WeaverOrderContractTests):
+    capability_id = "describe_gtdb_tree_placement"
+    minimal_outputs = frozenset({"gtdb.tree.rootpath"})
+    backend = "local"
+
+    def make_weaver(self):
+        weaver = _build_weaver()
+        strat = weaver._backends.get(self.backend)
+        if strat is None or not strat.is_configured():
+            pytest.skip(f"backend {self.backend!r} not configured")
+        return weaver
+
+    def sample_strand_sets(self):
+        # Real, distinct inputs whose species reps are leaves of the fixture tree.
+        samples = [
+            {"ncbi.taxon.id": "562"},
+            {"organism.scientific_name": "Escherichia coli"},
+            {"ncbi.taxon.id": "2053517"},
+            {"ncbi.taxon.id": "41978"},
+            {"ncbi.taxon.id": "3048838"},
+        ]
+        return [
+            StrandSet.from_strands(f"e{i}", [Strand(t, v) for t, v in values.items()])
+            for i, values in enumerate(samples)
+        ]
+
+
 class TestApiOrder(WeaverOrderContractTests):
     capability_id = "describe_gtdb_taxonomy"
     minimal_outputs = frozenset({"gtdb.lineage"})

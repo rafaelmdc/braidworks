@@ -1,6 +1,6 @@
 # Contributing to gtdb_weaver
 
-GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage). Source: https://gtdb.ecogenomic.org (CC-BY-SA-4.0). Kind: `lookup`. Capabilities: `describe_gtdb_taxonomy`.
+GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage). Source: https://gtdb.ecogenomic.org (CC-BY-SA-4.0). Kind: `lookup`. Capabilities: `describe_gtdb_taxonomy`, `describe_gtdb_tree_placement`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -40,10 +40,28 @@ weaverkit verify --spec weaver.spec.toml --package gtdb_weaver --strict
 
 ## Current outputs
 
-This weaver currently produces: `gtdb.lineage`, `gtdb.taxon.id`.
+This weaver currently produces: `gtdb.lineage`, `gtdb.taxon.id`, `gtdb.tree.rootpath`.
+
+## Tree placement (`describe_gtdb_tree_placement`)
+
+`local`-only. Emits `gtdb.tree.rootpath` — the organism's path from the root of the GTDB
+reference tree to its species-representative leaf, as `[node_id, cumulative_depth]` steps.
+Braidworks resolves per entity, so the *pairwise* patristic distance is computed by the
+consumer from two paths via `gtdb_weaver.cophenetic` (deepest shared node). The geometry
+(Newick parsing, root paths, cophenetic) lives in [`tree.py`](src/gtdb_weaver/tree.py); the
+crosswalk join is species → representative `accession` → tree leaf.
+
+Data: the reference trees are the GTDB `bac120.tree` + `ar53.tree` Newick files, acquired
+by `setup.ensure_gtdb_trees` (consent-gated) alongside the crosswalk. The bundled fixture
+(`data/fixture_tree.nwk`, 5 leaves) is what `verify --strict` runs against.
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- **Verified against GTDB R232** (`tests/test_e2e_live.py::test_live_tree_placement_distances_are_sane`,
+  `BRAIDWORKS_RUN_LIVE=1`): the `bac120.tree`/`ar53.tree` URLs resolve, the metadata `accession`
+  equals the tree leaf label (GB_/RS_ prefix), the parser handles the real ~190k-leaf tree
+  (max depth ~104), and patristic distance tracks phylogeny (E. coli–Salmonella < E. coli–Bacteroides).
+- Distance normalization (e.g. by tree diameter) is intentionally left to the consumer; the
+  weaver emits raw geometry only.
+- Node ids are a pre-order index of the fixed per-release tree — stable across calls, so the
+  emitted paths cache per id. A release change re-numbers them (bump the fingerprint).

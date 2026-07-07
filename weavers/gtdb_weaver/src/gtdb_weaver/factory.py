@@ -24,7 +24,14 @@ from braidworks.core import BaseWeaver, BackendConfigurationError
 
 from gtdb_weaver.backends.local import GtdbLocalBackend
 from gtdb_weaver.backends.api import BASE_URL as _API_BASE_URL, GtdbApiBackend
-from gtdb_weaver.setup import auto_consented, db_is_valid, default_db_path, ensure_gtdb_db
+from gtdb_weaver.setup import (
+    auto_consented,
+    db_is_valid,
+    default_db_path,
+    default_tree_paths,
+    ensure_gtdb_db,
+    ensure_gtdb_trees,
+)
 from gtdb_weaver.weaver import GtdbWeaver
 
 
@@ -33,6 +40,8 @@ def build_gtdb_weaver(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    enable_tree_placement: bool = False,
+    tree_paths: list[str | Path] | None = None,
     enable_api: bool = False,
     api_base_url: str | None = None,
     api_client: httpx.AsyncClient | None = None,
@@ -41,17 +50,22 @@ def build_gtdb_weaver(
     """Build a GtdbWeaver, wiring the local and/or api backends from config.
 
     The local backend is configured when ``db_path`` is given or ``auto_setup`` is set;
-    its crosswalk DB is ensured (consent-gated, see ``setup.ensure_gtdb_db``). The api
-    backend is configured when ``enable_api`` is set or a client is injected. With **no**
-    backend-selecting argument, returns the zero-config **introspection** weaver — both
-    backends declared, the keyless api usable and local present-but-unconfigured (its
-    default DB path, not built) — which is what ``weaverkit verify`` and entry-point
-    discovery call as ``build_gtdb_weaver()``.
+    its crosswalk DB is ensured (consent-gated, see ``setup.ensure_gtdb_db``). Tree
+    placement additionally needs the Newick reference trees: pass ``tree_paths`` to point
+    at existing trees, or ``enable_tree_placement=True`` to ensure (download) the default
+    ones. The api backend is configured when ``enable_api`` is set or a client is injected.
+    With **no** backend-selecting argument, returns the zero-config **introspection**
+    weaver — both backends declared, the keyless api usable and local present-but-
+    unconfigured (its default DB path, not built) — which is what ``weaverkit verify`` and
+    entry-point discovery call as ``build_gtdb_weaver()``.
     """
     backends: dict[str, Any] = {}
     if db_path is not None or auto_setup:
         resolved = _ensure_local_db(db_path, auto_setup=auto_setup, refresh=refresh)
-        backends["local"] = GtdbLocalBackend(resolved)
+        trees = _resolve_tree_paths(
+            tree_paths, enable_tree_placement=enable_tree_placement, auto_setup=auto_setup
+        )
+        backends["local"] = GtdbLocalBackend(resolved, tree_paths=trees)
     if enable_api or api_client is not None:
         backends["api"] = GtdbApiBackend(base_url=api_base_url or _API_BASE_URL, client=api_client)
     if not backends:
@@ -90,6 +104,23 @@ def _ensure_local_db(db_path: str | Path | None, *, auto_setup: bool, refresh: b
     return ensure_gtdb_db(target, auto=consented, refresh=refresh)
 
 
+def _resolve_tree_paths(
+    tree_paths: list[str | Path] | None, *, enable_tree_placement: bool, auto_setup: bool
+) -> list[str | Path]:
+    """Reference-tree paths for the local backend, or [] when tree placement is off.
+
+    Explicit ``tree_paths`` win. Otherwise, with ``enable_tree_placement`` the default
+    trees are ensured (downloaded under ``auto_setup`` consent). If neither is set but the
+    default trees already exist on disk, use them; else return [] (placement simply
+    misses — the crosswalk lookups still work).
+    """
+    if tree_paths is not None:
+        return tree_paths
+    if enable_tree_placement:
+        return list(ensure_gtdb_trees(auto=auto_consented(auto_setup)))
+    return [p for p in default_tree_paths() if p.exists()]
+
+
 def build_gtdb_weaver_fixture() -> BaseWeaver:
     """Fixture-backed weaver for ``verify --strict`` — no network.
 
@@ -97,11 +128,11 @@ def build_gtdb_weaver_fixture() -> BaseWeaver:
     ``golden_backend``) and the *api* backend against a canned ``httpx.MockTransport``,
     so both backends' contract/golden tests run offline and reproducibly.
     """
-    from gtdb_weaver.fixture import fixture_db_path, mock_client
+    from gtdb_weaver.fixture import fixture_db_path, fixture_tree_path, mock_client
 
     return GtdbWeaver(
         {
-            "local": GtdbLocalBackend(fixture_db_path()),
+            "local": GtdbLocalBackend(fixture_db_path(), tree_paths=[fixture_tree_path()]),
             "api": GtdbApiBackend(client=mock_client()),
         }
     )

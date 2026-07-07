@@ -65,6 +65,9 @@ OUTPUT_KEYS: dict[str, str] = {
     # gtdb_weaver leaf output (gtdb.taxon.id is a shared join key — see SHARED_KEYS)
     "gtdb.lineage": "This organism's GTDB genome-based, rank-normalized lineage — "
     "an ordered list of {rank, name} from domain to species.",
+    "gtdb.tree.rootpath": "This organism's path from the root of the GTDB reference tree "
+    "to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. "
+    "Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic).",
     # genome assembly outputs (ncbi_weaver list_genomes / describe_genome)
     "genome.assembly.count": "How many genome assemblies exist for this organism.",
     "genome.assembly.records": "Genome assemblies for this organism — accession, organism, level, RefSeq category.",
