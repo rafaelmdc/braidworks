@@ -22,6 +22,7 @@ import hashlib
 import json
 import sqlite3
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Callable
 
@@ -121,8 +122,7 @@ def write_db(
     try:
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
         con.execute(
-            "CREATE TABLE association ("
-            "ncbi_id INTEGER, experiment_id INTEGER, full_json TEXT)"
+            "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER, full_json TEXT)"
         )
         rows = []
         n_with_taxid = 0
@@ -159,9 +159,7 @@ def db_is_valid(path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
-        has_hash = con.execute(
-            "SELECT value FROM meta WHERE key = 'content_sha256'"
-        ).fetchone()
+        has_hash = con.execute("SELECT value FROM meta WHERE key = 'content_sha256'").fetchone()
         count = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]
         return bool(has_hash) and count > 0
     except sqlite3.Error:
@@ -211,3 +209,40 @@ def ensure_disbiome_db(
         refresh=refresh,
         min_free_bytes=200_000_000,  # ~7 MB data; generous headroom for the temp build
     )
+
+
+def iter_associations(
+    db_path: str | Path | None = None, *, auto: bool = False
+) -> Iterator[dict[str, Any]]:
+    """Yield every Disbiome microbe–disease association as a flat record — the bulk view.
+
+    The ``fetch`` capability answers "this microbe's diseases" per taxid; this is its
+    bulk counterpart, for an ingestion that needs the *whole* association table (e.g. to
+    seed a union node set over all Disbiome taxa). Ensures the local DB (consent-gated,
+    like the backend), then streams every experiment carrying an NCBI taxid. Each record::
+
+        {taxid, meddra_id, meddra_level, disease_name, outcome, experiment_id}
+
+    ``outcome`` is Disbiome's raw qualitative outcome ("Elevated" / "Reduced"); missing
+    fields are already normalized to ``None``. Experiments without a taxid are skipped —
+    there is no organism to key on.
+    """
+    path = ensure_disbiome_db(db_path, auto=auto)
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        cursor = con.execute(
+            "SELECT ncbi_id, full_json FROM association "
+            "WHERE ncbi_id IS NOT NULL ORDER BY experiment_id"
+        )
+        for ncbi_id, full_json in cursor:
+            record = json.loads(full_json)
+            yield {
+                "taxid": int(ncbi_id),
+                "meddra_id": record.get("meddra_id"),
+                "meddra_level": record.get("meddra_level"),
+                "disease_name": record.get("disease_name"),
+                "outcome": record.get("qualitative_outcome"),
+                "experiment_id": record.get("experiment_id"),
+            }
+    finally:
+        con.close()
