@@ -2,9 +2,18 @@
 
 The phylogeny "distance" between two organisms is the **patristic (cophenetic)
 distance** on the GTDB bac120/ar53 reference tree — the summed branch length on the
-path between their two species-representative leaves. Braidworks resolves *per entity*
-(one input id → its attributes), never per pair, so this module deliberately splits the
-computation into two halves:
+path between their two species-representative leaves.
+
+**What the number means.** GTDB's branch lengths are in **expected amino-acid
+substitutions per site** (the tree is inferred from a concatenated alignment of the
+bac120 / ar53 marker proteins), so a patristic distance is the **total molecular
+divergence** accumulated along the evolutionary path between two genomes — larger =
+more diverged. The absolute value is scale-specific to the tree/alignment and is not
+meaningful on its own; only the **relative ordering** of distances is (a consumer
+should rank-normalize rather than lean on the raw magnitude).
+
+Braidworks resolves *per entity* (one input id → its attributes), never per pair, so
+this module deliberately splits the computation into two halves:
 
 * :func:`build_rootpaths` — the per-leaf, batch-independent half. Each leaf's **root
   path** (``[(node_id, cumulative_depth), …]`` from the root down to the leaf) is a pure
