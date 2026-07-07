@@ -14,6 +14,7 @@ Two data sources, joined at query time:
 from __future__ import annotations
 
 import csv
+import logging
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
@@ -22,6 +23,12 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Iterable, Iterator
+
+# The AGORA2 SBML archive is compressed with Deflate64 (method 9), which the stdlib
+# zipfile cannot decode; importing this monkeypatches zipfile to support it.
+import zipfile_deflate64  # noqa: F401,E402
+
+logger = logging.getLogger("agora_weaver.dataset")
 
 # The bundled crosswalk's AGORA2 release — part of the (offline) fingerprint.
 CROSSWALK_RELEASE = "AGORA2-v2.01"
@@ -167,19 +174,28 @@ def build_reaction_db(
             rxn_info,
         )
         written = 0
+        skipped = 0
         with zipfile.ZipFile(sbml_zip) as zf:
             for name in zf.namelist():
                 if not name.endswith(".xml"):
                     continue
                 reconstruction = Path(name).stem
-                with zf.open(name) as fh:
-                    rows = ((reconstruction, abbrev) for abbrev in iter_sbml_reactions(fh))
-                    cur = con.executemany(
-                        "INSERT OR IGNORE INTO reaction (reconstruction, abbreviation) "
-                        "VALUES (?, ?)",
-                        rows,
-                    )
-                    written += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+                try:
+                    with zf.open(name) as fh:
+                        # Materialize per model so a malformed one is skipped, not fatal — a
+                        # multi-thousand-model archive can carry the odd corrupt SBML file.
+                        rows = [(reconstruction, abbrev) for abbrev in iter_sbml_reactions(fh)]
+                except ET.ParseError as exc:
+                    logger.warning("skipping malformed SBML model %s: %s", name, exc)
+                    skipped += 1
+                    continue
+                cur = con.executemany(
+                    "INSERT OR IGNORE INTO reaction (reconstruction, abbreviation) VALUES (?, ?)",
+                    rows,
+                )
+                written += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        if skipped:
+            logger.warning("skipped %d malformed SBML model(s) of the archive", skipped)
         con.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('content_hash', ?)",
             (content_hash,),

@@ -26,10 +26,11 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
+    { name = "zipfile-deflate64" },
 ]
 
 [package.optional-dependencies]
@@ -45,6 +46,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
     { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+    { name = "zipfile-deflate64", specifier = ">=0.2" },
 ]
 provides-extras = ["test"]
 
@@ -994,3 +996,9 @@ requires-dist = [
     { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
 ]
 provides-extras = ["test"]
+
+[[package]]
+name = "zipfile-deflate64"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/1b/f397f821b48156ee94c5ca7ad82dc5cdb73cbcbc4377b9c1b21556f3ce8c/zipfile-deflate64-0.2.0.tar.gz", hash = "sha256:875a3299de102edf1c17f8cafcc528b1ca80b62dc4814b9cb56867ec59fbfd18", size = 62896, upload-time = "2022-01-05T09:24:39.575Z" }
