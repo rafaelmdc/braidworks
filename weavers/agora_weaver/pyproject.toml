@@ -1,10 +1,10 @@
 [project]
 name = "agora_weaver"
-version = "0.1.0"
+version = "0.1.1"
 description = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["braidworks-core"]
+dependencies = ["braidworks-core>=0.11.2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23", "weaverkit"]
