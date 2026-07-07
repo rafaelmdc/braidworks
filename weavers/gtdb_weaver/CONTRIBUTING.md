@@ -51,6 +51,10 @@ consumer from two paths via `gtdb_weaver.cophenetic` (deepest shared node). The 
 (Newick parsing, root paths, cophenetic) lives in [`tree.py`](src/gtdb_weaver/tree.py); the
 crosswalk join is species → representative `accession` → tree leaf.
 
+GTDB branch lengths are **expected amino-acid substitutions per site**, so a patristic
+distance is the **total molecular divergence** between two genomes. Only the relative
+ordering is meaningful (scale is tree/alignment-specific) — consumers should rank-normalize.
+
 Data: the reference trees are the GTDB `bac120.tree` + `ar53.tree` Newick files, acquired
 by `setup.ensure_gtdb_trees` (consent-gated) alongside the crosswalk. The bundled fixture
 (`data/fixture_tree.nwk`, 5 leaves) is what `verify --strict` runs against.
