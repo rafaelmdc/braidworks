@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "agora"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.1"
 WEAVER_TITLE = (
     "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
 )

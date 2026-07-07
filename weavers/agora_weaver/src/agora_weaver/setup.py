@@ -22,6 +22,7 @@ from typing import Iterator
 from braidworks.core.localdb import auto_consented
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
+from braidworks.core.localdb import USER_AGENT
 from braidworks.core.localdb import ensure_local_db
 from braidworks.core.localdb import md5_file as _md5_file
 
@@ -89,7 +90,10 @@ def _fetch_reaction_crosswalk(
     url: str | None = f"{api_url}?page_size=1000"
     seen = 0
     while url:
-        with urllib.request.urlopen(url, timeout=60) as resp:
+        # VMH sits behind Cloudflare, which 403s the default urllib agent — send the
+        # shared braidworks User-Agent (same as localdb.download).
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(request, timeout=60) as resp:
             body = json.loads(resp.read().decode("utf-8"))
         for r in body.get("results") or []:
             abbrev = (r.get("abbreviation") or "").strip()
