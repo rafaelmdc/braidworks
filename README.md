@@ -135,6 +135,29 @@ Every input lands in exactly one bucket of the result:
 `len(resolved) + len(unresolved) + len(review_queue) + len(errors)` always equals the
 number of inputs — nothing is silently dropped.
 
+### 2c. …or the one-liner: `braidworks.fetch`
+
+The registry/plan/execute/unwrap dance above is the right amount of control for the
+executor and the CLI. When you just want *"give me attribute Y for these N ids"*, the
+`fetch` facade collapses all of it into one batch call — it auto-discovers the
+installed weavers, plans the route, runs it, and hands back a plain per-id result:
+
+```python
+from braidworks import fetch
+
+res = fetch("microbe.metabolism.reactions", ids=["853", "1680"])   # taxids in
+res.get("853")["microbe.metabolism.reactions"]   # -> the AGORA2 reaction repertoire
+res.column("microbe.metabolism.reactions")       # -> {id: value} across all resolved ids
+res.unresolved                                    # -> ids with no model (your coverage gaps)
+```
+
+`have=` sets the input type (default `ncbi.taxon.id`); `want` may be a list to pull
+several attributes at once; pass a prebuilt `registry=` to skip re-discovery across
+many calls, and `params=` for capability parameters (bare `{"organism": "9606"}` or
+per-capability `{cap_id: {name: value}}`). `async_fetch(...)` is the coroutine form for
+when you are already inside an event loop. `fetch` is the easy 80%; for custom policies,
+traversal fan-out, or streaming events, drop down to `Braider`/`LocalExecutor` (§2b).
+
 ---
 
 ## What you can ask for (the weavers)

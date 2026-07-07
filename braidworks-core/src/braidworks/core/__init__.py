@@ -33,6 +33,7 @@ from braidworks.core.discovery import (
     build_registry_from_entry_points,
     iter_weaver_builders,
 )
+from braidworks.core.fetch import FetchResult, async_fetch, fetch
 from braidworks.core.http import NOT_FOUND_STATUSES, is_not_found_status
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
@@ -129,6 +130,9 @@ __all__ = [
     "ENTRY_POINT_GROUP",
     "build_registry_from_entry_points",
     "iter_weaver_builders",
+    "fetch",
+    "async_fetch",
+    "FetchResult",
     "BackendConfigurationError",
     "BackendUnavailable",
     "BraidworksError",
