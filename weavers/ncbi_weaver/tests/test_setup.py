@@ -63,7 +63,10 @@ class _FakeNetwork:
         )
         self.calls: list[str] = []
 
-    def urlopen(self, url: str, *args: object, **kwargs: object) -> _FakeResponse:
+    def urlopen(self, url: object, *args: object, **kwargs: object) -> _FakeResponse:
+        # download() now passes a urllib Request (to set a User-Agent), not a bare URL string.
+        url = getattr(url, "full_url", url)
+        assert isinstance(url, str)
         self.calls.append(url)
         if url.endswith(".md5"):
             return _FakeResponse(self.md5_text.encode("utf-8"))
