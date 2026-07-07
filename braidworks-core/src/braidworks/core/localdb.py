@@ -34,6 +34,10 @@ ENV_DATA_DIR = "BRAIDWORKS_DATA_DIR"
 ENV_AUTO = "BRAIDWORKS_AUTO_DOWNLOAD"
 _TRUTHY = {"1", "true", "yes", "on"}
 
+# Identify braidworks on downloads. The ``Mozilla/5.0`` prefix is what CDN bot-filters
+# (e.g. Cloudflare in front of VMH/AGORA2) expect; without it they 403 the default agent.
+USER_AGENT = "Mozilla/5.0 (compatible; braidworks/1.0)"
+
 DEFAULT_MIN_FREE_BYTES = 4 * 1024**3
 LOCK_STALE_SECONDS = 2 * 60 * 60
 LOCK_POLL_SECONDS = 1.0
@@ -88,9 +92,15 @@ def download(
     progress: ProgressCallback | None = None,
     label: str = "Downloading",
 ) -> None:
-    """Stream ``url`` to ``destination``, emitting progress events."""
+    """Stream ``url`` to ``destination``, emitting progress events.
+
+    Sends an explicit ``User-Agent``: some data hosts sit behind a CDN (e.g. VMH/AGORA2
+    behind Cloudflare) that 403s the default ``Python-urllib`` agent. Identify as braidworks
+    with a browser-recognizable prefix so those sources serve the file.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url) as response, destination.open("wb") as handle:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request) as response, destination.open("wb") as handle:
         total_header = response.headers.get("Content-Length")
         total = int(total_header) if total_header else None
         downloaded = 0

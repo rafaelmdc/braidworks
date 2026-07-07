@@ -135,3 +135,38 @@ def test_build_lock_acquires_and_releases(tmp_path):
     with lock:
         assert (tmp_path / "db.sqlite.lock").exists()
     assert not (tmp_path / "db.sqlite.lock").exists()
+
+
+def test_download_sends_braidworks_user_agent(monkeypatch, tmp_path):
+    """download() must set a User-Agent, else CDN bot-filters (VMH/Cloudflare) 403 it."""
+    import urllib.request
+
+    from braidworks.core.localdb import USER_AGENT, download
+
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        headers = {"Content-Length": "3"}
+
+        def __init__(self) -> None:
+            self._chunks = [b"abc", b""]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def read(self, _n):
+            return self._chunks.pop(0)
+
+    def _fake_urlopen(request):
+        captured["ua"] = request.get_header("User-agent")
+        return _FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    destination = tmp_path / "f.bin"
+    download("https://example.test/f.bin", destination)
+
+    assert captured["ua"] == USER_AGENT
+    assert destination.read_bytes() == b"abc"
