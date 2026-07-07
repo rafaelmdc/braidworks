@@ -57,10 +57,10 @@ by `setup.ensure_gtdb_trees` (consent-gated) alongside the crosswalk. The bundle
 
 ## Expansion notes
 
-- **Confirm the tree URLs / leaf-label format on the live tree** — `setup.DEFAULT_*_TREE_URL`
-  and the assumption that metadata `accession` equals the tree leaf label (GB_/RS_ prefix)
-  are from the metadata schema, not yet observed against a downloaded tree. Capture a real
-  `bac120.tree` excerpt and wire the live E2E before relying on real-data placement.
+- **Verified against GTDB R232** (`tests/test_e2e_live.py::test_live_tree_placement_distances_are_sane`,
+  `BRAIDWORKS_RUN_LIVE=1`): the `bac120.tree`/`ar53.tree` URLs resolve, the metadata `accession`
+  equals the tree leaf label (GB_/RS_ prefix), the parser handles the real ~190k-leaf tree
+  (max depth ~104), and patristic distance tracks phylogeny (E. coli–Salmonella < E. coli–Bacteroides).
 - Distance normalization (e.g. by tree diameter) is intentionally left to the consumer; the
   weaver emits raw geometry only.
 - Node ids are a pre-order index of the fixed per-release tree — stable across calls, so the

@@ -32,9 +32,9 @@ logger = logging.getLogger("gtdb_weaver.setup")
 _BASE = "https://data.gtdb.ecogenomic.org/releases/latest"
 DEFAULT_BAC120_URL = f"{_BASE}/bac120_metadata.tsv.gz"
 DEFAULT_AR53_URL = f"{_BASE}/ar53_metadata.tsv.gz"
-# Newick reference trees — the source for tree placement (patristic distance). Leaves
-# are representative genome accessions. NOTE: confirm these filenames against the live
-# release layout in the tree backend's E2E before relying on the download.
+# Newick reference trees — the source for tree placement (patristic distance). Leaves are
+# representative genome accessions. Filenames verified against the live release (GTDB R232)
+# by the tree backend's E2E (tests/test_e2e_live.py).
 DEFAULT_BAC120_TREE_URL = f"{_BASE}/bac120.tree"
 DEFAULT_AR53_TREE_URL = f"{_BASE}/ar53.tree"
 _VERSION_URL = f"{_BASE}/VERSION.txt"

@@ -31,10 +31,9 @@ RS_GCF_027889305.1	f	d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Ent
 # GET https://gtdb-api.ecogenomic.org/search/gtdb?search=Escherichia+coli
 {"rows":[{"accession":"GCA_000155005.1","ncbiOrgName":"Escherichia coli O157:H7 str. EC4024","gtdbTaxonomy":"d__Bacteria; p__Pseudomonadota; c__Gammaproteobacteria; o__Enterobacterales; f__Enterobacteriaceae; g__Escherichia; s__Escherichia coli","isGtdbSpeciesRep":false}]}
 
-# bac120.tree (Newick excerpt) — leaves are representative genome accessions (with the
-# GTDB GB_/RS_ prefix, matching `accession` above); internal nodes carry 'support:rank'
-# labels. Branch lengths shown are illustrative pending the live-E2E capture.
-((RS_GCF_000005845.2:0.03,RS_GCF_000006945.2:0.03)'100.0:g__Escherichia':0.11)'97.0:f__Enterobacteriaceae':0.05;
+# bac120.tree (Newick excerpt, GTDB R232) — leaves are representative genome accessions
+# (GB_/RS_ prefix, matching `accession` above); internal nodes carry bootstrap support values.
+(RS_GCF_001579805.1:0.00055,RS_GCF_013385825.1:0.00055)86.0:0.00055
 """
 
 # One organism (taxid OR name) -> GTDB species id + rank-normalized lineage.
