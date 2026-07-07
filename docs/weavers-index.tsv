@@ -6,6 +6,7 @@ disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.species_id	microbe.
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 faprotax	describe_ecology	lookup	none	local	ncbi.taxon.lineage	microbe.ecology.functional_groups	
 gtdb	describe_gtdb_taxonomy	lookup	none	local;api	ncbi.taxon.id;organism.scientific_name	gtdb.taxon.id;gtdb.lineage	
+gtdb	describe_gtdb_tree_placement	lookup	none	local;api	ncbi.taxon.id;organism.scientific_name	gtdb.tree.rootpath	
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.list_children	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.id;ncbi.taxon.children_count;ncbi.taxon.children_records	

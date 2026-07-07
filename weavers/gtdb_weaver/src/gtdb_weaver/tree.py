@@ -23,7 +23,7 @@ computation into two halves:
 from __future__ import annotations
 
 import itertools
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 # One step on a leaf's path from the root: the ancestor node's stable id and the
@@ -132,6 +132,19 @@ class _Parser:
             raise NewickError(f"invalid branch length {token!r}") from exc
 
 
+def _walk(
+    node: _Node, parent: RootPath, counter: itertools.count[int], paths: dict[str, RootPath]
+) -> None:
+    node_id = next(counter)
+    depth = (parent[-1][1] if parent else 0.0) + (node.length or 0.0)
+    path = parent + [(node_id, depth)]
+    if node.children:
+        for child in node.children:
+            _walk(child, path, counter, paths)
+    elif node.name:
+        paths[node.name] = path
+
+
 def build_rootpaths(root: _Node) -> dict[str, RootPath]:
     """Map each leaf label to its root path ``[(node_id, depth), …]``.
 
@@ -141,19 +154,23 @@ def build_rootpaths(root: _Node) -> dict[str, RootPath]:
     ``depth`` is the cumulative branch length from the root (the root itself is depth 0).
     """
     paths: dict[str, RootPath] = {}
-    counter = itertools.count()
+    _walk(root, [], itertools.count(), paths)
+    return paths
 
-    def walk(node: _Node, parent: RootPath) -> None:
-        node_id = next(counter)
-        depth = (parent[-1][1] if parent else 0.0) + (node.length or 0.0)
-        path = parent + [(node_id, depth)]
-        if node.children:
-            for child in node.children:
-                walk(child, path)
-        elif node.name:
-            paths[node.name] = path
 
-    walk(root, [])
+def load_rootpaths(texts: Iterable[str]) -> dict[str, RootPath]:
+    """Root paths for the leaves of several Newick trees under one shared id space.
+
+    GTDB ships two disjoint reference trees (bacteria ``bac120`` + archaea ``ar53``).
+    A single id counter spans all of them, so no leaf in one tree shares an ancestor id
+    with a leaf in another: :func:`cophenetic` between cross-tree leaves finds no common
+    node and returns their summed root depths (maximally distant), which is the right
+    answer for organisms in different domains — while within a tree it is exact.
+    """
+    paths: dict[str, RootPath] = {}
+    counter: itertools.count[int] = itertools.count()
+    for text in texts:
+        _walk(parse_newick(text), [], counter, paths)
     return paths
 
 

@@ -32,6 +32,11 @@ logger = logging.getLogger("gtdb_weaver.setup")
 _BASE = "https://data.gtdb.ecogenomic.org/releases/latest"
 DEFAULT_BAC120_URL = f"{_BASE}/bac120_metadata.tsv.gz"
 DEFAULT_AR53_URL = f"{_BASE}/ar53_metadata.tsv.gz"
+# Newick reference trees — the source for tree placement (patristic distance). Leaves
+# are representative genome accessions. NOTE: confirm these filenames against the live
+# release layout in the tree backend's E2E before relying on the download.
+DEFAULT_BAC120_TREE_URL = f"{_BASE}/bac120.tree"
+DEFAULT_AR53_TREE_URL = f"{_BASE}/ar53.tree"
 _VERSION_URL = f"{_BASE}/VERSION.txt"
 
 _NAMESPACE = "gtdb"
@@ -41,18 +46,64 @@ _DB_FILENAME = "gtdb_crosswalk.sqlite"
 _MIN_FREE_BYTES = 2 * 1024**3
 
 __all__ = [
+    "DEFAULT_AR53_TREE_URL",
     "DEFAULT_AR53_URL",
+    "DEFAULT_BAC120_TREE_URL",
     "DEFAULT_BAC120_URL",
     "auto_consented",
     "db_is_valid",
     "default_db_path",
+    "default_tree_paths",
     "ensure_gtdb_db",
+    "ensure_gtdb_trees",
 ]
 
 
 def default_db_path() -> Path:
     """Per-user default crosswalk DB path (``BRAIDWORKS_DATA_DIR`` overrides the cache dir)."""
     return _core_default_db_path(_NAMESPACE, _DB_FILENAME)
+
+
+def default_tree_paths() -> list[Path]:
+    """Per-user default reference-tree paths (bac120, ar53), beside the crosswalk DB."""
+    parent = default_db_path().parent
+    return [parent / "bac120.tree", parent / "ar53.tree"]
+
+
+def ensure_gtdb_trees(
+    *,
+    auto: bool = False,
+    refresh: bool = False,
+    urls: tuple[str, str] = (DEFAULT_BAC120_TREE_URL, DEFAULT_AR53_TREE_URL),
+) -> list[Path]:
+    """Ensure the local Newick reference trees exist, returning their paths.
+
+    Each tree is downloaded (consent-gated, like the crosswalk) if absent. Idempotent:
+    a present, non-empty tree is returned as-is. Trees are plain files, so "valid" is
+    simply "exists and non-empty".
+    """
+
+    def _valid(path: Path) -> bool:
+        return path.exists() and path.stat().st_size > 0
+
+    out: list[Path] = []
+    for target, url in zip(default_tree_paths(), urls):
+        ensure_local_db(
+            target,
+            is_valid=_valid,
+            build=lambda dest, u=url: _download(u, dest, label=f"Downloading GTDB tree {u}"),
+            consent_message=(
+                f"GTDB reference tree not found at {target}.\n"
+                "Tree placement (patristic distance) needs the GTDB Newick reference trees.\n"
+                "  - call: build_gtdb_weaver(auto_setup=True, enable_tree_placement=True)\n"
+                "  - or set: BRAIDWORKS_AUTO_DOWNLOAD=1"
+            ),
+            auto=auto,
+            refresh=refresh,
+            min_free_bytes=_MIN_FREE_BYTES,
+        )
+        out.append(target)
+    return out
 
 
 def db_is_valid(path: Path) -> bool:
@@ -96,11 +147,13 @@ def _fetch_release() -> str | None:
     return None
 
 
-def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool]]:
-    """Stream ``(ncbi_taxid, gtdb_taxonomy, is_rep)`` from a gzipped GTDB metadata TSV.
+def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool, str]]:
+    """Stream ``(ncbi_taxid, gtdb_taxonomy, is_rep, accession)`` from a gzipped metadata TSV.
 
     Columns are located by header name (their ordinal positions drift across releases).
-    Rows without an integer taxid or a taxonomy are skipped.
+    ``accession`` is the genome id GTDB labels its reference-tree leaves with — kept so a
+    species representative can be joined to its leaf. Rows without an integer taxid or a
+    taxonomy are skipped.
     """
     with gzip.open(gz_path, mode="rt", encoding="utf-8", newline="") as fh:
         reader = csv.reader(fh, delimiter="\t")
@@ -112,9 +165,10 @@ def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool]]:
             c_taxid = idx["ncbi_taxid"]
             c_tax = idx["gtdb_taxonomy"]
             c_rep = idx["gtdb_representative"]
+            c_acc = idx["accession"]
         except KeyError as exc:
             raise ValueError(f"GTDB metadata missing expected column {exc}") from exc
-        width = max(c_taxid, c_tax, c_rep) + 1
+        width = max(c_taxid, c_tax, c_rep, c_acc) + 1
         for row in reader:
             if len(row) < width:
                 continue
@@ -126,13 +180,14 @@ def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool]]:
                 taxid = int(raw_taxid)
             except ValueError:
                 continue
-            yield taxid, taxonomy_str, row[c_rep].strip().lower() in {"t", "true", "1"}
+            is_rep = row[c_rep].strip().lower() in {"t", "true", "1"}
+            yield taxid, taxonomy_str, is_rep, row[c_acc].strip()
 
 
 def _build_crosswalk(tmp_db: Path, *, bac120_url: str, ar53_url: str, release: str | None) -> None:
     """Build callback for ``ensure_local_db``: download both TSVs → the crosswalk SQLite."""
     resolved_release = release or _fetch_release() or "latest"
-    rows: list[tuple[int, str, bool]] = []
+    rows: list[tuple[int, str, bool, str]] = []
     for label, url in (("bac120", bac120_url), ("ar53", ar53_url)):
         archive = tmp_db.parent / f"{label}_metadata.tsv.gz"
         logger.info("acquiring GTDB %s metadata -> %s", label, archive)
