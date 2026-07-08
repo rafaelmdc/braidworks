@@ -11,7 +11,7 @@ db_name = "agora"
 weaver_id = "agora"
 kind = "lookup"
 title = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
-version = "0.1.2"
+version = "0.2.0"
 license = "CC-BY-NC-4.0"
 citation = "https://doi.org/10.1038/s41587-022-01628-0"
 attribution = "AGORA2 / Virtual Metabolic Human (VMH), Heinken et al., Nat Biotechnol 2023 (data CC BY-NC 4.0)"
@@ -45,6 +45,13 @@ max_batch_size = 50
   [[capability.group]]
   id = "reactions"
   outputs = ["microbe.metabolism.reactions"]
+
+  # The genome-scale model itself (SBML), for community-flux / seed-set complementarity.
+  # Fetches just the ~8 MB individual model from VMH (lazy, cached), not the 2.17 GB archive;
+  # returns a local path per reconstruction. The substrate for metabolic.complementarity.
+  [[capability.group]]
+  id = "model"
+  outputs = ["microbe.metabolism.sbml"]
 
 # Goldens run against build_agora_weaver_fixture (bundled crosswalk + a tiny fixture
 # reaction DB), so `verify --strict` is reproducible offline.

@@ -64,3 +64,39 @@ async def test_full_blob_has_overview_and_every_row():
 async def test_unknown_taxid_is_no_match_not_error():
     r = await _resolve(build_gmrepo_weaver_fixture(), 999999999, {NAMES})
     assert r.status is WeaveStatus.NO_MATCH
+
+
+PROFILES_CAP = "gmrepo.sample_profiles"
+SAMPLE_PROFILES = "microbe.abundance.sample_profiles"
+
+
+async def test_sample_profiles_returns_sample_by_taxon_matrix():
+    weaver = build_gmrepo_weaver_fixture()
+    out = await weaver.execute_batch(
+        PROFILES_CAP,
+        [StrandSet.from_strands("e", [Strand("disease.mesh.id", "D003093")])],
+        requested_outputs=frozenset({SAMPLE_PROFILES}),
+        backend="local",
+    )
+    r = out[0]
+    assert r.status is WeaveStatus.OK
+    profile = {s.type_id: s.value for s in r.strands}[SAMPLE_PROFILES]
+    assert profile["mesh_id"] == "D003093"
+    assert profile["n_runs"] == 2  # ERRFIX01, ERRFIX02
+    rows = profile["profiles"]
+    assert len(rows) == 4
+    assert {row["run_id"] for row in rows} == {"ERRFIX01", "ERRFIX02"}
+    first = rows[0]
+    assert first["run_id"] == "ERRFIX01" and first["ncbi_taxon_id"] == 816
+    assert first["relative_abundance"] == 52.4
+
+
+async def test_sample_profiles_unknown_disease_is_no_match():
+    weaver = build_gmrepo_weaver_fixture()
+    out = await weaver.execute_batch(
+        PROFILES_CAP,
+        [StrandSet.from_strands("e", [Strand("disease.mesh.id", "D000000")])],
+        requested_outputs=frozenset({SAMPLE_PROFILES}),
+        backend="local",
+    )
+    assert out[0].status is WeaveStatus.NO_MATCH

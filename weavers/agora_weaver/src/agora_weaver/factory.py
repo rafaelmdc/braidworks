@@ -28,6 +28,8 @@ def build_agora_weaver(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    sbml_cache_dir: str | Path | None = None,
+    auto_download_models: bool = False,
     **_config: Any,
 ) -> BaseWeaver:
     """Build an AgoraWeaver with the local backend.
@@ -37,11 +39,23 @@ def build_agora_weaver(
     when ``db_path`` is given or ``auto_setup`` is set; otherwise the backend points at
     the default DB path present-or-not (this zero-config form is what ``weaverkit verify``
     and entry-point discovery call as ``build_agora_weaver()``).
+
+    The ``model`` group (genome-scale SBML) fetches each ~8 MB model on demand into
+    ``sbml_cache_dir``; ``auto_download_models`` (or ``BRAIDWORKS_AUTO_DOWNLOAD``) permits the
+    download, else a not-yet-cached model is simply omitted.
     """
     reaction_db: str | Path | None = db_path
     if db_path is not None or auto_setup:
         reaction_db = _ensure_reaction_db(db_path, auto_setup=auto_setup, refresh=refresh)
-    return AgoraWeaver({"local": AgoraLocalBackend(reaction_db)})
+    return AgoraWeaver(
+        {
+            "local": AgoraLocalBackend(
+                reaction_db,
+                sbml_cache_dir=sbml_cache_dir,
+                auto_download_models=auto_download_models,
+            )
+        }
+    )
 
 
 def _interactive() -> bool:

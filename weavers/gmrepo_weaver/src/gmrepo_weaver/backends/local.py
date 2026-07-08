@@ -32,6 +32,9 @@ NAMES = "microbe.abundance.phenotype_names"
 COUNT = "microbe.abundance.count"
 ASSOCIATIONS = "microbe.abundance.associations"
 RECORDS = "microbe.abundance.records"
+SAMPLE_PROFILES = "microbe.abundance.sample_profiles"
+
+_PROFILES_CAPABILITY = "gmrepo.sample_profiles"
 
 
 def _association_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -106,11 +109,44 @@ class GmrepoLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == _PROFILES_CAPABILITY:
+            return await asyncio.to_thread(self._profiles_all, queries)
         return await asyncio.to_thread(self._lookup_all, queries)
 
     def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         con = self._connect()
         return [self._lookup_one(con, q) for q in queries]
+
+    def _profiles_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        con = self._connect()
+        return [self._profiles_one(con, q) for q in queries]
+
+    def _profiles_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
+        mesh_id = query.get("disease.mesh.id")
+        mesh_id = str(mesh_id).strip() if mesh_id is not None else None
+        if not mesh_id:
+            return LookupRecord(query=query, found=False)
+        rows = [
+            {
+                "run_id": r["run_id"],
+                "ncbi_taxon_id": r["ncbi_taxon_id"],
+                "rank": r["rank"],
+                "relative_abundance": r["relative_abundance"],
+            }
+            for r in con.execute(
+                "SELECT run_id, ncbi_taxon_id, rank, relative_abundance "
+                "FROM sample_profile WHERE mesh_id = ? ORDER BY run_id, ncbi_taxon_id",
+                (mesh_id,),
+            ).fetchall()
+        ]
+        if not rows:
+            return LookupRecord(query=query, found=False)
+        n_runs = len({r["run_id"] for r in rows})
+        return LookupRecord(
+            query=query,
+            found=True,
+            values={SAMPLE_PROFILES: {"mesh_id": mesh_id, "n_runs": n_runs, "profiles": rows}},
+        )
 
     def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
         taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
