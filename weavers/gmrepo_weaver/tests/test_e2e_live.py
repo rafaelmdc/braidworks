@@ -19,7 +19,14 @@ import pytest
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
-from gmrepo_weaver.setup import _overview_rows, _post, _taxon_associations, write_db
+from gmrepo_weaver.setup import (
+    _fetch_profiles,
+    _fetch_run_ids,
+    _overview_rows,
+    _post,
+    _taxon_associations,
+    write_db,
+)
 from gmrepo_weaver.weaver import GmrepoWeaver
 
 pytestmark = pytest.mark.skipif(
@@ -79,3 +86,32 @@ async def test_live_minibuild_and_resolve(tmp_path: Path):
     )
     skip_if_transient(miss[0])
     assert miss[0].status is WeaveStatus.NO_MATCH
+
+
+async def test_live_sample_profiles_minibuild(tmp_path: Path):
+    """The per-run sample-profile path: list runs for a phenotype + fetch a few profiles."""
+    mesh_id = "D003924"  # Crohn Disease — a well-sampled phenotype
+    run_ids = _fetch_run_ids(_post, mesh_id, max_runs=3)
+    assert run_ids, "expected the *Limit run-listing route to return run ids"
+
+    profiles = _fetch_profiles(_post, [mesh_id], max_runs=3)
+    assert profiles, "expected per-run taxonomic profiles with relative abundances"
+    assert all(0.0 <= p["relative_abundance"] <= 100.0 for p in profiles)
+    assert len({p["run_id"] for p in profiles}) >= 1
+
+    db = tmp_path / "gmrepo.sqlite"
+    write_db(db, overview=[], associations=[], phenotypes=[], sample_profiles=profiles)
+    weaver = GmrepoWeaver({"local": GmrepoLocalBackend(db)})
+    out = await weaver.execute_batch(
+        "gmrepo.sample_profiles",
+        [StrandSet.from_strands("e", [Strand("disease.mesh.id", mesh_id)])],
+        requested_outputs=frozenset({"microbe.abundance.sample_profiles"}),
+        backend="local",
+    )
+    r = out[0]
+    skip_if_transient(r)
+    assert r.status is WeaveStatus.OK
+    profile = {s.type_id: s.value for s in r.strands}["microbe.abundance.sample_profiles"]
+    assert profile["mesh_id"] == mesh_id
+    assert profile["n_runs"] >= 1
+    assert profile["profiles"]

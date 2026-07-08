@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -318,7 +318,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },

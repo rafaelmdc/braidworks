@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "agora"
-WEAVER_VERSION = "0.1.2"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = (
     "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
 )
@@ -41,7 +41,11 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 id="describe_metabolic_reconstruction",
                 consumes=frozenset({"ncbi.taxon.id"}),
                 produces=frozenset(
-                    {"microbe.metabolism.reactions", "microbe.metabolism.reconstruction"}
+                    {
+                        "microbe.metabolism.reactions",
+                        "microbe.metabolism.reconstruction",
+                        "microbe.metabolism.sbml",
+                    }
                 ),
                 output_groups=(
                     OutputGroup(
@@ -50,6 +54,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(
                         id="reactions", outputs=frozenset({"microbe.metabolism.reactions"})
                     ),
+                    OutputGroup(id="model", outputs=frozenset({"microbe.metabolism.sbml"})),
                 ),
                 backends=backends,
                 max_batch_size=50,

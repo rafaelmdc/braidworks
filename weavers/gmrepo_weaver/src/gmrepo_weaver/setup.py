@@ -114,14 +114,21 @@ def write_db(
     overview: list[dict],
     associations: list[dict],
     phenotypes: list[dict],
+    sample_profiles: list[dict] | None = None,
 ) -> None:
     """Build the SQLite at ``target`` from already-fetched (or canned) tables.
 
     Shared by the live build (``_build``) and the fixture, so schema + join live in
     one place. ``overview`` rows are one-per-taxon (normalized global summary);
     ``association`` rows are one-per-(taxon, phenotype). ``ncbi_taxon_id`` is the join
-    key the backend queries on.
+    key the backend queries on for the taxon-centric capability.
+
+    ``sample_profiles`` (optional) are one-per-(phenotype, run, taxon) relative-abundance
+    rows for the *per-sample* capability (``gmrepo.sample_profiles``, keyed on ``mesh_id``)
+    that feeds the co-occurrence layer. Empty by default so the taxon-abundance build stays
+    the fast few-MB crawl; populated only when a caller asks for specific phenotypes' runs.
     """
+    sample_profiles = sample_profiles or []
     content = _content_hash(
         sorted(overview, key=lambda r: (int(r["ncbi_taxon_id"]), r.get("rank", ""))),
         sorted(
@@ -129,6 +136,10 @@ def write_db(
             key=lambda r: (int(r["ncbi_taxon_id"]), str(r.get("mesh_id", ""))),
         ),
         sorted(phenotypes, key=lambda p: str(p.get("mesh_id", ""))),
+        sorted(
+            sample_profiles,
+            key=lambda r: (str(r.get("mesh_id", "")), str(r.get("run_id", "")), int(r["ncbi_taxon_id"])),
+        ),
     )
 
     con = sqlite3.connect(target)
@@ -177,8 +188,26 @@ def write_db(
                 for r in associations
             ],
         )
+        con.execute(
+            "CREATE TABLE sample_profile ("
+            "mesh_id TEXT, run_id TEXT, ncbi_taxon_id INTEGER, rank TEXT, relative_abundance REAL)"
+        )
+        con.executemany(
+            "INSERT INTO sample_profile VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    r.get("mesh_id"),
+                    r.get("run_id"),
+                    int(r["ncbi_taxon_id"]),
+                    r.get("rank"),
+                    _num(r.get("relative_abundance")),
+                )
+                for r in sample_profiles
+            ],
+        )
         con.execute("CREATE INDEX ix_overview_taxon ON overview(ncbi_taxon_id)")
         con.execute("CREATE INDEX ix_association_taxon ON association(ncbi_taxon_id)")
+        con.execute("CREATE INDEX ix_profile_mesh ON sample_profile(mesh_id)")
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
@@ -186,6 +215,7 @@ def write_db(
                 ("n_overview", str(len(overview))),
                 ("n_associations", str(len(associations))),
                 ("n_phenotypes", str(len(phenotypes))),
+                ("n_sample_profiles", str(len(sample_profiles))),
                 ("source", API_BASE),
             ],
         )
@@ -204,8 +234,11 @@ def db_is_valid(path: Path) -> bool:
         return False
     try:
         has_hash = con.execute("SELECT value FROM meta WHERE key = 'content_sha256'").fetchone()
-        count = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]
-        return bool(has_hash) and count > 0
+        assoc = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]
+        # A profiles-only build (associations empty) is still usable for the sample_profiles
+        # capability, so accept either populated table.
+        profiles = con.execute("SELECT COUNT(*) FROM sample_profile").fetchone()[0]
+        return bool(has_hash) and (assoc > 0 or profiles > 0)
     except sqlite3.Error:
         return False
     finally:
@@ -230,6 +263,12 @@ def _post(endpoint: str, body: dict[str, Any]) -> Any:
 
 
 _TAXON_ENDPOINT = "getPhenotypesAndAbundanceSummaryOfAAssociatedTaxon"
+# Per-run endpoints for the sample-profile crawl (the co-occurrence substrate). The
+# ``*Limit`` run-listing route is the live one — the plain getAssociatedRunsByPhenotypeMeshID
+# returns empty (same dead family as the *ByMeshID abundance endpoints).
+_RUNS_ENDPOINT = "getAssociatedRunsByPhenotypeMeshIDLimit"
+_PROFILE_ENDPOINT = "getFullTaxonomicProfileByRunID"
+_RUNS_PAGE = 100  # run-listing pagination page size
 
 
 def _overview_rows(gut_microbes: Any) -> list[dict]:
@@ -285,6 +324,83 @@ def _taxon_associations(taxid: int, payload: Any) -> list[dict]:
     return out
 
 
+def _fetch_run_ids(
+    post: Callable[[str, dict[str, Any]], Any], mesh_id: str, max_runs: int
+) -> list[str]:
+    """List up to ``max_runs`` run ids for a phenotype (paginated over the live *Limit route)."""
+    run_ids: list[str] = []
+    skip = 0
+    while len(run_ids) < max_runs:
+        want = min(_RUNS_PAGE, max_runs - len(run_ids))
+        batch = post(_RUNS_ENDPOINT, {"mesh_id": mesh_id, "skip": skip, "limit": want})
+        rows = batch if isinstance(batch, list) else _rows_of(batch, "runs")
+        if not rows:
+            break
+        for r in rows:
+            rid = r.get("run_id") if isinstance(r, dict) else None
+            if rid:
+                run_ids.append(str(rid))
+        skip += len(rows)
+        if len(rows) < want:
+            break
+    return run_ids[:max_runs]
+
+
+def _run_profile_rows(mesh_id: str, run_id: str, payload: Any) -> list[dict]:
+    """Rows of ``getFullTaxonomicProfileByRunID`` → per-(run, taxon) relative-abundance dicts."""
+    if not isinstance(payload, dict):
+        return []
+    out: list[dict] = []
+    for rank_key in ("species", "genus"):
+        for row in payload.get(rank_key, []) or []:
+            if not isinstance(row, dict):
+                continue
+            taxid = _coerce_taxid(row.get("ncbi_taxon_id"))
+            abundance = _num(row.get("relative_abundance"))
+            if taxid is None or abundance is None:
+                continue
+            out.append(
+                {
+                    "mesh_id": mesh_id,
+                    "run_id": run_id,
+                    "ncbi_taxon_id": taxid,
+                    "rank": row.get("taxon_rank_level") or rank_key,
+                    "relative_abundance": abundance,
+                }
+            )
+    return out
+
+
+def _fetch_profiles(
+    post: Callable[[str, dict[str, Any]], Any],
+    mesh_ids: list[str],
+    max_runs: int,
+    progress: ProgressCallback | None = None,
+) -> list[dict]:
+    """Fetch per-run species/genus profiles for the given phenotypes (bounded by ``max_runs``).
+
+    One run-listing walk per phenotype, then the per-run profiles over the thread pool
+    (network-bound). A flaky run is skipped so it can't sink the crawl.
+    """
+    profiles: list[dict] = []
+    for mesh_id in mesh_ids:
+        run_ids = _fetch_run_ids(post, mesh_id, max_runs)
+
+        def _one(run_id: str, mesh_id: str = mesh_id) -> list[dict]:
+            try:
+                return _run_profile_rows(mesh_id, run_id, post(_PROFILE_ENDPOINT, {"run_id": run_id}))
+            except Exception:  # noqa: BLE001 — one flaky run must not sink the crawl
+                return []
+
+        with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
+            futures = {pool.submit(_one, rid): rid for rid in run_ids}
+            for done, future in enumerate(as_completed(futures), start=1):
+                if progress:
+                    progress(done, len(run_ids), f"{mesh_id} run {futures[future]}")
+                profiles.extend(future.result())
+    return profiles
+
+
 def _fetch_tables(
     post: Callable[[str, dict[str, Any]], Any],
     progress: ProgressCallback | None = None,
@@ -332,10 +448,27 @@ def _build(
     *,
     post: Callable[[str, dict[str, Any]], Any] = _post,
     progress: ProgressCallback | None = None,
+    profile_phenotypes: list[str] | None = None,
+    profile_max_runs: int = 200,
 ) -> None:
-    """Fetch the GMrepo tables and write the SQLite at ``target`` (``post`` injectable)."""
+    """Fetch the GMrepo tables and write the SQLite at ``target`` (``post`` injectable).
+
+    If ``profile_phenotypes`` (mesh ids) are given, also crawl up to ``profile_max_runs``
+    per-run profiles for each — the per-sample substrate for the co-occurrence layer.
+    """
     overview, associations, phenotypes = _fetch_tables(post, progress)
-    write_db(target, overview=overview, associations=associations, phenotypes=phenotypes)
+    sample_profiles = (
+        _fetch_profiles(post, profile_phenotypes, profile_max_runs, progress)
+        if profile_phenotypes
+        else []
+    )
+    write_db(
+        target,
+        overview=overview,
+        associations=associations,
+        phenotypes=phenotypes,
+        sample_profiles=sample_profiles,
+    )
 
 
 def ensure_gmrepo_db(
@@ -344,17 +477,28 @@ def ensure_gmrepo_db(
     auto: bool = False,
     refresh: bool = False,
     progress: ProgressCallback | None = None,
+    profile_phenotypes: list[str] | None = None,
+    profile_max_runs: int = 200,
 ) -> Path:
     """Ensure a valid local GMrepo SQLite exists, building it if consented.
 
     Idempotent: a valid DB is returned instantly. Otherwise acquisition needs consent
     (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); without it, an actionable
     ``BackendConfigurationError`` is raised. ``refresh=True`` rebuilds from the API.
+
+    ``profile_phenotypes`` (mesh ids) additionally crawl per-run sample profiles for the
+    co-occurrence layer; because the DB build is idempotent, adding profiles to an existing
+    DB requires ``refresh=True`` (the profiles ride along with a full rebuild).
     """
     path = Path(db_path) if db_path else default_gmrepo_db_path()
 
     def _build_with_progress(target: Path) -> None:
-        _build(target, progress=progress)
+        _build(
+            target,
+            progress=progress,
+            profile_phenotypes=profile_phenotypes,
+            profile_max_runs=profile_max_runs,
+        )
 
     return ensure_local_db(
         path,

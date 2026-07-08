@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -62,6 +62,21 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="associations", outputs=frozenset({"microbe.abundance.associations"})
                     ),
                     OutputGroup(id="full", outputs=frozenset({"microbe.abundance.records"})),
+                ),
+                backends=backends,
+            ),
+            Capability(
+                # Per-sample substrate for the co-occurrence layer: a phenotype (MeSH id) ->
+                # its runs' per-taxon relative abundances (the sample × taxon matrix). Keyed on
+                # disease.mesh.id, not the taxon id the summary capability consumes.
+                id="gmrepo.sample_profiles",
+                consumes=frozenset({"disease.mesh.id"}),
+                produces=frozenset({"microbe.abundance.sample_profiles"}),
+                output_groups=(
+                    OutputGroup(
+                        id="profiles",
+                        outputs=frozenset({"microbe.abundance.sample_profiles"}),
+                    ),
                 ),
                 backends=backends,
             ),

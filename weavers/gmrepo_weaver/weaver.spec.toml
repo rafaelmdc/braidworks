@@ -21,7 +21,7 @@ db_name = "gmrepo"
 weaver_id = "gmrepo"
 kind = "lookup"
 title = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
-version = "0.1.0"
+version = "0.2.0"
 license = "Open"
 citation = "https://doi.org/10.1093/nar/gkz764"
 attribution = "GMrepo (Wu et al., NAR 2020)"
@@ -66,6 +66,19 @@ consumes = ["ncbi.taxon.id"]
   [[capability.group]]
   id = "full"
   outputs = ["microbe.abundance.records"]
+
+# Per-sample substrate for the co-occurrence layer: a phenotype (MeSH id) -> its runs'
+# per-taxon relative abundances (the sample × taxon matrix). Keyed on disease.mesh.id.
+# Populated only for phenotypes a caller crawls (getAssociatedRunsByPhenotypeMeshIDLimit +
+# getFullTaxonomicProfileByRunID, bounded by profile_max_runs) — heavier than the taxon
+# summaries, so it is a separate opt-in build.
+[[capability]]
+id = "gmrepo.sample_profiles"
+consumes = ["disease.mesh.id"]
+
+  [[capability.group]]
+  id = "profiles"
+  outputs = ["microbe.abundance.sample_profiles"]
 
 # Golden runs against the deterministic fixture (build_gmrepo_weaver_fixture: a tiny SQLite
 # built from canned rows for Bacteroides, taxid 816) so verify --strict is reproducible offline.

@@ -37,6 +37,8 @@ def build_gmrepo_weaver_configured(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    profile_phenotypes: list[str] | None = None,
+    profile_max_runs: int = 200,
     **_config: Any,
 ) -> BaseWeaver:
     """Configured builder for real use: ensures the local DB, then wires the backend.
@@ -44,8 +46,18 @@ def build_gmrepo_weaver_configured(
     With ``auto_setup=True`` (or ``BRAIDWORKS_AUTO_DOWNLOAD=1``) the few-MB DB is built
     from the GMrepo API on first use; otherwise an explicit ``db_path`` must already
     point at a built DB, or an actionable error is raised. ``refresh=True`` rebuilds.
+
+    Pass ``profile_phenotypes`` (MeSH ids) to also crawl up to ``profile_max_runs`` per-run
+    sample profiles for each — the ``gmrepo.sample_profiles`` substrate for the co-occurrence
+    layer. Since the build is idempotent, adding profiles to an existing DB needs ``refresh=True``.
     """
-    path = ensure_gmrepo_db(db_path, auto=auto_setup, refresh=refresh)
+    path = ensure_gmrepo_db(
+        db_path,
+        auto=auto_setup,
+        refresh=refresh,
+        profile_phenotypes=profile_phenotypes,
+        profile_max_runs=profile_max_runs,
+    )
     return GmrepoWeaver({"local": GmrepoLocalBackend(path)})
 
 

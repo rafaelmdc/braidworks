@@ -124,6 +124,12 @@ OUTPUT_KEYS: dict[str, str] = {
     "phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
     "microbe.abundance.records": "Full GMrepo abundance rows for this microbe — the global "
     "overview plus every per-phenotype prevalence/abundance record.",
+    "microbe.abundance.sample_profiles": "Per-run taxonomic profiles for a phenotype (GMrepo) — "
+    "the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) "
+    "that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI).",
+    "microbe.metabolism.sbml": "The genome-scale metabolic model (AGORA2 SBML) for this microbe — "
+    "a local path per reconstruction (lazily downloaded per model), the substrate for "
+    "community-flux / seed-set metabolic-complementarity analysis.",
     # disease-ontology outputs (mondo_weaver) — the disease-side feature source
     "disease.ontology.name": "The MONDO term name for this disease.",
     "disease.ontology.parents": "This disease's direct is-a parents in MONDO — a list of "

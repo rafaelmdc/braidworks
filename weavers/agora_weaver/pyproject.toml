@@ -1,6 +1,6 @@
 [project]
 name = "agora_weaver"
-version = "0.1.2"
+version = "0.2.0"
 description = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
