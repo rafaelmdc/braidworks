@@ -1,0 +1,75 @@
+# gmrepo_weaver — GMrepo (Chen lab, HUST): curated human gut metagenome abundances.
+#
+# A `lookup` weaver: ncbi.taxon.id -> this microbe's *observed ecology* in curated human
+# gut metagenomes — how abundant/prevalent it is across all samples, and its per-phenotype
+# (disease/health) prevalence + median relative abundance, from the free, keyless GMrepo
+# REST API. Unlike the genome-derived layers (reactions, traits, phylogeny), this is
+# measured-from-samples abundance — a genuinely orthogonal modality.
+#
+# GMrepo exposes a POST-JSON API. The whole per-taxon/per-phenotype abundance summary is
+# bounded (~150 phenotypes x two rank-level calls + one global overview), so the `local`
+# backend builds a small SQLite once by fetching + inverting those tables on taxon id,
+# then serves offline (like disbiome_weaver — no per-run profiles in this DB; those are a
+# heavier, separate ingestion for the co-occurrence layer).
+#
+# Outputs come in light->heavy slices: `summary` (global abundance overview + the phenotype
+# names it appears in + a count), `associations` (one compact row per phenotype: prevalence
+# %, median relative abundance, sample count), or `full` (the complete joined blob). Each
+# group is independent, so the light slice never pays for the blob.
+[weaver]
+db_name = "gmrepo"
+weaver_id = "gmrepo"
+kind = "lookup"
+title = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
+version = "0.1.0"
+license = "Open"
+citation = "https://doi.org/10.1093/nar/gkz764"
+attribution = "GMrepo (Wu et al., NAR 2020)"
+source_url = "https://gmrepo.humangut.info"
+fingerprint_source = "content hash (sha256) of the fetched GMrepo abundance tables, recorded at build time — GMrepo publishes no release tag"
+backends = ["local"]
+# Real records from the keyless POST-JSON API. The local build fetches the global microbe
+# overview once, then walks every phenotype fetching its associated genera + species, and
+# inverts the rows on ncbi_taxon_id.
+source_sample = """
+# POST https://gmrepo.humangut.info/api/get_all_gut_microbes  body {}  ->
+{ "all_species": [ {"species_name":"Bacteroides uniformis","ncbi_taxon_id":820,
+                    "pct_of_all_samples":78.4,"nr_phenotypes":41,"median_abundance":2.13} ],
+  "all_genus":   [ {"genus_name":"Bacteroides","ncbi_taxon_id":816,
+                    "pct_of_all_samples":94.1,"nr_phenotypes":58,"median_abundance":9.72} ] }
+# POST /api/get_all_phenotypes  body {}  ->
+{ "phenotypes": [ {"mesh_id":"D003093","phenotype_name":"Colitis, Ulcerative",
+                   "nr_species":712,"nr_genera":233,"nr_valid_samples":540} ] }
+# POST /api/getAssociatedGeneraByMeshID   body {"mesh_id":"D003093"}  ->
+[ {"genus_name":"Bacteroides","ncbi_taxon_id":816,"samples":540,
+   "prevalence_percentage":91.3,"median_abundance":7.41} ]
+# POST /api/getAssociatedSpeciesByMeshID  body {"mesh_id":"D003093"}  -> [ {species_name, ncbi_taxon_id, samples, prevalence_percentage, median_abundance} ]
+"""
+
+[[capability]]
+id = "gmrepo.list_abundances"
+# GMrepo keys on NCBI taxon ids directly (genus and species rank both present); consume the
+# generic organism join key so a genus or species taxid both resolve.
+consumes = ["ncbi.taxon.id"]
+
+  # Lightest slice — "how common/abundant is this microbe in guts, and in which phenotypes?"
+  [[capability.group]]
+  id = "summary"
+  outputs = ["microbe.abundance.overview", "microbe.abundance.phenotype_names", "microbe.abundance.count"]
+
+  # Medium slice — one compact row per phenotype (the prevalence + abundance signal).
+  [[capability.group]]
+  id = "associations"
+  outputs = ["microbe.abundance.associations"]
+
+  # The big blob — global overview + every per-phenotype row, fully joined.
+  [[capability.group]]
+  id = "full"
+  outputs = ["microbe.abundance.records"]
+
+# Golden runs against the deterministic fixture (build_gmrepo_weaver_fixture: a tiny SQLite
+# built from canned rows for Bacteroides, taxid 816) so verify --strict is reproducible offline.
+[[golden]]
+capability = "gmrepo.list_abundances"
+input = { "ncbi.taxon.id" = 816 }
+expect = { "microbe.abundance.count" = 1, "microbe.abundance.phenotype_names" = ["Colitis, Ulcerative"] }
