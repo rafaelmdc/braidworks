@@ -28,6 +28,7 @@ import json
 import sqlite3
 import urllib.request
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,6 +38,7 @@ API_BASE = "https://gmrepo.humangut.info/api"
 NAMESPACE = "gmrepo"
 DB_FILENAME = "gmrepo.sqlite"
 _FETCH_TIMEOUT = 180  # seconds
+_FETCH_WORKERS = 8  # concurrent per-taxon requests (network-bound; polite to the API)
 # GMrepo sits behind Cloudflare; send a UA so the POST is not 403'd (cf. agora_weaver).
 _USER_AGENT = "braidworks/gmrepo_weaver (+https://github.com/rafaelmdc/braidworks)"
 
@@ -291,8 +293,10 @@ def _fetch_tables(
 
     One call each for the taxon universe (``get_all_gut_microbes``) and the phenotype
     catalog (``get_all_phenotypes``), then one call per overview taxon for its
-    per-phenotype abundance rows. A per-taxon fetch that errors is skipped (a partial
-    taxon must not abort a ~3000-call build); the taxon still keeps its overview row.
+    per-phenotype abundance rows — those ~3000 calls are pure network wait, so they run
+    over a small thread pool (``_FETCH_WORKERS``) to keep the one-time build to minutes
+    rather than hours. A per-taxon fetch that errors is skipped (a partial taxon must not
+    abort the build); the taxon still keeps its overview row.
     """
     overview = _overview_rows(post("get_all_gut_microbes", {}))
 
@@ -306,17 +310,20 @@ def _fetch_tables(
         if p.get("disease")
     ]
 
+    def _one(taxid: int) -> list[dict]:
+        try:
+            return _taxon_associations(taxid, post(_TAXON_ENDPOINT, {"ncbi_taxon_id": taxid}))
+        except Exception:  # noqa: BLE001 — a single flaky taxon must not sink the build
+            return []
+
     associations: list[dict] = []
     total = len(overview)
-    for i, taxon in enumerate(overview):
-        taxid = taxon["ncbi_taxon_id"]
-        if progress:
-            progress(i + 1, total, f"taxon {taxid}")
-        try:
-            payload = post(_TAXON_ENDPOINT, {"ncbi_taxon_id": taxid})
-        except Exception:  # noqa: BLE001 — a single flaky taxon must not sink the build
-            continue
-        associations.extend(_taxon_associations(taxid, payload))
+    with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
+        futures = {pool.submit(_one, t["ncbi_taxon_id"]): t["ncbi_taxon_id"] for t in overview}
+        for done, future in enumerate(as_completed(futures), start=1):
+            if progress:
+                progress(done, total, f"taxon {futures[future]}")
+            associations.extend(future.result())
     return overview, associations, phenotypes
 
 
