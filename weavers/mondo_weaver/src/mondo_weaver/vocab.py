@@ -15,9 +15,9 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = (
-    "MONDO disease ontology (MeSH/MedDRA disease id -> unified MONDO id + is-a ancestors)"
+    "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
 )
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -68,6 +68,34 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="mondo.lookup_by_meddra",
                 consumes=frozenset({"disease.meddra.id"}),
+                produces=frozenset(
+                    {
+                        "disease.mondo.id",
+                        "disease.ontology.ancestors",
+                        "disease.ontology.depth",
+                        "disease.ontology.name",
+                        "disease.ontology.parents",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset(
+                            {
+                                "disease.mondo.id",
+                                "disease.ontology.depth",
+                                "disease.ontology.name",
+                                "disease.ontology.parents",
+                            }
+                        ),
+                    ),
+                    OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
+                ),
+                backends=backends,
+            ),
+            Capability(
+                id="mondo.lookup_by_name",
+                consumes=frozenset({"disease.name"}),
                 produces=frozenset(
                     {
                         "disease.mondo.id",

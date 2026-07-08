@@ -13,11 +13,12 @@ from pathlib import Path
 from mondo_weaver.setup import _Term, write_db
 
 
-def _term(mondo_id, name, parents=(), xrefs=()):
+def _term(mondo_id, name, parents=(), xrefs=(), synonyms=()):
     t = _Term(mondo_id)
     t.name = name
     t.parents = list(parents)
     t.xrefs = list(xrefs)
+    t.synonyms = list(synonyms)
     return t
 
 
@@ -27,6 +28,7 @@ _TERMS = [
         "ulcerative colitis",
         parents=["MONDO:0005292"],
         xrefs=[("MESH", "D003093", True), ("MedDRA", "10045365", True)],
+        synonyms=["colitis ulcerative"],
     ),
     _term(
         "MONDO:0005292",

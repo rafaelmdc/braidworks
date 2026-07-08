@@ -74,6 +74,25 @@ async def test_integer_meddra_id_is_accepted():
     assert _strands(r)[MONDO_ID] == "MONDO:0005101"
 
 
+async def test_name_lookup_resolves_by_label():
+    r = await _resolve(
+        "mondo.lookup_by_name", "disease.name", "Ulcerative Colitis", {MONDO_ID, NAME}
+    )
+    sm = _strands(r)
+    assert sm[MONDO_ID] == "MONDO:0005101"  # case/whitespace-insensitive
+    assert sm[NAME] == "ulcerative colitis"
+
+
+async def test_name_lookup_resolves_by_exact_synonym():
+    r = await _resolve("mondo.lookup_by_name", "disease.name", "colitis ulcerative", {MONDO_ID})
+    assert _strands(r)[MONDO_ID] == "MONDO:0005101"
+
+
+async def test_unknown_name_is_no_match():
+    r = await _resolve("mondo.lookup_by_name", "disease.name", "not a real disease", {NAME})
+    assert r.status is WeaveStatus.NO_MATCH
+
+
 async def test_unknown_disease_is_no_match_not_error():
     r = await _resolve("mondo.lookup_by_mesh", "disease.mesh.id", "D999999", {NAME})
     assert r.status is WeaveStatus.NO_MATCH

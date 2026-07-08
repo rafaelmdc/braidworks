@@ -61,8 +61,16 @@ def normalize_xref(source: str, xref_id: str) -> tuple[str, str] | None:
     return tag, xref_id.strip()
 
 
+_SYNONYM_RE = re.compile(r'"((?:[^"\\]|\\.)*)"\s+(EXACT|NARROW|BROAD|RELATED)')
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a disease name/synonym for case- and whitespace-insensitive matching."""
+    return " ".join(name.lower().split())
+
+
 class _Term:
-    __slots__ = ("mondo_id", "name", "obsolete", "parents", "xrefs")
+    __slots__ = ("mondo_id", "name", "obsolete", "parents", "xrefs", "synonyms")
 
     def __init__(self, mondo_id: str) -> None:
         self.mondo_id = mondo_id
@@ -70,6 +78,7 @@ class _Term:
         self.obsolete = False
         self.parents: list[str] = []
         self.xrefs: list[tuple[str, str, bool]] = []  # (source_tag, id, is_equivalent)
+        self.synonyms: list[str] = []  # EXACT synonym strings only
 
 
 def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
@@ -105,6 +114,10 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
             match = _MONDO_RE.search(value)
             if match:
                 current.parents.append(match.group(0))
+        elif key == "synonym":
+            match = _SYNONYM_RE.match(value)
+            if match and match.group(2) == "EXACT":
+                current.synonyms.append(match.group(1).replace('\\"', '"'))
         elif key == "xref":
             token = value.split(" ", 1)[0]
             source, _, xref_id = token.partition(":")
@@ -127,10 +140,19 @@ def write_db(target: Path, *, data_version: str | None, terms: list[_Term]) -> N
         con.execute(
             "CREATE TABLE xref (source TEXT, xref_id TEXT, mondo_id TEXT, is_equivalent INTEGER)"
         )
+        # name index: normalized label/exact-synonym -> mondo id (priority 0=label, 1=synonym).
+        con.execute("CREATE TABLE name (norm TEXT, mondo_id TEXT, priority INTEGER)")
         con.executemany(
             "INSERT OR IGNORE INTO term VALUES (?, ?)",
             [(t.mondo_id, t.name) for t in terms],
         )
+        name_rows: list[tuple[str, str, int]] = []
+        for t in terms:
+            if t.name:
+                name_rows.append((normalize_name(t.name), t.mondo_id, 0))
+            for syn in t.synonyms:
+                name_rows.append((normalize_name(syn), t.mondo_id, 1))
+        con.executemany("INSERT INTO name VALUES (?, ?, ?)", name_rows)
         con.executemany(
             "INSERT INTO isa VALUES (?, ?)",
             [(t.mondo_id, p) for t in terms for p in t.parents if p in valid_ids],
@@ -141,6 +163,7 @@ def write_db(target: Path, *, data_version: str | None, terms: list[_Term]) -> N
         )
         con.execute("CREATE INDEX ix_isa_child ON isa(child)")
         con.execute("CREATE INDEX ix_xref_lookup ON xref(source, xref_id)")
+        con.execute("CREATE INDEX ix_name_lookup ON name(norm)")
         n_edges = con.execute("SELECT COUNT(*) FROM isa").fetchone()[0]
         n_xref = con.execute("SELECT COUNT(*) FROM xref").fetchone()[0]
         con.executemany(
@@ -170,7 +193,8 @@ def db_is_valid(path: Path) -> bool:
         has_version = con.execute("SELECT value FROM meta WHERE key = 'data_version'").fetchone()
         n_terms = con.execute("SELECT COUNT(*) FROM term").fetchone()[0]
         n_xref = con.execute("SELECT COUNT(*) FROM xref").fetchone()[0]
-        return bool(has_version) and n_terms > 0 and n_xref > 0
+        n_name = con.execute("SELECT COUNT(*) FROM name").fetchone()[0]  # 0.2.0 name index
+        return bool(has_version) and n_terms > 0 and n_xref > 0 and n_name > 0
     except sqlite3.Error:
         return False
     finally:

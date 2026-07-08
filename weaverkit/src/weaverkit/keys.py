@@ -47,6 +47,8 @@ SHARED_KEYS: dict[str, str] = {
     "for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
     "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for "
     "disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
+    "disease.name": "A disease name (e.g. 'ulcerative colitis') — a free-text entry point that "
+    "resolves to a disease ontology term via label/synonym matching.",
     "disease.mondo.id": "MONDO Disease Ontology id for one disease — the unified disease "
     "join key that harmonizes MeSH / MedDRA / DOID / OMIM identities.",
 }

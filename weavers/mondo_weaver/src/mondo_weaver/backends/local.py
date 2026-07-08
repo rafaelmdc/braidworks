@@ -24,7 +24,7 @@ from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
 
-from mondo_weaver.setup import db_is_valid, default_mondo_db_path
+from mondo_weaver.setup import db_is_valid, default_mondo_db_path, normalize_name
 
 MONDO_ID = "disease.mondo.id"
 NAME = "disease.ontology.name"
@@ -32,10 +32,12 @@ PARENTS = "disease.ontology.parents"
 DEPTH = "disease.ontology.depth"
 ANCESTORS = "disease.ontology.ancestors"
 
-# capability id -> (consumed type id, xref source tag)
+# capability id -> (consumed type id, xref source tag). Source "NAME" resolves via the
+# label/synonym index instead of a cross-reference.
 _CAPABILITY_SOURCE = {
     "mondo.lookup_by_mesh": ("disease.mesh.id", "MESH"),
     "mondo.lookup_by_meddra": ("disease.meddra.id", "MedDRA"),
+    "mondo.lookup_by_name": ("disease.name", "NAME"),
 }
 
 _ANCESTORS_SQL = """
@@ -113,11 +115,17 @@ class MondoLocalBackend(BackendBase):
         consumed, source = _CAPABILITY_SOURCE[capability_id]
         return [self._lookup_one(con, q, consumed, source) for q in queries]
 
-    def _resolve_mondo(self, con: sqlite3.Connection, source: str, xref_id: str) -> str | None:
+    def _resolve_mondo(self, con: sqlite3.Connection, source: str, value: str) -> str | None:
+        if source == "NAME":
+            row = con.execute(
+                "SELECT mondo_id FROM name WHERE norm = ? ORDER BY priority LIMIT 1",
+                (normalize_name(value),),
+            ).fetchone()
+            return row[0] if row else None
         row = con.execute(
             "SELECT mondo_id FROM xref WHERE source = ? AND xref_id = ? "
             "ORDER BY is_equivalent DESC LIMIT 1",
-            (source, xref_id),
+            (source, value),
         ).fetchone()
         return row[0] if row else None
 

@@ -1,6 +1,6 @@
 [project]
 name = "mondo_weaver"
-version = "0.1.0"
+version = "0.2.0"
 description = "MONDO disease ontology (MeSH/MedDRA disease id -> unified MONDO id + is-a ancestors) — a Braidworks weaver."
 readme = "README.md"
 requires-python = ">=3.12"
