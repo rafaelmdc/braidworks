@@ -42,6 +42,13 @@ SHARED_KEYS: dict[str, str] = {
     "protein.pfam.id": "A Pfam family id.",
     "pdb.id": "A PDB / PDBe structure id.",
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    # Disease layer (mondo_weaver) — entry points + the unified disease join key
+    "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point "
+    "for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
+    "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for "
+    "disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
+    "disease.mondo.id": "MONDO Disease Ontology id for one disease — the unified disease "
+    "join key that harmonizes MeSH / MedDRA / DOID / OMIM identities.",
 }
 
 
@@ -104,6 +111,25 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, "
     "method, sample, host.",
     "microbe.disease.records": "Full Disbiome experiment rows linking this microbe to diseases.",
+    # microbe abundance/ecology outputs (gmrepo_weaver) — measured from curated gut metagenomes
+    "microbe.abundance.overview": "This microbe's global gut-metagenome abundance summary — "
+    "percent of all samples it occurs in, its median relative abundance, and how many "
+    "phenotypes it appears in (GMrepo).",
+    "microbe.abundance.phenotype_names": "The gut-metagenome phenotypes (diseases/health) "
+    "this microbe is reported prevalent in (GMrepo).",
+    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, "
+    "phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
+    "microbe.abundance.records": "Full GMrepo abundance rows for this microbe — the global "
+    "overview plus every per-phenotype prevalence/abundance record.",
+    # disease-ontology outputs (mondo_weaver) — the disease-side feature source
+    "disease.ontology.name": "The MONDO term name for this disease.",
+    "disease.ontology.parents": "This disease's direct is-a parents in MONDO — a list of "
+    "{mondo_id, name}.",
+    "disease.ontology.ancestors": "This disease's full is-a ancestor lineage in MONDO (up to "
+    "the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis.",
+    "disease.ontology.depth": "This disease's minimum is-a distance to a MONDO root "
+    "(how specific the term is).",
     # AGORA2 metabolic-reconstruction outputs (agora_weaver)
     "microbe.metabolism.reconstruction": "This organism's AGORA2 genome-scale metabolic "
     "reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome).",

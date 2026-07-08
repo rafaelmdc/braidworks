@@ -26,7 +26,9 @@ SPEC_FILENAME = "weaver.spec.toml"
 
 # Keys a user supplies directly at the start of a braid — always "met", never an
 # island even if no weaver produces them.
-ENTRY_KEYS: frozenset[str] = frozenset({"organism.name", "protein.query"})
+ENTRY_KEYS: frozenset[str] = frozenset(
+    {"organism.name", "protein.query", "disease.mesh.id", "disease.meddra.id"}
+)
 
 # Directory names skipped during discovery (test fixtures aren't real weavers).
 _SKIP_DIRS: frozenset[str] = frozenset({"tests", "fixtures", "build", "dist", "__pycache__"})

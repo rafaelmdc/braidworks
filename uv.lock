@@ -12,7 +12,9 @@ members = [
     "disbiome-weaver",
     "example-weaver",
     "faprotax-weaver",
+    "gmrepo-weaver",
     "gtdb-weaver",
+    "mondo-weaver",
     "ncbi-weaver",
     "pdbe-weaver",
     "quickgo-weaver",
@@ -174,7 +176,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.11.2"
+version = "0.11.3"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -313,6 +315,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/d5/b1/e5b92c59d2c37817e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/35/380b9a5922f4340e51c309cde09e5bd32e62f02302971bee30dc15aa0624/fastapi-0.137.1-py3-none-any.whl", hash = "sha256:64f6983c59e45c4b9fdc44e57cb8035c2451ee91ea8e8ec042aca37de7cf6b69", size = 121877, upload-time = "2026-06-15T11:28:19.523Z" },
 ]
+
+[[package]]
+name = "gmrepo-weaver"
+version = "0.1.0"
+source = { editable = "weavers/gmrepo_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "gtdb-weaver"
@@ -458,6 +484,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
+
+[[package]]
+name = "mondo-weaver"
+version = "0.1.0"
+source = { editable = "weavers/mondo_weaver" }
+dependencies = [
+    { name = "braidworks-core" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "weaverkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
+    { name = "weaverkit", marker = "extra == 'test'", editable = "weaverkit" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
@@ -919,7 +969,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.4.5"
+version = "0.4.6"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
