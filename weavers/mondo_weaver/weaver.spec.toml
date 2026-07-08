@@ -1,0 +1,70 @@
+# mondo_weaver — MONDO (Monarch Initiative): the unified Disease Ontology.
+#
+# A `lookup` weaver: a disease id (MeSH descriptor or MedDRA id) -> that disease's place
+# in the MONDO Disease Ontology — its unified MONDO id, term name, direct is-a parents,
+# and its full is-a ancestor lineage up to the root. The ancestor lineage is a disease
+# *feature*: two diseases sharing ancestors are ontologically close, and an unseen disease
+# still carries ancestor features (cold-start), exactly what a disease-side representation
+# needs (turns bare disease IDs into a hierarchy embedding).
+#
+# MONDO ships a single ~53 MB OBO release (http://purl.obolibrary.org/obo/mondo.obo) with
+# is_a edges and MeSH/MedDRA cross-references, so the `local` backend parses it once into a
+# small SQLite (terms + is_a edges + xref index) and serves offline; ancestors are walked
+# with a recursive query at lookup time. Two entry capabilities (MeSH-coded and MedDRA-coded
+# diseases) share the backend so both Disbiome (MedDRA) and GMrepo (MeSH) resolve.
+[weaver]
+db_name = "mondo"
+weaver_id = "mondo"
+kind = "lookup"
+title = "MONDO disease ontology (MeSH/MedDRA disease id -> unified MONDO id + is-a ancestors)"
+version = "0.1.0"
+license = "CC-BY-4.0"
+citation = "https://doi.org/10.1101/2022.04.13.22273750"
+attribution = "Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)"
+source_url = "https://mondo.monarchinitiative.org"
+fingerprint_source = "the MONDO release tag from the OBO header (data-version, e.g. releases/2026-07-06)"
+backends = ["local"]
+# Real stanzas from mondo.obo. Each [Term] carries id/name, is_a edges (MONDO parents), and
+# xref lines cross-referencing MeSH/MedDRA (the reliable ones tagged MONDO:equivalentTo).
+source_sample = """
+data-version: releases/2026-07-06
+[Term]
+id: MONDO:0005101
+name: ulcerative colitis
+is_a: MONDO:0005292 ! colitis
+xref: MESH:D003093 {source="MONDO:equivalentTo"}
+xref: DOID:8577 {source="MONDO:equivalentTo"}
+"""
+
+[[capability]]
+id = "mondo.lookup_by_mesh"
+consumes = ["disease.mesh.id"]
+
+  # Lightest slice — the resolved MONDO identity + how specific it is.
+  [[capability.group]]
+  id = "term"
+  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.parents", "disease.ontology.depth"]
+
+  # The feature — the full is-a ancestor lineage.
+  [[capability.group]]
+  id = "ancestors"
+  outputs = ["disease.ontology.ancestors"]
+
+[[capability]]
+id = "mondo.lookup_by_meddra"
+consumes = ["disease.meddra.id"]
+
+  [[capability.group]]
+  id = "term"
+  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.parents", "disease.ontology.depth"]
+
+  [[capability.group]]
+  id = "ancestors"
+  outputs = ["disease.ontology.ancestors"]
+
+# Golden runs against the deterministic fixture (build_mondo_weaver_fixture: a tiny SQLite
+# with ulcerative colitis / colitis / IBD terms) so verify --strict is reproducible offline.
+[[golden]]
+capability = "mondo.lookup_by_mesh"
+input = { "disease.mesh.id" = "D003093" }
+expect = { "disease.mondo.id" = "MONDO:0005101", "disease.ontology.name" = "ulcerative colitis" }
