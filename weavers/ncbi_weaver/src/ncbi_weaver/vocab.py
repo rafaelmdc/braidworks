@@ -11,6 +11,7 @@ from braidworks.core import (
     OutputGroup,
     Parameter,
     Provenance,
+    UnavailableCapability,
     WeaverManifest,
 )
 
@@ -63,7 +64,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.1"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -279,17 +280,36 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         resolve_name_capability(backends=backends),
         describe_taxon_capability(backends=backends),
     ]
+    api_only = (
+        list_children_capability(backends=("api",)),
+        list_genomes_capability(backends=("api",)),
+        describe_genome_capability(backends=("api",)),
+        resolve_gene_capability(backends=("api",)),
+        describe_gene_capability(backends=("api",)),
+        list_orthologs_capability(backends=("api",)),
+    )
+    unavailable: tuple[UnavailableCapability, ...] = ()
     if "api" in backends:
-        capabilities.append(list_children_capability(backends=("api",)))
-        capabilities.append(list_genomes_capability(backends=("api",)))
-        capabilities.append(describe_genome_capability(backends=("api",)))
-        capabilities.append(resolve_gene_capability(backends=("api",)))
-        capabilities.append(describe_gene_capability(backends=("api",)))
-        capabilities.append(list_orthologs_capability(backends=("api",)))
+        capabilities.extend(api_only)
+    else:
+        # Declare what is being withheld and why. Without this the six API-only
+        # capabilities disappear silently and a caller asking for, say,
+        # ``ncbi.taxon.children_records`` is told no capability produces it — which reads
+        # as a gap in the weaver rather than a switch that is off.
+        unavailable = tuple(
+            UnavailableCapability(
+                id=cap.id,
+                produces=frozenset(cap.produces),
+                requires_backends=("api",),
+                hint="build_ncbi_weaver(enable_api=True)",
+            )
+            for cap in api_only
+        )
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
         capabilities=tuple(capabilities),
+        unavailable=unavailable,
     )

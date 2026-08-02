@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import warnings
+
 import networkx as nx
 
 from braidworks.core.capability import Capability, WeaverManifest
-from braidworks.core.exceptions import InvalidManifestError
+from braidworks.core.exceptions import (
+    CapabilityUnavailableWarning,
+    InvalidManifestError,
+)
 
 if TYPE_CHECKING:
     from braidworks.core.weaver import BaseWeaver
@@ -93,6 +98,15 @@ class BraidRegistry:
         self._weavers[manifest.weaver_id] = weaver
         self._manifests[manifest.weaver_id] = manifest
         self._graph = None  # invalidate cached projection
+        if manifest.unavailable:
+            listed = "; ".join(u.describe() for u in manifest.unavailable)
+            warnings.warn(
+                f"{manifest.weaver_id!r} registered without "
+                f"{len(manifest.unavailable)} of its capabilities: {listed}. "
+                "Requests for their outputs will fail as if no weaver produced them.",
+                CapabilityUnavailableWarning,
+                stacklevel=2,
+            )
 
     def get_weaver(self, weaver_id: str) -> BaseWeaver:
         return self._weavers[weaver_id]

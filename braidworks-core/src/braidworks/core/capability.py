@@ -271,6 +271,46 @@ class Provenance:
 
 
 @dataclass(frozen=True)
+class UnavailableCapability:
+    """A capability this weaver declares but *this instance* cannot offer.
+
+    A weaver's manifest describes the instance, not the package: when a capability's only
+    backends are unconfigured, honest practice is to leave it out of ``capabilities`` so the
+    planner never routes to something that cannot run. The cost is that it vanishes without
+    trace, and the caller sees ``no capability produces 'X'`` — which reads as "no weaver can
+    do this" when the truth is "this one could, if configured". Recording the omission here
+    keeps the manifest honest *and* keeps the reason discoverable.
+    """
+
+    id: str
+    produces: frozenset[str]
+    requires_backends: tuple[str, ...]
+    hint: str = ""  # how to enable it, e.g. "build_ncbi_weaver(enable_api=True)"
+
+    def describe(self) -> str:
+        backends = ", ".join(self.requires_backends)
+        tail = f" — {self.hint}" if self.hint else ""
+        return f"{self.id} (needs backend: {backends}){tail}"
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "produces": sorted(self.produces),
+            "requires_backends": list(self.requires_backends),
+            "hint": self.hint,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> UnavailableCapability:
+        return cls(
+            id=data["id"],
+            produces=frozenset(data.get("produces", ())),
+            requires_backends=tuple(data.get("requires_backends", ())),
+            hint=data.get("hint", ""),
+        )
+
+
+@dataclass(frozen=True)
 class WeaverManifest:
     """Static declaration of a weaver's capabilities. Read before instantiation."""
 
@@ -278,6 +318,9 @@ class WeaverManifest:
     version: str
     capabilities: tuple[Capability, ...] = field(default_factory=tuple)
     provenance: Provenance | None = None
+    # Capabilities this weaver declares but cannot offer as configured (see
+    # ``UnavailableCapability``). Purely diagnostic: never routed, only reported.
+    unavailable: tuple[UnavailableCapability, ...] = field(default_factory=tuple)
     # One-line human description (mirrors the spec's ``title``). Optional and purely
     # descriptive — surfaced by tooling (e.g. the network view's info card). Defaults
     # to "" so a manifest without it is still valid.
@@ -299,6 +342,8 @@ class WeaverManifest:
             data["provenance"] = self.provenance.to_json()
         if self.title:
             data["title"] = self.title
+        if self.unavailable:
+            data["unavailable"] = [u.to_json() for u in self.unavailable]
         return data
 
     @classmethod
@@ -309,5 +354,8 @@ class WeaverManifest:
             version=data["version"],
             capabilities=tuple(Capability.from_json(c) for c in data["capabilities"]),
             provenance=Provenance.from_json(prov) if prov is not None else None,
+            unavailable=tuple(
+                UnavailableCapability.from_json(u) for u in data.get("unavailable", ())
+            ),
             title=data.get("title", ""),
         )

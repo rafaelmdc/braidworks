@@ -65,3 +65,12 @@ class MissingInputError(BraidworksError):
 
 class InvalidManifestError(BraidworksError):
     """A weaver manifest failed validation at ``register()`` time."""
+
+
+class CapabilityUnavailableWarning(UserWarning):
+    """A registered weaver declares capabilities it cannot offer as configured.
+
+    Emitted at registration so the gap is visible *before* a fetch fails with what looks
+    like a missing capability. Silence with ``warnings.filterwarnings`` if the omission is
+    deliberate (e.g. an offline-only deployment).
+    """
