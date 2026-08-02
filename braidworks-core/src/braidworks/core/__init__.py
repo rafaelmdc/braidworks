@@ -13,6 +13,7 @@ from braidworks.core.cache import (
     compute_cache_key,
 )
 from braidworks.core.capability import (
+    UnavailableCapability,
     Capability,
     OutputGroup,
     Parameter,
@@ -37,6 +38,7 @@ from braidworks.core.fetch import FetchResult, async_fetch, fetch
 from braidworks.core.http import NOT_FOUND_STATUSES, is_not_found_status
 from braidworks.core.keytypes import CANONICAL_TYPES, canonicalize
 from braidworks.core.exceptions import (
+    CapabilityUnavailableWarning,
     BackendConfigurationError,
     BackendUnavailable,
     BraidworksError,
@@ -106,6 +108,8 @@ from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet
 from braidworks.core.weaver import BackendStrategy, BaseWeaver
 
 __all__ = [
+    "CapabilityUnavailableWarning",
+    "UnavailableCapability",
     "Braid",
     "BackendPolicy",
     "CapabilityInvocation",

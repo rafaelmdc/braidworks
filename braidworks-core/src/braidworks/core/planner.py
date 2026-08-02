@@ -144,11 +144,34 @@ class Braider:
             to_types=frozenset(cap.produces),
         )
 
+    def _no_producer_message(self, target: str) -> str:
+        """Explain a missing producer, distinguishing *absent* from *unconfigured*.
+
+        A capability whose backends are all unconfigured is left out of its weaver's
+        manifest, so the routing graph genuinely has no producer for its outputs. Saying
+        only "no capability produces X" sends the reader looking for a capability to write,
+        when one already exists and merely needs enabling — so name it when we can.
+        """
+        offers = [
+            (manifest.weaver_id, unavailable)
+            for manifest in self._registry.manifests()
+            for unavailable in manifest.unavailable
+            if target in unavailable.produces
+        ]
+        if not offers:
+            return f"no capability produces {target!r}"
+        listed = "; ".join(f"{weaver_id}:{u.describe()}" for weaver_id, u in offers)
+        return (
+            f"no *enabled* capability produces {target!r} — but it is produced by "
+            f"{listed}. That capability is not registered because its backend is not "
+            "configured, so enable the backend rather than adding a capability."
+        )
+
     def _route(
         self, graph: nx.MultiDiGraph, sources: frozenset[str], target: str
     ) -> list[str]:
         if target not in graph:
-            raise NoPathError(f"no capability produces {target!r}")
+            raise NoPathError(self._no_producer_message(target))
         if not sources:
             raise NoPathError(
                 f"no available type can reach {target!r} (no source types in graph)"
