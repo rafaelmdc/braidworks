@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-
 from braidworks.core import BaseWeaver
 
 from bacdive_weaver.backends.api import BacdiveApiBackend

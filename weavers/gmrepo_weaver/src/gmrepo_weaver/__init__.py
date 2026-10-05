@@ -5,8 +5,8 @@ from gmrepo_weaver.provider import GmrepoWeaverProvider, register
 from gmrepo_weaver.weaver import GmrepoWeaver
 
 __all__ = [
-    "build_gmrepo_weaver",
-    "register",
     "GmrepoWeaver",
     "GmrepoWeaverProvider",
+    "build_gmrepo_weaver",
+    "register",
 ]

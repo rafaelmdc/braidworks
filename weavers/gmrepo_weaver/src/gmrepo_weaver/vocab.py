@@ -15,13 +15,13 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.1"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
     source_url="https://gmrepo.humangut.info",
-    license="Open (academic)",
+    license="Open",
     citation="https://doi.org/10.1093/nar/gkz764",
     attribution="GMrepo (Wu et al., NAR 2020)",
 )
@@ -66,16 +66,12 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
             ),
             Capability(
-                # Per-sample substrate for the co-occurrence layer: a phenotype (MeSH id) ->
-                # its runs' per-taxon relative abundances (the sample × taxon matrix). Keyed on
-                # disease.mesh.id, not the taxon id the summary capability consumes.
                 id="gmrepo.sample_profiles",
                 consumes=frozenset({"disease.mesh.id"}),
                 produces=frozenset({"microbe.abundance.sample_profiles"}),
                 output_groups=(
                     OutputGroup(
-                        id="profiles",
-                        outputs=frozenset({"microbe.abundance.sample_profiles"}),
+                        id="profiles", outputs=frozenset({"microbe.abundance.sample_profiles"})
                     ),
                 ),
                 backends=backends,

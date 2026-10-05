@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from pathlib import Path
 import sqlite3
+from collections.abc import Callable, Iterator
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from tarfile import TarFile, TarInfo, is_tarfile
-from typing import BinaryIO, Iterator
+from typing import BinaryIO
 
 from .db import (
     clear_reference_tables,
@@ -371,7 +371,7 @@ def build_taxonomy_database(
         message="Initializing SQLite schema",
         final=True,
     )
-    built_at_utc = datetime.now(timezone.utc).isoformat()
+    built_at_utc = datetime.now(UTC).isoformat()
     source_dump_sha256 = sha256_file(dump_path)
     taxonomy_build_version = _build_taxonomy_version(built_at_utc, source_dump_sha256)
 

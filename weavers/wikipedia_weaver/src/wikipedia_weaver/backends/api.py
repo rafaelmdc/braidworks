@@ -14,13 +14,13 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
-
 from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core.http_pacing import PacedHTTPClient
 
 BASE_URL = "https://wikimedia.org/api/rest_v1/"
 _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gmail.com)"
@@ -29,9 +29,9 @@ _WINDOW_MONTHS = 12
 
 def _window(now: datetime) -> tuple[str, str]:
     """(start, end) timestamps (YYYYMMDD00) for the trailing window of whole months."""
-    end = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    end = datetime(now.year, now.month, 1, tzinfo=UTC)
     months = (now.year * 12 + (now.month - 1)) - _WINDOW_MONTHS
-    start = datetime(months // 12, months % 12 + 1, 1, tzinfo=timezone.utc)
+    start = datetime(months // 12, months % 12 + 1, 1, tzinfo=UTC)
     return start.strftime("%Y%m%d00"), end.strftime("%Y%m%d00")
 
 
@@ -50,14 +50,16 @@ class WikipediaApiBackend(BackendBase):
     def is_configured(self) -> bool:
         return self._configured or self._client is not None
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "wikipedia")
 
     def fingerprint(self) -> str:
         # Pageviews accrue monthly; bucket the cache by the window-end month.
-        _, end = _window(datetime.now(timezone.utc))
+        _, end = _window(datetime.now(UTC))
         return "enwiki-pageviews-" + end[:6]
 
     async def fetch(
@@ -69,7 +71,7 @@ class WikipediaApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        start, end = _window(datetime.now(timezone.utc))
+        start, end = _window(datetime.now(UTC))
         titles = [str(q.get("wikipedia.title", "")).strip() for q in queries]
 
         async def one(title: str) -> LookupRecord:
@@ -86,8 +88,9 @@ class WikipediaApiBackend(BackendBase):
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
                     return LookupRecord(query=query, found=False)  # no data for this title
-                return LookupRecord(query=query, found=False,
-                                    error=f"pageviews HTTP {exc.response.status_code}")
+                return LookupRecord(
+                    query=query, found=False, error=f"pageviews HTTP {exc.response.status_code}"
+                )
             except httpx.HTTPError as exc:
                 return LookupRecord(query=query, found=False, error=f"pageviews failed: {exc}")
 

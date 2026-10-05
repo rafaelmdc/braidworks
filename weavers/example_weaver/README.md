@@ -18,11 +18,11 @@ end-to-end in a minute, then copy the shape for your own weaver. It is literally
 
 ## The files to copy
 
-- **The contract:** [`weaver.spec.toml`](weaver.spec.toml).
-- **The one file to copy:** [`src/example_weaver/backends/local.py`](src/example_weaver/backends/local.py)
+- **The contract:** [`weaver.spec.toml`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/weaver.spec.toml).
+- **The one file to copy:** [`src/example_weaver/backends/local.py`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/src/example_weaver/backends/local.py)
   — a real `fetch` / `fingerprint` / `is_configured` over the bundled CSV.
-- **The data:** [`src/example_weaver/data/example_traits.csv`](src/example_weaver/data/example_traits.csv).
-- **Per-function contracts:** [weaverkit/docs/implementing-backends.md](../../weaverkit/docs/implementing-backends.md).
+- **The data:** [`src/example_weaver/data/example_traits.csv`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/src/example_weaver/data/example_traits.csv).
+- **Per-function contracts:** [weaverkit/docs/implementing-backends.md](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/docs/implementing-backends.md).
 
 ```python
 from example_weaver import build_example_weaver
@@ -39,4 +39,19 @@ uv run weaverkit verify --spec weaver.spec.toml \
 
 This is the *minimal* reference (a `lookup` weaver). For the *advanced* case — a
 `resolver` with fuzzy matching, two backends, and a multi-GB bulk DB — see
-[`../ncbi_weaver/`](../ncbi_weaver/). Build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[`../ncbi_weaver/`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/ncbi_weaver). Build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

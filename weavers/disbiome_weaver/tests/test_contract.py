@@ -7,9 +7,10 @@ weaken these — they are the framework contract.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from disbiome_weaver import vocab
 from disbiome_weaver.factory import build_disbiome_weaver_fixture
 
@@ -38,7 +39,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestDisbiomeResolveDiseasesCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("disbiome.list_diseases")
-    consumed_values_a = {"ncbi.taxon.species_id": 1591}
-    consumed_values_b = {"ncbi.taxon.species_id": "sample-b-ncbi.taxon.species_id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.species_id": 1591}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.species_id": "sample-b-ncbi.taxon.species_id"}
     group_subset = "summary"
     group_superset = "associations"

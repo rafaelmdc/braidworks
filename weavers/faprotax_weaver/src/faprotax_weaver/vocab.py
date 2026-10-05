@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "faprotax"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.1"
 WEAVER_TITLE = "FAPROTAX ecological function (organism lineage -> functional groups)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

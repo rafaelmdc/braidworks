@@ -9,8 +9,9 @@ A GTDB taxonomy string is a rank-prefixed, ``;``-joined lineage, e.g.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 # GTDB rank prefix -> canonical rank name (domain..species).
 _RANKS = {

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from disbiome_weaver.factory import build_disbiome_weaver_fixture
 
 CAP = "disbiome.list_diseases"

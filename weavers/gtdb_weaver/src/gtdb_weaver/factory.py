@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from braidworks.core import BackendConfigurationError, BaseWeaver
 
-from braidworks.core import BaseWeaver, BackendConfigurationError
-
+from gtdb_weaver.backends.api import BASE_URL as _API_BASE_URL
+from gtdb_weaver.backends.api import GtdbApiBackend
 from gtdb_weaver.backends.local import GtdbLocalBackend
-from gtdb_weaver.backends.api import BASE_URL as _API_BASE_URL, GtdbApiBackend
 from gtdb_weaver.setup import (
     auto_consented,
     db_is_valid,

@@ -27,12 +27,12 @@ import logging
 from typing import Any
 
 import httpx
+from braidworks.core import LookupRecord, format_exc, is_not_found_status
+from braidworks.core.http_pacing import PacedHTTPClient
 from rapidfuzz import fuzz
 
-from braidworks.core import LookupRecord, format_exc, is_not_found_status
-
-from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 from .. import vocab
+from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 
 _CHILDREN_LIMIT = 200  # top-N children surfaced in records (ids/count stay the true total)
 
@@ -108,12 +108,14 @@ class DatasetsV2Backend:
         """Datasets v2 is a live service, so the fingerprint is a fixed identifier."""
         return "datasets-v2"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         """Return the HTTP client, lazily creating one if none was injected."""
         if self._client is None:
             headers = {"api-key": self._api_key} if self._api_key else {}
             self._client = httpx.AsyncClient(base_url=self._base_url, headers=headers, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "ncbi")
 
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
@@ -168,22 +170,32 @@ class DatasetsV2Backend:
                     records.append(LookupRecord(query=q, found=False))
                     continue
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
+                )
                 continue
             except httpx.HTTPError as exc:
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
+                )
                 continue
             if not children:
                 records.append(LookupRecord(query=q, found=False))
                 continue
             ids = [c["taxid"] for c in children]
-            records.append(LookupRecord(query=q, found=True, values={
-                # The fan dimension: every distinct descendant taxid (uncapped).
-                vocab.TAXON_ID: ids,
-                vocab.CHILDREN_COUNT: len(ids),
-                vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
-            }))
+            records.append(
+                LookupRecord(
+                    query=q,
+                    found=True,
+                    values={
+                        # The fan dimension: every distinct descendant taxid (uncapped).
+                        vocab.TAXON_ID: ids,
+                        vocab.CHILDREN_COUNT: len(ids),
+                        vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
+                    },
+                )
+            )
         return records
 
     async def _fetch_children(self, taxid: str, rank: str) -> list[dict[str, Any]]:
@@ -194,9 +206,7 @@ class DatasetsV2Backend:
             params: dict[str, Any] = {"children": "true", "page_size": 1000}
             if page_token:
                 params["page_token"] = page_token
-            resp = await self._http().get(
-                f"/taxonomy/taxon/{taxid}/dataset_report", params=params
-            )
+            resp = await self._http().get(f"/taxonomy/taxon/{taxid}/dataset_report", params=params)
             resp.raise_for_status()
             body = resp.json()
             for entry in body.get("reports") or []:
@@ -207,8 +217,11 @@ class DatasetsV2Backend:
                 if rank and (node.get("rank") or "").lower() != rank:
                     continue
                 if tid not in out:
-                    out[tid] = {"taxid": tid, "name": _node_name(node),
-                                "rank": (node.get("rank") or "").lower()}
+                    out[tid] = {
+                        "taxid": tid,
+                        "name": _node_name(node),
+                        "rank": (node.get("rank") or "").lower(),
+                    }
             page_token = body.get("next_page_token")
             if not page_token:
                 break
@@ -245,19 +258,31 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
+                )
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
+                )
                 continue
             if not assemblies:
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            records.append(LookupRecord(query=q, found=True, values={
-                vocab.GENOME_ACCESSION: [a["accession"] for a in assemblies],  # the fan dimension
-                vocab.ASSEMBLY_COUNT: len(assemblies),
-                vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
-            }))
+            records.append(
+                LookupRecord(
+                    query=q,
+                    found=True,
+                    values={
+                        vocab.GENOME_ACCESSION: [
+                            a["accession"] for a in assemblies
+                        ],  # the fan dimension
+                        vocab.ASSEMBLY_COUNT: len(assemblies),
+                        vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
+                    },
+                )
+            )
         return records
 
     async def _fetch_genomes(self, taxid: str, base_params: dict) -> list[dict[str, Any]]:
@@ -268,9 +293,7 @@ class DatasetsV2Backend:
             params = dict(base_params)
             if page_token:
                 params["page_token"] = page_token
-            resp = await self._http().get(
-                f"/genome/taxon/{taxid}/dataset_report", params=params
-            )
+            resp = await self._http().get(f"/genome/taxon/{taxid}/dataset_report", params=params)
             resp.raise_for_status()
             body = resp.json()
             for a in body.get("reports") or []:
@@ -405,13 +428,15 @@ class DatasetsV2Backend:
             resp.raise_for_status()
             body = resp.json()
             for s in body.get("reports") or []:
-                out.append({
-                    "name": s.get("chr_name") or s.get("sequence_name"),
-                    "role": s.get("role"),
-                    "length": s.get("length"),
-                    "refseq_accession": s.get("refseq_accession"),
-                    "genbank_accession": s.get("genbank_accession"),
-                })
+                out.append(
+                    {
+                        "name": s.get("chr_name") or s.get("sequence_name"),
+                        "role": s.get("role"),
+                        "length": s.get("length"),
+                        "refseq_accession": s.get("refseq_accession"),
+                        "genbank_accession": s.get("genbank_accession"),
+                    }
+                )
             page_token = body.get("next_page_token")
             if not page_token:
                 break
@@ -486,12 +511,18 @@ class DatasetsV2Backend:
             if gene is None:
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            records.append(LookupRecord(query=q, found=True, values={
-                vocab.GENE_ID: int(gene["gene_id"]),
-                vocab.GENE_SYMBOL: gene.get("symbol"),
-                vocab.GENE_NAME: gene.get("description"),
-                vocab.GENE_ORGANISM: gene.get("taxname"),
-            }))
+            records.append(
+                LookupRecord(
+                    query=q,
+                    found=True,
+                    values={
+                        vocab.GENE_ID: int(gene["gene_id"]),
+                        vocab.GENE_SYMBOL: gene.get("symbol"),
+                        vocab.GENE_NAME: gene.get("description"),
+                        vocab.GENE_ORGANISM: gene.get("taxname"),
+                    },
+                )
+            )
         return records
 
     async def describe_gene(
@@ -573,12 +604,14 @@ class DatasetsV2Backend:
             product = r.get("product") or {}
             for t in product.get("transcripts") or []:
                 prot = t.get("protein") or {}
-                out.append({
-                    "transcript": t.get("accession_version"),
-                    "name": t.get("name"),
-                    "protein": prot.get("accession_version"),
-                    "protein_name": prot.get("name"),
-                })
+                out.append(
+                    {
+                        "transcript": t.get("accession_version"),
+                        "name": t.get("name"),
+                        "protein": prot.get("accession_version"),
+                        "protein_name": prot.get("name"),
+                    }
+                )
         return out[:_CHILDREN_LIMIT]
 
     async def list_orthologs(
@@ -597,24 +630,32 @@ class DatasetsV2Backend:
                 if is_not_found_status(exc.response.status_code):
                     records.append(LookupRecord(query=q, found=False))
                     continue
-                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
+                )
                 continue
             except httpx.HTTPError as exc:
-                records.append(LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}"))
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
+                )
                 continue
             if not orthologs:
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            records.append(LookupRecord(query=q, found=True, values={
-                vocab.GENE_ID: [o["gene_id"] for o in orthologs],  # the fan dimension
-                vocab.ORTHOLOG_COUNT: len(orthologs),
-                vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
-            }))
+            records.append(
+                LookupRecord(
+                    query=q,
+                    found=True,
+                    values={
+                        vocab.GENE_ID: [o["gene_id"] for o in orthologs],  # the fan dimension
+                        vocab.ORTHOLOG_COUNT: len(orthologs),
+                        vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
+                    },
+                )
+            )
         return records
 
-    async def _fetch_orthologs(
-        self, gid: str, taxon_filter: str | None
-    ) -> list[dict[str, Any]]:
+    async def _fetch_orthologs(self, gid: str, taxon_filter: str | None) -> list[dict[str, Any]]:
         """Paginate gene/id/{id}/orthologs, excluding the query gene; distinct + ordered."""
         out: dict[int, dict[str, Any]] = {}
         page_token: str | None = None
@@ -632,8 +673,11 @@ class DatasetsV2Backend:
                 oid = g.get("gene_id")
                 if oid is None or str(oid) == gid or oid in out:
                     continue  # skip the query gene itself
-                out[oid] = {"gene_id": int(oid), "symbol": g.get("symbol"),
-                            "organism": g.get("taxname")}
+                out[oid] = {
+                    "gene_id": int(oid),
+                    "symbol": g.get("symbol"),
+                    "organism": g.get("taxname"),
+                }
             page_token = body.get("next_page_token")
             if not page_token:
                 break

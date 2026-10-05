@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.4"
+version = "0.1.8"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -19,23 +19,105 @@ fingerprint_source = "QuickGO REST API contract (ebi.ac.uk/QuickGO/services, ann
 api_key = "none"
 backends = ["api"]
 # Real excerpt of GET .../QuickGO/services/annotation/search?geneProductId=P04637
-#   &limit=3&includeFields=goName
+#   &limit=2&includeFields=goName
 source_sample = """
 {
-  "numberOfHits": 1036,
-  "pageInfo": { "resultsPerPage": 3, "current": 1, "total": 346 },
+  "numberOfHits": 1043,
   "results": [
     {
+      "id": "UniProtKB:P04637!58679183",
       "geneProductId": "UniProtKB:P04637",
+      "qualifier": "acts_upstream_of",
       "goId": "GO:0008285",
       "goName": "negative regulation of cell population proliferation",
-      "goAspect": "biological_process",
       "goEvidence": "ISS",
-      "qualifier": "acts_upstream_of",
+      "goAspect": "biological_process",
+      "evidenceCode": "ECO:0000250",
+      "reference": "PMID:30514107",
+      "withFrom": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "UniProtKB",
+              "id": "P10361"
+            }
+          ]
+        }
+      ],
       "taxonId": 9606,
-      "symbol": "TP53"
+      "taxonName": null,
+      "assignedBy": "ARUK-UCL",
+      "extensions": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "CL",
+              "id": "0002254",
+              "relation": "occurs_in"
+            }
+          ]
+        }
+      ],
+      "targetSets": [
+        "BHF-UCL",
+        "KRUK",
+        "dbTF"
+      ],
+      "symbol": "TP53",
+      "date": "20210810",
+      "synonyms": null,
+      "name": null
+    },
+    {
+      "id": "UniProtKB:P04637!58679184",
+      "geneProductId": "UniProtKB:P04637",
+      "qualifier": "acts_upstream_of",
+      "goId": "GO:0051726",
+      "goName": "regulation of cell cycle",
+      "goEvidence": "ISS",
+      "goAspect": "biological_process",
+      "evidenceCode": "ECO:0000250",
+      "reference": "PMID:30514107",
+      "withFrom": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "UniProtKB",
+              "id": "P10361"
+            }
+          ]
+        }
+      ],
+      "taxonId": 9606,
+      "taxonName": null,
+      "assignedBy": "ARUK-UCL",
+      "extensions": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "CL",
+              "id": "0002254",
+              "relation": "occurs_in"
+            }
+          ]
+        }
+      ],
+      "targetSets": [
+        "BHF-UCL",
+        "KRUK",
+        "dbTF"
+      ],
+      "symbol": "TP53",
+      "date": "20210810",
+      "synonyms": null,
+      "name": null
     }
-  ]
+  ],
+  "pageInfo": {
+    "resultsPerPage": 2,
+    "current": 1,
+    "total": 522
+  }
 }
 # GET .../ontology/go/terms/GO:0006915 (describe_go_term)
 {
@@ -52,14 +134,14 @@ source_sample = """
 """
 
 # One accession -> paginated annotation/search, deduped to distinct GO terms. QuickGO
-# has no batch-by-accession endpoint, so batches fan out per accession.
+# accepts comma-separated accessions; the backend correlates echoed geneProductId.
 [[capability]]
 id = "list_go_terms"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 10
 # go.term is one→many: the weaver emits every distinct GO id, so a caller can fan out
 # (ExpandPolicy) one child per term — "protein -> all GO terms, each drillable". The
-# per-aspect lists (go.molecular_function/…) are descriptive term names; go.count the total.
+# per-aspect lists are term names; go.count counts distinct terms in retrieved pages.
 set_outputs = ["go.term"]
 
   [[capability.group]]
@@ -77,6 +159,14 @@ set_outputs = ["go.term"]
   [[capability.group]]
   id = "full"
   outputs = ["go.records"]
+
+  [[capability.group]]
+  id = "annotations"
+  outputs = ["go.annotation.records"]
+
+  [[capability.group]]
+  id = "coverage"
+  outputs = ["go.annotation.coverage"]
 
 # The consumer of the fan dimension: one GO id -> that term's detail (QuickGO
 # /ontology/go/terms/{id}). Consumes go.term (what list_go_terms produces), so a

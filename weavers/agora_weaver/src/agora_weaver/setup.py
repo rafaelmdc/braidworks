@@ -16,14 +16,12 @@ import json
 import logging
 import sqlite3
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
-from braidworks.core.localdb import auto_consented
+from braidworks.core.localdb import USER_AGENT, auto_consented, ensure_local_db
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
-from braidworks.core.localdb import USER_AGENT
-from braidworks.core.localdb import ensure_local_db
 from braidworks.core.localdb import md5_file as _md5_file
 
 from agora_weaver import dataset

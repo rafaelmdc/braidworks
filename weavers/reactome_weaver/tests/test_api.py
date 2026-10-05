@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from reactome_weaver.backends.api import ReactomeApiBackend
 
 CAP = "list_pathways"
@@ -38,14 +37,17 @@ def _backend(rows=None, *, status=200, calls=None, limit=30):
             return httpx.Response(200, content=json.dumps(rows if rows is not None else []))
         return httpx.Response(404, content=b"{}")
 
-    client = httpx.AsyncClient(base_url="https://r/ContentService",
-                              transport=httpx.MockTransport(handler))
+    client = httpx.AsyncClient(
+        base_url="https://r/ContentService", transport=httpx.MockTransport(handler)
+    )
     return ReactomeApiBackend(client=client, limit=limit)
 
 
 async def _one(backend, accession):
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": accession}], requested_outputs=ALL,
+        CAP,
+        [{"protein.uniprot.accession": accession}],
+        requested_outputs=ALL,
         groups_to_compute=frozenset(),
     )
     assert len(records) == 1
@@ -86,8 +88,12 @@ async def test_in_disease_flag_carried():
 
 DESCRIBE = "describe_pathway"
 _DETAIL = {
-    "stId": "R-HSA-69541", "displayName": "Stabilization of p53", "schemaClass": "Pathway",
-    "speciesName": "Homo sapiens", "isInDisease": False, "releaseDate": "2004-07-06",
+    "stId": "R-HSA-69541",
+    "displayName": "Stabilization of p53",
+    "schemaClass": "Pathway",
+    "speciesName": "Homo sapiens",
+    "isInDisease": False,
+    "releaseDate": "2004-07-06",
 }
 
 
@@ -101,17 +107,23 @@ def _detail_backend(obj=None, *, status=200, calls=None):
             return httpx.Response(200, content=json.dumps([obj] if obj else []))
         return httpx.Response(404, content=b"{}")
 
-    client = httpx.AsyncClient(base_url="https://r/ContentService",
-                              transport=httpx.MockTransport(handler))
+    client = httpx.AsyncClient(
+        base_url="https://r/ContentService", transport=httpx.MockTransport(handler)
+    )
     return ReactomeApiBackend(client=client)
 
 
 async def _describe(backend, pid):
     records = await backend.fetch(
-        DESCRIBE, [{"pathway.reactome.id": pid}],
+        DESCRIBE,
+        [{"pathway.reactome.id": pid}],
         requested_outputs=frozenset(
-            {"pathway.reactome.display_name", "pathway.reactome.species",
-             "pathway.reactome.in_disease", "pathway.reactome.detail"}
+            {
+                "pathway.reactome.display_name",
+                "pathway.reactome.species",
+                "pathway.reactome.in_disease",
+                "pathway.reactome.detail",
+            }
         ),
         groups_to_compute=frozenset(),
     )
@@ -155,8 +167,9 @@ async def test_describe_pathway_batches_many_into_one_request():
         found = [o for o in others if o["stId"] in ids]
         return httpx.Response(200, content=json.dumps(found))
 
-    client = httpx.AsyncClient(base_url="https://r/ContentService",
-                              transport=httpx.MockTransport(handler))
+    client = httpx.AsyncClient(
+        base_url="https://r/ContentService", transport=httpx.MockTransport(handler)
+    )
     backend = ReactomeApiBackend(client=client)
     records = await backend.fetch(
         DESCRIBE,
@@ -194,3 +207,46 @@ async def test_server_error_becomes_per_entity_error():
 def test_fingerprint_is_stable_and_real():
     fp = ReactomeApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_lookup_batch_is_bounded_concurrent_and_keeps_query_order():
+    import asyncio
+
+    accessions = [f"P{i:05d}" for i in range(6)]
+    active = peak = calls = 0
+
+    async def handler(request):
+        nonlocal active, peak, calls
+        accession = request.url.path.split("/")[-2]
+        active += 1
+        peak = max(peak, active)
+        calls += 1
+        try:
+            await asyncio.sleep(0.02 if accession == accessions[0] else 0.001)
+            if accession == accessions[3]:
+                return httpx.Response(503, json={})
+            return httpx.Response(200, json=[_pw("R-HSA-" + accession)])
+        finally:
+            active -= 1
+
+    backend = ReactomeApiBackend(
+        client=httpx.AsyncClient(
+            base_url="https://fixture",
+            transport=httpx.MockTransport(handler),
+        ),
+        max_concurrency=2,
+    )
+    queries = [{"protein.uniprot.accession": accession} for accession in accessions]
+    records = await backend.fetch(
+        CAP,
+        queries,
+        requested_outputs=ALL,
+        groups_to_compute=frozenset(),
+    )
+    assert peak == 2 and active == 0 and calls == len(queries)
+    assert [record.query for record in records] == queries
+    for accession, record in zip(accessions, records):
+        if accession == accessions[3]:
+            assert record.error and not record.found
+        else:
+            assert record.found and record.values["pathway.reactome.id"] == ["R-HSA-" + accession]

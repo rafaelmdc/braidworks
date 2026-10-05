@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from mondo_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("local",))
@@ -55,15 +55,15 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestMondoLookupByMeshCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("mondo.lookup_by_mesh")
-    consumed_values_a = {"disease.mesh.id": "D003093"}
-    consumed_values_b = {"disease.mesh.id": "sample-b-disease.mesh.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"disease.mesh.id": "D003093"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"disease.mesh.id": "sample-b-disease.mesh.id"}
     group_subset = "term"
     group_superset = "ancestors"
 
 
 class TestMondoLookupByMeddraCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("mondo.lookup_by_meddra")
-    consumed_values_a = {"disease.meddra.id": "sample-a-disease.meddra.id"}
-    consumed_values_b = {"disease.meddra.id": "sample-b-disease.meddra.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"disease.meddra.id": "sample-a-disease.meddra.id"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"disease.meddra.id": "sample-b-disease.meddra.id"}
     group_subset = "term"
     group_superset = "ancestors"

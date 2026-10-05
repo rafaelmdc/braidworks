@@ -11,7 +11,6 @@ from taxonomy_resolver.build import build_taxonomy_database
 from taxonomy_resolver.policy import MatchType, ResolutionStatus
 from taxonomy_resolver.schemas import DecisionAction, DecisionRecord, ResolveRequest
 from taxonomy_resolver.service import TaxonomyResolverService
-
 from tests.test_deterministic_resolution import NAMES_DMP, NODES_DMP, _BytesReader
 
 

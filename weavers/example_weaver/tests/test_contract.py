@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from example_weaver import vocab
 from example_weaver.factory import build_example_weaver
 
@@ -48,7 +48,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestResolveTraitsCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("describe_traits")
-    consumed_values_a = {"ncbi.taxon.id": "562"}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "562"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "traits.core"
     group_superset = "traits.growth"

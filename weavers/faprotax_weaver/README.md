@@ -6,7 +6,7 @@ FAPROTAX ecological function (organism lineage -> functional groups) weaver for 
 - **License:** Open
 - **Cite:** https://doi.org/10.1126/science.aaf4507
 
-The contract lives in [`weaver.spec.toml`](weaver.spec.toml).
+The contract lives in [`weaver.spec.toml`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/faprotax_weaver/weaver.spec.toml).
 
 ## What it does
 
@@ -52,3 +52,18 @@ import faprotax_weaver
 factory = WeaverFactory()
 faprotax_weaver.register(factory)        # makes "faprotax" buildable
 ```
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/faprotax_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

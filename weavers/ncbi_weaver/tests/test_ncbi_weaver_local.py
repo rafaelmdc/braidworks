@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import BackendConfigurationError, Strand, StrandSet, WeaveStatus
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 SAMPLE_NAMES = [
@@ -154,7 +154,7 @@ class TestLocalOrderContract(WeaverOrderContractTests):
 
 class TestLocalCacheFingerprint(CacheFingerprintTests):
     capability = vocab.resolve_name_capability(backends=("local",))
-    consumed_values_a = {vocab.ORGANISM_NAME: "Faecalibacterium prausnitzii"}
-    consumed_values_b = {vocab.ORGANISM_NAME: "Bacteria"}
+    consumed_values_a: ClassVar[dict[str, object]] = {vocab.ORGANISM_NAME: "Faecalibacterium prausnitzii"}
+    consumed_values_b: ClassVar[dict[str, object]] = {vocab.ORGANISM_NAME: "Bacteria"}
     group_subset = "core"
     group_superset = "lineage"

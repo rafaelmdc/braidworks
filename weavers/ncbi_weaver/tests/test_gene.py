@@ -8,9 +8,7 @@ gene, taxon_filter).
 from __future__ import annotations
 
 import httpx
-
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 GENES = {

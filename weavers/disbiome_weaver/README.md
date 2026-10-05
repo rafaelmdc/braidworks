@@ -44,7 +44,9 @@ weaver = build_disbiome_weaver_configured(auto_setup=True)
 # In an app that wires a WeaverFactory, `disbiome_weaver.register(factory)` adds it as a provider.
 ```
 
-From the `braidworks` CLI (auto-discovered once installed; the DB is built on first use):
+For CLI discovery, first build the **default** cache with
+`ensure_disbiome_db(auto=True)` from `disbiome_weaver.setup`. The default discovery
+builder only inspects that cache; it does not build it. Then run:
 
 ```bash
 braidworks run disbiome disbiome.list_diseases --have ncbi.taxon.id=816
@@ -58,5 +60,20 @@ make test       # conformance + contract + behavior, offline (live E2E self-skip
 make test-live  # opt-in: build the real DB from the API and resolve a known taxid
 ```
 
-Extend it ([CONTRIBUTING.md](CONTRIBUTING.md)): reverse disease→microbe lookup, emitting
-the taxid back out, etc. Build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+Extend it ([CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/CONTRIBUTING.md)): reverse disease→microbe lookup, emitting
+the taxid back out, etc. Build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

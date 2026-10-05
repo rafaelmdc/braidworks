@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "wikidata"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.5"
 WEAVER_TITLE = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -40,31 +40,31 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 id="resolve_taxon",
                 consumes=frozenset({"organism.scientific_name"}),
                 produces=frozenset(
-                    {"organism.vernacular_names", "wikidata.qid", "wikipedia.title",
-                     "wikidata.sitelinks"}
+                    {
+                        "organism.vernacular_names",
+                        "wikidata.qid",
+                        "wikidata.sitelinks",
+                        "wikipedia.title",
+                    }
                 ),
                 output_groups=(
                     OutputGroup(
                         id="core",
                         outputs=frozenset(
-                            {"wikidata.qid", "wikipedia.title", "wikidata.sitelinks"}
+                            {"wikidata.qid", "wikidata.sitelinks", "wikipedia.title"}
                         ),
                     ),
                     OutputGroup(id="names", outputs=frozenset({"organism.vernacular_names"})),
                 ),
-                backends=("api",),
+                backends=tuple(b for b in ("api",) if b in backends),
                 always_computed_groups=frozenset({"core"}),
                 parameters=(
                     Parameter(
                         name="expected_rank",
                         type="string",
-                        description=(
-                            "Taxon rank (P105 English label, e.g. 'order', 'genus') used to "
-                            "disambiguate a cross-code homonym: when a scientific name "
-                            "resolves to several Wikidata items, the one whose rank matches "
-                            "is chosen. Omit to leave such names ambiguous (the historical "
-                            "behaviour)."
-                        ),
+                        enum=(),
+                        default=None,
+                        description="Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour).",
                     ),
                 ),
             ),

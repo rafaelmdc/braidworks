@@ -45,7 +45,7 @@ and `disbiome_weaver` (disease). UniProt is the one node that speaks both hub ke
 
 ## Deterministic representative selection
 
-**The same query always resolves to the same protein.** UniProt's default relevance
+**Selection is deterministic for the same returned source data.** UniProt's default relevance
 ranking is *not* stable (a bare `TP53` can return different orthologs on different
 calls), so the backend imposes a fixed total order instead:
 
@@ -58,7 +58,14 @@ calls), so the backend imposes a fixed total order instead:
 > equally, so the representative is the *best-annotated* ortholog — **not necessarily
 > the species you expect** (`TP53` → a hamster entry, not human). This is deterministic,
 > not arbitrary. For a *specific* protein, query an **accession** (`P04637` → human p53,
-> exact and stable) or add an organism to the term.
+> exact) or pass `--param organism=9606` for human. Live source data can change.
+
+This capability returns **one representative**, not all matching proteins or
+isoforms. It remains a lookup: the executor's default ambiguity pause applies to
+resolver candidates and does not make this representative lookup exhaustive.
+Use `map_to_accession` for a set of identifier mappings. The selection basis is
+reviewed-first search, annotation score, and accession tie-break; an organism
+constraint narrows the search but does not promise a unique biological match.
 
 ## Use it
 
@@ -66,6 +73,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run uniprot resolve_protein --have protein.query=P04637
+braidworks weave --have protein.query=TP53 --param organism=9606 --want protein.uniprot.accession,ncbi.taxon.id
 braidworks weave --have protein.query=P04637 --want protein.name,ncbi.taxon.id
 ```
 
@@ -86,4 +94,27 @@ make test                          # conformance + contract + golden, fully offl
 BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live UniProt API (schema-drift detector)
 ```
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+Extend it: [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/uniprot_weaver/CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+
+## Batch execution
+
+The backend runs per-query lookups with at most four concurrent operations by
+default, preserving one ordered result per input and per-input failures. Set
+max_concurrency when constructing the API backend to lower the bound. This is a
+concurrency limit, not an HTTP requests-per-second guarantee. Existing bulk
+operations, where implemented, keep their batch endpoints.
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/uniprot_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

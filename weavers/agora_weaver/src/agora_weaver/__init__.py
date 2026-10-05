@@ -5,8 +5,8 @@ from agora_weaver.provider import AgoraWeaverProvider, register
 from agora_weaver.weaver import AgoraWeaver
 
 __all__ = [
-    "build_agora_weaver",
-    "register",
     "AgoraWeaver",
     "AgoraWeaverProvider",
+    "build_agora_weaver",
+    "register",
 ]

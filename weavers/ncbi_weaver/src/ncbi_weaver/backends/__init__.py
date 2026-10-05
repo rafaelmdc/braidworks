@@ -4,4 +4,4 @@ from .base import ResolutionBackend
 from .datasets_v2 import DatasetsV2Backend
 from .local import LocalTaxonomyBackend
 
-__all__ = ["ResolutionBackend", "LocalTaxonomyBackend", "DatasetsV2Backend"]
+__all__ = ["DatasetsV2Backend", "LocalTaxonomyBackend", "ResolutionBackend"]

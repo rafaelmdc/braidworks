@@ -22,9 +22,9 @@ import hashlib
 import json
 import sqlite3
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
@@ -170,7 +170,7 @@ def db_is_valid(path: Path) -> bool:
 
 def _fetch(endpoint: str) -> list[dict]:
     url = f"{API_BASE}/{endpoint}"
-    with urllib.request.urlopen(url, timeout=_FETCH_TIMEOUT) as response:  # noqa: S310 (known host)
+    with urllib.request.urlopen(url, timeout=_FETCH_TIMEOUT) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
-from typing import TextIO
 import urllib.request
+from pathlib import Path
+from typing import TextIO
 
 from taxonomy_resolver.build import build_taxonomy_database
 

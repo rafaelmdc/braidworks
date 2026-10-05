@@ -11,9 +11,7 @@ from __future__ import annotations
 from urllib.parse import unquote_plus
 
 import httpx
-
 from braidworks.core import MatchStatus, Strand, StrandSet, WeaveStatus
-
 from wikidata_weaver import factory
 from wikidata_weaver.backends import api
 from wikidata_weaver.backends.api import WikidataApiBackend

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from gtdb_weaver.tree import build_rootpaths, cophenetic, parse_newick
 
 # R

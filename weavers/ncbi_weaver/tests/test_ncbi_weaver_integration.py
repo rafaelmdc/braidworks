@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from braidworks.core import (
     BackendUnavailable,
     Braider,
@@ -15,7 +14,6 @@ from braidworks.core import (
     Strand,
     StrandSet,
 )
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 RESOLVABLE = [

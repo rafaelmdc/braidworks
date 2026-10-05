@@ -10,12 +10,10 @@ import os
 from pathlib import Path
 
 import pytest
-
-from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from agora_weaver.backends.local import AgoraLocalBackend
 from agora_weaver.setup import individual_sbml_url
 from agora_weaver.weaver import AgoraWeaver
+from braidworks.core import Strand, StrandSet, WeaveStatus
 
 _TAXID = "592010"  # Abiotrophia defectiva -> Abiotrophia_defectiva_ATCC_49176
 _RECON = "Abiotrophia_defectiva_ATCC_49176"

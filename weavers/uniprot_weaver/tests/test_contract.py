@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from uniprot_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("api",))
@@ -55,7 +55,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 class TestResolveProteinCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("resolve_protein")
-    consumed_values_a = {"protein.query": "TP53"}
-    consumed_values_b = {"protein.query": "sample-b-protein.query"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"protein.query": "TP53"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"protein.query": "sample-b-protein.query"}
     group_subset = "identity"
     group_superset = "taxonomy"

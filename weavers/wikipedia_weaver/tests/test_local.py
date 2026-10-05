@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from wikipedia_weaver.backends.local import WikipediaLocalBackend
 from wikipedia_weaver.setup import _parse_lines, build_pageviews_db, db_is_valid
 

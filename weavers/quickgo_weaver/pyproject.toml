@@ -1,10 +1,17 @@
 [project]
 name = "quickgo_weaver"
-version = "0.1.4"
+version = "0.1.8"
 description = "Gene Ontology annotations (accession -> GO terms by aspect) — a Braidworks weaver."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.7.1", "httpx>=0.27"]
+dependencies = ["braidworks-core>=0.13.0", "httpx>=0.27"]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
 
 [project.entry-points."braidworks.weavers"]
 quickgo = "quickgo_weaver.factory:build_quickgo_weaver"

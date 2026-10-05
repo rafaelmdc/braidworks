@@ -1,10 +1,17 @@
 [project]
 name = "alphafold_weaver"
-version = "0.1.3"
+version = "0.1.6"
 description = "AlphaFold predicted structure (accession -> model + confidence) — a Braidworks weaver."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.7.1", "httpx>=0.27"]
+dependencies = ["braidworks-core>=0.13.0", "httpx>=0.27"]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
 
 [project.entry-points."braidworks.weavers"]
 alphafold = "alphafold_weaver.factory:build_alphafold_weaver"

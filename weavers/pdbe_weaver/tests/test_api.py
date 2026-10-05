@@ -11,18 +11,20 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from pdbe_weaver.backends.api import PdbeApiBackend
 
 CAP = "list_structures"
-ALL = frozenset(
-    {"pdb.id", "structure.pdb.ids", "structure.pdb.count", "structure.pdb.records"}
-)
+ALL = frozenset({"pdb.id", "structure.pdb.ids", "structure.pdb.count", "structure.pdb.records"})
 
 
 def _row(pid, cov, res=None, chain="A", method="X-ray diffraction"):
-    return {"pdb_id": pid, "chain_id": chain, "coverage": cov, "resolution": res,
-            "experimental_method": method}
+    return {
+        "pdb_id": pid,
+        "chain_id": chain,
+        "coverage": cov,
+        "resolution": res,
+        "experimental_method": method,
+    }
 
 
 def _backend(mapping=None, *, status=200, limit=25, calls=None):
@@ -31,7 +33,7 @@ def _backend(mapping=None, *, status=200, limit=25, calls=None):
             calls.append(str(request.url))
         if status != 200:
             return httpx.Response(status, content=b"{}")
-        if "/best_structures/" in request.url.path:
+        if "/best_structures/" in request.url.path or request.url.path.endswith("/best_structures"):
             return httpx.Response(200, content=json.dumps(mapping or {}))
         return httpx.Response(404, content=b"{}")
 
@@ -41,7 +43,9 @@ def _backend(mapping=None, *, status=200, limit=25, calls=None):
 
 async def _one(backend, accession):
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": accession}], requested_outputs=ALL,
+        CAP,
+        [{"protein.uniprot.accession": accession}],
+        requested_outputs=ALL,
         groups_to_compute=frozenset(),
     )
     assert len(records) == 1
@@ -49,8 +53,9 @@ async def _one(backend, accession):
 
 
 async def test_dedups_chains_and_orders_best_first():
-    mapping = {"P04637": [_row("1tup", 0.55, 2.2), _row("1tup", 0.52, 2.2, "B"),
-                          _row("2ahi", 0.9, 3.5)]}
+    mapping = {
+        "P04637": [_row("1tup", 0.55, 2.2), _row("1tup", 0.52, 2.2, "B"), _row("2ahi", 0.9, 3.5)]
+    }
     v = (await _one(_backend(mapping), "P04637")).values
     assert v["structure.pdb.count"] == 2  # two chains of 1tup collapsed
     assert v["structure.pdb.ids"] == ["2ahi", "1tup"]  # higher coverage first
@@ -106,8 +111,12 @@ async def test_server_error_becomes_per_entity_error():
 
 DESCRIBE = "describe_structure"
 DESCRIBE_ALL = frozenset(
-    {"structure.pdb.title", "structure.pdb.method", "structure.pdb.release_date",
-     "structure.pdb.detail"}
+    {
+        "structure.pdb.title",
+        "structure.pdb.method",
+        "structure.pdb.release_date",
+        "structure.pdb.detail",
+    }
 )
 _DETAIL_1TUP = {
     "title": "TUMOR SUPPRESSOR P53 COMPLEXED WITH DNA",
@@ -134,7 +143,9 @@ def _describe_backend(detail=None, *, status=200, calls=None):
 
 async def _describe(backend, pdb_id):
     records = await backend.fetch(
-        DESCRIBE, [{"pdb.id": pdb_id}], requested_outputs=DESCRIBE_ALL,
+        DESCRIBE,
+        [{"pdb.id": pdb_id}],
+        requested_outputs=DESCRIBE_ALL,
         groups_to_compute=frozenset(),
     )
     assert len(records) == 1
@@ -186,7 +197,8 @@ async def test_describe_batches_many_into_one_request():
     records = await _describe_backend(detail, calls=calls).fetch(
         DESCRIBE,
         [{"pdb.id": "1tup"}, {"pdb.id": "2ahi"}, {"pdb.id": "9zzz"}],
-        requested_outputs=DESCRIBE_ALL, groups_to_compute=frozenset(),
+        requested_outputs=DESCRIBE_ALL,
+        groups_to_compute=frozenset(),
     )
     assert [r.found for r in records] == [True, True, False]
     assert records[1].values["structure.pdb.title"] == "EM STRUCTURE"
@@ -196,3 +208,48 @@ async def test_describe_batches_many_into_one_request():
 def test_fingerprint_is_stable_and_real():
     fp = PdbeApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_list_structures_batches_many_into_one_request():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "p69905": [_row("4hhb", 1.0)],
+                "P04637": [_row("1tup", 0.9)],
+            },
+        )
+
+    backend = PdbeApiBackend(
+        client=httpx.AsyncClient(
+            base_url="https://p/api",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    queries = [
+        {"protein.uniprot.accession": acc} for acc in ("P69905", "MISSING", "P04637", "P69905", "")
+    ]
+    records = await backend.fetch(
+        CAP, queries, requested_outputs=ALL, groups_to_compute=frozenset()
+    )
+    assert len(calls) == 1
+    assert calls[0].method == "POST"
+    assert calls[0].url.path == "/api/mappings/best_structures"
+    assert calls[0].content.decode() == "MISSING,P04637,P69905"
+    assert [r.query for r in records] == queries
+    assert [r.found for r in records] == [True, False, True, True, False]
+    assert records[0].values["pdb.id"] == ["4hhb"]
+    assert records[2].values["pdb.id"] == ["1tup"]
+
+
+async def test_list_structures_bulk_does_not_assign_another_accessions_rows():
+    backend = _backend({"P04637": [_row("1tup", 0.9)]})
+    queries = [{"protein.uniprot.accession": acc} for acc in ("P04637", "MISSING")]
+    records = await backend.fetch(
+        CAP, queries, requested_outputs=ALL, groups_to_compute=frozenset()
+    )
+    assert records[0].found
+    assert not records[1].found

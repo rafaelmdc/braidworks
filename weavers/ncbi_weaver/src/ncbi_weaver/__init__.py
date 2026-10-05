@@ -11,16 +11,16 @@ from .provider import NCBIWeaverProvider
 from .weaver import NCBITaxonWeaver
 
 __all__ = [
+    "BackendDispatchWeaver",
+    "CandidateMatch",
+    "DatasetsV2Backend",
+    "LineageEntry",
+    "LocalTaxonomyBackend",
     "NCBITaxonWeaver",
     "NCBIWeaverProvider",
-    "build_ncbi_weaver",
-    "BackendDispatchWeaver",
     "ResolutionBackend",
-    "LocalTaxonomyBackend",
-    "DatasetsV2Backend",
     "TaxonMatch",
     "TaxonMatchStatus",
-    "LineageEntry",
-    "CandidateMatch",
+    "build_ncbi_weaver",
     "map_taxon_match",
 ]

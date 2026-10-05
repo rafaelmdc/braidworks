@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-
 from braidworks.core import BackendConfigurationError, BaseWeaver
 
 from wikipedia_weaver.backends.api import WikipediaApiBackend

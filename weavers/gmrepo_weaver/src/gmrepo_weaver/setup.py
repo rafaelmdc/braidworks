@@ -27,10 +27,10 @@ import hashlib
 import json
 import sqlite3
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
@@ -252,13 +252,13 @@ def _post(endpoint: str, body: dict[str, Any]) -> Any:
     ``APPEND_SLASH``, which 500s a slash-less POST (it cannot redirect and keep the
     body) — the published example code predates that server config.
     """
-    request = urllib.request.Request(  # noqa: S310 (known host)
+    request = urllib.request.Request(
         f"{API_BASE}/{endpoint}/",
         data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json", "User-Agent": _USER_AGENT},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:  # noqa: S310
+    with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

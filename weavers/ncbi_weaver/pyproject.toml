@@ -1,15 +1,22 @@
 [project]
 name = "ncbi_weaver"
-version = "0.2.0"
+version = "0.2.2"
 description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets v2 API backends)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
-  "braidworks-core>=0.7.1",
+  "braidworks-core>=0.13.0",
   "rapidfuzz>=3.0,<4.0",
   "httpx>=0.27",
   "platformdirs>=4.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]

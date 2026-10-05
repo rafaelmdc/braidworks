@@ -27,9 +27,10 @@ import logging
 import os
 import sqlite3
 import tempfile
-from contextlib import contextmanager
+from collections.abc import Iterable
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import IO, Iterable
+from typing import IO
 
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
@@ -99,38 +100,41 @@ def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month
     across access methods are summed via UPSERT in batched transactions so peak memory
     stays flat regardless of dump size.
     """
-    # A binary file object is a bz2 dump to decompress+decode; tests pass text lines.
-    if hasattr(source, "read"):
-        text: Iterable[str] = bz2.open(source, mode="rt", encoding="utf-8", errors="replace")
-    else:
-        text = source
+    with ExitStack() as stack:
+        # A binary file object is a bz2 dump to decompress+decode; tests pass text lines.
+        if hasattr(source, "read"):
+            text: Iterable[str] = stack.enter_context(
+                bz2.open(source, mode="rt", encoding="utf-8", errors="replace")
+            )
+        else:
+            text = source
 
-    con = sqlite3.connect(tmp_db)
-    try:
-        con.execute("PRAGMA journal_mode=OFF")
-        con.execute("PRAGMA synchronous=OFF")
-        con.execute("CREATE TABLE pageviews (title TEXT PRIMARY KEY, views INTEGER NOT NULL)")
-        con.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+        con = sqlite3.connect(tmp_db)
+        try:
+            con.execute("PRAGMA journal_mode=OFF")
+            con.execute("PRAGMA synchronous=OFF")
+            con.execute("CREATE TABLE pageviews (title TEXT PRIMARY KEY, views INTEGER NOT NULL)")
+            con.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
 
-        batch: list[tuple[str, int]] = []
-        n = 0
-        for title, views in _parse_lines(text):
-            batch.append((title, views))
-            if len(batch) >= _UPSERT_BATCH:
+            batch: list[tuple[str, int]] = []
+            n = 0
+            for title, views in _parse_lines(text):
+                batch.append((title, views))
+                if len(batch) >= _UPSERT_BATCH:
+                    _flush(con, batch)
+                    n += len(batch)
+                    batch.clear()
+            if batch:
                 _flush(con, batch)
                 n += len(batch)
-                batch.clear()
-        if batch:
-            _flush(con, batch)
-            n += len(batch)
 
-        con.execute(
-            "INSERT OR REPLACE INTO metadata(key, value) VALUES ('dump_month', ?)", (month,)
-        )
-        con.commit()
-        logger.info("built pageviews DB: %s rows from dump %s", n, month)
-    finally:
-        con.close()
+            con.execute(
+                "INSERT OR REPLACE INTO metadata(key, value) VALUES ('dump_month', ?)", (month,)
+            )
+            con.commit()
+            logger.info("built pageviews DB: %s rows from dump %s", n, month)
+        finally:
+            con.close()
 
 
 def _flush(con: sqlite3.Connection, batch: list[tuple[str, int]]) -> None:

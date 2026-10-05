@@ -16,10 +16,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 from braidworks.testing.contract import WeaverOrderContractTests
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 from ncbi_weaver.setup import db_is_valid, default_db_path, ensure_taxonomy_db
 

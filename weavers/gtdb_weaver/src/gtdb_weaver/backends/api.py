@@ -17,10 +17,8 @@ import asyncio
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase
-from braidworks.core import LookupRecord
-from braidworks.core import format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core.http_pacing import PacedHTTPClient
 
 from gtdb_weaver import taxonomy
 
@@ -44,11 +42,13 @@ class GtdbApiBackend(BackendBase):
     def is_configured(self) -> bool:
         return self._configured or self._client is not None
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         """The HTTP client, lazily created if none was injected."""
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "gtdb")
 
     def fingerprint(self) -> str:
         return "gtdb_weaver-api-v1"

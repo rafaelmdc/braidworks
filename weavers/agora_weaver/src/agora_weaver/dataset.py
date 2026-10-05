@@ -19,14 +19,15 @@ import re
 import sqlite3
 import xml.etree.ElementTree as ET
 import zipfile
+from collections.abc import Iterable, Iterator
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 # The AGORA2 SBML archive is compressed with Deflate64 (method 9), which the stdlib
 # zipfile cannot decode; importing this monkeypatches zipfile to support it.
-import zipfile_deflate64  # noqa: F401,E402
+import zipfile_deflate64  # noqa: F401
 
 logger = logging.getLogger("agora_weaver.dataset")
 

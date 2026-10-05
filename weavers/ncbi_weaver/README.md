@@ -57,7 +57,7 @@ weaver = build_ncbi_weaver(db_path="…", enable_api=True)    # local preferred,
 ```
 
 The manifest advertises only the backends you wire in, so a missing one never breaks
-planning — it just isn't an option. See [docs/database.md](../../docs/database.md) for the
+planning — it just isn't an option. See [docs/database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
 local DB. In an app that wires a `WeaverFactory`, `ncbi_weaver.register(factory)` adds it.
 
 ## Use it
@@ -84,4 +84,19 @@ make test                          # conformance + contract + golden, fully offl
 BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live NCBI Datasets API (schema-drift detector)
 ```
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+Extend it: [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/ncbi_weaver/CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/ncbi_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

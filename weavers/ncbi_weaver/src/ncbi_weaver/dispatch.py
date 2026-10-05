@@ -9,12 +9,13 @@ shared ``weaverkit`` once a second weaver proves the abstraction.
 from __future__ import annotations
 
 from braidworks.core import (
-    BaseWeaver,
     BackendUnavailable,
+    BaseWeaver,
     UnsupportedCapability,
     WeaveResult,
     map_lookup,
 )
+from braidworks.core.http_pacing import validate_request_pacing
 
 from . import vocab
 from .backends.base import ResolutionBackend
@@ -34,6 +35,9 @@ class BackendDispatchWeaver(BaseWeaver):
                 f"backend {backend!r} is not configured for {self.MANIFEST.weaver_id!r}"
             )
         return strat
+
+    def supports_request_pacing(self, backend: str) -> bool:
+        return bool(getattr(self._backends.get(backend), "supports_request_pacing", False))
 
     def backend_fingerprint(self, backend: str) -> str:
         strat = self._backends.get(backend)
@@ -60,6 +64,7 @@ class BackendDispatchWeaver(BaseWeaver):
     ) -> list[WeaveResult]:
         # Today's taxonomy capabilities take no parameters; accepted for the uniform
         # runner contract and ignored. Genome/gene capabilities will thread it to resolve.
+        validate_request_pacing(self, backend)
         cap = self.MANIFEST.capability(capability_id)
         if cap is None:
             raise UnsupportedCapability(

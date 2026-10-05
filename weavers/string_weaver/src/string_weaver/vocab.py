@@ -7,10 +7,15 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Provenance,
+    WeaverManifest,
+)
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.6"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -35,10 +40,10 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
                     {
-                        "protein.query",
                         "protein.interaction.count",
                         "protein.interaction.partners",
                         "protein.interaction.records",
+                        "protein.query",
                     }
                 ),
                 output_groups=(
@@ -46,17 +51,17 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="summary",
                         outputs=frozenset(
                             {
-                                "protein.query",
                                 "protein.interaction.count",
                                 "protein.interaction.partners",
+                                "protein.query",
                             }
                         ),
                     ),
                     OutputGroup(id="full", outputs=frozenset({"protein.interaction.records"})),
                 ),
-                set_outputs=frozenset({"protein.query"}),
                 backends=backends,
                 max_batch_size=25,
+                set_outputs=frozenset({"protein.query"}),
             ),
         ),
     )

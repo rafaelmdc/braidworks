@@ -5,8 +5,8 @@ from quickgo_weaver.provider import QuickgoWeaverProvider, register
 from quickgo_weaver.weaver import QuickgoWeaver
 
 __all__ = [
-    "build_quickgo_weaver",
-    "register",
     "QuickgoWeaver",
     "QuickgoWeaverProvider",
+    "build_quickgo_weaver",
+    "register",
 ]

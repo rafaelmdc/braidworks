@@ -22,13 +22,14 @@ import logging
 from typing import Any
 
 import httpx
-
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("pdbe_weaver.api")
 
 DEFAULT_BASE_URL = "https://www.ebi.ac.uk/pdbe/api"
 DEFAULT_LIMIT = 25  # top structures to surface in ids/records (count stays the true total)
+_BEST_CHUNK = 100  # accessions per bulk best-structure request
 _SUMMARY_CHUNK = 200  # pdb ids per POST /pdb/entry/summary request (keeps the body bounded)
 _WORST_RESOLUTION = 1e9  # sort sentinel for entries with no resolution (NMR/EM sometimes)
 
@@ -49,8 +50,11 @@ def _rank(rec: dict[str, Any]) -> tuple[float, float]:
 
 def _sort_key(rec: dict[str, Any]) -> tuple[float, float, str]:
     """Best-first total order: coverage desc, resolution asc, then pdb_id (stable)."""
-    return (-(rec.get("coverage") or 0.0), rec.get("resolution") or _WORST_RESOLUTION,
-            rec.get("pdb_id") or "")
+    return (
+        -(rec.get("coverage") or 0.0),
+        rec.get("resolution") or _WORST_RESOLUTION,
+        rec.get("pdb_id") or "",
+    )
 
 
 def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
@@ -118,10 +122,12 @@ class PdbeApiBackend(BackendBase):
         """A live service; the fingerprint pins the REST API contract."""
         return "pdbe-api-v1"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "pdbe")
 
     async def fetch(
         self,
@@ -135,10 +141,42 @@ class PdbeApiBackend(BackendBase):
         # describe_structure drills PDB ids; list_structures lists a protein's structures.
         if capability_id == "describe_structure":
             return await self._describe_structures(queries)
-        records: list[LookupRecord] = []
-        for query in queries:
-            accession = str(query.get("protein.uniprot.accession", "")).strip()
-            records.append(await self._resolve_one(query, accession))
+        return await self._list_structures(queries)
+
+    async def _list_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        accessions = [str(q.get("protein.uniprot.accession", "")).strip() for q in queries]
+        distinct = sorted({accession for accession in accessions if accession})
+        mappings: dict[str, list[dict[str, Any]]] = {}
+        errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _BEST_CHUNK):
+            chunk = distinct[start : start + _BEST_CHUNK]
+            try:
+                if len(chunk) == 1:
+                    response = await self._http().get(f"/mappings/best_structures/{chunk[0]}")
+                else:
+                    response = await self._http().post(
+                        "/mappings/best_structures",
+                        content=",".join(chunk),
+                        headers={"Content-Type": "text/plain"},
+                    )
+                response.raise_for_status()
+                mappings.update({key.upper(): rows for key, rows in response.json().items()})
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
+            except httpx.HTTPError as exc:
+                errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
+        records = []
+        for query, accession in zip(queries, accessions):
+            rows = mappings.get(accession.upper()) or []
+            if accession in errors:
+                records.append(LookupRecord(query=query, error=errors[accession]))
+            elif rows:
+                records.append(
+                    LookupRecord(query=query, found=True, values=_extract(rows, self._limit))
+                )
+            else:
+                records.append(LookupRecord(query=query, found=False))
         return records
 
     async def _describe_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
@@ -183,28 +221,3 @@ class PdbeApiBackend(BackendBase):
             else:
                 records.append(LookupRecord(query=query, found=True, values=_describe(pid, obj)))
         return records
-
-    async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
-        if not accession:
-            return LookupRecord(query=query, found=False)
-        try:
-            resp = await self._http().get(f"/mappings/best_structures/{accession}")
-            resp.raise_for_status()
-            body = resp.json()
-        except httpx.HTTPStatusError as exc:
-            # PDBe 404s (or 400s a malformed) accession with no structure mapping —
-            # a NO_MATCH, not an error (shared 400/404 rule, braidworks.core.http).
-            if is_not_found_status(exc.response.status_code):
-                return LookupRecord(query=query, found=False)
-            logger.warning("PDBe lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
-        except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
-            logger.warning("PDBe lookup failed for %r: %s", accession, exc)
-            return LookupRecord(query=query, error=f"PDBe API error: {format_exc(exc)}")
-
-        # Response is {accession: [rows]}; the key casing can differ, so fall back to the
-        # sole value if the exact key is absent.
-        rows = body.get(accession) or (next(iter(body.values()), []) if body else [])
-        if not rows:
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_extract(rows, self._limit))

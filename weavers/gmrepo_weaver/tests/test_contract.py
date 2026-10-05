@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from gmrepo_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("local",))
@@ -55,7 +55,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestGmrepoListAbundancesCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("gmrepo.list_abundances")
-    consumed_values_a = {"ncbi.taxon.id": 816}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.id": 816}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "summary"
     group_superset = "associations"

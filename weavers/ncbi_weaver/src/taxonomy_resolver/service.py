@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
+from typing import Self
 
 from .cache import lookup_reviewed_mapping, record_reviewed_mapping
 from .db import connect, fetch_all_metadata, initialize_database
@@ -62,7 +63,7 @@ class TaxonomyResolverService:
         self._taxonomy_connection.close()
         self._closed = True
 
-    def __enter__(self) -> TaxonomyResolverService:
+    def __enter__(self) -> Self:
         """Support context-manager usage for explicit connection cleanup."""
 
         return self
@@ -71,7 +72,7 @@ class TaxonomyResolverService:
         self,
         _exc_type: type[BaseException] | None,
         _exc: BaseException | None,
-        _tb: object | None,
+        _tb: object,
     ) -> None:
         """Close owned connections when the service leaves a context block."""
 

@@ -15,9 +15,7 @@ import os
 from pathlib import Path
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
 from gmrepo_weaver.setup import (
     _fetch_profiles,

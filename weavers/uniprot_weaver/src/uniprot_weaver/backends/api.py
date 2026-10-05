@@ -25,8 +25,8 @@ import re
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase, LookupRecord, format_exc
+from braidworks.core import BackendBase, LookupRecord, format_exc, map_bounded
+from braidworks.core.http_pacing import PacedHTTPClient
 
 from uniprot_weaver import mapping
 
@@ -79,9 +79,7 @@ def _mapping_record(
         values={
             type_id: ordered,  # the fan dimension (set output)
             mapping.MAPPING_COUNT: len(ordered),
-            mapping.MAPPING_RECORDS: [
-                {"id": i, "reviewed": i in reviewed_set} for i in ordered
-            ],
+            mapping.MAPPING_RECORDS: [{"id": i, "reviewed": i in reviewed_set} for i in ordered],
         },
     )
 
@@ -113,6 +111,8 @@ def _pick(results: list[dict[str, Any]]) -> dict[str, Any]:
         results,
         key=lambda r: (-float(r.get("annotationScore") or 0.0), r.get("primaryAccession", "")),
     )
+
+
 # Evidence parentheticals UniProt appends to FUNCTION text — noise on a dossier card.
 _EVIDENCE = re.compile(r"\s*\((?:PubMed:[^)]*|By similarity|Probable|Potential|Reviewed[^)]*)\)")
 
@@ -177,10 +177,17 @@ class UniprotApiBackend(BackendBase):
     name = "api"
 
     def __init__(
-        self, *, base_url: str = DEFAULT_BASE_URL, client: httpx.AsyncClient | None = None
+        self,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        client: httpx.AsyncClient | None = None,
+        max_concurrency: int = 4,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        self._max_concurrency = max_concurrency
 
     def is_configured(self) -> bool:
         """UniProtKB REST needs no key or local data, so it's always usable."""
@@ -190,14 +197,16 @@ class UniprotApiBackend(BackendBase):
         """A live service; the fingerprint pins the REST API/JSON contract version."""
         return "uniprot-rest-v1"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             # follow_redirects: the ID-mapping results endpoint 303-redirects to its
             # stream variant when a job finishes.
             self._client = httpx.AsyncClient(
                 base_url=self._base_url, timeout=30.0, follow_redirects=True
             )
-        return self._client
+        return PacedHTTPClient(self._client, "uniprot")
 
     async def fetch(
         self,
@@ -215,11 +224,13 @@ class UniprotApiBackend(BackendBase):
         # resolve_protein: one search per query; the whole entry arrives at once, so we
         # compute every field and let the shared mapper filter to requested_outputs.
         organism = str((params or {}).get("organism") or "").strip() or None
-        records: list[LookupRecord] = []
-        for query in queries:
-            term = str(query.get("protein.query", "")).strip()
-            records.append(await self._resolve_one(query, term, organism))
-        return records
+
+        async def resolve(query: dict[str, Any]) -> LookupRecord:
+            return await self._resolve_one(
+                query, str(query.get("protein.query", "")).strip(), organism
+            )
+
+        return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     # --- ID mapping ----------------------------------------------------------
 
@@ -267,8 +278,7 @@ class UniprotApiBackend(BackendBase):
             rev = reviewed[from_db].get(src, [])
             rev_set = set(rev)
             ordered = rev + [a for a in resolved[from_db].get(src, []) if a not in rev_set]
-            records.append(_mapping_record(q, mapping.ACCESSION, ordered,
-                                           reviewed_set=rev_set))
+            records.append(_mapping_record(q, mapping.ACCESSION, ordered, reviewed_set=rev_set))
         return records
 
     async def _map_from_accession(
@@ -331,7 +341,9 @@ class UniprotApiBackend(BackendBase):
             resp.raise_for_status()
             for row in resp.json().get("results", []):
                 to_val = row.get("to")
-                target = to_val if isinstance(to_val, str) else (to_val or {}).get("primaryAccession")
+                target = (
+                    to_val if isinstance(to_val, str) else (to_val or {}).get("primaryAccession")
+                )
                 src = str(row.get("from", ""))
                 if target and src:
                     out.setdefault(src, []).append(target)
@@ -368,9 +380,7 @@ class UniprotApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_extract(entry))
 
-    async def _best_hit(
-        self, term: str, organism: str | None = None
-    ) -> dict[str, Any] | None:
+    async def _best_hit(self, term: str, organism: str | None = None) -> dict[str, Any] | None:
         """Deterministic hit: prefer reviewed, escalate accession -> gene -> free text.
 
         The first variant that returns any results wins; ``_pick`` then chooses the

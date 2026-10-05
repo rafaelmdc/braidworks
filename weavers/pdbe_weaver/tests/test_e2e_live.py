@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from pdbe_weaver import build_pdbe_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -73,8 +71,12 @@ async def _describe(weaver, pdb_id):
             "describe_structure",
             [ss],
             requested_outputs=frozenset(
-                {"structure.pdb.title", "structure.pdb.method",
-                 "structure.pdb.release_date", "structure.pdb.detail"}
+                {
+                    "structure.pdb.title",
+                    "structure.pdb.method",
+                    "structure.pdb.release_date",
+                    "structure.pdb.detail",
+                }
             ),
             backend="api",
         )
@@ -98,3 +100,21 @@ async def test_live_describe_unknown_is_no_match():
     result = await _describe(weaver, "9zz9")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_bulk_best_structures_match_each_accession():
+    weaver = build_pdbe_weaver()
+    accessions = ["P04637", "P69905"]
+    results = await weaver.execute_batch(
+        "list_structures",
+        [StrandSet.from_strands(a, [Strand("protein.uniprot.accession", a)]) for a in accessions],
+        requested_outputs=frozenset({"pdb.id", "structure.pdb.count"}),
+        backend="api",
+    )
+    assert len(results) == 2
+    for result, expected_structure in zip(results, ["1tup", "4hhb"]):
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert expected_structure in values["pdb.id"]
+        assert values["structure.pdb.count"] == len(values["pdb.id"])

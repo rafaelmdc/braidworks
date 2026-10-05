@@ -8,13 +8,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
+# Single source of the mini dump (also used by conftest + weaverkit verify --strict).
+from ncbi_weaver.fixture import NAMES_DMP, NODES_DMP
 from taxonomy_resolver.build import build_taxonomy_database
 from taxonomy_resolver.policy import MatchType, ResolutionStatus, WarningCode
 from taxonomy_resolver.schemas import ResolveRequest
 from taxonomy_resolver.service import TaxonomyResolverService
-
-# Single source of the mini dump (also used by conftest + weaverkit verify --strict).
-from ncbi_weaver.fixture import NAMES_DMP, NODES_DMP
 
 
 class DeterministicResolutionTests(unittest.TestCase):

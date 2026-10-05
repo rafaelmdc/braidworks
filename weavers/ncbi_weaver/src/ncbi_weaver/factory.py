@@ -21,7 +21,6 @@ from typing import Any
 
 import httpx
 
-
 from .backends.datasets_v2 import DEFAULT_BASE_URL, DatasetsV2Backend
 from .backends.local import LocalTaxonomyBackend
 from .setup import (

@@ -22,8 +22,8 @@ import logging
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
+from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("reactome_weaver.api")
 
@@ -85,9 +85,13 @@ class ReactomeApiBackend(BackendBase):
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
         limit: int = DEFAULT_LIMIT,
+        max_concurrency: int = 4,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        self._max_concurrency = max_concurrency
         self._limit = limit
 
     def is_configured(self) -> bool:
@@ -98,12 +102,14 @@ class ReactomeApiBackend(BackendBase):
         """A live service; the fingerprint pins the ContentService API contract."""
         return "reactome-contentservice-v1"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url, timeout=30.0, headers={"Accept": "application/json"}
             )
-        return self._client
+        return PacedHTTPClient(self._client, "reactome")
 
     async def fetch(
         self,
@@ -117,11 +123,13 @@ class ReactomeApiBackend(BackendBase):
         # describe_pathway drills pathway ids; list_pathways lists a protein's pathways.
         if capability_id == "describe_pathway":
             return await self._describe_pathways(queries)
-        records: list[LookupRecord] = []
-        for query in queries:
-            accession = str(query.get("protein.uniprot.accession", "")).strip()
-            records.append(await self._resolve_one(query, accession))
-        return records
+
+        async def resolve(query: dict[str, Any]) -> LookupRecord:
+            return await self._resolve_one(
+                query, str(query.get("protein.uniprot.accession", "")).strip()
+            )
+
+        return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     async def _describe_pathways(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         """Pathway ids -> their details via the bulk ``POST /data/query/ids`` endpoint.
@@ -139,7 +147,8 @@ class ReactomeApiBackend(BackendBase):
                 if not chunk:
                     continue
                 resp = await self._http().post(
-                    "/data/query/ids", content=",".join(chunk),
+                    "/data/query/ids",
+                    content=",".join(chunk),
                     headers={"Content-Type": "text/plain"},
                 )
                 resp.raise_for_status()

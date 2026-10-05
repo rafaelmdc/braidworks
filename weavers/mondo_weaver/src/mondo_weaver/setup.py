@@ -17,9 +17,8 @@ from __future__ import annotations
 import re
 import sqlite3
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Callable
 
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
@@ -70,7 +69,7 @@ def normalize_name(name: str) -> str:
 
 
 class _Term:
-    __slots__ = ("mondo_id", "name", "obsolete", "parents", "xrefs", "synonyms")
+    __slots__ = ("mondo_id", "name", "obsolete", "parents", "synonyms", "xrefs")
 
     def __init__(self, mondo_id: str) -> None:
         self.mondo_id = mondo_id
@@ -203,8 +202,8 @@ def db_is_valid(path: Path) -> bool:
 
 def _download(target: Path, progress: ProgressCallback | None = None) -> None:
     """Stream the OBO release to ``target``."""
-    request = urllib.request.Request(OBO_URL, headers={"User-Agent": _USER_AGENT})  # noqa: S310
-    with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:  # noqa: S310
+    request = urllib.request.Request(OBO_URL, headers={"User-Agent": _USER_AGENT})
+    with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT) as response:
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
         with open(target, "wb") as fh:

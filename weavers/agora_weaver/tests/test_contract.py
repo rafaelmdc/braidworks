@@ -8,12 +8,12 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
+from agora_weaver import factory, vocab
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
-from agora_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("local",))
 
@@ -57,7 +57,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestDescribeMetabolicReconstructionCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("describe_metabolic_reconstruction")
-    consumed_values_a = {"ncbi.taxon.id": "592010"}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "592010"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "core"
     group_superset = "reactions"

@@ -2,8 +2,7 @@
 
 Opt-in: set ``BRAIDWORKS_RUN_LIVE=1`` to enable (makes real network calls). Run it
 after changes that touch the api backend's request/parse code, to confirm the live
-schema still matches what the offline tests assume. Replace the TODO input/asserts
-with a known-truth example from the real source.
+schema still matches what the offline tests assume.
 """
 
 from __future__ import annotations
@@ -11,9 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from uniprot_weaver import build_uniprot_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -71,6 +68,24 @@ async def test_live_accession_is_deterministic():
     assert produced.get("ncbi.taxon.id") == 9606
 
 
+async def test_live_species_pinned_symbol_selects_human_tp53():
+    """The documented organism-pinned symbol query selects human p53."""
+    weaver = build_uniprot_weaver()
+    ss = StrandSet.from_strands("human", [Strand("protein.query", "TP53")])
+    result = await weaver.execute(
+        "resolve_protein",
+        ss,
+        requested_outputs=frozenset({"protein.uniprot.accession", "ncbi.taxon.id"}),
+        backend="api",
+        params={"organism": "9606"},
+    )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    assert produced["protein.uniprot.accession"] == "P04637"
+    assert produced["ncbi.taxon.id"] == 9606
+
+
 async def test_live_unknown_query_is_no_match():
     weaver = build_uniprot_weaver()
     ss = StrandSet.from_strands("e1", [Strand("protein.query", "zzzznotarealprotein9999")])
@@ -118,12 +133,16 @@ async def test_live_map_to_accession_from_ensembl():
 
 async def test_live_map_from_accession_to_geneid():
     """Reverse bridge: accession P04637 -> NCBI GeneID 7157 (routes by requested output)."""
-    result = await _idmap("map_from_accession", "protein.uniprot.accession", "P04637", "gene.ncbi.id")
+    result = await _idmap(
+        "map_from_accession", "protein.uniprot.accession", "P04637", "gene.ncbi.id"
+    )
     assert result.status is WeaveStatus.OK
     gene_ids = {s.type_id: s.value for s in result.strands}["gene.ncbi.id"]
     assert any(str(g) == "7157" for g in gene_ids)
 
 
 async def test_live_map_to_accession_unknown_is_no_match():
-    result = await _idmap("map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession")
+    result = await _idmap(
+        "map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession"
+    )
     assert result.status is WeaveStatus.NO_MATCH

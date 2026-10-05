@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from gmrepo_weaver.factory import build_gmrepo_weaver_fixture
 
 CAP = "gmrepo.list_abundances"

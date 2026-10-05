@@ -7,10 +7,15 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Provenance,
+    WeaverManifest,
+)
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.5"
+WEAVER_VERSION = "0.1.8"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -35,8 +40,8 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
                     {
-                        "pathway.reactome.id",
                         "pathway.reactome.count",
+                        "pathway.reactome.id",
                         "pathway.reactome.names",
                         "pathway.reactome.records",
                     }
@@ -46,29 +51,27 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="summary",
                         outputs=frozenset(
                             {
-                                "pathway.reactome.id",
                                 "pathway.reactome.count",
+                                "pathway.reactome.id",
                                 "pathway.reactome.names",
                             }
                         ),
                     ),
                     OutputGroup(id="full", outputs=frozenset({"pathway.reactome.records"})),
                 ),
-                set_outputs=frozenset({"pathway.reactome.id"}),
                 backends=backends,
                 max_batch_size=25,
+                set_outputs=frozenset({"pathway.reactome.id"}),
             ),
-            # The consumer side: one pathway id -> that pathway's detail. Consumes the
-            # set key list_pathways produces, so a fanned pathway is drillable.
             Capability(
                 id="describe_pathway",
                 consumes=frozenset({"pathway.reactome.id"}),
                 produces=frozenset(
                     {
-                        "pathway.reactome.display_name",
-                        "pathway.reactome.species",
-                        "pathway.reactome.in_disease",
                         "pathway.reactome.detail",
+                        "pathway.reactome.display_name",
+                        "pathway.reactome.in_disease",
+                        "pathway.reactome.species",
                     }
                 ),
                 output_groups=(
@@ -76,10 +79,10 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="detail",
                         outputs=frozenset(
                             {
-                                "pathway.reactome.display_name",
-                                "pathway.reactome.species",
-                                "pathway.reactome.in_disease",
                                 "pathway.reactome.detail",
+                                "pathway.reactome.display_name",
+                                "pathway.reactome.in_disease",
+                                "pathway.reactome.species",
                             }
                         ),
                     ),

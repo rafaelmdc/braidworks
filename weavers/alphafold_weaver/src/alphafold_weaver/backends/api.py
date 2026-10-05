@@ -21,8 +21,8 @@ import logging
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
+from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("alphafold_weaver.api")
 
@@ -69,10 +69,17 @@ class AlphafoldApiBackend(BackendBase):
     name = "api"
 
     def __init__(
-        self, *, base_url: str = DEFAULT_BASE_URL, client: httpx.AsyncClient | None = None
+        self,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        client: httpx.AsyncClient | None = None,
+        max_concurrency: int = 4,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        self._max_concurrency = max_concurrency
 
     def is_configured(self) -> bool:
         """AlphaFold DB REST needs no key or local data, so it's always usable."""
@@ -82,10 +89,12 @@ class AlphafoldApiBackend(BackendBase):
         """A live service; the fingerprint pins the REST API contract."""
         return "alphafold-api-v1"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "alphafold")
 
     async def fetch(
         self,
@@ -96,11 +105,12 @@ class AlphafoldApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        records: list[LookupRecord] = []
-        for query in queries:
-            accession = str(query.get("protein.uniprot.accession", "")).strip()
-            records.append(await self._resolve_one(query, accession))
-        return records
+        async def resolve(query: dict[str, Any]) -> LookupRecord:
+            return await self._resolve_one(
+                query, str(query.get("protein.uniprot.accession", "")).strip()
+            )
+
+        return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

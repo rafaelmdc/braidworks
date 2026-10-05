@@ -7,9 +7,7 @@ set-output fan dimension (a list of child taxids), count/records, and the misses
 from __future__ import annotations
 
 import httpx
-
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 # A tiny subtree for genus 216851: two species + one strain + a "no rank" group node.

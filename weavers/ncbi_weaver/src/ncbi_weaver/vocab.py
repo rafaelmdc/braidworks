@@ -63,7 +63,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.2"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -168,12 +168,23 @@ def list_genomes_capability(*, backends: tuple[str, ...]) -> Capability:
         output_groups=(OutputGroup(id="genomes", outputs=LIST_GENOMES_OUTPUTS),),
         set_outputs=frozenset({GENOME_ACCESSION}),
         parameters=(
-            Parameter(name="reference_only", type="bool", default=False,
-                      description="Only NCBI reference/representative genomes."),
-            Parameter(name="annotated_only", type="bool", default=False,
-                      description="Only assemblies that have annotation."),
-            Parameter(name="assembly_level", type="string",
-                      description="Filter to a level: Complete Genome / Chromosome / Scaffold / Contig."),
+            Parameter(
+                name="reference_only",
+                type="bool",
+                default=False,
+                description="Only NCBI reference/representative genomes.",
+            ),
+            Parameter(
+                name="annotated_only",
+                type="bool",
+                default=False,
+                description="Only assemblies that have annotation.",
+            ),
+            Parameter(
+                name="assembly_level",
+                type="string",
+                description="Filter to a level: Complete Genome / Chromosome / Scaffold / Contig.",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,
@@ -219,8 +230,12 @@ def resolve_gene_capability(*, backends: tuple[str, ...]) -> Capability:
         produces=RESOLVE_GENE_OUTPUTS,
         output_groups=(OutputGroup(id="gene", outputs=RESOLVE_GENE_OUTPUTS),),
         parameters=(
-            Parameter(name="taxon", type="string", default="9606",
-                      description="Taxid/name to disambiguate the species (default human)."),
+            Parameter(
+                name="taxon",
+                type="string",
+                default="9606",
+                description="Taxid/name to disambiguate the species (default human).",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,
@@ -261,8 +276,11 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
         output_groups=(OutputGroup(id="orthologs", outputs=ORTHOLOG_OUTPUTS),),
         set_outputs=frozenset({GENE_ID}),
         parameters=(
-            Parameter(name="taxon_filter", type="string",
-                      description="Restrict orthologs to this taxid/clade (e.g. 40674 mammals)."),
+            Parameter(
+                name="taxon_filter",
+                type="string",
+                description="Restrict orthologs to this taxid/clade (e.g. 40674 mammals).",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,

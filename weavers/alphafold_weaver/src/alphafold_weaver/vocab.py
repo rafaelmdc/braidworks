@@ -7,10 +7,15 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Provenance,
+    WeaverManifest,
+)
 
 WEAVER_ID = "alphafold"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.6"
 WEAVER_TITLE = "AlphaFold predicted structure (accession -> model + confidence)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

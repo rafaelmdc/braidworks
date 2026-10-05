@@ -5,8 +5,8 @@ from wikidata_weaver.provider import WikidataWeaverProvider, register
 from wikidata_weaver.weaver import WikidataWeaver
 
 __all__ = [
-    "build_wikidata_weaver",
-    "register",
     "WikidataWeaver",
     "WikidataWeaverProvider",
+    "build_wikidata_weaver",
+    "register",
 ]

@@ -11,7 +11,7 @@ the three GO aspects), and drills any single term into its definition.
 
 | Capability | Consumes | Produces |
 |---|---|---|
-| `list_go_terms` | `protein.uniprot.accession` | **`go.term`** (⤜ fan: every distinct GO id), `go.molecular_function`, `go.biological_process`, `go.cellular_component` (term-name lists), `go.count`, `go.records` |
+| `list_go_terms` | `protein.uniprot.accession` | **`go.term`** (⤜ fan: every distinct GO id), `go.molecular_function`, `go.biological_process`, `go.cellular_component` (term-name lists), `go.count`, `go.records`, `go.annotation.records`, `go.annotation.coverage` |
 | `describe_go_term` | `go.term` | `go.term.name`, `go.term.aspect`, `go.term.definition`, `go.term.detail` |
 
 `list_go_terms` emits `go.term` as a **set output** (the fan dimension), and
@@ -19,11 +19,27 @@ the three GO aspects), and drills any single term into its definition.
 
 ## Dedup + deterministic ordering
 
-QuickGO returns **one row per annotation evidence**, so a single protein yields hundreds
-of rows across many pages. The backend paginates (up to a page cap, default 10 × 200 =
-2000 annotations — truncation is logged, not silent), **dedups to distinct GO terms**, and
-sorts them by GO id. So the same accession always yields the same lists. An accession with
-no annotations is a clean `NO_MATCH`.
+QuickGO returns one row per annotation, with source evidence, qualifiers and
+references. The default budget is ten pages of 200 rows per accession.
+The term inventory (go.term, go.records and aspect lists) deduplicates by GO ID
+and sorts by that ID. go.count is the number of distinct terms **retrieved**,
+not a claim about the complete source total or positive experimental support.
+
+Request go.annotation.records for the retrieved source rows, preserving evidence,
+qualifiers, references and annotation extensions without interpretation. Two
+annotations for the same term remain separate. No evidence or qualifier filtering
+is applied; read those fields before using the inventory as a biological assertion.
+See the [QuickGO API](https://www.ebi.ac.uk/QuickGO/api/index.html).
+
+Request go.annotation.coverage for complete (true / false / null), pages_retrieved,
+total_pages, total_annotations, observed_annotations and reason. Completeness refers
+to the reported pagination for this query; it does not establish a frozen database
+snapshot. A page cap or source-count mismatch makes complete false; absent page
+metadata makes it unknown. Non-complete coverage also travels as a warning even
+when you request only go.count or an aspect list, including CSV/TSV exports.
+
+Deterministic ordering applies to the same returned source data. Live annotations
+can change. An accession with no annotations remains a clean NO_MATCH.
 
 ## Use it
 
@@ -31,6 +47,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run quickgo describe_go_term --have go.term=GO:0006915
+braidworks weave --have protein.uniprot.accession=P04637 --want go.annotation.records,go.annotation.coverage --format json
 braidworks weave --have protein.query=P04637 --want go.biological_process   # routed via uniprot
 # fan one protein out into each GO term's definition:
 braidworks weave --have protein.query=P04637 --want go.term.name --expand all
@@ -53,4 +70,30 @@ make test                          # conformance + contract + golden, fully offl
 BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live QuickGO API (schema-drift detector)
 ```
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+Extend it: [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/quickgo_weaver/CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+
+## In## Batch execution
+
+Annotation queries accept up to ten distinct accessions per HTTP query and correlate
+rows by the echoed geneProductId. Paging is shared, with a budget scaled by the
+number of distinct accessions. Each accession retains the configured annotation
+cap (max_pages times 200); capped detail is marked incomplete. Coverage includes
+query_scope and source_total_annotations for the combined query, while
+total_annotations is that accession's count when the complete combined response
+establishes it. An unseen accession in an incomplete batch is an error rather
+than a claimed biological absence. Missing/unexpected echoed IDs are errors.
+
+stallation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/quickgo_weaver/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

@@ -9,10 +9,8 @@ inputs below with real, distinct inputs from the source.
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import WeaverOrderContractTests
-
 from wikipedia_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("api",))

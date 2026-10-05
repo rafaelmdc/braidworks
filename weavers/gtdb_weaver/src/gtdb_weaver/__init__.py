@@ -6,9 +6,9 @@ from gtdb_weaver.tree import cophenetic
 from gtdb_weaver.weaver import GtdbWeaver
 
 __all__ = [
+    "GtdbWeaver",
+    "GtdbWeaverProvider",
     "build_gtdb_weaver",
     "cophenetic",
     "register",
-    "GtdbWeaver",
-    "GtdbWeaverProvider",
 ]

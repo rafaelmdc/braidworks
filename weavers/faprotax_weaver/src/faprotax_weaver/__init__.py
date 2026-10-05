@@ -5,8 +5,8 @@ from faprotax_weaver.provider import FaprotaxWeaverProvider, register
 from faprotax_weaver.weaver import FaprotaxWeaver
 
 __all__ = [
-    "build_faprotax_weaver",
-    "register",
     "FaprotaxWeaver",
     "FaprotaxWeaverProvider",
+    "build_faprotax_weaver",
+    "register",
 ]

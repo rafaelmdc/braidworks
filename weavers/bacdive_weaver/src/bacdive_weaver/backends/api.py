@@ -27,8 +27,8 @@ import logging
 from typing import Any
 
 import httpx
-
 from braidworks.core import BackendBase, LookupRecord, format_exc
+from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("bacdive_weaver.api")
 
@@ -127,10 +127,12 @@ class BacdiveApiBackend(BackendBase):
         """BacDive v2 is a live service; the fingerprint pins the API contract version."""
         return "bacdive-api-v2"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "bacdive")
 
     async def fetch(
         self,

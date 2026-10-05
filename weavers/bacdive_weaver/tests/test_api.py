@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from bacdive_weaver.backends.api import BacdiveApiBackend
 
 CAP = "describe_traits"

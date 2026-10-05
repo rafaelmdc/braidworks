@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from reactome_weaver import build_reactome_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -75,10 +73,15 @@ async def test_live_describe_pathway():
     ss = StrandSet.from_strands("p1", [Strand("pathway.reactome.id", "R-HSA-69541")])
     result = (
         await weaver.execute_batch(
-            "describe_pathway", [ss],
+            "describe_pathway",
+            [ss],
             requested_outputs=frozenset(
-                {"pathway.reactome.display_name", "pathway.reactome.species",
-                 "pathway.reactome.in_disease", "pathway.reactome.detail"}
+                {
+                    "pathway.reactome.display_name",
+                    "pathway.reactome.species",
+                    "pathway.reactome.in_disease",
+                    "pathway.reactome.detail",
+                }
             ),
             backend="api",
         )

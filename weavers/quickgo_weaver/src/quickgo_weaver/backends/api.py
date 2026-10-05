@@ -10,7 +10,7 @@ evidence*, so a single protein yields hundreds of rows across many pages. The ba
 
 **Determinism:** distinct terms are sorted by GO id, so the same accession always yields
 the same lists. Completeness is bounded by ``max_pages`` (a protein with more annotation
-pages than the cap is truncated — logged, not silent).
+pages than the cap is truncated — reported in coverage metadata and warnings).
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -19,16 +19,19 @@ against the live API (annotation/search for P04637).
 
 from __future__ import annotations
 
+import json
 import logging
+from dataclasses import replace
 from typing import Any
 
 import httpx
-
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("quickgo_weaver.api")
 
 DEFAULT_BASE_URL = "https://www.ebi.ac.uk/QuickGO/services"
+_ACCESSION_CHUNK = 10  # bounded multi-accession annotation query
 _TERM_CHUNK = 100  # GO ids per multi-id /ontology/go/terms request (keeps the URL bounded)
 _PAGE_SIZE = 200  # QuickGO's max results per page
 _MAX_PAGES = 10  # cap fan-out: 10 pages * 200 = 2000 annotations (covers nearly all proteins)
@@ -98,6 +101,8 @@ class QuickgoApiBackend(BackendBase):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if max_pages < 1:
+            raise ValueError("max_pages must be positive")
         self._max_pages = max_pages
 
     def is_configured(self) -> bool:
@@ -108,12 +113,14 @@ class QuickgoApiBackend(BackendBase):
         """A live service; the fingerprint pins the REST API contract."""
         return "quickgo-api-v1"
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url, timeout=30.0, headers={"Accept": "application/json"}
             )
-        return self._client
+        return PacedHTTPClient(self._client, "quickgo")
 
     async def fetch(
         self,
@@ -127,10 +134,67 @@ class QuickgoApiBackend(BackendBase):
         # describe_go_term drills GO ids; list_go_terms lists a protein's terms.
         if capability_id == "describe_go_term":
             return await self._describe_terms(queries)
-        records: list[LookupRecord] = []
-        for query in queries:
-            accession = str(query.get("protein.uniprot.accession", "")).strip()
-            records.append(await self._resolve_one(query, accession))
+        return await self._list_annotations(queries)
+
+    async def _list_annotations(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        ids = [str(q.get("protein.uniprot.accession", "")).strip().upper() for q in queries]
+        distinct = sorted({accession for accession in ids if accession})
+        by_id: dict[str, LookupRecord] = {}
+        for start in range(0, len(distinct), _ACCESSION_CHUNK):
+            chunk = distinct[start : start + _ACCESSION_CHUNK]
+            if len(chunk) == 1:
+                query = {"protein.uniprot.accession": chunk[0]}
+                by_id[chunk[0]] = await self._resolve_one(query, chunk[0])
+            else:
+                by_id.update(await self._resolve_batch(chunk))
+        return [
+            replace(by_id[accession], query=query)
+            if accession
+            else LookupRecord(query=query, found=False)
+            for query, accession in zip(queries, ids)
+        ]
+
+    async def _resolve_batch(self, accessions: list[str]) -> dict[str, LookupRecord]:
+        queries = {accession: {"protein.uniprot.accession": accession} for accession in accessions}
+        try:
+            rows, source_coverage = await self._all_annotations(
+                ",".join(accessions),
+                max_pages=self._max_pages * len(accessions),
+            )
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return {a: LookupRecord(query=q, found=False) for a, q in queries.items()}
+            return {
+                a: LookupRecord(query=q, error=f"QuickGO API error: {format_exc(exc)}")
+                for a, q in queries.items()
+            }
+        except httpx.HTTPError as exc:
+            return {
+                a: LookupRecord(query=q, error=f"QuickGO API error: {format_exc(exc)}")
+                for a, q in queries.items()
+            }
+        grouped: dict[str, list[dict[str, Any]]] = {a: [] for a in accessions}
+        for row in rows:
+            echoed = str(row.get("geneProductId") or "").rsplit(":", 1)[-1].upper()
+            if echoed not in grouped:
+                message = "QuickGO bulk response cannot be correlated: missing or unexpected geneProductId"
+                return {a: LookupRecord(query=q, error=message) for a, q in queries.items()}
+            grouped[echoed].append(row)
+        records = {}
+        for accession, annotation_rows in grouped.items():
+            cap = self._max_pages * _PAGE_SIZE
+            selected = annotation_rows[:cap]
+            coverage = dict(source_coverage)
+            coverage["query_scope"] = accessions
+            coverage["source_total_annotations"] = source_coverage["total_annotations"]
+            coverage["total_annotations"] = (
+                len(annotation_rows) if source_coverage["complete"] is True else None
+            )
+            coverage["observed_annotations"] = len(selected)
+            if len(annotation_rows) > cap:
+                coverage["complete"] = False
+                coverage["reason"] = "per_accession_cap"
+            records[accession] = self._annotation_record(queries[accession], selected, coverage)
         return records
 
     async def _describe_terms(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
@@ -175,20 +239,70 @@ class QuickgoApiBackend(BackendBase):
         if not accession:
             return LookupRecord(query=query, found=False)
         try:
-            rows = await self._all_annotations(accession)
+            rows, coverage = await self._all_annotations(accession)
+        except httpx.HTTPStatusError as exc:
+            if is_not_found_status(exc.response.status_code):
+                return LookupRecord(query=query, found=False)
+            logger.warning("QuickGO lookup failed for %r: %s", accession, exc)
+            return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
         except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
             logger.warning("QuickGO lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
 
-        if not rows:
-            return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_aggregate(rows))
+        return self._annotation_record(query, rows, coverage)
 
-    async def _all_annotations(self, accession: str) -> list[dict[str, Any]]:
-        """Page through annotation/search up to the page cap, collecting every row."""
+    @staticmethod
+    def _annotation_record(
+        query: dict[str, Any],
+        rows: list[dict[str, Any]],
+        coverage: dict[str, Any],
+    ) -> LookupRecord:
+        if not rows:
+            if coverage["complete"] is not True:
+                return LookupRecord(
+                    query=query,
+                    error=(
+                        "QuickGO annotation coverage incomplete or unknown before any rows "
+                        "for this accession were retrieved"
+                    ),
+                )
+            return LookupRecord(query=query, found=False)
+        values = _aggregate(rows)
+        values["go.annotation.records"] = sorted(
+            [dict(row) for row in rows],
+            key=lambda row: (
+                row.get("goId") or "",
+                row.get("id") or "",
+                json.dumps(row, sort_keys=True),
+            ),
+        )
+        values["go.annotation.coverage"] = coverage
+        warnings = ()
+        if coverage["complete"] is not True:
+            state = "incomplete" if coverage["complete"] is False else "unknown"
+            warnings = (
+                (
+                    f"QuickGO annotation coverage {state}: {coverage['reason']}; "
+                    "go.count describes only the retrieved term inventory"
+                ),
+            )
+        return LookupRecord(query=query, found=True, values=values, warnings=warnings)
+
+    async def _all_annotations(
+        self,
+        accession: str,
+        *,
+        max_pages: int | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Collect bounded pages, retaining the source's pagination/accounting claims."""
         rows: list[dict[str, Any]] = []
-        page = 1
-        while page <= self._max_pages:
+        total_pages: int | None = None
+        total_annotations: int | None = None
+        complete: bool | None = None
+        reason: str | None = None
+        pages_retrieved = 0
+        page_cap = max_pages if max_pages is not None else self._max_pages
+        for page in range(1, page_cap + 1):
             resp = await self._http().get(
                 "/annotation/search",
                 params={
@@ -200,11 +314,31 @@ class QuickgoApiBackend(BackendBase):
             )
             resp.raise_for_status()
             body = resp.json()
-            rows.extend(body.get("results", []))
-            total = (body.get("pageInfo") or {}).get("total", page)
-            if page >= total:
+            rows.extend(body.get("results") or [])
+            pages_retrieved = page
+            reported_pages = (body.get("pageInfo") or {}).get("total")
+            reported_hits = body.get("numberOfHits")
+            if isinstance(reported_hits, int) and not isinstance(reported_hits, bool):
+                total_annotations = reported_hits
+            if not isinstance(reported_pages, int) or isinstance(reported_pages, bool):
+                reason = "missing_page_info"
                 break
-            page += 1
+            total_pages = reported_pages
+            if page >= total_pages:
+                complete = True
+                if total_annotations is not None and len(rows) != total_annotations:
+                    complete = False
+                    reason = "row_count_mismatch"
+                break
         else:
-            logger.info("QuickGO annotations for %s truncated at %d pages", accession, self._max_pages)
-        return rows
+            complete = False
+            reason = "page_cap"
+            logger.info("QuickGO annotations for %s truncated at %d pages", accession, page_cap)
+        return rows, {
+            "complete": complete,
+            "reason": reason,
+            "pages_retrieved": pages_retrieved,
+            "total_pages": total_pages,
+            "total_annotations": total_annotations,
+            "observed_annotations": len(rows),
+        }

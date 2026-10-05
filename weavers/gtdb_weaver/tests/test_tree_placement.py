@@ -8,7 +8,6 @@ reduce pairs of paths to distances with :func:`gtdb_weaver.cophenetic`.
 from __future__ import annotations
 
 import pytest
-
 from gtdb_weaver import cophenetic
 from gtdb_weaver.backends.local import GtdbLocalBackend
 from gtdb_weaver.fixture import fixture_db_path, fixture_tree_path

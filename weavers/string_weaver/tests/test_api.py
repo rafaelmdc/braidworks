@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from string_weaver.backends.api import StringApiBackend
 
 CAP = "list_interactions"

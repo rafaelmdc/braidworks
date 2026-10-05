@@ -6,6 +6,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Self
 from unittest.mock import patch
 
 from taxonomy_tools.build_ncbi_taxonomy import download_taxdump
@@ -65,7 +66,7 @@ class _FakeResponse:
         if content_length is not None:
             self.headers["Content-Length"] = str(content_length)
 
-    def __enter__(self) -> "_FakeResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

@@ -12,10 +12,8 @@ from __future__ import annotations
 import os
 
 import pytest
-
-from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from bacdive_weaver import build_bacdive_weaver
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 pytestmark = pytest.mark.skipif(

@@ -17,13 +17,12 @@ import gzip
 import logging
 import sqlite3
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
-from braidworks.core.localdb import auto_consented
+from braidworks.core.localdb import auto_consented, ensure_local_db
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
-from braidworks.core.localdb import ensure_local_db
 
 from gtdb_weaver import taxonomy
 
@@ -142,7 +141,7 @@ def _fetch_release() -> str | None:
             token = line.strip()
             if token:
                 return token.split()[0]
-    except Exception as exc:  # network/parse — non-fatal, the tag is only informational
+    except Exception as exc:  # noqa: BLE001 - optional release metadata must not abort a build
         logger.info("could not read GTDB VERSION.txt: %s", exc)
     return None
 

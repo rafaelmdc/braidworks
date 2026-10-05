@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from braidworks.core import WeaverFactory, WeaverProvider
-
 from ncbi_weaver import NCBITaxonWeaver, NCBIWeaverProvider, vocab
 
 

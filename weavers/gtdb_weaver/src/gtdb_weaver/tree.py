@@ -34,6 +34,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 # One step on a leaf's path from the root: the ancestor node's stable id and the
 # cumulative branch length (depth) from the root to that node.
@@ -68,7 +69,7 @@ def parse_newick(text: str) -> _Node:
 
 
 class _Parser:
-    _SPECIAL = set("(),:;")
+    _SPECIAL: ClassVar[set[str]] = set("(),:;")
 
     def __init__(self, text: str) -> None:
         self.text = text

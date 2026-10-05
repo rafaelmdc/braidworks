@@ -14,12 +14,11 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import unquote
 
 import httpx
-
 from braidworks.core import (
     BackendBase,
     Candidate,
@@ -27,6 +26,7 @@ from braidworks.core import (
     ResolverRecord,
     is_not_found_status,
 )
+from braidworks.core.http_pacing import PacedHTTPClient
 
 # The Wikidata Query Service SPARQL endpoint (distinct from the www. content host).
 BASE_URL = "https://query.wikidata.org"
@@ -107,15 +107,17 @@ class WikidataApiBackend(BackendBase):
     def is_configured(self) -> bool:
         return self._configured or self._client is not None
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=60.0)
-        return self._client
+        return PacedHTTPClient(self._client, "wikidata")
 
     def fingerprint(self) -> str:
         # Wikidata is continuously edited; bucket the cache by query month so results
         # refresh monthly (matches the spec's "query-month" source of truth).
-        return "wikidata-api-" + datetime.now(timezone.utc).strftime("%Y-%m")
+        return "wikidata-api-" + datetime.now(UTC).strftime("%Y-%m")
 
     async def _post_chunk(self, query: str) -> dict[str, Any]:
         """POST one chunk and return the parsed SPARQL JSON, retrying transient failures.
@@ -186,8 +188,13 @@ class WikidataApiBackend(BackendBase):
         for name, query in zip(names, queries):
             if name in failed:
                 records.append(
-                    ResolverRecord(query=query, status=MatchStatus.ERROR, values={},
-                                   candidates=[], error="Wikidata query failed after retries")
+                    ResolverRecord(
+                        query=query,
+                        status=MatchStatus.ERROR,
+                        values={},
+                        candidates=[],
+                        error="Wikidata query failed after retries",
+                    )
                 )
                 continue
             items = rows_by_name.get(name, {})
@@ -204,25 +211,30 @@ class WikidataApiBackend(BackendBase):
                     items = ranked
             if not items:
                 records.append(
-                    ResolverRecord(query=query, status=MatchStatus.NO_MATCH, values={},
-                                   candidates=[])
+                    ResolverRecord(
+                        query=query, status=MatchStatus.NO_MATCH, values={}, candidates=[]
+                    )
                 )
             elif len(items) == 1:
                 ((qid, fields),) = items.items()
                 records.append(
-                    ResolverRecord(query=query, status=MatchStatus.RESOLVED,
-                                   values=_values(qid, fields), candidates=[])
+                    ResolverRecord(
+                        query=query,
+                        status=MatchStatus.RESOLVED,
+                        values=_values(qid, fields),
+                        candidates=[],
+                    )
                 )
             else:
                 # Same scientific name on several items (homonym across nomenclature
                 # codes, or duplicate items) — return all for review, deterministically.
                 candidates = [
-                    Candidate(values=_values(qid, fields))
-                    for qid, fields in sorted(items.items())
+                    Candidate(values=_values(qid, fields)) for qid, fields in sorted(items.items())
                 ]
                 records.append(
-                    ResolverRecord(query=query, status=MatchStatus.AMBIGUOUS, values={},
-                                   candidates=candidates)
+                    ResolverRecord(
+                        query=query, status=MatchStatus.AMBIGUOUS, values={}, candidates=candidates
+                    )
                 )
         return records
 

@@ -21,8 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from braidworks.core import BackendBase
-from braidworks.core import LookupRecord
+from braidworks.core import BackendBase, LookupRecord
 
 from gtdb_weaver import taxonomy, tree
 

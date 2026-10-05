@@ -13,9 +13,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from gtdb_weaver import build_gtdb_weaver, cophenetic
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}

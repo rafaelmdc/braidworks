@@ -61,7 +61,9 @@ def _handler(request: httpx.Request) -> httpx.Response:
     if "/idmapping/status/" in path:
         return httpx.Response(200, content=json.dumps({"jobStatus": "FINISHED"}))
     if "/idmapping/results/" in path:
-        return httpx.Response(200, content=json.dumps({"results": [{"from": "7157", "to": "P04637"}]}))
+        return httpx.Response(
+            200, content=json.dumps({"results": [{"from": "7157", "to": "P04637"}]})
+        )
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

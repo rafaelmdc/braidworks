@@ -15,20 +15,36 @@ import json
 import httpx
 
 _PATHWAYS = [
-    {"stId": "R-HSA-111448", "displayName": "Activation of NOXA and translocation to mitochondria",
-     "schemaClass": "Pathway", "isInDisease": False},
-    {"stId": "R-HSA-69541", "displayName": "Stabilization of p53",
-     "schemaClass": "Pathway", "isInDisease": False},
+    {
+        "stId": "R-HSA-111448",
+        "displayName": "Activation of NOXA and translocation to mitochondria",
+        "schemaClass": "Pathway",
+        "isInDisease": False,
+    },
+    {
+        "stId": "R-HSA-69541",
+        "displayName": "Stabilization of p53",
+        "schemaClass": "Pathway",
+        "isInDisease": False,
+    },
     # duplicate stId -> must collapse to one pathway
-    {"stId": "R-HSA-111448", "displayName": "Activation of NOXA and translocation to mitochondria",
-     "schemaClass": "Pathway", "isInDisease": False},
+    {
+        "stId": "R-HSA-111448",
+        "displayName": "Activation of NOXA and translocation to mitochondria",
+        "schemaClass": "Pathway",
+        "isInDisease": False,
+    },
 ]
 
 # /data/query/{id} detail objects (describe_pathway), shaped like real Reactome.
 _PATHWAY_DETAIL = {
     "R-HSA-69541": {
-        "stId": "R-HSA-69541", "displayName": "Stabilization of p53", "schemaClass": "Pathway",
-        "speciesName": "Homo sapiens", "isInDisease": False, "releaseDate": "2004-07-06",
+        "stId": "R-HSA-69541",
+        "displayName": "Stabilization of p53",
+        "schemaClass": "Pathway",
+        "speciesName": "Homo sapiens",
+        "isInDisease": False,
+        "releaseDate": "2004-07-06",
     },
 }
 
