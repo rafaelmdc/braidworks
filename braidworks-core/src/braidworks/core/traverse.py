@@ -30,7 +30,7 @@ from collections.abc import Callable
 from typing import Any
 
 from braidworks.core.braid import BackendPolicy
-from braidworks.core.cache import InMemoryStrandCache, StrandCache
+from braidworks.core.cache import StrandCache
 from braidworks.core.capability import Capability
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.executor import (
@@ -41,7 +41,6 @@ from braidworks.core.executor import (
     ReviewPolicy,
     _ExpansionBudget,
 )
-from braidworks.core.parameters import validate_scoped_parameters
 from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.strand import MergePolicy, StrandSet
@@ -161,6 +160,7 @@ async def run_traversed(
     max_expansion: int = 10_000,
     _expansion_budget: _ExpansionBudget | None = None,
     on_event: Callable[[dict[str, Any]], None] | None = None,
+    on_checkpoint: Callable[[Any], None] | None = None,
 ) -> ExecutionResult:
     """Run an ordered list of traversals, re-rooting between each, then plan ``want``.
 
@@ -172,124 +172,34 @@ async def run_traversed(
     into the returned result; only resolved entities flow to the next phase. A single
     cache is shared across phases so a value reached twice is computed once.
     """
-    braider = Braider(registry)
-    budget = _expansion_budget or _ExpansionBudget(max_expansion, len(input_sets))
-    cache = cache if cache is not None else InMemoryStrandCache()
-    executor = executor if executor is not None else LocalExecutor(registry, cache)
-    params = validate_scoped_parameters(
-        params or {},
-        traversal_route_capabilities(
-            registry, input_sets, traversals, target_types, backend_policy=backend_policy
+    from braidworks.core.query import QueryOptions, QueryRequest, prepare_query
+    from braidworks.core.query_state import continue_query, start_query
+
+    prepared = prepare_query(
+        registry,
+        QueryRequest(
+            tuple(input_sets),
+            target_types,
+            tuple(cid for _, cid in traversals),
+            params or {},
+            QueryOptions(
+                backend_policy, expand_policy, review_policy, confidence_threshold, max_expansion
+            ),
         ),
     )
-
-    grouped: dict[frozenset[str], list[StrandSet]] = {}
-    for ss in input_sets:
-        grouped.setdefault(ss.available_types(), []).append(ss)
-    if len(grouped) > 1:
-        combined = ExecutionResult()
-        for group in grouped.values():
-            group_caps = traversal_route_capabilities(
-                registry, group, traversals, target_types, backend_policy=backend_policy
-            )
-            part = await run_traversed(
-                registry,
-                group,
-                traversals,
-                target_types,
-                backend_policy=backend_policy,
-                expand_policy=expand_policy,
-                params={cid: p for cid, p in params.items() if cid in group_caps},
-                review_policy=review_policy,
-                confidence_threshold=confidence_threshold,
-                error_policy=error_policy,
-                merge_policy=merge_policy,
-                cache=cache,
-                executor=executor,
-                max_expansion=max_expansion,
-                _expansion_budget=budget,
-                on_event=on_event,
-            )
-            combined.resolved.extend(part.resolved)
-            _absorb_dead_ends(combined, part)
-        return combined
-
-    final = ExecutionResult()
-    current = input_sets
-
-    async def _run(braid, sets, *, expand):
-        return await executor.execute(
-            braid,
-            sets,
-            review_policy=review_policy,
-            confidence_threshold=confidence_threshold,
-            error_policy=error_policy,
-            merge_policy=merge_policy,
-            expand_policy=expand,
-            params=params,
-            max_expansion=max_expansion,
-            _expansion_budget=budget,
-            backend_policy=backend_policy,
-            on_event=on_event,
-        )
-
-    for weaver_id, capability_id in traversals:
-        if not current:
-            break
-        # The fan consumes one type (e.g. ncbi.taxon.id); the user's --have may be a
-        # higher-level strand (organism.name) that has to be *resolved* down to it
-        # first. The type planner does that for plain `weave`; do the same here by
-        # running a resolution prelude before the fan, so `--traverse` accepts the
-        # same natural inputs `weave` does. Re-root onto the prelude's resolved values.
-        (source,) = tuple(registry.get_capability(weaver_id, capability_id).consumes)
-        available = frozenset().union(*(s.available_types() for s in current))
-        if source not in available:
-            try:
-                prelude = braider.plan(
-                    available_types=available,
-                    target_types=frozenset({source}),
-                    backend_policy=backend_policy,
-                )
-            except (NoPlanError, NoPathError):
-                prelude = None  # let the fan raise the precise missing-input error
-            if prelude is not None and prelude.steps:
-                # Resolution should not be truncated by a fan's --expand top:K.
-                res = await _run(prelude, current, expand=ExpandPolicy.all())
-                _absorb_dead_ends(final, res)
-                # Feed the fan only the resolved join key — the prelude's byproduct
-                # strands (e.g. the seed's scientific_name) must not ride into the
-                # fanned children and stale-fill them.
-                current = [s.restricted_to({source}) for s in res.resolved]
-                if not current:
-                    break
-        # Every traversal changes the entity represented by the join key. Seed
-        # annotations and previous relationship outputs must not describe its
-        # children, even when the join key was supplied without a prelude.
-        current = [s.restricted_to({source}) for s in current]
-        braid = braider.plan_capability(weaver_id, capability_id, backend_policy=backend_policy)
-        res = await _run(braid, current, expand=expand_policy)
-        _absorb_dead_ends(final, res)
-        current = res.resolved
-
-    if target_types and current:
-        available = frozenset().union(*(s.available_types() for s in current))
-        braid = braider.plan(
-            available_types=available,
-            target_types=target_types,
-            backend_policy=backend_policy,
-        )
-        res = await _run(braid, current, expand=expand_policy)
-        final.references = _merge_references(final.references, res.references)
-        final.resolved.extend(res.resolved)
-        final.unresolved.extend(res.unresolved)
-        final.review_queue.extend(res.review_queue)
-        final.errors.extend(res.errors)
-        final.truncations.extend(res.truncations)
-    else:
-        # No target requested (or nothing survived): the fanned children are the result.
-        final.resolved.extend(current)
-
-    return final
+    state = start_query(prepared, budget=_expansion_budget)
+    state.settings_override = {
+        "error_policy": error_policy.value,
+        "merge_policy": merge_policy.value,
+    }
+    return await continue_query(
+        registry,
+        state,
+        executor=executor,
+        cache=cache if executor is None else None,
+        on_event=on_event,
+        on_checkpoint=on_checkpoint,
+    )
 
 
 def _absorb_dead_ends(final: ExecutionResult, res: ExecutionResult) -> None:

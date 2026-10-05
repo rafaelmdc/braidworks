@@ -14,13 +14,12 @@ from .executor import (
     ExpandPolicy,
     LocalExecutor,
     ReviewPolicy,
-    _ExpansionBudget,
 )
 from .parameters import map_parameter_items, validate_scoped_parameters
 from .planner import Braider
 from .registry import BraidRegistry
 from .strand import StrandSet
-from .traverse import resolve_traversal, run_traversed, traversal_route_capabilities
+from .traverse import resolve_traversal, traversal_route_capabilities
 
 
 def normalize_expansion(mode: str | None, k: int = 1, *, traversal: bool = False) -> ExpandPolicy:
@@ -224,33 +223,24 @@ async def execute_query(
     executor: LocalExecutor | None = None,
     cache: StrandCache | None = None,
     on_event: Callable[[dict], None] | None = None,
+    on_checkpoint: Callable[[Any], None] | None = None,
 ) -> ExecutionResult:
-    """Compose existing executor/traversal with one global expansion budget."""
-    request = prepared.request
-    sets = [StrandSet.from_json(deepcopy(ss.to_json())) for ss in request.inputs]
-    if executor is not None and cache is not None:
-        raise ValueError("supply executor or cache, not both")
-    executor = executor if executor is not None else LocalExecutor(registry, cache)
+    """Start the same state engine used by continuation; presentation stays outside."""
+    from .query_state import continue_query, start_query
+
     if on_event:
-        on_event({"event": "progress", "input_count": len(sets), "completed_inputs": 0})
-    common = {
-        **request.options.executor_kwargs(),
-        "params": prepared.effective_params,
-        "on_event": on_event,
-    }
-    if prepared.traversals:
-        return await run_traversed(
-            registry, sets, list(prepared.traversals), request.targets, executor=executor, **common
+        on_event(
+            {
+                "event": "progress",
+                "input_count": len(prepared.request.inputs),
+                "completed_inputs": 0,
+            }
         )
-    result = ExecutionResult()
-    budget = _ExpansionBudget(request.options.max_expansion, len(sets))
-    completed = 0
-    for braid, indices in prepared.plans:
-        part = await executor.execute(
-            braid, [sets[i] for i in indices], _expansion_budget=budget, **common
-        )
-        absorb_result(result, part)
-        completed += len(indices)
-        if on_event:
-            on_event({"event": "progress", "input_count": len(sets), "completed_inputs": completed})
-    return result
+    return await continue_query(
+        registry,
+        start_query(prepared),
+        executor=executor,
+        cache=cache,
+        on_event=on_event,
+        on_checkpoint=on_checkpoint,
+    )

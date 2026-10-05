@@ -50,6 +50,7 @@ from braidworks.core.exceptions import (
     ReviewRequired,
     UnsupportedCapability,
 )
+from braidworks.core.execution_state import ExecutionState
 from braidworks.core.executor import (
     ErrorPolicy,
     ExecutionError,
@@ -93,6 +94,7 @@ from braidworks.core.query import (
     execute_query,
     prepare_query,
 )
+from braidworks.core.query_state import QueryExecutionState, continue_query, start_query
 from braidworks.core.records import (
     Candidate,
     LookupRecord,
@@ -148,6 +150,7 @@ __all__ = [
     "ErrorPolicy",
     "ExecutionError",
     "ExecutionResult",
+    "ExecutionState",
     "ExpandMode",
     "ExpandPolicy",
     "ExpansionTruncation",
@@ -167,6 +170,7 @@ __all__ = [
     "Parameter",
     "PreparedQuery",
     "Provenance",
+    "QueryExecutionState",
     "QueryOptions",
     "QueryRequest",
     "Reference",
@@ -197,6 +201,7 @@ __all__ = [
     "classify_exception",
     "classify_status",
     "compute_cache_key",
+    "continue_query",
     "default_db_path",
     "download",
     "ensure_local_db",
@@ -223,5 +228,6 @@ __all__ = [
     "resolve_traversal",
     "run_traversed",
     "skip_if_transient",
+    "start_query",
     "validate_manifest",
 ]

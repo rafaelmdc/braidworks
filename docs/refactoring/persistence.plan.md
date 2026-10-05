@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01–P03 verified locally; P04 verified locally; P05–P07 planned. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04 verified locally; P05 verified locally; P06–P07 planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -250,3 +250,24 @@ SQLiteStrandCache and CachePolicy. Human interface configuration is reserved for
 Executed P04 after its AP01–02 dependency while keeping unrelated application tasks
 planned, per the user's request to implement one plan at a time.
 Local commit: see `feat(cache): add opt-in SQLite cache with versioned policy and codec`.
+
+## P05 implementation evidence — 2026-10-05
+
+ExecutionState captures chunk/wave/reroute cursors, active/terminal internal row keys,
+results, review/errors, expansion counter and options. QueryExecutionState adds the
+heterogeneous-group/traversal/prelude/target cursor and active executor state. Values
+roundtrip through versioned JSON with shared entity aliases and expansion budget restored.
+Internal node keys distinguish duplicate labels; public entity/source_row/parent labels
+remain intact. Legacy execute/run_traversed/execute_query are facades over this engine.
+Fetched waves use the existing deterministic application algorithm, now isolated in
+_apply_wave; source/cache I/O stays outside it. Checkpoint observers run after application
+and phase/cursor advancement. Interrupted unapplied waves cannot be serialized/reused;
+load the last complete checkpoint. Runtime handles are excluded. No run-store I/O yet.
+
+Thirteen boundary tests reconstruct at every wave/chunk/reroute/query phase, with fresh
+executors/caches, and compare complete outcomes/alias counts with uninterrupted runs.
+Coverage includes duplicates, heterogeneous groups, two self-loop traversals, bounded
+set/candidate fan-out, errors/reroutes, unresolved/review and cancellation. Completed
+waves and completed queries do not call sources again. Existing core/toolkit contracts
+and full workspace suite pass. Core 0.16.0 exposes start_query/continue_query and states.
+Local commit: see `refactor(execution): serialize applied waves and query phase cursors`.
