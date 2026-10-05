@@ -138,3 +138,27 @@ recomputable observations: retain a copy and choose a new file rather than forci
 incompatible cache open. Corrupt entries log a warning and miss. No pickle or arbitrary
 object stringification is used. API contract fingerprints and TTLs do not guarantee a
 frozen provider dataset. Cache writes and durable run advancement are independent.
+
+## Durable run storage (braidworks-core 0.17.0)
+
+SQLiteRunStore stores versioned complete QueryExecutionState snapshots separately from
+lookup cache and observation archives. Choose an explicit local path; no persistence
+is enabled by default. RunDefinition.capture(registry, prepared) retains immutable
+settings/plans and declared source identities. Call definition.validate(registry,
+worker_identity=...) before continuing a loaded state; changed identities require a
+new run. A saved fingerprint does not freeze a remote provider.
+
+create() returns revision 0. claim(run_id, revision=..., lease_seconds=60) grants an
+opaque owner token. Every save/renew/finish/release requires the current revision and
+owner and returns a new revision. Renew before expiry; an expired token cannot write.
+A crashed owner blocks takeover only until its bounded lease expires. release() leaves
+the last saved state paused. finish() accepts a done query and releases ownership;
+review results retain review status. It does not choose candidates.
+
+Transactions contain only snapshot validation/storage, never source calls or human waits.
+A crash during save retains either the previous snapshot or the whole next snapshot.
+Unapplied interrupted waves may repeat upstream reads. Cache hits are observations, not
+run progress. Use local disk, not cross-host/network SQLite. Run schema version 1 has
+no automatic destructive migration: retain the file for migration and use a new path
+when incompatible. Runs have no automatic retention/deletion policy; keep backups and
+remove an old store only when no owners use it. CLI/browser controls are still planned.

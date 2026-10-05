@@ -109,6 +109,13 @@ from braidworks.core.references import (
 )
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
+from braidworks.core.run_store import (
+    RunCheckpoint,
+    RunConflict,
+    RunDefinition,
+    RunStore,
+    SQLiteRunStore,
+)
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.sqlite_cache import SQLiteStrandCache
 from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet
@@ -178,6 +185,11 @@ __all__ = [
     "ReviewPolicy",
     "ReviewQueueItem",
     "ReviewRequired",
+    "RunCheckpoint",
+    "RunConflict",
+    "RunDefinition",
+    "RunStore",
+    "SQLiteRunStore",
     "SQLiteStrandCache",
     "StepOutcome",
     "Strand",

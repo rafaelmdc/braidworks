@@ -34,11 +34,13 @@ def connection_scope(
 
 
 @contextmanager
-def transaction(connection: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+def transaction(
+    connection: sqlite3.Connection, *, immediate: bool = False
+) -> Iterator[sqlite3.Connection]:
     """Own one transaction; reject nesting into a caller's transaction."""
     if connection.in_transaction:
         raise ValueError("Cannot own an already active SQLite transaction")
-    connection.execute("BEGIN")
+    connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
     try:
         yield connection
         connection.commit()

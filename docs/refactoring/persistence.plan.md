@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01–P03 verified locally; P04 verified locally; P05 verified locally; P06–P07 planned. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -271,3 +271,26 @@ set/candidate fan-out, errors/reroutes, unresolved/review and cancellation. Comp
 waves and completed queries do not call sources again. Existing core/toolkit contracts
 and full workspace suite pass. Core 0.16.0 exposes start_query/continue_query and states.
 Local commit: see `refactor(execution): serialize applied waves and query phase cursors`.
+
+## P06 implementation evidence — 2026-10-05
+
+RunDefinition and RunCheckpoint roundtrip through canonical versioned JSON. Definitions
+retain the prepared query, declared registry/source identity (including optional unavailable
+backends), and caller-supplied worker identity. Whole-registry identity is conservative
+because rerouting can use sources outside the original plan. validate() rejects changes
+before continuation; API fingerprints remain declarations rather than frozen datasets.
+SQLiteRunStore implements create/load/claim/renew/save/finish/release and ordered listing.
+Short BEGIN IMMEDIATE transactions atomically replace complete snapshots. Revisions and
+random owner tokens reject stale/concurrent saves; finite positive leases recover after
+expiry. Clock checks run after acquiring the writer lock. Malformed snapshots are rejected
+before commit. Completion releases ownership; saved review stays review, never accepted
+implicitly. Persistence remains opt-in and has no cache-progress coupling.
+
+Twenty real SQLite regression tests pass, including four competing connections, a spawned
+owner exiting, process death after an uncommitted write, injected transaction failure,
+renewal/recovery/release, duplicate identities, stale tokens/revisions, changed source/worker/
+options, corruption/future schema and completed-wave continuation without new source calls.
+Core 481 tests pass; full workspace 1335 passed/48 skipped; make lint passes. Core 0.17.0
+exports the narrow storage contracts. Human interface activation and lease renewal around
+long async execution belong to P07. No API backend changed; no network/data downloads.
+Local commit: see `feat(resume): add atomic SQLite run snapshots and ownership leases`.
