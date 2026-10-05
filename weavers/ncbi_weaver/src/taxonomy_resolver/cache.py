@@ -20,7 +20,6 @@ from .normalize import normalize_level, normalize_name
 from .policy import MatchType, ResolutionStatus, WarningCode
 from .schemas import DecisionAction, DecisionRecord, ResolveRequest
 
-_INITIALIZED_CACHE_DATABASES: set[tuple[str, str | int]] = set()
 DatabaseHandle = sqlite3.Connection | Path | str
 
 
@@ -33,22 +32,9 @@ def _resolve_cache_db_path(
     return cache_db_path if cache_db_path is not None else taxonomy_db_path
 
 
-def _cache_key(db_path: DatabaseHandle) -> tuple[str, str | int]:
-    """Return a stable in-process key for one cache backend."""
-
-    if isinstance(db_path, sqlite3.Connection):
-        return ("connection", id(db_path))
-    return ("path", str(Path(db_path).resolve()))
-
-
 def _ensure_cache_database(db_path: DatabaseHandle, *, create_indexes: bool) -> None:
-    """Initialize the cache schema once per process for each SQLite file."""
-
-    key = _cache_key(db_path)
-    if key in _INITIALIZED_CACHE_DATABASES:
-        return
+    """Inspect the actual database instead of memoizing replaceable filesystem paths."""
     initialize_database(db_path, create_indexes=create_indexes)
-    _INITIALIZED_CACHE_DATABASES.add(key)
 
 
 def lookup_reviewed_mapping(

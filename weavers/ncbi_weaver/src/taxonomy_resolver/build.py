@@ -12,9 +12,10 @@ from pathlib import Path
 from tarfile import TarFile, TarInfo, is_tarfile
 from typing import BinaryIO
 
+from braidworks.core.sqlite import connection_scope
+
 from .db import (
     clear_reference_tables,
-    connect,
     initialize_database,
     insert_taxa_rows,
     insert_taxon_name_rows,
@@ -284,9 +285,7 @@ def _count_rows(table_name: str, db_handle: sqlite3.Connection) -> int:
 def _get_root_taxid_count(db_handle: sqlite3.Connection) -> int:
     """Return the number of root rows present in the loaded taxonomy."""
 
-    row = db_handle.execute(
-        "SELECT COUNT(*) AS row_count FROM taxa WHERE is_root = 1"
-    ).fetchone()
+    row = db_handle.execute("SELECT COUNT(*) AS row_count FROM taxa WHERE is_root = 1").fetchone()
     return int(row["row_count"])
 
 
@@ -317,8 +316,7 @@ def _validate_build(
         "taxa_loaded": taxa_count == expected_taxa_count and taxa_count > 0,
         "names_loaded": name_count == expected_name_count and name_count > 0,
         "scientific_names_loaded": (
-            scientific_name_count == expected_scientific_name_count
-            and scientific_name_count > 0
+            scientific_name_count == expected_scientific_name_count and scientific_name_count > 0
         ),
         "root_present": root_taxid_count >= 1,
     }
@@ -377,7 +375,7 @@ def build_taxonomy_database(
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path, create_indexes=False)
-    with connect(db_path) as build_connection:
+    with connection_scope(db_path) as build_connection:
         _notify_progress(
             progress_callback,
             stage="prepare",
@@ -409,10 +407,12 @@ def build_taxonomy_database(
                 message="Starting names.dmp load",
                 current=0,
             )
-            _scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = _insert_names(
-                archive,
-                db_handle=build_connection,
-                progress_callback=progress_callback,
+            _scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = (
+                _insert_names(
+                    archive,
+                    db_handle=build_connection,
+                    progress_callback=progress_callback,
+                )
             )
             build_connection.commit()
 

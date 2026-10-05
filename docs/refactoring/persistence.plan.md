@@ -3,11 +3,11 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: planned; no work below is implemented yet. Tracking: #144, #143, #146.
+Status: P01 verified locally; P02–P07 planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
-| P01 | PF01 | Connection scopes and real schema initialization | W00 |
+| P01 | PF01 | Connection scopes and real schema initialization — verified | W00 |
 | P02a | PF02 | Owned build locking with recovery/timeout | P01 |
 | P02b | PF02 | Source reader identity/session consistency | P01; coordinate P02a |
 | P03a | PF03 | Separate reviewed-history repository and migration | P01–02 |
@@ -152,3 +152,25 @@ with acceptance evidence and local commit hash. Record resolved engineering choi
 alongside tests; do not silently change spec defaults. Run relevant package tests, then
 workspace checks at coherent checkpoints. Data/tools stay isolated and uncommitted.
 Keep source/API behavior unchanged where possible; changed API paths require live E2E.
+
+## P01 implementation evidence — 2026-10-05
+
+Implemented `braidworks.core.sqlite` connection_scope, readonly_uri and transaction.
+Owned handles always close; explicit transaction ownership rejects nesting. NCBI
+internal read/write scopes now use explicit paths/handles, close owned connections,
+and preserve active borrowed transactions. A fresh borrowed write commits only the
+transaction it starts; commit=False requires a borrowed handle. Legacy connect() still
+sets the documented no-path default for compatibility, but internal scopes do not.
+Read paths do not initialize/create files. Builds now explicitly close their handle.
+Schema version 1 is stored in source-local taxonomy_schema; future versions reject.
+Actual databases are checked instead of initialized-path memoization, including replacement.
+Review-history separation remains P03, not part of this change.
+
+Evidence: core 403 passed; NCBI 121 passed/11 skipped; full workspace Make test passed;
+make lint and NCBI strict verification passed. Ten new regression tests cover ownership,
+rollback, borrowed transactions, special/missing paths, replacement and future schema.
+No API backend changed; no live network tests or data downloads were required.
+Core 0.13.1; NCBI 0.2.3 with core floor 0.13.1. Isolated uv environment retained.
+The broad unscoped ruff check also reported five existing findings in docs/diagrams and
+tools/release_tags.py outside the Make lint targets; those files were not changed.
+Local commit: see git log entry `refactor(sqlite): make connection and schema ownership explicit`.

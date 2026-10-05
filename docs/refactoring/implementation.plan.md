@@ -1,6 +1,6 @@
 # Combined implementation plan
 
-Date: 2026-10-05. Status: specifications complete; new implementation not started.
+Date: 2026-10-05. Status: W01 verified locally; remaining work packages planned.
 [Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
 [persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
@@ -11,7 +11,7 @@ baseline, not another rewrite to perform.
 | Step | Requirements | Concrete work / reviewable result | Depends on | Status |
 |---|---|---|---|---|
 | W00 | RD01–08 | Record current baseline and keep regression contracts | Existing readiness commits | Baseline recorded |
-| W01 | PF01 | SQLite ownership helpers; NCBI explicit handles and schema initialization | W00 | Planned |
+| W01 | PF01 | SQLite ownership helpers; NCBI explicit handles and schema initialization | W00 | Verified locally; see persistence.plan.md |
 | W02 | PF02 | Safe build-lock ownership and source identity/session checks | W01 | Planned |
 | W03 | PF03 | Separate review repository/history migration; batch thread boundaries | W01–02 | Planned |
 | W04 | AP01–02 | QueryRequest/Options/PreparedQuery; shared prepare/execute service | W00; coordinate W03 APIs | Planned |
