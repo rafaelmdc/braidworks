@@ -2,7 +2,7 @@
 
 Domain-neutral mechanics shared by any weaver whose backend reads a multi-GB local
 artifact built from a download: default cache-path resolution, the opt-in consent
-gate, a streamed download, an MD5 integrity check, a disk precheck, a best-effort
+gate, a streamed download, an MD5 integrity check, a disk precheck, an OS-owned
 cross-process build lock, and an atomically-published build.
 
 It is **callback-shaped**: :func:`ensure_local_db` owns the orchestration (validity →
@@ -14,8 +14,10 @@ taxonomy assumptions) so the next bulk weaver can reuse it.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -40,7 +42,8 @@ _TRUTHY = {"1", "true", "yes", "on"}
 USER_AGENT = "Mozilla/5.0 (compatible; braidworks/1.0)"
 
 DEFAULT_MIN_FREE_BYTES = 4 * 1024**3
-LOCK_STALE_SECONDS = 2 * 60 * 60
+LOCK_STALE_SECONDS = 2 * 60 * 60  # Legacy public constant; age never determines ownership.
+LOCK_TIMEOUT_SECONDS = 2 * 60 * 60
 LOCK_POLL_SECONDS = 1.0
 
 # (phase, message, done_bytes, total_bytes|None, finished) — a generic progress event.
@@ -129,44 +132,74 @@ def check_disk(target_dir: Path, *, min_free_bytes: int = DEFAULT_MIN_FREE_BYTES
 
 
 class BuildLock:
-    """A best-effort cross-process lock so two builds never target the same path."""
+    """Process-owned advisory lock (POSIX flock / Windows byte-range lock).
 
-    def __init__(self, db_path: Path) -> None:
+    The stable lock file remains after release: unlinking it lets a contender lock
+    a different inode. Kernel ownership survives long builds and ends on process
+    death. Use only on a local filesystem with working OS advisory locks.
+    """
+
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        timeout: float = LOCK_TIMEOUT_SECONDS,
+        progress: Callable[[str], None] | None = None,
+    ) -> None:
+        if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout < 0:
+            raise ValueError("Build-lock timeout must be finite and nonnegative")
         self._path = db_path.with_name(db_path.name + ".lock")
+        self._timeout = timeout
+        self._progress = progress
+        self._handle = None
 
     def __enter__(self) -> Self:
-        while True:
-            try:
-                fd = os.open(self._path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                if self._reclaim_if_stale():
-                    continue
-                time.sleep(LOCK_POLL_SECONDS)
-                continue
-            os.write(fd, str(os.getpid()).encode("ascii"))
-            os.close(fd)
+        if self._handle is not None:
+            raise RuntimeError("BuildLock is already acquired")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        handle = self._path.open("a+b")
+        if os.name == "nt" and self._path.stat().st_size == 0:
+            # Windows locking requires an existing byte.
+            handle.write(b"0")
+            handle.flush()
+        deadline = time.monotonic() + self._timeout
+        try:
+            while True:
+                try:
+                    if os.name == "posix":
+                        import fcntl
+
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    elif os.name == "nt":
+                        import msvcrt
+
+                        handle.seek(0)
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    else:
+                        raise BackendConfigurationError("OS build locks require POSIX or Windows")
+                    break
+                except OSError as exc:
+                    if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        raise
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise BackendConfigurationError(
+                            f"Timed out waiting for build lock {self._path}"
+                        ) from exc
+                    if self._progress is not None:
+                        self._progress(f"Waiting for build lock {self._path}")
+                    time.sleep(min(LOCK_POLL_SECONDS, remaining))
+            self._handle = handle
             return self
+        except BaseException:
+            handle.close()
+            raise
 
     def __exit__(self, *_exc: object) -> None:
-        try:
-            self._path.unlink()
-        except FileNotFoundError:
-            pass
-
-    def _reclaim_if_stale(self) -> bool:
-        """Remove the lock if older than the staleness window (a crashed build)."""
-        try:
-            age = time.time() - self._path.stat().st_mtime
-        except FileNotFoundError:
-            return True  # lock vanished — retry acquisition immediately
-        if age > LOCK_STALE_SECONDS:
-            logger.warning("reclaiming stale build lock %s (age %.0fs)", self._path, age)
-            try:
-                self._path.unlink()
-            except FileNotFoundError:
-                pass
-            return True
-        return False
+        if self._handle is not None:
+            # Closing this exact handle releases only this owner's kernel lock.
+            self._handle.close()
+            self._handle = None
 
 
 def ensure_local_db(

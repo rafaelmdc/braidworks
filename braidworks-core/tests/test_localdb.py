@@ -134,7 +134,10 @@ def test_build_lock_acquires_and_releases(tmp_path):
     lock = BuildLock(db)
     with lock:
         assert (tmp_path / "db.sqlite.lock").exists()
-    assert not (tmp_path / "db.sqlite.lock").exists()
+    # Keep a stable inode: removing the file would split contending owners.
+    assert (tmp_path / "db.sqlite.lock").exists()
+    with BuildLock(db, timeout=0):
+        pass
 
 
 def test_download_sends_braidworks_user_agent(monkeypatch, tmp_path):

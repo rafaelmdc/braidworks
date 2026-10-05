@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01 verified locally; P02–P07 planned. Tracking: #144, #143, #146.
+Status: P01 verified locally; P02a verified locally; P02b–P07 in progress/planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -174,3 +174,17 @@ Core 0.13.1; NCBI 0.2.3 with core floor 0.13.1. Isolated uv environment retained
 The broad unscoped ruff check also reported five existing findings in docs/diagrams and
 tools/release_tags.py outside the Make lint targets; those files were not changed.
 Local commit: see git log entry `refactor(sqlite): make connection and schema ownership explicit`.
+
+## P02a implementation evidence — 2026-10-05
+
+BuildLock uses POSIX flock or Windows byte-range locking on a stable file. Kernel
+ownership ends on process death; age never evicts a live owner. Acquisition accepts a
+finite nonnegative timeout and optional wait progress callback. Unsupported OSes fail
+clearly. Release closes this owner's handle and never unlinks a contender's inode.
+The old lock-file-removal assertion was deliberately replaced with persistent-inode
+and successful-reacquisition assertions: unlinking would violate mutual exclusion.
+18 targeted tests and 408 core tests passed, including real spawned-process timeout,
+old live owner, process termination recovery, repeat release and invalid timeouts.
+Linux POSIX behavior tested; Windows implementation requires Windows CI validation.
+Atomic build-failure tests retained. No fallback based on stale timestamps or Redis.
+Local commit: see `fix(localdb): use process-owned locks with bounded acquisition`.
