@@ -72,7 +72,8 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
     assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
-    assert "Braider(registry).plan" in arts["python"]
+    assert "prepare_query(registry, request)" in arts["python"]
+    assert "execute_query(registry, prepared)" in arts["python"]
     assert arts["braid"] is out["path"]
 
 

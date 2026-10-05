@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A02 verified locally as persistence dependencies; A03–A08 planned. Tracking: #145, #146.
+Status: A01–A03 verified locally as persistence dependencies; A04–A08 planned. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -156,3 +156,26 @@ all-group preflight and expansion/confidence validation. Existing parameter, rev
 fan-out, archive, CLI/fetch/browser contracts retained. Core 0.14.0, toolkit 0.5.1/floor
 0.14.0. Render/code extraction, stream lifecycle and browser normalization remain A03–05.
 Local commit: see `refactor(query): share preparation and execution across interfaces`.
+
+## A03 implementation evidence — 2026-10-05
+
+weaverkit.codegen renders shell/Python artifacts from PreparedQuery. Single/batch
+wrappers share request preparation and effective settings. Python calls public core
+prepare_query/execute_query, embedding normalized ordered inputs; no weaverkit.serve
+or FastAPI import. Generated batch output now consistently uses ExecutionResult JSON,
+matching single Python artifacts; the browser keeps its presentation envelope. This
+intentional output boundary is documented in weaverkit/README.md. Artifact keys remain.
+render_path projects an existing Braid; build_path remains the planning convenience.
+Preview artifacts and completed single/batch result graphs reuse prepared routes.
+
+224 toolkit tests pass, including actual generated CLI/Python fixture execution, source
+rows, parameters, traversal/expansion, review settings and safe literal shell quoting.
+New checks assert presentation never plans or executes and route preview/run plan once.
+Ordinary generated-source assertions were deliberately updated to the new public service;
+the executable batch regression now asserts core resolved rows/source order instead of
+the old server envelope. No conformance/contract assertion was weakened.
+Current core/toolkit wheels installed into a fresh repo-local venv without FastAPI;
+generated Python ran and preserved two duplicate-label rows. Full workspace 1338
+passed/48 skipped, make lint passes. Toolkit 0.5.2 retains core floor 0.14.0 (the
+first shared service release). All minimum-floor artifact checks remain W14.
+Local commit: see `refactor(presentation): render prepared queries and core Python examples`.

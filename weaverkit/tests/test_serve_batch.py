@@ -105,8 +105,9 @@ def test_batch_generated_python_reproduces_all_rows(
     script.write_text(document["artifacts"]["python"])
     runpy.run_path(str(script))
     payload = json.loads(capsys.readouterr().out)
-    assert payload["summary"]["inputs"] == 2
-    assert len(payload["rows"]) == 2
+    assert len(payload["resolved"]) == 2
+    assert [row["source_row"] for row in payload["resolved"]] == [1, 2]
+    assert "weaverkit.serve" not in document["artifacts"]["python"]
     assert "--in-file -" in document["artifacts"]["cli_weave"]
 
 

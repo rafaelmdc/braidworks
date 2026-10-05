@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from pathlib import Path
 
-from braidworks.core.braid import BackendPolicy
+from braidworks.core.braid import BackendPolicy, Braid
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.planner import Braider
 from braidworks.core.references import references_for
@@ -227,6 +227,12 @@ def build_path(
     braider = Braider(registry)
     braid = braider.plan(from_types, to_types, backend_policy=policy)
 
+    return render_path(registry, braid, policy=policy)
+
+
+def render_path(registry: BraidRegistry, braid: Braid, *, policy: BackendPolicy) -> dict:
+    """Project an already prepared braid; never plan or execute a source."""
+    from_types, to_types = braid.from_types, braid.to_types
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
 
@@ -256,9 +262,7 @@ def build_path(
         }
         for source in sorted(step.input_types):
             ensure_type(source)
-            edges.append(
-                {"source": f"type:{source}", "target": op_id, "weaver": step.weaver_id}
-            )
+            edges.append({"source": f"type:{source}", "target": op_id, "weaver": step.weaver_id})
         for target in sorted(step.output_types):
             ensure_type(target)
             edges.append(
@@ -329,14 +333,18 @@ def _run_graph(root: str, leaves: list[dict], cap_weaver: dict[str, str]) -> dic
         for o in leaf.get("completion", []):
             produced |= set(o.get("produced", []))
     input_types = sorted(set(rep.get("strands", {})) - produced)
-    input_label = ", ".join(
-        f"{_short_label(t)}={_fmt_value(_leaf_value(rep, t))}" for t in input_types
-    ) or root
+    input_label = (
+        ", ".join(f"{_short_label(t)}={_fmt_value(_leaf_value(rep, t))}" for t in input_types)
+        or root
+    )
 
     in_id = f"run:{root}:in"
     add(
-        in_id, kind="type", key=(input_types[0] if input_types else root),
-        label=input_label, role="entry",
+        in_id,
+        kind="type",
+        key=(input_types[0] if input_types else root),
+        label=input_label,
+        role="entry",
         description=f"originating input — fanned into {len(leaves)} leaf/leaves",
     )
 
@@ -370,19 +378,35 @@ def _run_graph(root: str, leaves: list[dict], cap_weaver: dict[str, str]) -> dic
         cid = steps[i]
         ptypes = sorted(step_prod.get(cid, ()))
         op_id = f"run:{root}:op:{i}"
-        add(op_id, kind="op", label=f"{weaver_of(cid)}\n{cid}", weaver=weaver_of(cid),
-            capability=cid, input_types=[], output_types=ptypes)
+        add(
+            op_id,
+            kind="op",
+            label=f"{weaver_of(cid)}\n{cid}",
+            weaver=weaver_of(cid),
+            capability=cid,
+            input_types=[],
+            output_types=ptypes,
+        )
         edges.append({"source": prev, "target": op_id, "weaver": weaver_of(cid)})
         res_id = f"run:{root}:res:{i}"
-        add(res_id, kind="type", key=(ptypes[0] if ptypes else cid),
-            label=_result_label(rep, ptypes), role="shared")
+        add(
+            res_id,
+            kind="type",
+            key=(ptypes[0] if ptypes else cid),
+            label=_result_label(rep, ptypes),
+            role="shared",
+        )
         edges.append({"source": op_id, "target": res_id, "weaver": weaver_of(cid)})
         prev = res_id
 
     title = f"Run: {input_label}"
     if fork_idx is None:
-        return {"title": title, "nodes": list(nodes.values()), "edges": edges,
-                "leaves": len(leaves)}
+        return {
+            "title": title,
+            "nodes": list(nodes.values()),
+            "edges": edges,
+            "leaves": len(leaves),
+        }
 
     # Fork op (shared), then a per-leaf chain for every step from the fork onward.
     title = f"Run: {input_label}  ×{len(leaves)}"
@@ -390,9 +414,16 @@ def _run_graph(root: str, leaves: list[dict], cap_weaver: dict[str, str]) -> dic
         cid = steps[j]
         if j == fork_idx:
             fop_id = f"run:{root}:op:{j}"
-            add(fop_id, kind="op", label=f"{weaver_of(cid)}\n{cid}", weaver=weaver_of(cid),
-                capability=cid, input_types=[], output_types=sorted(step_prod.get(cid, ())),
-                set_outputs=sorted(step_prod.get(cid, ())))
+            add(
+                fop_id,
+                kind="op",
+                label=f"{weaver_of(cid)}\n{cid}",
+                weaver=weaver_of(cid),
+                capability=cid,
+                input_types=[],
+                output_types=sorted(step_prod.get(cid, ())),
+                set_outputs=sorted(step_prod.get(cid, ())),
+            )
             edges.append({"source": prev, "target": fop_id, "weaver": weaver_of(cid)})
 
     for leaf in leaves:
@@ -403,18 +434,34 @@ def _run_graph(root: str, leaves: list[dict], cap_weaver: dict[str, str]) -> dic
             ptypes = sorted(step_prod.get(cid, ()))
             if j > fork_idx:
                 op_id = f"run:{leaf_id}:op:{j}"
-                add(op_id, kind="op", label=f"{weaver_of(cid)}\n{cid}", weaver=weaver_of(cid),
-                    capability=cid, input_types=[], output_types=ptypes)
+                add(
+                    op_id,
+                    kind="op",
+                    label=f"{weaver_of(cid)}\n{cid}",
+                    weaver=weaver_of(cid),
+                    capability=cid,
+                    input_types=[],
+                    output_types=ptypes,
+                )
                 edges.append({"source": branch_prev, "target": op_id, "weaver": weaver_of(cid)})
                 branch_prev = op_id
             res_id = f"run:{leaf_id}:res:{j}"
-            add(res_id, kind="type", key=(ptypes[0] if ptypes else cid),
-                label=_result_label(leaf, ptypes), role="out",
-                description=f"leaf {leaf_id}")
-            edges.append({
-                "source": branch_prev, "target": res_id, "weaver": weaver_of(cid),
-                "fan": j == fork_idx,  # the fan edges fan out from the fork op
-            })
+            add(
+                res_id,
+                kind="type",
+                key=(ptypes[0] if ptypes else cid),
+                label=_result_label(leaf, ptypes),
+                role="out",
+                description=f"leaf {leaf_id}",
+            )
+            edges.append(
+                {
+                    "source": branch_prev,
+                    "target": res_id,
+                    "weaver": weaver_of(cid),
+                    "fan": j == fork_idx,  # the fan edges fan out from the fork op
+                }
+            )
             branch_prev = res_id
 
     return {"title": title, "nodes": list(nodes.values()), "edges": edges, "leaves": len(leaves)}
@@ -470,9 +517,7 @@ def build_data(
     }
     if from_types and to_types:
         try:
-            data["paths"].append(
-                build_path(registry, from_types, to_types, policy=policy)
-            )
+            data["paths"].append(build_path(registry, from_types, to_types, policy=policy))
         except (NoPathError, NoPlanError) as exc:
             data["meta"]["problems"].append(
                 f"path {sorted(from_types)} -> {sorted(to_types)}: {exc}"

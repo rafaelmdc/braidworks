@@ -129,3 +129,9 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+Generated single and batch Python examples use the public core query service
+(`braidworks-core>=0.14.0`). They print `ExecutionResult.to_json()` and need neither
+weaverkit nor FastAPI at execution time; batch inputs retain order and source rows.
+The browser keeps its own table/summary response envelope. Generated CLI commands
+quote literal input values and preserve effective parameters and query policies.

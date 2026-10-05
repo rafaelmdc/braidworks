@@ -22,7 +22,6 @@ import them lazily and fail with a clear install hint if missing.
 
 import asyncio
 import io
-import shlex
 
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
@@ -47,6 +46,7 @@ from braidworks.core.references import references_for
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.traverse import resolve_traversal, traversal_route_capabilities
 
+from weaverkit.codegen import cli_artifact, path_artifact, python_artifact
 from weaverkit.view import (
     build_data,
     build_path,
@@ -54,6 +54,7 @@ from weaverkit.view import (
     discover_registry,
     parse_policy,
     render_html,
+    render_path,
 )
 
 _SERVE_EXTRA_HINT = (
@@ -65,49 +66,31 @@ _SERVE_EXTRA_HINT = (
 # --- request logic (FastAPI-free, unit-testable) -----------------------------
 
 
-def _experiment_python(
-    have,
-    want,
-    traversals,
-    params,
-    policy,
-    expand,
-    k,
-    max_expansion,
-    review_policy,
-    confidence_threshold,
-):
-    prefix = (
-        "import asyncio\nimport json\n"
-        "from braidworks.core import (BackendPolicy, Braider, ExpandPolicy, LocalExecutor, ReviewPolicy,\n"
-        "    Strand, StrandSet, build_registry_from_entry_points)\n"
-        "from braidworks.core.traverse import run_traversed\n\n"
-        "async def main():\n"
-        "    registry = build_registry_from_entry_points()\n"
-        f"    have = {have!r}\n    want = {want!r}\n    params = {params!r}\n"
-        f"    policy = BackendPolicy({policy.value!r})\n"
-        f"    review = ReviewPolicy({review_policy!r})\n"
-        f"    expand = ExpandPolicy.{'all()' if expand == 'all' else f'top_k({k})' if expand == 'top_k' else 'top()'}\n"
-        "    ss = StrandSet.from_strands('e1', [Strand(key, value) for key, value in have.items()])\n"
-        "    ss.source_row = 1\n"
+def _prepare_experiment(registry, have, want, traverse, batch=None, **options):
+    sets = (
+        batch_inputs(have, batch)
+        if batch is not None
+        else [StrandSet.from_strands("e1", [Strand(key, value) for key, value in have.items()])]
     )
-    if traversals:
-        body = (
-            f"    result = await run_traversed(registry, [ss], {traversals!r}, frozenset(want),\n"
-            f"        backend_policy=policy, expand_policy=expand, params=params, max_expansion={max_expansion},\n"
-            f"        review_policy=review, confidence_threshold={confidence_threshold!r})\n"
-        )
-    else:
-        body = (
-            "    braid = Braider(registry).plan(frozenset(have), frozenset(want), backend_policy=policy)\n"
-            "    result = await LocalExecutor(registry).execute(braid, [ss], backend_policy=policy,\n"
-            f"        expand_policy=expand, params=params, max_expansion={max_expansion},\n"
-            f"        review_policy=review, confidence_threshold={confidence_threshold!r})\n"
-        )
-    return (
-        prefix
-        + body
-        + "    print(json.dumps(result.to_json(), ensure_ascii=False))\n\nasyncio.run(main())\n"
+    if not sets[0].available_types() or (not want and not traverse):
+        raise ValueError("choose inputs and outputs or a pass-through step")
+    for i, ss in enumerate(sets, 1):
+        ss.source_row = i
+    return prepare_query(
+        registry,
+        QueryRequest(
+            tuple(sets),
+            frozenset(want),
+            tuple(traverse or ()),
+            options.get("params") or {},
+            QueryOptions(
+                options.get("policy", BackendPolicy.LOCAL_FIRST),
+                normalize_expansion(options.get("expand", "top"), options.get("k", 1)),
+                ReviewPolicy(options.get("review_policy", "halt")),
+                options.get("confidence_threshold", 0.0),
+                options.get("max_expansion", 10_000),
+            ),
+        ),
     )
 
 
@@ -124,100 +107,59 @@ def code_response(
     max_expansion=10_000,
     review_policy="halt",
     confidence_threshold=0.0,
+    _prepared=None,
 ):
-    """Generate runnable artifacts from the same validated settings used by a run."""
-    if not have or (not want and not traverse):
-        return {"ok": False, "error": "choose Have and Want or a pass-through step"}
+    """Render validated query artifacts without repeating planning or execution."""
+    options = {
+        "policy": policy,
+        "expand": expand,
+        "k": k,
+        "params": params,
+        "max_expansion": max_expansion,
+        "review_policy": review_policy,
+        "confidence_threshold": confidence_threshold,
+    }
+    return _code_response(registry, have, want, traverse, None, options, _prepared)
+
+
+def _code_response(registry, have, want, traverse, batch, options, prepared=None):
     try:
-        review_policy = ReviewPolicy(review_policy).value
-        if not 0 <= confidence_threshold <= 1:
-            raise ValueError("confidence_threshold must be between 0 and 1")
-        if expand not in {"top", "top_k", "all"} or k < 1 or max_expansion < 1:
-            raise ValueError("invalid expansion settings")
-        traversals = [resolve_traversal(registry, token) for token in traverse or []]
-        if traversals:
-            ss = StrandSet.from_strands(
-                "preview", [Strand(key, value) for key, value in have.items()]
+        prepared = prepared or _prepare_experiment(registry, have, want, traverse, batch, **options)
+        settings = prepared.request.options
+        path = (
+            render_path(registry, prepared.plans[0][0], policy=settings.backend_policy)
+            if (batch is None and prepared.plans and not prepared.traversals)
+            else None
+        )
+        recipe = {
+            "have": have,
+            "want": want,
+            "traverse": traverse or [],
+            "policy": settings.backend_policy.value,
+            "expand": settings.expand_policy.mode.value,
+            "k": settings.expand_policy.k,
+            "max_expansion": settings.max_expansion,
+            "params": prepared.effective_params,
+            "review_policy": settings.review_policy.value,
+            "confidence_threshold": settings.confidence_threshold,
+            "path": path,
+        }
+        if batch is not None:
+            recipe.update(
+                batch=batch, planned_routes=[braid.to_json() for braid, _ in prepared.plans]
             )
-            caps = traversal_route_capabilities(
-                registry, [ss], traversals, frozenset(want), backend_policy=policy
-            )
-            path = None
-        else:
-            path = build_path(registry, frozenset(have), frozenset(want), policy=policy)
-            caps = _path_capabilities(registry, path)
-        validated, effective = _effective_parameters(params, caps)
+        return {
+            "ok": True,
+            "effective_params": _prepared_effective(registry, prepared),
+            "artifacts": {
+                "cli_weave": cli_artifact(prepared, have, batch=batch),
+                "cli_path": path_artifact(prepared, have, batch=batch),
+                "python": python_artifact(prepared),
+                "braid": recipe,
+            },
+        }
     except (ValueError, BraidworksError) as exc:
         return {"ok": False, "error": str(exc)}
-    tokens = ["braidworks", "weave"]
-    for key, value in have.items():
-        tokens += ["--have", f"{key}={value}"]
-    if want:
-        tokens += ["--want", ",".join(want)]
-    for token in traverse or []:
-        tokens += ["--traverse", token]
-    for cid, values in validated.items():
-        for name, value in values.items():
-            tokens += ["--param", f"{cid}:{name}={value}"]
-    cli_expand = "all" if expand == "all" else f"top:{k}" if expand == "top_k" else "none"
-    tokens += [
-        "--policy",
-        policy.value,
-        "--expand",
-        cli_expand,
-        "--max-expansion",
-        str(max_expansion),
-        "--review-policy",
-        review_policy,
-        "--confidence-threshold",
-        str(confidence_threshold),
-    ]
-    return {
-        "ok": True,
-        "effective_params": effective,
-        "artifacts": {
-            "cli_weave": shlex.join(tokens),
-            "cli_path": shlex.join(
-                [
-                    "braidworks",
-                    "path",
-                    "--from",
-                    ",".join(have),
-                    "--to",
-                    ",".join(want),
-                    "--policy",
-                    policy.value,
-                ]
-            )
-            if not traversals
-            else "Traversal has no single type path.",
-            "python": _experiment_python(
-                have,
-                want,
-                traversals,
-                validated,
-                policy,
-                expand,
-                k,
-                max_expansion,
-                review_policy,
-                confidence_threshold,
-            ),
-            "braid": {
-                "have": have,
-                "want": want,
-                "traverse": traverse or [],
-                "policy": policy.value,
-                "expand": expand,
-                "k": k,
-                "max_expansion": max_expansion,
-                "params": validated,
-                "review_policy": review_policy,
-                "confidence_threshold": confidence_threshold,
-                "path": path,
-            },
-        },
-    }
 
 
 def _weaver_ids_in_path(path: dict) -> list[str]:
@@ -256,12 +198,15 @@ def plan_response(
                 "citations": [],
                 "artifacts": {},
             }
-        path = build_path(registry, frozenset(frm), frozenset(to), policy=policy)
+        prepared = _prepare_experiment(
+            registry, {key: "<value>" for key in frm}, to, [], policy=policy
+        )
+        path = render_path(registry, prepared.plans[0][0], policy=policy)
     except (NoPathError, NoPlanError) as exc:
         return {"ok": False, "error": str(exc)}
-    artifacts = code_response(registry, {key: "<value>" for key in frm}, to, policy=policy)[
-        "artifacts"
-    ]
+    artifacts = code_response(
+        registry, {key: "<value>" for key in frm}, to, policy=policy, _prepared=prepared
+    )["artifacts"]
     return {
         "ok": True,
         "path": path,
@@ -366,91 +311,8 @@ def _error_list(result_json: dict) -> list[dict]:
 
 
 def batch_code_response(registry, have, want, traverse, batch, **options):
-    """Batch artifacts call the same execution helper, with the entire input preserved."""
-    try:
-        sets = batch_inputs(have, batch)
-        policy = options.get("policy", BackendPolicy.LOCAL_FIRST)
-        traversals = [resolve_traversal(registry, token) for token in traverse or []]
-        caps = {}
-        plans = []
-        if traversals:
-            caps = traversal_route_capabilities(
-                registry, sets, traversals, frozenset(want), backend_policy=policy
-            )
-        else:
-            for types in dict.fromkeys(ss.available_types() for ss in sets):
-                braid = Braider(registry).plan(types, frozenset(want), backend_policy=policy)
-                plans.append(braid.to_json())
-                caps.update(
-                    {
-                        step.capability_id: registry.get_capability(
-                            step.weaver_id, step.capability_id
-                        )
-                        for step in braid.steps
-                    }
-                )
-        validated, effective = _effective_parameters(options.get("params"), caps)
-        expand = options.get("expand", "top")
-        k = options.get("k", 1)
-        review = ReviewPolicy(options.get("review_policy", "halt")).value
-        if expand not in {"top", "top_k", "all"} or k < 1:
-            raise ValueError("invalid expansion settings")
-        tokens = ["braidworks", "weave", "--in-file", "-"]
-        if batch.get("format", "lines") == "lines":
-            tokens += ["--in-type", batch["input_type"]]
-        for key, value in have.items():
-            tokens += ["--have", f"{key}={value}"]
-        if want:
-            tokens += ["--want", ",".join(want)]
-        for token in traverse or []:
-            tokens += ["--traverse", token]
-        for cid, values in validated.items():
-            for name, value in values.items():
-                tokens += ["--param", f"{cid}:{name}={value}"]
-        tokens += [
-            "--policy",
-            policy.value,
-            "--expand",
-            "all" if expand == "all" else f"top:{k}" if expand == "top_k" else "none",
-            "--max-expansion",
-            str(options.get("max_expansion", 10_000)),
-            "--review-policy",
-            review,
-            "--confidence-threshold",
-            str(options.get("confidence_threshold", 0)),
-        ]
-        settings = {**options, "policy": policy.value, "params": validated}
-        python_options = {**settings, "policy": policy}
-        python_options.pop("policy")
-        python = (
-            "import asyncio, json\nfrom braidworks.core import BackendPolicy, build_registry_from_entry_points\n"
-            "from weaverkit.serve import execute_batch_response\n\nasync def main():\n"
-            f"    result = await execute_batch_response(build_registry_from_entry_points(), {have!r}, {want!r}, {traverse!r}, {batch!r},\n"
-            f"        policy=BackendPolicy({policy.value!r}), **{python_options!r})\n"
-            "    print(json.dumps(result, ensure_ascii=False))\n\nasyncio.run(main())\n"
-        )
-        return {
-            "ok": True,
-            "effective_params": effective,
-            "artifacts": {
-                "cli_weave": "printf '%s' "
-                + shlex.quote(batch["text"])
-                + " | "
-                + shlex.join(tokens),
-                "cli_path": "The batch plans each distinct input-type group independently.",
-                "python": python,
-                "braid": {
-                    "have": have,
-                    "batch": batch,
-                    "want": want,
-                    "traverse": traverse,
-                    "planned_routes": plans,
-                    **settings,
-                },
-            },
-        }
-    except (ValueError, BraidworksError) as exc:
-        return {"ok": False, "error": str(exc)}
+    """Render the entire normalized batch through the same core query service."""
+    return _code_response(registry, have, want, traverse, batch, options)
 
 
 def batch_inputs(have, batch):
@@ -495,40 +357,28 @@ async def execute_batch_response(
     on_event=None,
 ):
     """Plan every row group before I/O, then execute with one shared expansion budget."""
-    sets = (
-        batch_inputs(have, batch)
-        if batch is not None
-        else [StrandSet.from_strands("e1", [Strand(key, value) for key, value in have.items()])]
-    )
-    if not sets[0].available_types() or (not want and not traverse):
-        raise ValueError("choose inputs and outputs or a pass-through step")
-    for i, ss in enumerate(sets, 1):
-        ss.source_row = i
-    prepared = prepare_query(
+    prepared = _prepare_experiment(
         registry,
-        QueryRequest(
-            tuple(sets),
-            frozenset(want),
-            tuple(traverse or ()),
-            params or {},
-            QueryOptions(
-                policy,
-                normalize_expansion(expand, k),
-                ReviewPolicy(review_policy),
-                confidence_threshold,
-                max_expansion,
-            ),
-        ),
+        have,
+        want,
+        traverse,
+        batch,
+        policy=policy,
+        expand=expand,
+        k=k,
+        params=params,
+        max_expansion=max_expansion,
+        review_policy=review_policy,
+        confidence_threshold=confidence_threshold,
     )
+    sets = list(prepared.request.inputs)
     result = await execute_query(registry, prepared, on_event=on_event)
     traversals = prepared.traversals
     plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
     effective = _prepared_effective(registry, prepared)
     payload = _traverse_payload(registry, result, want, [cid for _, cid in traversals])
     if len(plans) == 1:
-        payload["path"] = build_path(
-            registry, sets[0].available_types(), frozenset(want), policy=policy
-        )
+        payload["path"] = render_path(registry, plans[0][0], policy=policy)
     payload["summary"]["inputs"] = len(sets)
     return {
         **payload,
@@ -548,14 +398,18 @@ def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
     return have, want, None
 
 
-def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPolicy) -> dict:
+def _run_payload(
+    registry, result, have: dict, want: list, *, policy: BackendPolicy, braid=None
+) -> dict:
     """Assemble the run response from an ``ExecutionResult`` (shared by sync + streaming)."""
     rj = result.to_json()
     runs, _dropped = build_run_views(rj, registry)
     columns, rows = _rows(rj, want)
     return {
         "ok": True,
-        "path": build_path(registry, frozenset(have), frozenset(want), policy=policy),
+        "path": render_path(registry, braid, policy=policy)
+        if braid is not None
+        else build_path(registry, frozenset(have), frozenset(want), policy=policy),
         "result": rj,
         "runs": runs,
         "columns": columns,
@@ -621,7 +475,7 @@ def run_response(
     except (ValueError, BraidworksError) as exc:
         return {"ok": False, "error": str(exc)}
     return {
-        **_run_payload(registry, result, have, want, policy=policy),
+        **_run_payload(registry, result, have, want, policy=policy, braid=prepared.plans[0][0]),
         "effective_params": effective,
         "review_policy": review_policy,
         "confidence_threshold": confidence_threshold,

@@ -395,5 +395,5 @@ def test_generated_code_preserves_review_policy_and_confidence(recording_registr
     assert document["ok"]
     assert "--review-policy allow_continue" in document["artifacts"]["cli_weave"]
     assert "--confidence-threshold 0.8" in document["artifacts"]["cli_weave"]
-    assert "ReviewPolicy('allow_continue')" in document["artifacts"]["python"]
-    assert "confidence_threshold=0.8" in document["artifacts"]["python"]
+    assert "'review_policy': 'allow_continue'" in document["artifacts"]["python"]
+    assert "'confidence_threshold': 0.8" in document["artifacts"]["python"]

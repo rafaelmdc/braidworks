@@ -1052,7 +1052,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.5.1"
+version = "0.5.2"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
