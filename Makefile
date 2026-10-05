@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: help sync test test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+.PHONY: help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -17,7 +17,10 @@ help:  ## Show this help
 sync:  ## Create/refresh the workspace venv with all extras
 	uv sync --all-extras
 
-test: test-core test-kit test-arq test-weavers  ## Run every package's test suite
+test: test-tools test-core test-kit test-arq test-weavers  ## Run every package's test suite
+
+test-tools:  ## Check package release selection
+	uv run python -m unittest discover -s tools/tests
 
 test-core:  ## Run the braidworks-core suite
 	cd braidworks-core && uv run --extra test python -m pytest -q
@@ -68,13 +71,16 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
+	tools/check_artifacts.py tools/stage_release.py tools/tests \
 	$(WEAVER_LINT_PATHS)
 
-lint:  ## Lint all packages and tests with ruff
-	uvx ruff check $(LINT_PATHS)
+RUFF_VERSION := 0.16.10
+
+lint:  ## Lint all packages and tests with pinned ruff
+	uvx ruff==$(RUFF_VERSION) check $(LINT_PATHS)
 
 fmt:  ## Auto-format with ruff
-	uvx ruff format $(LINT_PATHS)
+	uvx ruff==$(RUFF_VERSION) format $(LINT_PATHS)
 
 clean:  ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
