@@ -1,5 +1,6 @@
 # Application refactor plan, excluding persistence
 
+Implementation contracts and integrated work order: [three-round programme](../refactoring/README.md).
 Tracking: [#145](https://github.com/rafaelmdc/braidworks/issues/145).
 Related [audit/spec](application-patterns.spec.md). Status: planning only.
 The persistence plan and #143 retain ownership of connections, caches, checkpoints
