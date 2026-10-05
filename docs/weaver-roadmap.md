@@ -19,23 +19,20 @@ exactly which source and license they're dealing with.
 
 ---
 
-## 0. Current priority & deferred breadth (updated 2026-06-15)
+## 0. Current priority & deferred breadth (updated 2026-10-04)
 
 The protein hub is built out (uniprot → pdbe / alphafold / quickgo / reactome /
 string), each `list_*` set key has its `describe_*` consumer, and cardinality
 fan-out ships. **Shipped since:** the `braidworks` CLI, traversal fan-out
 (`--for-each`), error-tolerant weaving + reroute, interchangeable-source fallback,
-classified errors, and CI hardening (live E2E, CodeQL, Dependabot). core `0.7.1`.
+classified errors, and CI hardening (live E2E, CodeQL, Dependabot).
 
-**▶ Current top priority is the first item below — `uniprot resolve_mapping`** —
-because it completes the molecular flagship demo (orthologs → structures). See
-**[NEXT.md](NEXT.md)** for the start-here plan, scope, and the coverage caveat.
+UniProt's `map_to_accession` and `map_from_accession` already provide identifier
+mapping, including the NCBI gene-to-protein bridge. The current priority is
+publication readiness; see **[NEXT.md](NEXT.md)** for the remaining release gates.
 
 Deferred-breadth weavers/capabilities (valuable, but each only deepens one corner):
 
-- **`uniprot resolve_mapping`** — accession → cross-reference ids (KEGG, InterPro,
-  Pfam, Ensembl, …). Turns UniProt into the intermediate edge that unlocks the
-  islands below.
 - **`string → KEGG`** — STRING maps proteins to KEGG pathways; a `pathway.kegg.id`
   producer (needs the KEGG-licensing note, §7).
 - **Disease / MeSH hub** — STRING (and others) are disease-queryable; a
@@ -84,7 +81,12 @@ their own capability/output group**, so it can act as an intermediate. That sing
 choice is what lets the braider plan e.g.
 `organism.name → taxid → uniprot.accession → string.interaction`.
 
-### Weaver interface table (what each needs → offers)
+### Historical design sketch (includes proposed sources)
+
+The table below mixes shipped and proposed interfaces. For the complete current
+catalogue, use [weavers-index.tsv](weavers-index.tsv) and [keys-index.md](keys-index.md).
+For installation and source-specific setup, read each package's README under
+`weavers/`; local database sources can require large opt-in downloads.
 
 | Weaver (DB) | Consumes | Produces | Role |
 |---|---|---|---|

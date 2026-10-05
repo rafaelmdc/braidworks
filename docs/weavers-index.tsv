@@ -1,12 +1,17 @@
 weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
-agora	describe_metabolic_reconstruction	lookup	none	local	ncbi.taxon.id	microbe.metabolism.reconstruction;microbe.metabolism.reactions	
+agora	describe_metabolic_reconstruction	lookup	none	local	ncbi.taxon.id	microbe.metabolism.reconstruction;microbe.metabolism.reactions;microbe.metabolism.sbml	
 alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.records	
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph	
 disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 faprotax	describe_ecology	lookup	none	local	ncbi.taxon.lineage	microbe.ecology.functional_groups	
+gmrepo	gmrepo.list_abundances	lookup	none	local	ncbi.taxon.id	microbe.abundance.overview;microbe.abundance.phenotype_names;microbe.abundance.count;microbe.abundance.associations;microbe.abundance.records	
+gmrepo	gmrepo.sample_profiles	lookup	none	local	disease.mesh.id	microbe.abundance.sample_profiles	
 gtdb	describe_gtdb_taxonomy	lookup	none	local;api	ncbi.taxon.id;organism.scientific_name	gtdb.taxon.id;gtdb.lineage	
 gtdb	describe_gtdb_tree_placement	lookup	none	local;api	ncbi.taxon.id;organism.scientific_name	gtdb.tree.rootpath	
+mondo	mondo.lookup_by_mesh	lookup	none	local	disease.mesh.id	disease.mondo.id;disease.ontology.name;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
+mondo	mondo.lookup_by_meddra	lookup	none	local	disease.meddra.id	disease.mondo.id;disease.ontology.name;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
+mondo	mondo.lookup_by_name	lookup	none	local	disease.name	disease.mondo.id;disease.ontology.name;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.list_children	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.id;ncbi.taxon.children_count;ncbi.taxon.children_records	
@@ -17,7 +22,7 @@ ncbi	ncbi.describe_gene	resolver	optional	local;api	gene.ncbi.id	gene.symbol;gen
 ncbi	ncbi.list_orthologs	resolver	optional	local;api	gene.ncbi.id	gene.ncbi.id;gene.ortholog.count;gene.ortholog.records	
 pdbe	list_structures	lookup	none	api	protein.uniprot.accession	pdb.id;structure.pdb.ids;structure.pdb.count;structure.pdb.records	
 pdbe	describe_structure	lookup	none	api	pdb.id	structure.pdb.title;structure.pdb.method;structure.pdb.release_date;structure.pdb.detail	
-quickgo	list_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.term;go.count;go.records	
+quickgo	list_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.term;go.count;go.records;go.annotation.records;go.annotation.coverage	
 quickgo	describe_go_term	lookup	none	api	go.term	go.term.name;go.term.aspect;go.term.definition;go.term.detail	
 reactome	list_pathways	lookup	none	api	protein.uniprot.accession	pathway.reactome.id;pathway.reactome.names;pathway.reactome.count;pathway.reactome.records	
 reactome	describe_pathway	lookup	none	api	pathway.reactome.id	pathway.reactome.display_name;pathway.reactome.species;pathway.reactome.in_disease;pathway.reactome.detail	

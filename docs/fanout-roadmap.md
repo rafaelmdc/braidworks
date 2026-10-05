@@ -7,22 +7,37 @@ phases — **the full fan-out mechanism (Phases 1–3) before the run visualizer
 ## Phase 1 — shipped (resolver/entry fan-out)
 
 `ExpandPolicy` (`braidworks.core.ExpandPolicy`, modes `TOP` / `TOP_K(k)` / `ALL`) is
-plumbed through `LocalExecutor.execute(..., expand_policy=, max_expansion=)`. On an
-`AMBIGUOUS` result **carrying candidates**:
+plumbed through LocalExecutor.execute(..., expand_policy=, max_expansion=).
+Since core 0.12.0, ambiguous resolver results pause under the default ReviewPolicy.HALT,
+even when TOP_K or ALL is selected. Expansion alone does not authorize a match.
 
-- **`TOP`** (default) — auto-selects the single highest-confidence candidate (ties
-  broken by a stable serialization of its strands) and merges it in place; a warning
-  records the N→1 collapse so it is never silent. *This changed the previous default*,
-  which routed every `AMBIGUOUS` to the review queue.
-- **`TOP_K(k)` / `ALL`** — forks the entity into k / all lineage-tagged children, each
-  carrying the parent strands plus one candidate's strands; the children re-enter the
-  remaining waves and end as independent `resolved` leaves.
+With explicit ReviewPolicy.ALLOW_CONTINUE and candidates above the confidence floor:
+
+- TOP selects the highest-confidence candidate, with a deterministic tie-break.
+- TOP_K(k) / ALL fork selected candidates into independent children.
+- Selected entities retain requires_review and the source warnings.
+
 
 `AMBIGUOUS` with **no** candidates is unchanged: there is nothing to pick or fork, so it
 still routes to the review queue / RAISE per `ReviewPolicy`. Children carry
 `StrandSet.parent_id` (the originating-input id, preserved across forks) for regrouping.
-`max_expansion` (default 10 000) caps the per-run leaf count with a logged truncation.
+`max_expansion` (default 10 000) bounds leaf growth across all input chunks,
+traversal phases and reroutes. Every original input reserves one leaf slot. Forks
+replace that slot and reserve extras before cloning; cross-products are enumerated
+only up to the available budget. If the input count itself exceeds the limit, inputs
+are preserved and no additional leaves are admitted. No source row is silently dropped.
+`ExecutionResult.truncations` records each limited fork's entity/source row,
+capability, requested/kept/omitted counts and limit, and survives JSON serialization.
+Counts describe successors omitted at that fork, not hypothetical final descendants.
+Retained children carry a warning; CLI exports include structured truncations and
+stderr reports them. `weave --max-expansion N` sets the shared limit.
 Cache keys already include each child's distinct fan value, so children never collide.
+
+ReviewPolicy.RAISE rejects ambiguity before selection or child allocation.
+A positive confidence_threshold checks candidate confidence and each selected strand's
+confidence. Results below the threshold pause even with ALLOW_CONTINUE. Candidate
+context and review flags survive JSON round trips. See
+[migrating-to-0.12.md](migrating-to-0.12.md) for CLI, Python and browser controls.
 
 ## Why (the principle)
 
@@ -171,8 +186,8 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
 - Per-type policy map. **Deferred to Phase 2.** Phase 1 takes a single run-level
   `ExpandPolicy`; the per-type map lands with `set`-output expansion.
 - Result grouping. ✅ **Yes** — `StrandSet.parent_id` carries the originating-input id.
-- Blow-up guardrail. ✅ **Done** — `max_expansion` (default 10 000) per-run cap with a
-  logged truncation.
+- Blow-up guardrail. ✅ **Done** — `max_expansion` (default 10 000) bounds allocation
+  across chunks/phases, with serialized truncation reports and preserved root coverage.
 
 ## Open questions for Phase 2
 

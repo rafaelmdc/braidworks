@@ -239,6 +239,12 @@ class BaseWeaver(ABC):
 ```
 
 **`execute_batch` hard contract:**
+
+The shared backend dispatcher and executor runner validate response counts before mapping,
+caching, or merging. A mismatch raises `BatchContractError` and aborts the run without
+fallback. Each response must still correspond to its input position: equal-length
+reordering cannot be detected by a count check.
+
 - Returns exactly one `WeaveResult` per input `StrandSet`.
 - Results are in the same order as the input list.
 - If an input has no match, that position gets `WeaveResult(status=NO_MATCH)`.
@@ -354,7 +360,13 @@ CapabilityInvocation
 
 `BackendConfigurationError` is never in `fallback_on`. It aborts the run.
 
-**BackendPolicy** controls how the braider assigns primary and fallbacks — but the braider must intersect the policy preference with `capability.backends` before assigning. A capability that only declares `("api",)` cannot have `primary_backend="local"` regardless of what the policy prefers.
+**BackendPolicy** constrains eligible routes and assigns primary and fallback backends.
+Before shortest-path search, the braider removes capabilities with no declared backend
+allowed by the policy. Thus `LOCAL_ONLY` can choose a more expensive local path over a
+cheaper API-only path. `LOCAL_FIRST` and `API_FIRST` still minimize capability cost
+across both backend kinds; their preference order applies within each chosen capability.
+Planning uses declared backends, not runtime configuration or network availability.
+No type route raises `NoPathError`; a type route blocked by policy raises `NoPlanError`.
 
 **Braider backend assignment rule (per invocation):**
 
@@ -449,7 +461,7 @@ Braid
 ### MVP Planning Algorithm
 
 1. Only single-input capabilities are in the graph (multi-input not projected).
-2. For each target type not already in `available_types`, run Dijkstra from `available_types` to the target.
+2. Remove capabilities with no backend permitted by `BackendPolicy`. For each target type not already in `available_types`, run Dijkstra from `available_types` to the target.
 3. Collect all `(weaver_id, capability_id, input_type, output_type)` tuples from all paths.
 4. Group by `(weaver_id, capability_id, input_type)`. Each group becomes one `CapabilityInvocation` with the union of `output_types`.
 5. Topological sort on data dependencies (step N's outputs feed step N+1's inputs).
@@ -487,7 +499,17 @@ ExecutionResult
 
 `ExecutionError` is JSON-serializable. It captures the useful information from a failure without carrying a non-serializable Python exception object, which matters for future Celery and HPC execution where results are transmitted across process boundaries.
 
-These four buckets are mutually exclusive and exhaustive. Every entity in the input batch ends up in exactly one.
+`resolved`, `unresolved` and `review_queue` describe terminal entity outcomes;
+`errors` also carries branch diagnostics for successful entities. `total()` counts
+distinct terminal entities, deduplicating branch errors and excluding recovered
+diagnostics as additional outcomes. Fan-out counts terminal children rather than
+input roots. `fatal_errors()` distinguishes blocking errors from partial success.
+
+`ExecutionResult.to_json()` includes result-scoped `entity_refs` for every bucket.
+The references preserve shared entity identity through deserialization while
+keeping independently supplied inputs distinct, even if their labels and values
+are identical. Old snapshots without this field remain readable; their missing
+identity relationships cannot be inferred safely from labels or content.
 
 - `resolved` — the braid ran to completion and produced target data. For a linear braid this means all target types were found or already present; for a braid with independent branches it means *at least one* target type was produced (see "Branch parallelism and completion metadata" below). StrandSet contains whatever the succeeding branches produced.
 - `unresolved` — the braid ran but a step returned `NO_MATCH` with no remaining fallbacks. Valid biological outcome ("we searched and found nothing"), not an error.
@@ -507,7 +529,11 @@ These four buckets are mutually exclusive and exhaustive. Every entity in the in
 - `ALLOW_CONTINUE` — merge strands and continue. The entity will land in `resolved` if the rest of the braid succeeds.
 - `RAISE` — raise `ReviewRequired` immediately.
 
-**`AMBIGUOUS` always halts or raises — `ALLOW_CONTINUE` does not apply to it.** When `status=AMBIGUOUS`, `strands` is empty; there is nothing to merge. Continuing would silently do nothing, or worse, imply a candidate was chosen when it was not. The rule: `AMBIGUOUS` goes to `review_queue` (with `HALT`) or raises (with `RAISE`). `ALLOW_CONTINUE` is ignored for `AMBIGUOUS`. This is not configurable.
+**AMBIGUOUS pauses by default.** HALT preserves the complete candidate set in
+review_queue; RAISE raises ReviewRequired. Explicit ALLOW_CONTINUE permits
+ExpandPolicy to select/fork candidate-bearing results, while retaining requires_review.
+Candidate-free ambiguity still queues. An explicit confidence threshold is a hard
+floor: results below it pause even with ALLOW_CONTINUE.
 
 **`WeaveStatus.ERROR` policy (`ErrorPolicy`)** controls what happens after all fallback backends are exhausted or when no fallback is configured:
 - `RECORD_AND_CONTINUE` (default) — add `ExecutionError` to `errors`, remove entity from active set, continue batch.
@@ -515,7 +541,7 @@ These four buckets are mutually exclusive and exhaustive. Every entity in the in
 
 To trigger backend fallback on `WeaveStatus.ERROR` before `ErrorPolicy` is applied, put `FallbackCondition.ERROR` in the `CapabilityInvocation.fallback_on` set.
 
-**`confidence_threshold`** is an independent check. If any produced strand has `confidence < threshold`, the entity is halted by the same halt/continue/raise behaviour as `ReviewPolicy`. Both checks run independently; either can halt an entity.
+**confidence_threshold** is an independent floor. If a selected candidate or produced strand falls below it, the entity pauses even with ALLOW_CONTINUE; RAISE raises immediately. Review flags remain a separate check.
 
 ### Branch parallelism and completion metadata
 
@@ -527,65 +553,20 @@ Every step that touched an entity leaves a `StepOutcome` in `StrandSet.completio
 
 > **Note — partial results bucket.** We deliberately keep the four buckets and record partial branch success as completion metadata rather than adding a dedicated `partial` bucket to `ExecutionResult`. Partial results are expected to be uncommon. If they turn out to be frequent and callers want to branch on them directly, a `partial` bucket can be added later as an additive change — the `StepOutcome` data needed to populate it is already captured.
 
-**Two parallelism axes — don't conflate them.** *Branch parallelism* (above) is a core concern: it runs independent steps of one braid concurrently, multiplying concurrency by the small, graph-fixed branch factor. It is a per-entity *latency* mechanism and does **not** scale with batch size. *Entity-level fan-out* — splitting one step's large batch across many workers — is a *throughput* mechanism that scales with the fleet, and it lives entirely in the distributed runner (`braidworks-arq`), not core. Fan-out's safety gate is a **rate budget, not a cache**: the cluster-wide token bucket bounds aggregate external call rate regardless of how wide a step fans out (excess workers block on tokens), and fanning out a rate-limited backend with no declared budget is refused outright. A cache reduces total call *volume*; the token bucket bounds the *rate* — orthogonal concerns. See `braidworks-arq/README.md`.
+**Two parallelism axes — don't conflate them.** *Branch parallelism* (above) is a core concern: it runs independent steps of one braid concurrently, multiplying concurrency by the small, graph-fixed branch factor. It is a per-entity *latency* mechanism and does **not** scale with batch size. *Entity-level fan-out* — splitting one step's large batch across many workers — is a *throughput* mechanism that scales with the fleet, and it lives entirely in the distributed runner (`braidworks-arq`), not core. External fan-out requires a declared request budget or an explicit unbudgeted
+assertion. Core's `PacedHTTPClient` tags requests through task-local context; each
+HTTPX request hook acquires one token before sending, including redirects and
+pagination. Local execution shares a process-wide budget across clients, threads
+and event loops. Distributed workers install a task-scoped Redis budget callback,
+so local and distributed budgets are never both charged for one request. Capacity
+one prevents initial bursts, while bulk requests preserve their batching advantage.
+Unsupported backends fail when a matching budget is configured. See
+[request pacing](request-pacing.md) for configuration and scope.
 
-### Deferred design: per-call rate granularity (Phase B)
-
-> **Status: documented, not built.** This section records the design and the trigger
-> conditions so the future build is known work, not a re-derivation. **Do not
-> implement until a trigger below fires.**
-
-**The gap.** Today's rate limiting is charged at the **task boundary**: `weave_step`
-acquires `cost = len(batch)` tokens *before* calling the weaver, then the weaver makes
-its external calls. This bounds the *average* call rate (the bucket throttles when the
-next task may start) but not the **burst within a task** (after acquiring its tokens, a
-weaver can fire all its calls back-to-back), and the cost is an *estimate* — it assumes
-~1 external call per entity. Two regimes break that estimate: a **batchable** weaver
-(1 API call for N entities → we over-charge N× and needlessly throttle) and a **chatty**
-weaver (k calls per entity → we under-charge and exceed the budget). Only the weaver
-knows its true call pattern.
-
-**The fix.** Move token acquisition **inside the weaver backend, around each external
-call** (`await gate.acquire()` immediately before each request). Then bursts are spaced
-to the sustained rate and the cost is exact regardless of batching/chattiness.
-
-**Why it's deferred, not done.** It is the first change that touches the weaver-facing
-contract (every external-call weaver must cooperate), and we currently have **no weaver
-that multi-calls per entity** — so the benefit is unexercised and the *policy* would be
-designed blind. Note that Phase A already approximates the fix for the common case:
-fanning a budgeted backend out at `chunk = 1` makes the per-task acquisition per-entity,
-≈ per-call when calls ≈ entities.
-
-**Settled interface (low risk — build this verbatim when triggered).**
-- Core defines a transport-neutral `RateGate` Protocol: `async def acquire(cost: float = 1.0) -> None`, with a no-op default. Richness (per-endpoint sub-budgets, priorities, adaptive limits) lives in the *implementation* (arq), never in this surface.
-- Expose it via a **contextvar accessor** (`current_rate_gate()`), **not** a new
-  `execute_batch` parameter — a kwarg would force a signature migration across every
-  weaver and break overrides without `**kwargs`. The distributed runner sets the
-  contextvar around the call; weaver backends read it. Zero signature churn, no risk to
-  existing weavers (default is no-op).
-- `braidworks-arq` backs the gate with the existing token bucket, keyed per
-  `weaver:backend`, enabled per backend.
-- **weaverkit** scaffolds the `api`-backend template to call `await
-  current_rate_gate().acquire()` before each request, so future weavers are gate-ready
-  by construction. (Caveat: the template *includes* the call; conformance cannot verify
-  it is placed around every request without a real throttled run — hand-written backends
-  still need manual wiring.)
-
-**The one real design knot — resolve it at build time.** Per-call gating and Phase A's
-per-task `cost = len(batch)` charge would **double-count**. A backend must declare which
-layer owns throttling: when a backend opts into the per-call gate, the task-level
-`_throttle` stands down for it (`cost = 0`). This "who owns the budget per backend" flag
-is the only non-mechanical decision; everything else is plumbing.
-
-**Triggers (act when any fires — prefer the design-time ones over waiting for an
-incident):**
-1. The first weaver that makes **more than one external call per entity** (the cost
-   estimate stops matching reality) — visible at authoring time.
-2. Onboarding a weaver against an API with a **strict short-window limit** (e.g. "10
-   req/sec" enforced per second, which rejects bursts even under your average) — visible
-   at authoring time.
-3. Observed **429s/throttling under load** despite being under the average budget — the
-   last-resort signal.
+Distributed caching is disabled by default, and dispatched workers must match the
+orchestrator's manifest and backend fingerprint. Cache reuse requires an explicit
+homogeneous-fleet assertion enforced by deployment controls. See
+`braidworks-arq/README.md`.
 
 ### Preflight Validation and Per-step Guard
 
@@ -606,9 +587,9 @@ No per-step Guard 2 is needed. Entities removed mid-execution (via `unresolved`,
 7. On `WeaveStatus.NO_MATCH` or `WeaveStatus.ERROR` with qualifying `fallback_on`: retry **only the affected entities** on the next fallback backend. Entities with `OK`, `AMBIGUOUS`, or other statuses keep their current-backend results and are not re-resolved.
 8. On `WeaveStatus.NO_MATCH` with no remaining fallbacks: move entity to `unresolved`.
 9. On `WeaveStatus.ERROR` with no remaining fallbacks: apply `ErrorPolicy` (`RECORD_AND_CONTINUE` → add `ExecutionError` to `errors`; `RAISE` → raise immediately).
-10. On `WeaveStatus.AMBIGUOUS`: move to `review_queue` with remaining steps. If `ReviewPolicy.RAISE`, raise instead.
+10. On AMBIGUOUS: HALT queues candidates with remaining steps; RAISE raises; explicit ALLOW_CONTINUE selects/expands candidates above the confidence floor.
 11. On `WeaveStatus.OK` with `requires_review=True`: apply `ReviewPolicy` (`HALT` → `review_queue`; `ALLOW_CONTINUE` → merge and continue; `RAISE` → raise).
-12. On `confidence < threshold` for any OK result: apply `ReviewPolicy` identically to step 11.
+12. On confidence below the threshold for an OK result: queue even with ALLOW_CONTINUE, or raise under RAISE.
 13. Store result in cache via `put(base_key, result)`. Merge strands into `StrandSet`.
 14. If this was the last step and the entity is still active: move to `resolved`.
 
@@ -772,7 +753,7 @@ These must hold throughout the implementation and must be covered by tests:
 11. **Per-entity fallback is per-entity.** `NO_MATCH`/`ERROR` fallback retries only affected entities. `BackendUnavailable` retries the whole batch on the next backend.
 12. **Preflight validates starting inputs before any steps run.** Entities missing `braid.from_types` go to `errors` immediately.
 13. **Guard 1 runs per-step before cache split.** Already-satisfied entities skip steps without weaver calls.
-14. **`AMBIGUOUS` always halts or raises.** `ALLOW_CONTINUE` is never applied to an `AMBIGUOUS` result.
+14. **AMBIGUOUS pauses by default.** Explicit ALLOW_CONTINUE permits candidate selection/expansion above the confidence floor and preserves review flags.
 15. **`NO_MATCH` goes to `unresolved`, not `errors` or `resolved`.** It is a valid data outcome, not a failure.
 16. **`ErrorPolicy.RAISE` aborts execution; no `ExecutionResult` is returned.** The entity is not added to `errors`.
 17. **`ExecutionError` is JSON-serializable.** No raw `Exception` objects in `ExecutionResult`.

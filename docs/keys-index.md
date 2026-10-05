@@ -10,6 +10,9 @@ Supplied by the user at the start of a braid.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
+| `disease.meddra.id` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_meddra` |
+| `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | — | `gmrepo:gmrepo.sample_profiles`, `mondo:mondo.lookup_by_mesh` |
+| `disease.name` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_name` |
 | `organism.name` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_name` |
 | `protein.query` | The text you start from — an organism name or a gene/protein query. | `string:list_interactions` | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
 
@@ -20,6 +23,7 @@ Registered bridge keys — what links weavers together.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `chem.chebi.id` | A ChEBI chemical id. | — | — |
+| `disease.mondo.id` | MONDO Disease Ontology id for one disease — the unified disease join key that harmonizes MeSH / MedDRA / DOID / OMIM identities. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `enzyme.ec` | An Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id for one gene. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `gene.hgnc.id` | HGNC id for one human gene. | — | `uniprot:map_to_accession` |
@@ -28,7 +32,7 @@ Registered bridge keys — what links weavers together.
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
-| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `agora:describe_metabolic_reconstruction`, `example:describe_traits`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
+| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `agora:describe_metabolic_reconstruction`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
@@ -53,6 +57,10 @@ Descriptive payload fields; nothing joins on them.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `chembl.id` | This protein's ChEMBL target id. | `uniprot:map_from_accession` | — |
+| `disease.ontology.ancestors` | This disease's full is-a ancestor lineage in MONDO (up to the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
+| `disease.ontology.depth` | This disease's minimum is-a distance to a MONDO root (how specific the term is). | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
+| `disease.ontology.name` | The MONDO term name for this disease. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
+| `disease.ontology.parents` | This disease's direct is-a parents in MONDO — a list of {mondo_id, name}. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `drugbank.id` | This protein's DrugBank id. | `uniprot:map_from_accession` | — |
 | `eggnog.group` | This protein's eggNOG orthologous-group id. | `uniprot:map_from_accession` | — |
 | `gene.detail` | Full record of this gene — symbol, description, type, chromosomes, synonyms, xrefs. | `ncbi:ncbi.describe_gene` | — |
@@ -69,17 +77,25 @@ Descriptive payload fields; nothing joins on them.
 | `genome.assembly.records` | Genome assemblies for this organism — accession, organism, level, RefSeq category. | `ncbi:ncbi.list_genomes` | — |
 | `genome.assembly.title` | The name of one genome assembly. | `ncbi:ncbi.describe_genome` | — |
 | `genome.sequence.records` | The sequences in one genome — name, role, length, RefSeq/GenBank accession. | `ncbi:ncbi.describe_genome` | — |
+| `go.annotation.coverage` | Pagination coverage, source counts and page-cap completeness. | `quickgo:list_go_terms` | — |
+| `go.annotation.records` | Source annotation rows, retaining evidence, qualifiers and references. | `quickgo:list_go_terms` | — |
 | `go.biological_process` | The biological processes this protein takes part in. | `quickgo:list_go_terms` | — |
 | `go.cellular_component` | Where in the cell this protein acts. | `quickgo:list_go_terms` | — |
-| `go.count` | How many GO terms annotate this protein. | `quickgo:list_go_terms` | — |
+| `go.count` | Distinct GO terms in retrieved annotation pages; inspect coverage for completeness. | `quickgo:list_go_terms` | — |
 | `go.molecular_function` | The molecular functions this protein is annotated with. | `quickgo:list_go_terms` | — |
-| `go.records` | This protein's GO annotations — GO id, name, aspect. | `quickgo:list_go_terms` | — |
+| `go.records` | Deduplicated GO term inventory — GO id, name, aspect. | `quickgo:list_go_terms` | — |
 | `go.term.aspect` | This GO term's aspect — molecular_function, biological_process, or cellular_component. | `quickgo:describe_go_term` | — |
 | `go.term.definition` | What this GO term means. | `quickgo:describe_go_term` | — |
 | `go.term.detail` | Full detail of this GO term — name, aspect, definition, synonyms. | `quickgo:describe_go_term` | — |
 | `go.term.name` | The name of this GO term. | `quickgo:describe_go_term` | — |
 | `gtdb.lineage` | This organism's GTDB genome-based, rank-normalized lineage — an ordered list of {rank, name} from domain to species. | `gtdb:describe_gtdb_taxonomy` | — |
 | `gtdb.tree.rootpath` | This organism's path from the root of the GTDB reference tree to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic). | `gtdb:describe_gtdb_tree_placement` | — |
+| `microbe.abundance.associations` | This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.count` | How many phenotypes this microbe has a GMrepo abundance record for. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.overview` | This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.phenotype_names` | The gut-metagenome phenotypes (diseases/health) this microbe is reported prevalent in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.records` | Full GMrepo abundance rows for this microbe — the global overview plus every per-phenotype prevalence/abundance record. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.sample_profiles` | Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI). | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
@@ -87,6 +103,7 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.ecology.functional_groups` | FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration). | `faprotax:describe_ecology` | — |
 | `microbe.metabolism.reactions` | The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}. | `agora:describe_metabolic_reconstruction` | — |
 | `microbe.metabolism.reconstruction` | This organism's AGORA2 genome-scale metabolic reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome). | `agora:describe_metabolic_reconstruction` | — |
+| `microbe.metabolism.sbml` | The genome-scale metabolic model (AGORA2 SBML) for this microbe — a local path per reconstruction (lazily downloaded per model), the substrate for community-flux / seed-set metabolic-complementarity analysis. | `agora:describe_metabolic_reconstruction` | — |
 | `microbe.trait.cell_shape` | This microbe's cell shape — rod, coccus, … | `bacdive:describe_traits` | — |
 | `microbe.trait.gram_stain` | This microbe's Gram stain — positive or negative. | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.metabolism` | How this microbe gets energy — aerobe, anaerobe, … | — | — |
@@ -134,12 +151,5 @@ Descriptive payload fields; nothing joins on them.
 | `structure.pdb.records` | This protein's PDB structures — id, method, resolution, coverage. | `pdbe:list_structures` | — |
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
+| `wikidata.sitelinks` | Language/site links associated with a Wikidata taxon item. | `wikidata:resolve_taxon` | — |
 | `wikipedia.pageviews` | Recent English-Wikipedia pageview count for one article — a popularity proxy. | `wikipedia:describe_pageviews` | — |
-
-## Uncatalogued (naming-drift risk)
-
-Produced but in neither registry — catalog in `weaverkit.keys` to keep names stable.
-
-| Key | Description | Produced by | Consumed by |
-| --- | --- | --- | --- |
-| `wikidata.sitelinks` | — | `wikidata:resolve_taxon` | — |
