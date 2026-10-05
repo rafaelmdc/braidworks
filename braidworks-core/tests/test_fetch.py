@@ -8,11 +8,13 @@ entry-point discovery or the network.
 
 from __future__ import annotations
 
+import json
+
+import pytest
 from braidworks.core import async_fetch, fetch
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand
-
 from helpers import ScriptedWeaver, simple_capability
 
 WANT = "microbe.metabolism.reactions"
@@ -77,3 +79,86 @@ def test_sync_fetch_wrapper_runs_its_own_loop():
     res = fetch(WANT, ids=["853", "999"], registry=_registry())
     assert res.get("853")[WANT] == ["ACGAMK", "PGK"]
     assert res.unresolved == ["999"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"typo": "value"},
+        {"wrong": {"typo": "value"}},
+        {CAP.id: {"typo": "value"}},
+        {CAP.id: {}, "typo": "value"},
+    ],
+)
+async def test_fetch_rejects_unknown_and_mixed_parameters_before_io(params):
+    registry = _registry()
+    weaver = registry.get_weaver("agora")
+    with pytest.raises(ValueError):
+        await async_fetch(WANT, ids=["853"], params=params, registry=registry)
+    assert weaver.batch_calls == 0
+
+
+@pytest.mark.parametrize("native", [False, True])
+async def test_fetch_validates_and_coerces_declared_parameters(monkeypatch, native):
+    from dataclasses import replace
+
+    from braidworks.core.capability import Parameter
+
+    registry = _registry()
+    weaver = registry.get_weaver("agora")
+    weaver._manifest = replace(
+        weaver.MANIFEST,
+        capabilities=(replace(CAP, parameters=(Parameter("organism", type="int"),)),),
+    )
+    registry = BraidRegistry()
+    registry.register(weaver)
+    original = weaver.execute_batch
+    seen = []
+
+    async def recording(*args, params=None, **kwargs):
+        seen.append(params)
+        return await original(*args, params=params, **kwargs)
+
+    monkeypatch.setattr(weaver, "execute_batch", recording)
+    params = {"organism": "9606"}
+    result = await async_fetch(
+        WANT, ["853"], registry=registry, params={CAP.id: params} if native else params
+    )
+    assert result.get("853")[WANT] == ["ACGAMK", "PGK"]
+    assert seen == [{"organism": 9606}]
+
+
+def test_sync_fetch_rejects_parameter_typo_before_io():
+    registry = _registry()
+    with pytest.raises(ValueError, match="organsim"):
+        fetch(WANT, ["853"], registry=registry, params={"organsim": "9606"})
+    assert registry.get_weaver("agora").batch_calls == 0
+
+
+def test_fetch_result_json_archive_preserves_partial_values_references_and_errors():
+    from braidworks.core.executor import ExecutionError
+    from braidworks.core.fetch import FetchResult
+    from braidworks.core.references import Reference
+    from braidworks.core.strand import StrandSet
+
+    result = FetchResult(
+        resolved={"853": {WANT: ["ACGAMK"], "details": {"count": 1}}},
+        unresolved=["999"],
+        references=[
+            Reference(
+                "agora", "https://example.test", "Open", "citation", "Provider", "cite_requested"
+            )
+        ],
+        errors=[
+            ExecutionError(
+                StrandSet.from_strands("999", [Strand("ncbi.taxon.id", "999")]),
+                "WeaverError",
+                "503 Service Unavailable",
+            )
+        ],
+    )
+    restored = FetchResult.from_json(json.loads(json.dumps(result.to_json())))
+    assert restored == result
+    assert restored.column(WANT) == {"853": ["ACGAMK"]}
+    assert restored.references[0].render() == result.references[0].render()
+    assert restored.errors[0].strand_set.get("ncbi.taxon.id").value == 999

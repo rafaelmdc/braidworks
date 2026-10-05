@@ -70,6 +70,7 @@ def map_lookup(
         status=status,
         strands=tuple(strands),
         errors=errors,
+        warnings=record.warnings,
     )
 
 

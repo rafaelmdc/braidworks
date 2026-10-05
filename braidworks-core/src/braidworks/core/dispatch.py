@@ -12,11 +12,14 @@ directly (decisions.md "thin contract, free implementation").
 
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from braidworks.core.backend import BackendBase
 from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+from braidworks.core.http_pacing import validate_request_pacing
 from braidworks.core.result import WeaveResult
+from braidworks.core.runner import validate_batch_size
 from braidworks.core.weaver import BaseWeaver
 
 
@@ -43,6 +46,9 @@ class BackendDispatchWeaver(BaseWeaver):
             )
         return strat
 
+    def supports_request_pacing(self, backend: str) -> bool:
+        return bool(getattr(self._backends.get(backend), "supports_request_pacing", False))
+
     def backend_fingerprint(self, backend: str) -> str:
         strat = self._backends.get(backend)
         # Guard on is_configured(): fingerprint() may read the data source, which an
@@ -65,6 +71,7 @@ class BackendDispatchWeaver(BaseWeaver):
         self, capability_id, strand_sets, *, requested_outputs, backend,
         params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
+        validate_request_pacing(self, backend)
         cap = self.MANIFEST.capability(capability_id)
         if cap is None:
             raise UnsupportedCapability(
@@ -89,6 +96,10 @@ class BackendDispatchWeaver(BaseWeaver):
             requested_outputs=requested_outputs,
             groups_to_compute=groups_to_compute,
             params=effective_params,
+        )
+        validate_batch_size(
+            len(queries), len(records),
+            context=f"{self.MANIFEST.weaver_id}.{capability_id} [{backend}] backend",
         )
         mapper = type(self).MAPPER
         return [

@@ -9,8 +9,8 @@ picked up with no code change.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from importlib.metadata import entry_points
-from typing import Callable, Iterator
 
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.weaver import BaseWeaver
@@ -18,15 +18,18 @@ from braidworks.core.weaver import BaseWeaver
 ENTRY_POINT_GROUP = "braidworks.weavers"
 
 
-def iter_weaver_builders() -> Iterator[tuple[str, Callable[[], BaseWeaver]]]:
-    """Yield ``(name, builder)`` for every installed ``braidworks.weavers`` entry point."""
+def iter_weaver_builders(
+    *,
+    only: frozenset[str] | None = None,
+) -> Iterator[tuple[str, Callable[[], BaseWeaver]]]:
+    """Yield installed builders, filtering entry-point names before importing plugins."""
     for ep in entry_points(group=ENTRY_POINT_GROUP):
+        if only is not None and ep.name not in only:
+            continue
         yield ep.name, ep.load()
 
 
-def build_registry_from_entry_points(
-    *, only: frozenset[str] | None = None
-) -> BraidRegistry:
+def build_registry_from_entry_points(*, only: frozenset[str] | None = None) -> BraidRegistry:
     """Build a registry from discovered weavers.
 
     ``only`` restricts to specific entry-point names (weaver ids) — the hook for a
@@ -34,8 +37,6 @@ def build_registry_from_entry_points(
     data it holds locally).
     """
     registry = BraidRegistry()
-    for name, builder in iter_weaver_builders():
-        if only is not None and name not in only:
-            continue
+    for _name, builder in iter_weaver_builders(only=only):
         registry.register(builder())
     return registry

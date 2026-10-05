@@ -7,9 +7,9 @@ short-circuit, consent gate, atomic publish, refresh, lock) is exercised directl
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
-
 from braidworks.core import BackendConfigurationError
 from braidworks.core.localdb import (
     BuildLock,
@@ -146,7 +146,7 @@ def test_download_sends_braidworks_user_agent(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
 
     class _FakeResponse:
-        headers = {"Content-Length": "3"}
+        headers: ClassVar[dict[str, str]] = {"Content-Length": "3"}
 
         def __init__(self) -> None:
             self._chunks = [b"abc", b""]

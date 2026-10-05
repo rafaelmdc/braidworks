@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core.braid import BackendPolicy, FallbackCondition
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry
-
 from helpers import make_weaver, resolve_name_capability, simple_capability
 
 
@@ -111,6 +109,68 @@ def test_local_only_with_api_only_raises_no_plan():
     with pytest.raises(NoPlanError):
         Braider(reg).plan(
             frozenset({"a"}), frozenset({"b"}), backend_policy=BackendPolicy.LOCAL_ONLY
+        )
+
+
+@pytest.mark.parametrize(
+    "policy,allowed,blocked",
+    [
+        (BackendPolicy.LOCAL_ONLY, "local", "api"),
+        (BackendPolicy.API_ONLY, "api", "local"),
+    ],
+)
+@pytest.mark.parametrize("multihop", [False, True])
+def test_restricted_policy_finds_more_expensive_supported_route(policy, allowed, blocked, multihop):
+    supported = [simple_capability("supported", {"a"}, {"b"}, backends=(allowed,), cost=3)]
+    if multihop:
+        supported = [
+            simple_capability("first", {"a"}, {"x"}, backends=(allowed,), cost=2),
+            simple_capability("second", {"x"}, {"b"}, backends=(allowed,), cost=2),
+        ]
+    reg = _registry(
+        make_weaver(
+            simple_capability("cheap", {"a"}, {"b"}, backends=(blocked,)), weaver_id="cheap"
+        ),
+        make_weaver(*supported, weaver_id="supported"),
+    )
+    graph = reg.build_graph()
+    edges_before = list(graph.edges(keys=True, data=True))
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"b"}), backend_policy=policy)
+    assert [step.capability_id for step in braid.steps] == [cap.id for cap in supported]
+    assert all(
+        step.primary_backend == allowed and not step.fallback_backends for step in braid.steps
+    )
+    assert list(reg.build_graph().edges(keys=True, data=True)) == edges_before
+    # Unrestricted policies still minimize declared capability cost.
+    default = Braider(reg).plan(frozenset({"a"}), frozenset({"b"}))
+    assert default.steps[0].weaver_id == "cheap"
+
+
+def test_policy_pruning_preserves_exclusions_and_no_path_distinction():
+    reg = _registry(
+        make_weaver(
+            simple_capability("cheap", {"a"}, {"b"}, backends=("api",)),
+            simple_capability("local", {"a"}, {"b"}, backends=("local",), cost=2),
+            weaver_id="w",
+        )
+    )
+    with pytest.raises(NoPlanError, match="local_only"):
+        Braider(reg).plan(
+            frozenset({"a"}),
+            frozenset({"b"}),
+            backend_policy=BackendPolicy.LOCAL_ONLY,
+            exclude=frozenset({("w", "local")}),
+        )
+    with pytest.raises(NoPathError):
+        Braider(reg).plan(
+            frozenset({"a"}),
+            frozenset({"b"}),
+            backend_policy=BackendPolicy.LOCAL_ONLY,
+            exclude=frozenset({("w", "local"), ("w", "cheap")}),
+        )
+    with pytest.raises(NoPathError):
+        Braider(reg).plan(
+            frozenset({"a"}), frozenset({"absent"}), backend_policy=BackendPolicy.LOCAL_ONLY
         )
 
 

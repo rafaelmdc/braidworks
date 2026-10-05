@@ -10,8 +10,9 @@ render it in the visualizer.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from braidworks.core.licenses import (
     ATTRIBUTION_REQUIRED,

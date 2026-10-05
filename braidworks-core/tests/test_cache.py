@@ -5,7 +5,6 @@ from __future__ import annotations
 from braidworks.core.cache import InMemoryStrandCache, compute_cache_key
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
-
 from helpers import resolve_name_capability
 
 CAP = resolve_name_capability()

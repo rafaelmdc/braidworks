@@ -12,7 +12,8 @@ later (deferred until a second weaver proves the abstraction); the
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Protocol, runtime_checkable
+from collections.abc import Mapping
+from typing import Any, Protocol, runtime_checkable
 
 from braidworks.core.weaver import BaseWeaver
 

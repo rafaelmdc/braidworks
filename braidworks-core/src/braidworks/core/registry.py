@@ -135,9 +135,7 @@ class BraidRegistry:
                 # consumes_any => each consumed type is an independent edge source
                 # (alternatives); a plain multi-input capability is conjunctive and not
                 # routed by the type→type graph.
-                if cap.consumes_any:
-                    sources = tuple(cap.consumes)
-                elif len(cap.consumes) == 1:
+                if cap.consumes_any or len(cap.consumes) == 1:
                     sources = tuple(cap.consumes)
                 else:
                     continue

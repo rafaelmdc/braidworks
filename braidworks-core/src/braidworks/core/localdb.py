@@ -23,6 +23,7 @@ import time
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
+from typing import Self
 
 from platformdirs import user_cache_dir
 
@@ -133,7 +134,7 @@ class BuildLock:
     def __init__(self, db_path: Path) -> None:
         self._path = db_path.with_name(db_path.name + ".lock")
 
-    def __enter__(self) -> "BuildLock":
+    def __enter__(self) -> Self:
         while True:
             try:
                 fd = os.open(self._path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)

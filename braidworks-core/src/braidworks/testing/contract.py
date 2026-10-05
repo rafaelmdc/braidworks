@@ -12,7 +12,6 @@ from __future__ import annotations
 # per-method docstrings would only restate the name. The mixins also deliberately
 # inspect StrandSet internals (_strands) to fingerprint raw inputs.
 # pylint: disable=missing-function-docstring,protected-access
-
 from typing import Any
 
 from braidworks.core.cache import InMemoryStrandCache, compute_cache_key

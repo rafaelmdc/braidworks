@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core import (
     BackendBase,
     BackendDispatchWeaver,
@@ -13,6 +12,7 @@ from braidworks.core import (
     MatchStatus,
     OutputGroup,
     ResolverRecord,
+    ReviewPolicy,
     Strand,
     StrandSet,
     WeaverManifest,
@@ -20,7 +20,10 @@ from braidworks.core import (
     map_lookup,
     map_resolver,
 )
-from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+from braidworks.core.exceptions import BackendUnavailable, BraidworksError, UnsupportedCapability
+from braidworks.core.executor import LocalExecutor
+from braidworks.core.planner import Braider
+from braidworks.core.registry import BraidRegistry
 
 CAP = Capability(
     id="resolve",
@@ -35,14 +38,28 @@ CAP = Capability(
 )
 
 
+@pytest.mark.parametrize("count", [1, 3])
+async def test_dispatch_rejects_wrong_record_count_before_mapping(count):
+    class MalformedBackend(_StubBackend):
+        async def fetch(self, capability_id, queries, **kwargs):
+            return [LookupRecord(query={}, found=False) for _ in range(count)]
+
+    weaver = _Weaver({"local": MalformedBackend()})
+    inputs = [StrandSet.from_strands(str(i), [Strand("organism.name", str(i))]) for i in range(2)]
+    with pytest.raises(BraidworksError, match="returned .* for 2 inputs"):
+        await weaver.execute_batch(
+            "resolve", inputs, requested_outputs=frozenset({"ncbi.taxon.id"}), backend="local"
+        )
+
+
 def _map_args(requested):
-    return dict(
-        capability=CAP,
-        requested_outputs=requested,
-        backend="local",
-        weaver_version="1.0.0",
-        weaver_id="ncbi",
-    )
+    return {
+        "capability": CAP,
+        "requested_outputs": requested,
+        "backend": "local",
+        "weaver_version": "1.0.0",
+        "weaver_id": "ncbi",
+    }
 
 
 # --- mapper: lookup ----------------------------------------------------------
@@ -124,7 +141,9 @@ class _StubBackend(BackendBase):
     def fingerprint(self):
         return "stub-v1"
 
-    async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None):
+    async def fetch(
+        self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None
+    ):
         self.seen_groups = groups_to_compute
         return [LookupRecord(query=q, found=True, values={"ncbi.taxon.id": 562}) for q in queries]
 
@@ -181,3 +200,105 @@ def test_backend_fingerprint_guards_unconfigured():
 def test_empty_backends_rejected():
     with pytest.raises(ValueError, match="at least one backend"):
         _Weaver({})
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ("ncbi.taxon.rank", "ncbi.taxon.id"),
+        ("ncbi.taxon.id", "ncbi.taxon.rank"),
+    ],
+)
+@pytest.mark.parametrize("kind", ["lookup", "resolved", "ambiguous"])
+async def test_cache_reuses_emitted_groups_without_claiming_internal_outputs(first, second, kind):
+    class Backend(_StubBackend):
+        calls = 0
+
+        async def fetch(self, capability_id, queries, **kwargs):
+            self.calls += 1
+            values = {
+                "ncbi.taxon.id": 562,
+                "organism.scientific_name": "Escherichia coli",
+                "ncbi.taxon.rank": "species",
+            }
+            if kind == "lookup":
+                return [LookupRecord(query=q, found=True, values=values) for q in queries]
+            if kind == "resolved":
+                return [
+                    ResolverRecord(query=q, status=MatchStatus.RESOLVED, values=values)
+                    for q in queries
+                ]
+            return [
+                ResolverRecord(
+                    query=q,
+                    status=MatchStatus.AMBIGUOUS,
+                    candidates=[Candidate(values=values, score=1.0)],
+                )
+                for q in queries
+            ]
+
+    class Weaver(_Weaver):
+        MAPPER = staticmethod(map_lookup if kind == "lookup" else map_resolver)
+
+    backend = Backend()
+    registry = BraidRegistry()
+    registry.register(Weaver({"local": backend}))
+    executor = LocalExecutor(registry)
+
+    async def run(target, runner):
+        inputs = [StrandSet.from_strands("e1", [Strand("organism.name", "E. coli")])]
+        braid = Braider(registry).plan(
+            available_types=frozenset({"organism.name"}), target_types=frozenset({target})
+        )
+        return await runner.execute(braid, inputs, review_policy=ReviewPolicy.ALLOW_CONTINUE)
+
+    first_result = await run(first, executor)
+    assert first_result.resolved[0].available_types() == (
+        frozenset({"organism.name"}) | CAP.outputs_to_compute(frozenset({first}))
+    )
+    second_result = await run(second, executor)
+    assert len(second_result.resolved) == 1
+    assert backend.calls == 2
+    repeated = await run(second, executor)
+    assert backend.calls == 2
+    fresh = await run(second, LocalExecutor(registry))
+    assert second_result.resolved[0].get(second) == fresh.resolved[0].get(second)
+    assert repeated.resolved[0].get(second) == fresh.resolved[0].get(second)
+
+
+async def test_cache_retains_triggered_group_when_optional_outputs_are_absent():
+    class Backend(_StubBackend):
+        calls = 0
+
+        async def fetch(self, capability_id, queries, **kwargs):
+            self.calls += 1
+            return [
+                LookupRecord(query=q, found=True, values={"ncbi.taxon.rank": None}) for q in queries
+            ]
+
+    backend = Backend()
+    registry = BraidRegistry()
+    registry.register(_Weaver({"local": backend}))
+    executor = LocalExecutor(registry)
+    braid = Braider(registry).plan(
+        available_types=frozenset({"organism.name"}),
+        target_types=frozenset({"ncbi.taxon.rank"}),
+    )
+    for _ in range(2):
+        result = await executor.execute(
+            braid, [StrandSet.from_strands("e1", [Strand("organism.name", "E. coli")])]
+        )
+        assert len(result.unresolved) == 1
+    assert backend.calls == 1
+
+
+@pytest.mark.parametrize("found,error", [(True, None), (False, None), (False, "failed")])
+def test_lookup_source_warnings_survive_mapping_and_json(found, error):
+    record = LookupRecord(
+        query={"id": 1}, found=found, error=error, warnings=("source coverage incomplete",)
+    )
+    restored = LookupRecord.from_json(record.to_json())
+    assert restored == record
+    result = map_lookup(restored, **_map_args(frozenset({"ncbi.taxon.id"})))
+    assert result.warnings == record.warnings
+    assert type(result).from_json(result.to_json()).warnings == record.warnings

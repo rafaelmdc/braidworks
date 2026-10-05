@@ -7,4 +7,4 @@ planning/execution API stays available under ``braidworks.core``.
 
 from braidworks.core.fetch import FetchResult, async_fetch, fetch
 
-__all__ = ["fetch", "async_fetch", "FetchResult"]
+__all__ = ["FetchResult", "async_fetch", "fetch"]

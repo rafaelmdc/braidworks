@@ -26,10 +26,12 @@ full capability id directly and is the unambiguous escape hatch.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.cache import InMemoryStrandCache, StrandCache
+from braidworks.core.capability import Capability
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.executor import (
     ErrorPolicy,
@@ -37,10 +39,14 @@ from braidworks.core.executor import (
     ExpandPolicy,
     LocalExecutor,
     ReviewPolicy,
+    _ExpansionBudget,
 )
+from braidworks.core.parameters import validate_scoped_parameters
 from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.strand import MergePolicy, StrandSet
+
+_DEFAULT_EXPAND_POLICY = ExpandPolicy.all()
 
 
 def relationship_name(capability_id: str) -> str:
@@ -48,7 +54,7 @@ def relationship_name(capability_id: str) -> str:
     ``orthologs``). Strips the weaver namespace and a leading ``list_``; an id that
     does not follow the convention falls back to its bare local name."""
     local = capability_id.rsplit(".", 1)[-1]
-    return local[len("list_") :] if local.startswith("list_") else local
+    return local.removeprefix("list_")
 
 
 def fan_capabilities(registry: BraidRegistry) -> list[tuple[str, str, str]]:
@@ -98,6 +104,45 @@ def resolve_traversal(registry: BraidRegistry, token: str) -> tuple[str, str]:
     return matches[0]
 
 
+def traversal_route_capabilities(
+    registry: BraidRegistry,
+    inputs: list[StrandSet],
+    traversals: list[tuple[str, str]],
+    targets: frozenset[str],
+    *,
+    backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+) -> dict[str, Capability]:
+    """Preview traversal, resolver-prelude and final-route parameter declarations.
+
+    Failed previews are left to execution to report. This performs no backend I/O
+    and never assumes a type present in one sparse row is available in every row.
+    """
+    capabilities = {cid: registry.get_capability(wid, cid) for wid, cid in traversals}
+    braider = Braider(registry)
+
+    def include_route(available, wanted):
+        try:
+            braid = braider.plan(available, wanted, backend_policy=backend_policy)
+        except (NoPathError, NoPlanError):
+            return
+        for step in braid.steps:
+            capabilities[step.capability_id] = registry.get_capability(
+                step.weaver_id, step.capability_id
+            )
+
+    for available in dict.fromkeys(ss.available_types() for ss in inputs):
+        for wid, cid in traversals:
+            cap = registry.get_capability(wid, cid)
+            if not cap.consumes <= available:
+                include_route(available, cap.consumes)
+            # A fan retains its consumed context alongside produced strands.
+            # Other seed attributes were discarded at the re-rooting boundary.
+            available = cap.consumes | cap.produces
+        if targets:
+            include_route(available, targets)
+    return capabilities
+
+
 async def run_traversed(
     registry: BraidRegistry,
     input_sets: list[StrandSet],
@@ -105,12 +150,16 @@ async def run_traversed(
     target_types: frozenset[str],
     *,
     backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
-    expand_policy: ExpandPolicy = ExpandPolicy.all(),
+    expand_policy: ExpandPolicy = _DEFAULT_EXPAND_POLICY,
     params: dict[str, dict[str, Any]] | None = None,
     review_policy: ReviewPolicy = ReviewPolicy.HALT,
+    confidence_threshold: float = 0.0,
     error_policy: ErrorPolicy = ErrorPolicy.RECORD_AND_CONTINUE,
     merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
     cache: StrandCache | None = None,
+    max_expansion: int = 10_000,
+    _expansion_budget: _ExpansionBudget | None = None,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> ExecutionResult:
     """Run an ordered list of traversals, re-rooting between each, then plan ``want``.
 
@@ -123,9 +172,45 @@ async def run_traversed(
     cache is shared across phases so a value reached twice is computed once.
     """
     braider = Braider(registry)
+    budget = _expansion_budget or _ExpansionBudget(max_expansion, len(input_sets))
     cache = cache if cache is not None else InMemoryStrandCache()
     executor = LocalExecutor(registry, cache)
-    params = params or {}
+    params = validate_scoped_parameters(
+        params or {},
+        traversal_route_capabilities(
+            registry, input_sets, traversals, target_types, backend_policy=backend_policy
+        ),
+    )
+
+    grouped: dict[frozenset[str], list[StrandSet]] = {}
+    for ss in input_sets:
+        grouped.setdefault(ss.available_types(), []).append(ss)
+    if len(grouped) > 1:
+        combined = ExecutionResult()
+        for group in grouped.values():
+            group_caps = traversal_route_capabilities(
+                registry, group, traversals, target_types, backend_policy=backend_policy
+            )
+            part = await run_traversed(
+                registry,
+                group,
+                traversals,
+                target_types,
+                backend_policy=backend_policy,
+                expand_policy=expand_policy,
+                params={cid: p for cid, p in params.items() if cid in group_caps},
+                review_policy=review_policy,
+                confidence_threshold=confidence_threshold,
+                error_policy=error_policy,
+                merge_policy=merge_policy,
+                cache=cache,
+                max_expansion=max_expansion,
+                _expansion_budget=budget,
+                on_event=on_event,
+            )
+            combined.resolved.extend(part.resolved)
+            _absorb_dead_ends(combined, part)
+        return combined
 
     final = ExecutionResult()
     current = input_sets
@@ -135,10 +220,14 @@ async def run_traversed(
             braid,
             sets,
             review_policy=review_policy,
+            confidence_threshold=confidence_threshold,
             error_policy=error_policy,
             merge_policy=merge_policy,
             expand_policy=expand,
             params=params,
+            max_expansion=max_expansion,
+            _expansion_budget=budget,
+            on_event=on_event,
         )
 
     for weaver_id, capability_id in traversals:
@@ -170,29 +259,29 @@ async def run_traversed(
                 current = [s.restricted_to({source}) for s in res.resolved]
                 if not current:
                     break
-        braid = braider.plan_capability(
-            weaver_id, capability_id, backend_policy=backend_policy
-        )
+        # Every traversal changes the entity represented by the join key. Seed
+        # annotations and previous relationship outputs must not describe its
+        # children, even when the join key was supplied without a prelude.
+        current = [s.restricted_to({source}) for s in current]
+        braid = braider.plan_capability(weaver_id, capability_id, backend_policy=backend_policy)
         res = await _run(braid, current, expand=expand_policy)
         _absorb_dead_ends(final, res)
         current = res.resolved
 
     if target_types and current:
         available = frozenset().union(*(s.available_types() for s in current))
-        try:
-            braid = braider.plan(
-                available_types=available,
-                target_types=target_types,
-                backend_policy=backend_policy,
-            )
-        except NoPlanError:
-            raise
+        braid = braider.plan(
+            available_types=available,
+            target_types=target_types,
+            backend_policy=backend_policy,
+        )
         res = await _run(braid, current, expand=expand_policy)
         final.references = _merge_references(final.references, res.references)
         final.resolved.extend(res.resolved)
         final.unresolved.extend(res.unresolved)
         final.review_queue.extend(res.review_queue)
         final.errors.extend(res.errors)
+        final.truncations.extend(res.truncations)
     else:
         # No target requested (or nothing survived): the fanned children are the result.
         final.resolved.extend(current)
@@ -209,6 +298,7 @@ def _absorb_dead_ends(final: ExecutionResult, res: ExecutionResult) -> None:
     final.unresolved.extend(res.unresolved)
     final.review_queue.extend(res.review_queue)
     final.errors.extend(res.errors)
+    final.truncations.extend(res.truncations)
 
 
 def _merge_references(existing, incoming):

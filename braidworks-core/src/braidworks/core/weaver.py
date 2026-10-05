@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, ClassVar, Hashable, Protocol, TypeVar, runtime_checkable
+from collections.abc import Callable, Hashable
+from typing import Any, ClassVar, Protocol, TypeVar, runtime_checkable
 
 from braidworks.core.capability import WeaverManifest
+from braidworks.core.http_pacing import validate_request_pacing
 from braidworks.core.result import WeaveResult
 from braidworks.core.strand import StrandSet
 
@@ -41,6 +43,10 @@ class BaseWeaver(ABC):
     """
 
     MANIFEST: ClassVar[WeaverManifest]
+
+    def supports_request_pacing(self, backend: str) -> bool:
+        """Whether every HTTP request on this backend uses the pacing seam."""
+        return False
 
     @abstractmethod
     def backend_fingerprint(self, backend: str) -> str:
@@ -84,6 +90,7 @@ class BaseWeaver(ABC):
         Hard contract: returns exactly one result per input, in input order.
         Default implementation is a serial loop; override for real batch.
         """
+        validate_request_pacing(self, backend)
         results: list[WeaveResult] = []
         for strand_set in strand_sets:
             results.append(
