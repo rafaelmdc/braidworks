@@ -17,7 +17,7 @@ Durability: ``max_tries`` bounds retries; if a worker dies mid-job arq re-queues
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, ClassVar
 
 from braidworks_arq.discovery import build_registry_from_entry_points, set_registry
 from braidworks_arq.settings import QUEUE_PREFIX, redis_settings
@@ -33,7 +33,7 @@ async def _on_startup(ctx: dict[str, Any]) -> None:
 class WorkerSettings:
     """arq worker configuration. Run with ``arq braidworks_arq.WorkerSettings``."""
 
-    functions = [weave_step]
+    functions: ClassVar[list] = [weave_step]
     redis_settings = redis_settings()
     queue_name = os.environ.get("BRAIDWORKS_QUEUE", f"{QUEUE_PREFIX}default")
     on_startup = _on_startup

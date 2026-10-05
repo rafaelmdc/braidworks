@@ -1,13 +1,20 @@
 [project]
 name = "braidworks-arq"
-version = "0.1.4"
+version = "0.2.0"
 description = "Distributed execution for Braidworks — run weave-steps on arq workers over Redis (async-native: durable queue, cross-machine fan-out, global rate-limiting)."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.4.0", "arq>=0.26", "redis>=5.0"]
+dependencies = ["braidworks-core>=0.13.0", "arq>=0.26", "redis>=5.0"]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
 
 [project.optional-dependencies]
-test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+test = ["pytest>=8.0", "pytest-asyncio>=0.23", "fakeredis[lua]>=2.39.0"]
 
 [build-system]
 requires = ["hatchling"]

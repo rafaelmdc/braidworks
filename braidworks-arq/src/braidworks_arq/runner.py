@@ -20,7 +20,7 @@ from typing import Any
 
 from arq import create_pool
 from arq.connections import ArqRedis
-
+from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult
 from braidworks.core.strand import StrandSet
 
@@ -40,7 +40,14 @@ class ArqStepRunner:
     test suite passes an inline pool so the suite needs no Redis).
     """
 
-    def __init__(self, *, pool: Any | None = None, result_timeout: float | None = 300.0) -> None:
+    def __init__(
+        self,
+        *,
+        pool: Any | None = None,
+        result_timeout: float | None = 300.0,
+        registry: BraidRegistry | None = None,
+    ) -> None:
+        self._registry = registry
         self._pool = pool
         self._result_timeout = result_timeout
 
@@ -70,9 +77,7 @@ class ArqStepRunner:
             )
 
         # Fan-out: contiguous chunks → concurrent jobs, at most `width` in flight.
-        chunks = [
-            strand_sets[i : i + plan.chunk] for i in range(0, len(strand_sets), plan.chunk)
-        ]
+        chunks = [strand_sets[i : i + plan.chunk] for i in range(0, len(strand_sets), plan.chunk)]
         sem = asyncio.Semaphore(plan.width)
 
         async def _run(sub: list[StrandSet]) -> list[WeaveResult]:
@@ -96,6 +101,13 @@ class ArqStepRunner:
         params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
         payload = [ss.to_json() for ss in strand_sets]
+        identity = None
+        if self._registry is not None:
+            weaver = self._registry.get_weaver(weaver_id)
+            identity = {
+                "manifest": weaver.MANIFEST.to_json(),
+                "backend_fingerprint": weaver.backend_fingerprint(backend),
+            }
         job = await pool.enqueue_job(
             _FUNCTION_NAME,
             weaver_id,
@@ -104,6 +116,7 @@ class ArqStepRunner:
             payload,
             requested,
             params or {},
+            identity,
             _queue_name=queue_for(weaver_id),
         )
         if job is None:  # pragma: no cover - only on a job-id collision we never set

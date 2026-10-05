@@ -12,13 +12,12 @@ executor that enqueued it, so the task is idempotent and safe to retry.
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
-import random
-
 from arq.worker import Retry
-
 from braidworks.core.exceptions import BackendConfigurationError, BackendUnavailable
+from braidworks.core.http_pacing import request_budget
 from braidworks.core.strand import StrandSet
 
 from braidworks_arq.discovery import get_registry
@@ -42,23 +41,21 @@ def _retry_defer(job_try: int) -> float:
     return base * (0.5 + random.random())
 
 
-async def _throttle(ctx: dict[str, Any], weaver_id: str, backend: str, cost: float) -> None:
-    """Await the cluster-wide token bucket if a rule matches this step.
-
-    ``cost`` is the number of tokens this task should consume — one per expected
-    external call (≈ the batch size under the non-batchable assumption), so the bucket
-    bounds the aggregate *call* rate across the fleet, not just task dispatch.
-    """
-    rate = rate_for(load_limits(), weaver_id, backend)
+def _request_bucket(ctx, weaver_id, backend, weaver):
+    try:
+        rate = rate_for(load_limits(), weaver_id, backend)
+    except ValueError as exc:
+        raise BackendConfigurationError(str(exc)) from exc
     if rate is None:
-        return
-    bucket = TokenBucket(
-        ctx["redis"],
-        key=f"braidworks:rl:{weaver_id}:{backend}",
-        rate=rate,
-        capacity=max(rate, 1.0),
+        return None
+    if not weaver.supports_request_pacing(backend):
+        raise BackendConfigurationError(
+            f"{weaver_id}:{backend} does not declare request pacing support; "
+            "use the shared HTTP client seam before enabling its rate limit"
+        )
+    return TokenBucket(
+        ctx["redis"], key=f"braidworks:rl:{weaver_id}:{backend}", rate=rate, capacity=1
     )
-    await bucket.acquire(cost)
 
 
 async def weave_step(
@@ -69,6 +66,7 @@ async def weave_step(
     strand_sets_json: list[dict[str, Any]],
     requested_outputs: list[str],
     params: dict[str, Any] | None = None,
+    expected_identity: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Run one weave-step batch on this worker; return ``[WeaveResult.to_json(), ...]``.
 
@@ -78,23 +76,39 @@ async def weave_step(
     """
     registry = get_registry()
     weaver = registry.get_weaver(weaver_id)
+    if expected_identity is not None:
+        actual_identity = {
+            "manifest": weaver.MANIFEST.to_json(),
+            "backend_fingerprint": weaver.backend_fingerprint(backend),
+        }
+        if actual_identity != expected_identity:
+            raise BackendConfigurationError(
+                f"worker identity mismatch for {weaver_id}:{backend}; "
+                "deploy matching package manifests and backend datasets"
+            )
     strand_sets = [StrandSet.from_json(d) for d in strand_sets_json]
     requested = frozenset(requested_outputs)
 
-    # One token per expected external call ≈ one per entity (non-batchable worst case).
-    await _throttle(ctx, weaver_id, backend, cost=max(1, len(strand_sets)))
+    bucket = _request_bucket(ctx, weaver_id, backend, weaver)
+
+    async def charge(request_weaver, request_backend):
+        if (request_weaver, request_backend) != (weaver_id, backend):
+            raise BackendConfigurationError("HTTP request escaped its worker budget namespace")
+        if bucket is not None:
+            await bucket.acquire()
 
     try:
-        results = await weaver.execute_batch(
-            capability_id,
-            strand_sets,
-            requested_outputs=requested,
-            backend=backend,
-            params=params or None,
-        )
+        with request_budget(charge):
+            results = await weaver.execute_batch(
+                capability_id,
+                strand_sets,
+                requested_outputs=requested,
+                backend=backend,
+                params=params or None,
+            )
     except _NO_RETRY:
         raise  # orchestrator-level control flow; never retry, never swallow
-    except Exception:  # noqa: BLE001 - transient: retry with backoff, then surface
+    except Exception:
         tries = ctx.get("job_try", 1)
         if tries >= MAX_TRIES:
             raise

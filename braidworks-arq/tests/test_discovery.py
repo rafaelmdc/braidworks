@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks_arq import discovery
 from braidworks_arq.settings import queue_for
-
 from fakes import EchoWeaver, registry_with
 
 

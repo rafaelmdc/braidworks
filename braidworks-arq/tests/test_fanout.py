@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks_arq import discovery
 from braidworks_arq.executor import build_distributed_executor
 from braidworks_arq.fanout import FanoutConfigError, FanoutPlan, plan_fanout
 from braidworks_arq.runner import ArqStepRunner
 from braidworks_arq.tasks import weave_step
-
 from fakes import (
     TAXID,
     EchoWeaver,
@@ -19,7 +17,6 @@ from fakes import (
     single_step_braid,
 )
 
-
 # --- planning -----------------------------------------------------------------
 
 
@@ -28,36 +25,55 @@ def test_no_fanout_by_default():
     assert plan == FanoutPlan(width=1, chunk=100)
 
 
-def test_budgeted_backend_uses_chunk_one():
+def test_budgeted_backend_preserves_bulk_chunks_with_request_pacing():
     plan = plan_fanout(
         "ncbi", "api", 100, widths={"ncbi:api": 4}, unbudgeted=set(), chunks={}, budgeted=True
     )
-    assert plan.width == 4 and plan.chunk == 1
+    assert plan.width == 4 and plan.chunk == 25
 
 
 def test_unbudgeted_local_splits_evenly():
     plan = plan_fanout(
-        "ncbi", "local", 100, widths={"ncbi:local": 4}, unbudgeted={"ncbi:local"}, chunks={}, budgeted=False
+        "ncbi",
+        "local",
+        100,
+        widths={"ncbi:local": 4},
+        unbudgeted={"ncbi:local"},
+        chunks={},
+        budgeted=False,
     )
     assert plan.width == 4 and plan.chunk == 25  # ceil(100/4)
 
 
 def test_explicit_chunk_override_wins():
     plan = plan_fanout(
-        "ncbi", "local", 100, widths={"ncbi": 4}, unbudgeted={"ncbi"}, chunks={"ncbi:local": 10}, budgeted=False
+        "ncbi",
+        "local",
+        100,
+        widths={"ncbi": 4},
+        unbudgeted={"ncbi"},
+        chunks={"ncbi:local": 10},
+        budgeted=False,
     )
     assert plan.width == 4 and plan.chunk == 10
 
 
 def test_fanout_without_budget_or_assertion_raises():
     with pytest.raises(FanoutConfigError, match="no rate budget"):
-        plan_fanout("ncbi", "api", 100, widths={"ncbi:api": 4}, unbudgeted=set(), chunks={}, budgeted=False)
+        plan_fanout(
+            "ncbi", "api", 100, widths={"ncbi:api": 4}, unbudgeted=set(), chunks={}, budgeted=False
+        )
 
 
 def test_backend_specific_width_beats_bare_weaver():
     plan = plan_fanout(
-        "ncbi", "local", 50,
-        widths={"ncbi": 2, "ncbi:local": 5}, unbudgeted={"ncbi:local"}, chunks={}, budgeted=False,
+        "ncbi",
+        "local",
+        50,
+        widths={"ncbi": 2, "ncbi:local": 5},
+        unbudgeted={"ncbi:local"},
+        chunks={},
+        budgeted=False,
     )
     assert plan.width == 5
 
@@ -72,11 +88,21 @@ class CountingPool:
         self._fn = fn
         self.chunk_sizes: list[int] = []
 
-    async def enqueue_job(self, name, weaver_id, cap, backend, payload, requested,
-                          params=None, _queue_name=None):
+    async def enqueue_job(
+        self,
+        name,
+        weaver_id,
+        cap,
+        backend,
+        payload,
+        requested,
+        params=None,
+        expected_identity=None,
+        _queue_name=None,
+    ):
         self.chunk_sizes.append(len(payload))
         return InlineJob(
-            self._fn, (weaver_id, cap, backend, payload, requested, params), None
+            self._fn, (weaver_id, cap, backend, payload, requested, params, expected_identity), None
         )
 
 
@@ -103,7 +129,9 @@ async def test_runner_no_fanout_is_single_dispatch(monkeypatch):
     discovery.set_registry(registry_with(EchoWeaver()))
     pool = CountingPool(weave_step)
     runner = ArqStepRunner(pool=pool)
-    await runner.run_step("fake", "fake.resolve", "local", name_sets("a", "b", "c"), frozenset({TAXID}))
+    await runner.run_step(
+        "fake", "fake.resolve", "local", name_sets("a", "b", "c"), frozenset({TAXID})
+    )
     assert pool.chunk_sizes == [3]  # one job, whole batch
 
 
@@ -138,14 +166,13 @@ async def test_executor_fanout_without_budget_raises(monkeypatch):
 # so it must work unchanged when steps run on workers. (They compose: batch-parallelism
 # × cardinality-expansion.) This is the regression guard for that claim.
 
-from braidworks.core.braid import Braid, CapabilityInvocation  # noqa: E402
-from braidworks.core.capability import Capability, OutputGroup, WeaverManifest  # noqa: E402
-from braidworks.core.executor import ExpandPolicy  # noqa: E402
-from braidworks.core.result import WeaveResult, WeaveStatus  # noqa: E402
-from braidworks.core.strand import Strand, StrandSet  # noqa: E402
-from braidworks.core.weaver import BaseWeaver  # noqa: E402
-
-from fakes import InlinePool  # noqa: E402
+from braidworks.core.braid import Braid, CapabilityInvocation
+from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
+from braidworks.core.executor import ExpandPolicy
+from braidworks.core.result import WeaveResult, WeaveStatus
+from braidworks.core.strand import Strand, StrandSet
+from braidworks.core.weaver import BaseWeaver
+from fakes import InlinePool
 
 ACCESSION = "protein.uniprot.accession"
 PATHWAY = "pathway.reactome.id"
@@ -184,9 +211,13 @@ class _PathwaysWeaver(BaseWeaver):
             strands=(Strand(PATHWAY, [f"R-{acc}-1", f"R-{acc}-2", f"R-{acc}-3"]),),
         )
 
-    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
+    async def execute_batch(
+        self, capability_id, strand_sets, *, requested_outputs, backend, params=None
+    ):
         return [
-            await self.execute(capability_id, ss, requested_outputs=requested_outputs, backend=backend)
+            await self.execute(
+                capability_id, ss, requested_outputs=requested_outputs, backend=backend
+            )
             for ss in strand_sets
         ]
 
@@ -210,7 +241,11 @@ async def test_cardinality_fanout_through_distributed_executor():
     res = await ex.execute(_pathways_braid(), inputs, expand_policy=ExpandPolicy.all())
     # one protein in → one resolved leaf per pathway, even though the step ran "on a worker".
     assert len(res.resolved) == 3
-    assert sorted(leaf.get(PATHWAY).value for leaf in res.resolved) == ["R-P1-1", "R-P1-2", "R-P1-3"]
+    assert sorted(leaf.get(PATHWAY).value for leaf in res.resolved) == [
+        "R-P1-1",
+        "R-P1-2",
+        "R-P1-3",
+    ]
     assert all(leaf.parent_id == "e0" for leaf in res.resolved)
     assert sorted(leaf.entity_id for leaf in res.resolved) == ["e0#0", "e0#1", "e0#2"]
 
