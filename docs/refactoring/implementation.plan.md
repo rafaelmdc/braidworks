@@ -16,7 +16,7 @@ baseline, not another rewrite to perform.
 | W03 | PF03 | Separate review repository/history migration; batch thread boundaries | W01–02 | Verified locally; see persistence.plan.md |
 | W04 | AP01–02 | QueryRequest/Options/PreparedQuery; shared prepare/execute service | W00; coordinate W03 APIs | Verified locally; see application.plan.md |
 | W05 | AP03 | Prepared-plan graph/code renderers; CLI/Python artifact equivalence | W04 | Verified locally; see application.plan.md |
-| W06 | AP04–05 | Shared GET/POST stream lifecycle; canonical browser request encoder | W04–05 | Planned |
+| W06 | AP04–05 | Shared GET/POST stream lifecycle; canonical browser request encoder | W04–05 | Verified locally; see application.plan.md |
 | W07 | AP06 | Pure scaffold generation/validation and safe writes | W00; align new runtime floor | Planned |
 | W08 | AP07 | Structured discovery and explicit worker retry decisions | W00 | Planned |
 | W09 | PF04 | Versioned cache codec/policy and SQLite cache adapter | W01–04 | Verified locally; see persistence.plan.md |

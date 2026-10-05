@@ -10,7 +10,7 @@ they do not repeat the audits or count a proposal as completed implementation.
 |---|---|---|---|---|
 | 1: publication readiness, six audits | [Readiness](readiness.spec.md) | [Readiness plan](readiness.plan.md) | [Six reports/specs/plans](../audits/README.md) | 43 findings fixed locally; remote delivery pending |
 | 2: persistence foundations | [Persistence](persistence.spec.md) | [Persistence plan](persistence.plan.md) | [Audit](../audits/persistence-design.spec.md), [design](../audits/persistence-refactor-design.md) | P01–P06 verified locally; P07 planned |
-| 3: application patterns | [Application](application.spec.md) | [Application plan](application.plan.md) | [Audit](../audits/application-patterns.spec.md), [design](../audits/application-patterns.plan.md) | A01–A04 verified locally; A05–A08 planned |
+| 3: application patterns | [Application](application.spec.md) | [Application plan](application.plan.md) | [Audit](../audits/application-patterns.spec.md), [design](../audits/application-patterns.plan.md) | A01–A05 verified locally; A06–A08 planned |
 
 [The combined implementation plan](implementation.plan.md) defines dependencies,
 commit-sized work packages and acceptance evidence. Requirement IDs below are the

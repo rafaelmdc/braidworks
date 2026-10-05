@@ -311,15 +311,11 @@ function wireCopies() {
 }
 
 async function showCode() {
-  const state = experimentState();
-  const have = Object.fromEntries(state.from.map((key) => [key, state.values[key] ?? "<value>"]));
-  const expand = state.expand === "auto" ? (state.traverse.length ? "all" : "top") : state.expand;
   let a;
   try {
+    const body = toQueryRequest(experimentState(), {placeholders: true});
     const response = await fetch("/api/code", {method: "POST", headers: {"content-type": "application/json"},
-      body: JSON.stringify({have: state.batch ? state.values : have, batch: state.batch, want: state.want, traverse: state.traverse, policy: state.policy,
-                            review_policy: state.review_policy, confidence_threshold: state.confidence_threshold,
-                            params: state.params, expand, k: state.k, max_expansion: state.max_expansion})});
+      body: JSON.stringify(body)});
     const doc = await response.json();
     if (!doc.ok) { showError(doc.error || "Could not generate code."); return; }
     a = doc.artifacts;
@@ -502,16 +498,11 @@ async function streamRun(body, btn, path) {
 
 function runBraid() {
   if (!lastPlan) return;
-  const have = parseValues(lastPlan.from, document.getElementById("r-values").value);
-  const batch = batchState(lastPlan.from);
-  if (!batch && !Object.keys(have).length) { showError("Enter input values."); return; }
-  return streamRun({have, batch, want: lastPlan.to, policy: lastPlan.policy,
-    expand: document.getElementById("r-expand").value,
-    k: Number(document.getElementById("r-k").value || 3), params: collectParams(),
-    review_policy: document.getElementById("b-review-policy").value,
-    confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
-    max_expansion: Number(document.getElementById("r-limit").value || 10000)},
-    document.getElementById("r-run"), lastPlan.path);
+  try {
+    const body = toQueryRequest(experimentState());
+    if (!body.batch && !Object.keys(body.have).length) { showError("Enter input values."); return; }
+    return streamRun(body, document.getElementById("r-run"), lastPlan.path);
+  } catch (e) { showError(String(e)); }
 }
 
 function fmtCell(v) {
@@ -629,7 +620,7 @@ async function runPlan() {
   try {
     const r = await fetch("/api/plan", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ from_types: from, to_types: to, policy }),
+      body: JSON.stringify(toPlanRequest({from, want: to, policy})),
     });
     const d = await r.json();
     if (!d.ok) { out.innerHTML = `<div class="berr"><b>No route.</b><br>${esc(d.error || "unroutable")}</div>`; return; }
@@ -710,22 +701,59 @@ function refreshRecipes() {
     Object.keys(recipes).sort().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
 }
 
+// Pure experiment values: DOM reading, execution data and animation stay separate.
+function normalizeExperiment(value) {
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const types = (x) => [...new Set((x || []).map((t) => String(t).trim()).filter(Boolean))];
+  const state = {version: 2, mode: value.mode === "graph" ? "graph" : "typed",
+    from: types(value.from), want: types(value.want), traverse: (value.traverse || []).slice(),
+    values: clone(value.values || {}), batch: value.batch ? clone(value.batch) : null,
+    params: clone(value.params || {}), policy: value.policy || "local_first",
+    review_policy: value.review_policy || "halt",
+    confidence_threshold: Number(value.confidence_threshold ?? 0),
+    expand: value.expand || "top", k: Number(value.k ?? 3),
+    max_expansion: Number(value.max_expansion ?? 10000)};
+  if (!["auto", "top", "top_k", "all"].includes(state.expand) ||
+      !Number.isInteger(state.k) || state.k < 1 ||
+      !Number.isInteger(state.max_expansion) || state.max_expansion < 1 ||
+      !Number.isFinite(state.confidence_threshold) || state.confidence_threshold < 0 || state.confidence_threshold > 1)
+    throw new Error("Check expansion, maximum leaves and confidence settings.");
+  return state;
+}
+
+function toQueryRequest(value, {placeholders = false} = {}) {
+  const state = normalizeExperiment(value);
+  const have = state.batch ? state.values : Object.fromEntries(state.from
+    .filter((key) => Object.hasOwn(state.values, key) || placeholders)
+    .map((key) => [key, state.values[key] ?? "<value>"]));
+  return {have, batch: state.batch, want: state.want, traverse: state.traverse,
+    policy: state.policy, review_policy: state.review_policy, confidence_threshold: state.confidence_threshold,
+    params: state.params, expand: state.expand === "auto" ? (state.traverse.length ? "all" : "top") : state.expand,
+    k: state.k, max_expansion: state.max_expansion};
+}
+
+function toPlanRequest(value) {
+  const state = normalizeExperiment(value), query = toQueryRequest(state);
+  return {from_types: state.from, to_types: query.want, traverse: query.traverse,
+    policy: query.policy};
+}
+
 function experimentState() {
   const mode = buildMode ? "graph" : "typed";
-  const from = buildMode ? build.have.slice() : splitTypes(document.getElementById("b-have").value);
-  const want = buildMode ? build.want.slice() : splitTypes(document.getElementById("b-want").value);
+  const from = buildMode ? build.have.slice() : lastPlan ? lastPlan.from.slice() : splitTypes(document.getElementById("b-have").value);
+  const want = buildMode ? build.want.slice() : lastPlan ? lastPlan.to.slice() : splitTypes(document.getElementById("b-want").value);
   const valueInput = document.getElementById(buildMode ? "bg-value" : "r-values");
   const values = valueInput ? parseValues(from, valueInput.value) : {};
   const expandInput = document.getElementById(buildMode ? "bg-expand" : "r-expand");
   const expand = expandInput ? expandInput.value : "top";
   const kInput = document.getElementById(buildMode ? "bg-k" : "r-k");
   const limitInput = document.getElementById(buildMode ? "bg-limit" : "r-limit");
-  return { version: 2, mode, from, want, values, batch: batchState(from), traverse: buildMode ? build.through.slice() : [],
+  return normalizeExperiment({ version: 2, mode, from, want, values, batch: batchState(from), traverse: buildMode ? build.through.slice() : [],
     policy: document.getElementById("b-policy").value,
     review_policy: document.getElementById("b-review-policy").value,
     confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
-    params: collectParams(), expand, k: parseInt(kInput && kInput.value, 10) || 3,
-    max_expansion: parseInt(limitInput && limitInput.value, 10) || 10000 };
+    params: collectParams(), expand, k: Number(kInput && kInput.value || 3),
+    max_expansion: Number(limitInput && limitInput.value || 10000) });
 }
 
 function recipeFeedback(message) {
@@ -738,7 +766,8 @@ function recipeFeedback(message) {
 
 function saveRecipe() {
   const name = (document.getElementById("b-recipe-name").value || "").trim();
-  const state = experimentState();
+  let state;
+  try { state = experimentState(); } catch (e) { recipeFeedback(String(e)); return; }
   if (!name || !state.from.length || (!state.want.length && !state.traverse.length)) {
     recipeFeedback("Enter a name and choose Have plus Want or a pass-through step."); return;
   }
@@ -753,7 +782,7 @@ function saveRecipe() {
 }
 
 async function loadRecipe(name) {
-  const r = loadRecipes()[name];
+  let r = loadRecipes()[name];
   if (!r) return;
   if (!r.version) { // legacy typed recipe: have/want are type-name strings
     if (buildMode) exitBuild();
@@ -768,6 +797,8 @@ async function loadRecipe(name) {
   if (r.version !== 2 || !Array.isArray(r.from) || !Array.isArray(r.want) || !Array.isArray(r.traverse)) {
     recipeFeedback("This recipe format is unsupported."); return;
   }
+  try { r = normalizeExperiment(r); }
+  catch (e) { recipeFeedback(String(e)); return; }
   document.getElementById("b-policy").value = r.policy || "local_first";
   document.getElementById("b-review-policy").value = r.review_policy || "halt";
   document.getElementById("b-confidence").value = r.confidence_threshold || 0;
@@ -978,12 +1009,7 @@ async function previewRoute() {
   try {
     const r = await fetch("/api/plan", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        from_types: build.have, to_types: build.want, traverse: build.through,
-        policy: document.getElementById("b-policy").value,
-        review_policy: document.getElementById("b-review-policy").value,
-        confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
-      }),
+      body: JSON.stringify(toPlanRequest(experimentState())),
     });
     const d = await r.json();
     if (seq !== previewSeq) return;                         // superseded by a newer selection
@@ -1074,19 +1100,12 @@ function exitBuild() {
 async function runBuild() {
   if (!build.have.length) { showError("Pick a starting type first."); return; }
   if (!build.want.length && !build.through.length) { showError("Choose outputs or a pass-through step."); return; }
-  const have = parseValues(build.have, document.getElementById("bg-value").value);
-  const batch = batchState(build.have);
-  if (!batch && !Object.keys(have).length) { showError("Enter input values."); return; }
-  await previewRoute();
-  const selected = document.getElementById("bg-expand").value;
-  return streamRun({have, batch, want: build.want, traverse: build.through,
-    policy: document.getElementById("b-policy").value,
-    expand: selected === "auto" ? (build.through.length ? "all" : "top") : selected,
-    k: Number(document.getElementById("bg-k").value || 5), params: collectParams(),
-    review_policy: document.getElementById("b-review-policy").value,
-    confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
-    max_expansion: Number(document.getElementById("bg-limit").value || 10000)},
-    document.getElementById("bg-run"), null);
+  try {
+    const body = toQueryRequest(experimentState());
+    if (!body.batch && !Object.keys(body.have).length) { showError("Enter input values."); return; }
+    await previewRoute();
+    return streamRun(body, document.getElementById("bg-run"), null);
+  } catch (e) { showError(String(e)); }
 }
 
 function setupBuilder() {

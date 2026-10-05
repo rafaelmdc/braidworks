@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A04 verified locally as persistence dependencies; A05–A08 planned. Tracking: #145, #146.
+Status: A01–A05 verified locally as persistence dependencies; A06–A08 planned. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -191,10 +191,28 @@ terminal error. GET/POST handlers now decode/adapt and call execute_batch_respon
 this common adapter, eliminating the GET-specific planner/executor/parameter path.
 The post-application checkpoint hook remains separate; streaming stores no run state.
 
-233 toolkit tests pass, including nine new lifecycle/slow-consumer/error contracts and
+234 toolkit tests pass, including ten new lifecycle/slow-consumer/error contracts and
 existing GET/POST expansion/parameter/review/batch parity tests. Real headless Firefox
 passes pasted duplicate rows, recipe roundtrip, heterogeneous CSV upload, cancellation
 with server task joined, and successful retry. No new browser/framework dependencies.
 make lint passes; toolkit 0.5.3/core floor remains 0.14.0. Cancellation cannot terminate
 already-running synchronous worker-thread work.
 Local commit: see `refactor(streaming): share bounded SSE task lifecycle across endpoints`.
+
+## A05 implementation evidence — 2026-10-05
+
+Browser normalizeExperiment and toQueryRequest/toPlanRequest are pure functions.
+experimentState only reads controls into the normalized recipe value. Typed/graph runs,
+code generation and previews share encoders; new recipes save/load the same value, while
+legacy loading remains supported. Graph auto resolves to all for traversals/top otherwise.
+Repeated traversal tokens are preserved. Parameters/batch/values are copied; invalid
+numeric settings fail visibly. Typed run/code/save use the displayed prepared type set
+rather than silently combining edited selector types with earlier run controls.
+
+Real Firefox checks pass for typed/graph encoder equality, automatic expansion, repeated
+traversals, input immutability, numeric validation and recipe version compatibility.
+Pasted duplicate rows, heterogeneous CSV upload, recipe reload, cancel/join and retry
+journeys pass again. Existing toolkit suites pass; make lint passes. Toolkit 0.5.4;
+no new JS tooling/framework/assets. Full accessibility/export/generated-code integration
+rehearsal remains W14 with the P07 controls.
+Local commit: see `refactor(browser): normalize experiments through shared request encoders`.
