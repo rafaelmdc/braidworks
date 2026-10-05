@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01 verified locally; P02a verified locally; P02b–P07 in progress/planned. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04–P07 planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -206,3 +206,24 @@ Tests include JSON roundtrip, same-generation reuse, replacement before/during s
 component identity and async heartbeat. Workspace suite and lint passed before commit.
 NCBI integration depends on P03a and is recorded separately below.
 Local commit: see `refactor(sources): bind local readers to artifact generations`.
+
+## P03a / NCBI P02b–P03b evidence — 2026-10-05
+
+Source-local ReviewedDecisionRepository owns history; reference sessions open read-only.
+Default history is a separate sibling `.reviews.sqlite`; explicit cache paths and legacy
+same-path configuration remain supported. Idempotent migration copies complete legacy
+rows/markers in one transaction and never deletes originals; duplicate original rows
+are retained. Failed imports roll back both markers and copies. Refresh retains history,
+while conservative build-version matching refuses stale reuse. Operational/rollback
+instructions are in docs/database.md. A former mock-only service test was deliberately
+replaced with real read-only behavior assertions; conformance/contract checks unchanged.
+
+NCBI now owns one service per batch with a borrowed SourceBinding reference session;
+service closure preserves borrowed handles and closes its review repository. Metadata
+and rows share a pinned generation, replacement rejects even across worker threads.
+Fixture benchmark: 100 rows 0.006s direct/0.009s batch-thread; 1000 rows 0.077s/0.052s.
+No persistent thread-local lifecycle is justified by that evidence. Already-running
+thread work may complete after cancellation. Core/local source suites, strict gates
+and workspace lint pass; final full workspace verification is recorded in the log.
+Local commits: P02a ed87656; six-source session change 3615baf; NCBI review change see
+`refactor(ncbi): separate reviewed history from read-only reference sessions`.

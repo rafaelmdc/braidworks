@@ -13,11 +13,11 @@ from pathlib import Path
 from .db import (
     fetch_reusable_reviewed_mapping,
     get_metadata_value,
-    initialize_database,
     insert_reviewed_mapping,
 )
 from .normalize import normalize_level, normalize_name
 from .policy import MatchType, ResolutionStatus, WarningCode
+from .review_store import initialize_review_store
 from .schemas import DecisionAction, DecisionRecord, ResolveRequest
 
 DatabaseHandle = sqlite3.Connection | Path | str
@@ -34,7 +34,7 @@ def _resolve_cache_db_path(
 
 def _ensure_cache_database(db_path: DatabaseHandle, *, create_indexes: bool) -> None:
     """Inspect the actual database instead of memoizing replaceable filesystem paths."""
-    initialize_database(db_path, create_indexes=create_indexes)
+    initialize_review_store(db_path, create_indexes=create_indexes)
 
 
 def lookup_reviewed_mapping(

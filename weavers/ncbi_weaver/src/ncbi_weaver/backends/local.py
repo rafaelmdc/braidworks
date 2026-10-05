@@ -1,17 +1,17 @@
 """LocalTaxonomyBackend — wraps the SQLite TaxonomyResolverService.
 
-One service per thread (``threading.local``), lazily created; sync calls are run
+One owned service per batch; sync calls are run
 off the event loop with ``asyncio.to_thread``. Construction is cheap and never
 raises: ``is_configured()`` reports whether the DB is present and built, and the
-persistent connection is created lazily on first use.
+read session is bound to the backend generation.
 """
 
 from __future__ import annotations
 
 import asyncio
-import threading
 from pathlib import Path
 
+from braidworks.core.source_identity import SourceBinding
 from taxonomy_resolver.policy import ResolutionStatus
 from taxonomy_resolver.schemas import BatchResolveRequest, ResolveRequest, ResolveResult
 from taxonomy_resolver.service import TaxonomyResolverService
@@ -49,7 +49,9 @@ class LocalTaxonomyBackend:
         # backend (manifest-complete, golden skips) without a 1.2 GB download.
         self._db_path = Path(db_path)
         self._cache_db_path = Path(cache_db_path) if cache_db_path else None
-        self._tl = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM metadata"))
+        )
         self._fingerprint: str | None = None
         self._configured = db_is_valid(self._db_path)
 
@@ -57,20 +59,10 @@ class LocalTaxonomyBackend:
         """Whether the taxonomy DB is present and built (checked at construction)."""
         return self._configured
 
-    def _service(self) -> TaxonomyResolverService:
-        """Return this thread's resolver service, creating it lazily on first use."""
-        svc = getattr(self._tl, "svc", None)
-        if svc is None:
-            svc = TaxonomyResolverService(self._db_path, self._cache_db_path)
-            self._tl.svc = svc
-        return svc
-
     def fingerprint(self) -> str:
-        """The taxonomy build version backing this DB (the cache fingerprint)."""
-        if self._fingerprint is None:
-            info = self._service().get_taxonomy_build_info()
-            self._fingerprint = info.get("taxonomy_build_version") or "unversioned"
-        return self._fingerprint
+        if not self._configured:
+            return "ncbi-local-unbuilt"
+        return self._source.fingerprint()
 
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
@@ -85,14 +77,21 @@ class LocalTaxonomyBackend:
     def _resolve_sync(
         self, capability_id: str, queries: list, need_lineage: bool
     ) -> list[TaxonMatch]:
-        svc = self._service()
-        if capability_id == vocab.RESOLVE_NAME:
-            req = BatchResolveRequest(items=[ResolveRequest(original_name=str(q)) for q in queries])
-            results = svc.resolve_batch(req).results
-            return [self._name_match(q, r, need_lineage, svc) for q, r in zip(queries, results)]
-        if capability_id == vocab.DESCRIBE_TAXON:
-            return [self._taxid_match(q, need_lineage, svc) for q in queries]
-        raise ValueError(f"unsupported capability {capability_id!r}")
+        with (
+            self._source.session() as connection,
+            TaxonomyResolverService(
+                self._db_path, self._cache_db_path, taxonomy_connection=connection
+            ) as svc,
+        ):
+            if capability_id == vocab.RESOLVE_NAME:
+                req = BatchResolveRequest(
+                    items=[ResolveRequest(original_name=str(q)) for q in queries]
+                )
+                results = svc.resolve_batch(req).results
+                return [self._name_match(q, r, need_lineage, svc) for q, r in zip(queries, results)]
+            if capability_id == vocab.DESCRIBE_TAXON:
+                return [self._taxid_match(q, need_lineage, svc) for q in queries]
+            raise ValueError(f"unsupported capability {capability_id!r}")
 
     def _lineage_for(self, taxid: int, inline, need_lineage: bool, svc: TaxonomyResolverService):
         """Convert/fetch lineage only when needed; never reads the lineage cache for core-only."""

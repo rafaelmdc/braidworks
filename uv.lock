@@ -585,7 +585,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },

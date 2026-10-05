@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Self
 
-from .cache import lookup_reviewed_mapping, record_reviewed_mapping
-from .db import connect, fetch_all_metadata, initialize_database
+from braidworks.core.sqlite import readonly_uri
+
+from .db import fetch_all_metadata
 from .exact import resolve_exact
 from .fuzzy import suggest_fuzzy_candidates
 from .lineage import get_lineage_for_taxid
@@ -21,6 +23,7 @@ from .policy import (
     classify_fuzzy_status,
     requires_review,
 )
+from .review_store import ReviewedDecisionRepository, default_review_path, migrate_review_history
 from .schemas import (
     BatchResolveRequest,
     BatchResolveResult,
@@ -38,20 +41,38 @@ class TaxonomyResolverService:
     modules own lookup, scoring, and persistence concerns.
     """
 
-    def __init__(self, taxonomy_db_path: str | Path, cache_db_path: str | Path | None = None):
+    def __init__(
+        self,
+        taxonomy_db_path: str | Path,
+        cache_db_path: str | Path | None = None,
+        *,
+        taxonomy_connection: sqlite3.Connection | None = None,
+    ):
         self.taxonomy_db_path = Path(taxonomy_db_path)
-        self.cache_db_path = Path(cache_db_path) if cache_db_path else None
-        initialize_database(self.taxonomy_db_path, create_indexes=False)
-        if self.cache_db_path and self.cache_db_path != self.taxonomy_db_path:
-            initialize_database(self.cache_db_path)
-        self._taxonomy_connection = connect(self.taxonomy_db_path)
-        if self.cache_db_path and self.cache_db_path != self.taxonomy_db_path:
-            self._cache_connection = connect(self.cache_db_path)
-        else:
-            self._cache_connection = self._taxonomy_connection
-        self._taxonomy_metadata = fetch_all_metadata(self._taxonomy_connection)
-        self._taxonomy_build_version = self._taxonomy_metadata.get("taxonomy_build_version")
-        self._closed = False
+        self.cache_db_path = (
+            Path(cache_db_path) if cache_db_path else default_review_path(self.taxonomy_db_path)
+        )
+        self._owns_taxonomy_connection = taxonomy_connection is None
+        self._taxonomy_connection = (
+            taxonomy_connection
+            if taxonomy_connection is not None
+            else sqlite3.connect(readonly_uri(self.taxonomy_db_path), uri=True)
+        )
+        self._taxonomy_connection.row_factory = sqlite3.Row
+        try:
+            # Explicit legacy same-path configuration remains supported; default is separate.
+            migrate_review_history(self.taxonomy_db_path, self.cache_db_path)
+            self._reviews = ReviewedDecisionRepository(self.cache_db_path)
+            self._cache_connection = self._reviews.connection
+            self._taxonomy_metadata = fetch_all_metadata(self._taxonomy_connection)
+            self._taxonomy_build_version = self._taxonomy_metadata.get("taxonomy_build_version")
+            self._closed = False
+        except BaseException:
+            if hasattr(self, "_reviews"):
+                self._reviews.close()
+            if self._owns_taxonomy_connection:
+                self._taxonomy_connection.close()
+            raise
 
     def close(self) -> None:
         """Release any persistent SQLite connections owned by the service."""
@@ -59,8 +80,9 @@ class TaxonomyResolverService:
         if self._closed:
             return
         if self._cache_connection is not self._taxonomy_connection:
-            self._cache_connection.close()
-        self._taxonomy_connection.close()
+            self._reviews.close()
+        if self._owns_taxonomy_connection:
+            self._taxonomy_connection.close()
         self._closed = True
 
     def __enter__(self) -> Self:
@@ -83,13 +105,7 @@ class TaxonomyResolverService:
 
         normalized_name = normalize_name(request.original_name)
 
-        cached = lookup_reviewed_mapping(
-            request,
-            taxonomy_db_path=self._taxonomy_connection,
-            cache_db_path=self._cache_connection,
-            taxonomy_build_version=self._taxonomy_build_version,
-            create_cache_indexes=self._cache_connection is not self._taxonomy_connection,
-        )
+        cached = self._reviews.lookup(request, self._taxonomy_build_version)
         if cached:
             return ResolveResult(
                 original_name=request.original_name,
@@ -97,7 +113,8 @@ class TaxonomyResolverService:
                 provided_level=request.provided_level,
                 status=cached.status,
                 review_required=requires_review(cached.status),
-                auto_accept=allows_auto_accept(cached.status) or cached.status == ResolutionStatus.CONFIRMED_BY_USER,
+                auto_accept=allows_auto_accept(cached.status)
+                or cached.status == ResolutionStatus.CONFIRMED_BY_USER,
                 match_type=MatchType.CACHED,
                 warnings=list(cached.warnings) + [WarningCode.CACHED_DECISION_REUSED],
                 matched_taxid=cached.resolved_taxid,
@@ -174,12 +191,7 @@ class TaxonomyResolverService:
     def record_decision(self, _decision: DecisionRecord) -> None:
         """Persist reviewed decisions when the cache backend is implemented."""
 
-        record_reviewed_mapping(
-            _decision,
-            taxonomy_db_path=self._taxonomy_connection,
-            cache_db_path=self._cache_connection,
-            create_cache_indexes=self._cache_connection is not self._taxonomy_connection,
-        )
+        self._reviews.record(_decision)
 
     def get_taxonomy_build_info(self) -> dict[str, str]:
         """Expose taxonomy build metadata for CLI and later integration checks."""
