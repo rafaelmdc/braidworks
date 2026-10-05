@@ -28,13 +28,10 @@ from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
 from braidworks.core.executor import (
     ExecutionResult,
     ExpandPolicy,
-    LocalExecutor,
     ReviewPolicy,
 )
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.outcomes import execution_records
-from braidworks.core.parameters import validate_scoped_parameters
-from braidworks.core.planner import Braider
 from braidworks.core.query import (
     QueryOptions,
     QueryRequest,
@@ -47,6 +44,7 @@ from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.traverse import resolve_traversal, traversal_route_capabilities
 
 from weaverkit.codegen import cli_artifact, path_artifact, python_artifact
+from weaverkit.streaming import sse_events
 from weaverkit.view import (
     build_data,
     build_path,
@@ -241,20 +239,6 @@ def _parameter_capabilities(registry, caps):
         for cid, cap in caps.items()
         if cap.parameters
     ]
-
-
-def _effective_parameters(params, caps):
-    if not isinstance(params or {}, dict) or any(
-        not isinstance(value, dict) for value in (params or {}).values()
-    ):
-        raise ValueError("params must map capability IDs to parameter objects")
-    validated = validate_scoped_parameters(params or {}, caps)
-    display = {
-        cid: {p.name: cap.resolve_params(validated.get(cid)).get(p.name) for p in cap.parameters}
-        for cid, cap in caps.items()
-        if cap.parameters
-    }
-    return validated, display
 
 
 def _prepared_effective(registry, prepared):
@@ -578,7 +562,6 @@ def _identity_columns(registry, columns):
 
 def create_app():
     """Build the FastAPI app. Raises a clear error if the ``[serve]`` extra is missing."""
-    import asyncio as _asyncio
     import json as _json
 
     try:
@@ -727,43 +710,24 @@ def create_app():
 
     @app.post("/api/run/stream")
     def api_post_run_stream(req: RunRequest):
-        async def stream():
-            queue = _asyncio.Queue()
-            task = None
-            try:
-                task = _asyncio.create_task(
-                    execute_batch_response(
-                        discover_registry().registry,
-                        req.have,
-                        req.want,
-                        req.traverse,
-                        req.batch.model_dump() if req.batch is not None else None,
-                        policy=parse_policy(req.policy),
-                        expand=req.expand,
-                        k=req.k,
-                        params=req.params,
-                        max_expansion=req.max_expansion,
-                        review_policy=req.review_policy,
-                        confidence_threshold=req.confidence_threshold,
-                        on_event=lambda event: queue.put_nowait(event),
-                    )
-                )
-                while not (task.done() and queue.empty()):
-                    try:
-                        event = await _asyncio.wait_for(queue.get(), timeout=0.1)
-                        yield f"data: {_json.dumps({'event': 'wave', **event})}\n\n"
-                    except TimeoutError:
-                        continue
-                yield f"data: {_json.dumps({'event': 'done', **await task})}\n\n"
-            except (ValueError, BraidworksError) as exc:
-                yield f"data: {_json.dumps({'event': 'error', 'error': str(exc)})}\n\n"
-            finally:
-                if task is not None:
-                    if not task.done():
-                        task.cancel()
-                    await _asyncio.gather(task, return_exceptions=True)
+        async def execute(on_event):
+            return await execute_batch_response(
+                discover_registry().registry,
+                req.have,
+                req.want,
+                req.traverse,
+                req.batch.model_dump() if req.batch is not None else None,
+                policy=parse_policy(req.policy),
+                expand=req.expand,
+                k=req.k,
+                params=req.params,
+                max_expansion=req.max_expansion,
+                review_policy=req.review_policy,
+                confidence_threshold=req.confidence_threshold,
+                on_event=on_event,
+            )
 
-        return StreamingResponse(stream(), media_type="text/event-stream")
+        return StreamingResponse(sse_events(execute), media_type="text/event-stream")
 
     @app.get("/api/run/stream")
     def api_run_stream(
@@ -777,84 +741,31 @@ def create_app():
         review_policy: str = "halt",
         confidence_threshold: float = 0.0,
     ):
-        # GET + query params so the browser drives it with a native EventSource (SSE).
-        # `have` is a JSON object; `want` is comma-separated.
-        def sse(obj) -> str:
-            return f"data: {_json.dumps(obj)}\n\n"
-
-        async def stream():
-            registry = discover_registry().registry
-            try:
-                bpolicy = parse_policy(policy)
-                review = ReviewPolicy(review_policy)
-                have_map = _json.loads(have or "{}")
-                supplied_params = _json.loads(params or "{}")
-                if not isinstance(have_map, dict) or not isinstance(supplied_params, dict):
-                    raise TypeError("have and params must be JSON objects")
-            except (ValueError, TypeError) as exc:
-                yield sse({"event": "error", "error": str(exc)})
-                return
-            want_list = [t for t in (want or "").split(",") if t]
-            hm, wl, err = _clean_run_inputs(have_map, want_list)
-            if err:
-                yield sse({"event": "error", "error": err})
-                return
-            try:
-                braid = Braider(registry).plan(frozenset(hm), frozenset(wl), backend_policy=bpolicy)
-                caps = {
-                    step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
-                    for step in braid.steps
-                }
-                validated, effective = _effective_parameters(supplied_params, caps)
-            except (ValueError, BraidworksError) as exc:
-                yield sse({"event": "error", "error": str(exc)})
-                return
-
-            queue: _asyncio.Queue = _asyncio.Queue()
-            ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in hm.items()])
-            ss.source_row = 1
-            task = _asyncio.create_task(
-                LocalExecutor(registry).execute(
-                    braid,
-                    [ss],
-                    expand_policy=_expand_policy(expand, k),
-                    backend_policy=bpolicy,
-                    params=validated,
-                    max_expansion=max_expansion,
-                    review_policy=review,
-                    confidence_threshold=confidence_threshold,
-                    on_event=lambda ev: queue.put_nowait(ev),
-                )
+        async def execute(on_event):
+            have_map = _json.loads(have or "{}")
+            supplied_params = _json.loads(params or "{}")
+            if not isinstance(have_map, dict) or not isinstance(supplied_params, dict):
+                raise ValueError("have and params must be JSON objects")  # noqa: TRY004 - public input error
+            hm, wl, error = _clean_run_inputs(have_map, [t for t in (want or "").split(",") if t])
+            if error:
+                raise ValueError(error)
+            return await execute_batch_response(
+                discover_registry().registry,
+                hm,
+                wl,
+                [],
+                None,
+                policy=parse_policy(policy),
+                expand=expand,
+                k=k,
+                params=supplied_params,
+                max_expansion=max_expansion,
+                review_policy=review_policy,
+                confidence_threshold=confidence_threshold,
+                on_event=on_event,
             )
-            try:
-                # Drain wave events live until the run finishes, then emit the final payload.
-                while not (task.done() and queue.empty()):
-                    try:
-                        ev = await _asyncio.wait_for(queue.get(), timeout=0.1)
-                        yield sse({"event": "wave", **ev})
-                    except TimeoutError:
-                        continue
-                try:
-                    result = await task
-                except (ValueError, BraidworksError) as exc:
-                    yield sse({"event": "error", "error": str(exc)})
-                    return
-                payload = _run_payload(registry, result, hm, wl, policy=bpolicy)
-                yield sse(
-                    {
-                        "event": "done",
-                        **payload,
-                        "effective_params": effective,
-                        "review_policy": review.value,
-                        "confidence_threshold": confidence_threshold,
-                    }
-                )
-            finally:
-                if not task.done():
-                    task.cancel()
-                await _asyncio.gather(task, return_exceptions=True)
 
-        return StreamingResponse(stream(), media_type="text/event-stream")
+        return StreamingResponse(sse_events(execute), media_type="text/event-stream")
 
     return app
 

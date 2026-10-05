@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A03 verified locally as persistence dependencies; A04–A08 planned. Tracking: #145, #146.
+Status: A01–A04 verified locally as persistence dependencies; A05–A08 planned. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -179,3 +179,22 @@ generated Python ran and preserved two duplicate-label rows. Full workspace 1338
 passed/48 skipped, make lint passes. Toolkit 0.5.2 retains core floor 0.14.0 (the
 first shared service release). All minimum-floor artifact checks remain W14.
 Local commit: see `refactor(presentation): render prepared queries and core Python examples`.
+
+## A04 implementation evidence — 2026-10-05
+
+streaming.query_events owns one query task and bounded progress queue (32 by default).
+Oldest optional progress coalesces when full; completion/errors are emitted outside
+the queue and never dropped. Iterator close/cancellation cancels and joins owned
+execution. sse_events closes its underlying iterator explicitly. Domain failures retain
+the existing error event; unexpected failures log their traceback and emit an actionable
+terminal error. GET/POST handlers now decode/adapt and call execute_batch_response through
+this common adapter, eliminating the GET-specific planner/executor/parameter path.
+The post-application checkpoint hook remains separate; streaming stores no run state.
+
+233 toolkit tests pass, including nine new lifecycle/slow-consumer/error contracts and
+existing GET/POST expansion/parameter/review/batch parity tests. Real headless Firefox
+passes pasted duplicate rows, recipe roundtrip, heterogeneous CSV upload, cancellation
+with server task joined, and successful retry. No new browser/framework dependencies.
+make lint passes; toolkit 0.5.3/core floor remains 0.14.0. Cancellation cannot terminate
+already-running synchronous worker-thread work.
+Local commit: see `refactor(streaming): share bounded SSE task lifecycle across endpoints`.
