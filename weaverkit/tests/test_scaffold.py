@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import runpy
 import sys
 from pathlib import Path
 
 import pytest
-
 from weaverkit.conformance import check_fingerprints, check_manifest
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import load_spec
@@ -29,7 +29,7 @@ def _generate(tmp_path: Path):
 
 
 def test_scaffold_writes_expected_files(tmp_path):
-    spec, dest, written = _generate(tmp_path)
+    _spec, dest, written = _generate(tmp_path)
     names = {p.relative_to(dest).as_posix() for p in written}
     assert "pyproject.toml" in names
     assert "weaver.spec.toml" in names
@@ -58,7 +58,7 @@ def test_scaffold_force_overwrites(tmp_path):
 
 
 def test_copied_spec_is_verbatim(tmp_path):
-    spec, dest, _ = _generate(tmp_path)
+    _spec, dest, _ = _generate(tmp_path)
     assert (dest / "weaver.spec.toml").read_text() == FIXTURE.read_text()
 
 
@@ -276,10 +276,10 @@ def test_bulk_scaffold_emits_setup_and_ensure(tmp_path):
 
 
 def test_bulk_pyproject_wires_core_and_script(tmp_path):
-    spec, dest = _generate_bulk(tmp_path)
+    _spec, dest = _generate_bulk(tmp_path)
     pyproject = (dest / "pyproject.toml").read_text()
     # Local-DB plumbing (and platformdirs) come from braidworks-core now.
-    assert "braidworks-core" in pyproject
+    assert "braidworks-core>=0.13.0" in pyproject
     assert "bulkdemo_weaver-ensure" in pyproject
     assert "uv run bulkdemo_weaver-ensure" in (dest / "Makefile").read_text()
 
@@ -343,6 +343,15 @@ def test_generated_vocab_is_valid_python(tmp_path):
     spec, dest, _ = _generate(tmp_path)
     source = (dest / "src" / spec.package / "vocab.py").read_text()
     compile(source, "vocab.py", "exec")  # must parse
+
+
+def test_generated_manifest_uses_only_wired_backends(tmp_path):
+    _, dest, _ = _generate(tmp_path)
+    module = runpy.run_path(str(dest / "src/madin_weaver/vocab.py"))
+    build_manifest = module["build_manifest"]
+    assert build_manifest(backends=("local",)).capabilities[0].backends == ("local",)
+    assert build_manifest(backends=()).capabilities[0].backends == ()
+    assert build_manifest(backends=("api",)).capabilities[0].backends == ()
 
 
 # Anchors the generated backend TODOs deep-link into implementing-backends.md.

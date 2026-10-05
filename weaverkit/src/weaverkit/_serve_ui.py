@@ -143,7 +143,9 @@ SERVE_CSS = """
 SERVE_HTML = """
 <div class="builder" id="builder" style="display:none">
   <h2>Build</h2>
-  <div class="bgroup"><input id="b-search" placeholder="Filter graph" autocomplete="off"></div>
+  <div class="bgroup"><label class="blabel" for="b-search">Find an input or output</label>
+    <input id="b-search" placeholder="e.g. biological processes" autocomplete="off">
+    <div id="b-search-results" aria-live="polite"></div></div>
 
   <!-- Click-to-build: pick nodes on the graph instead of typing types. -->
   <div class="brow">
@@ -160,22 +162,56 @@ SERVE_HTML = """
     <div class="bgroup">
       <span class="blabel">Want</span><div id="bg-want" class="chips"></div>
     </div>
+    <label for="bg-value" class="blabel">Input values (shared values for batches)</label>
     <input id="bg-value" placeholder="value, e.g. TP53" autocomplete="off">
+    <div class="note">For a batch, leave this empty or use it for values shared by every row.</div>
+    <label for="bg-expand" class="blabel">Expansion</label>
+    <select id="bg-expand"><option value="auto">automatic (top 1; all for pass-through)</option>
+      <option value="top">top 1</option><option value="top_k">top k</option><option value="all">all</option></select>
+    <label for="bg-k" class="blabel">k</label><input id="bg-k" type="number" min="1" value="5">
+    <label for="bg-limit" class="blabel">Maximum leaves</label><input id="bg-limit" type="number" min="1" value="10000">
     <div class="brow" style="margin-top:8px">
       <button class="btn primary" id="bg-run">Run</button>
+      <button class="btn ghost" id="bg-code">Code</button>
       <button class="btn ghost" id="bg-reset">Reset</button>
       <button class="btn ghost" id="bg-exit">Exit</button>
     </div>
   </div>
 
+  <label for="b-review-policy" class="blabel">Ambiguous matches</label>
+  <select id="b-review-policy">
+    <option value="halt">pause for review (default)</option>
+    <option value="allow_continue">select or expand candidates automatically</option>
+    <option value="raise">fail immediately</option>
+  </select>
+  <label for="b-confidence" class="blabel">Minimum confidence (0–1)</label>
+  <input id="b-confidence" type="number" min="0" max="1" step="0.01" value="0">
+  <div class="note">Automatic selection keeps the review flag. Results below the confidence floor still pause.</div>
+
+  <details id="b-batch-panel" style="margin-top:12px">
+    <summary class="blabel">Batch inputs</summary>
+    <label><input id="b-batch-enabled" type="checkbox"> Run multiple starting rows</label>
+    <label class="blabel" for="b-batch-format">Input format</label>
+    <select id="b-batch-format"><option value="lines">One value per line</option>
+      <option value="csv">CSV with type-id headers</option><option value="tsv">TSV with type-id headers</option></select>
+    <label class="blabel" for="b-batch-type">Type for one-value-per-line input</label>
+    <input id="b-batch-type" list="b-types" placeholder="protein.query">
+    <label class="blabel" for="b-batch-file">Upload text, CSV or TSV</label>
+    <input id="b-batch-file" type="file" accept=".txt,.csv,.tsv,text/plain,text/csv">
+    <label class="blabel" for="b-batch-text">Or paste inputs</label>
+    <textarea id="b-batch-text" rows="6" style="width:100%;box-sizing:border-box" placeholder="TP53&#10;BRCA1"></textarea>
+    <div class="note">Table headers are type IDs. Empty cells are absent inputs. Duplicates keep separate source rows. Row values override shared values.</div>
+  </details>
+  <div id="b-progress" role="status" aria-live="polite"></div>
+  <button id="b-cancel" class="btn" hidden>Cancel run</button>
   <details style="margin-top:12px">
     <summary class="blabel" style="cursor:pointer">Type it instead (advanced)</summary>
     <div class="bgroup" style="margin-top:8px">
-      <span class="blabel">Have</span>
+      <label class="blabel" for="b-have">Have</label>
       <input id="b-have" list="b-types" placeholder="protein.query" autocomplete="off">
     </div>
     <div class="bgroup">
-      <span class="blabel">Want</span>
+      <label class="blabel" for="b-want">Want</label>
       <input id="b-want" list="b-types" placeholder="pdb.id" autocomplete="off">
     </div>
     <datalist id="b-types"></datalist>
@@ -186,7 +222,7 @@ SERVE_HTML = """
   </details>
 
   <div class="bgroup" style="margin-top:11px">
-    <span class="blabel">Backend</span>
+    <label class="blabel" for="b-policy">Backend</label>
     <select id="b-policy" title="backend policy">
       <option value="local_first">local first</option>
       <option value="api_first">api first</option>
@@ -210,8 +246,8 @@ SERVE_HTML = """
 <div id="paramcards"></div>
 
 <div class="sheet-backdrop" id="sheet" hidden>
-  <div class="sheet">
-    <div class="sheet-head"><h3 id="sheet-title"></h3><button class="sheet-x" id="sheet-x">&times;</button></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1">
+    <div class="sheet-head"><h3 id="sheet-title"></h3><button class="sheet-x" id="sheet-x" aria-label="Close dialog">&times;</button></div>
     <div class="sheet-body" id="sheet-body"></div>
   </div>
 </div>
@@ -251,12 +287,18 @@ function setHash(from, to) {
 }
 
 // ---- sheets (modal pages) --------------------------------------------------
+let sheetReturnFocus = null;
 function openSheet(title, html) {
+  if (document.getElementById("sheet").hidden) sheetReturnFocus = document.activeElement;
   document.getElementById("sheet-title").textContent = title;
   document.getElementById("sheet-body").innerHTML = html;
   document.getElementById("sheet").hidden = false;
+  document.getElementById("sheet-x").focus();
 }
-function closeSheet() { document.getElementById("sheet").hidden = true; }
+function closeSheet() {
+  document.getElementById("sheet").hidden = true;
+  if (sheetReturnFocus && sheetReturnFocus.isConnected) sheetReturnFocus.focus();
+}
 
 // A copyable code/text block (copy button copies the following <pre>'s text).
 function copyBlock(text) {
@@ -268,9 +310,20 @@ function wireCopies() {
   });
 }
 
-function showCode() {
-  if (!lastDoc) return;
-  const a = lastDoc.artifacts;
+async function showCode() {
+  const state = experimentState();
+  const have = Object.fromEntries(state.from.map((key) => [key, state.values[key] ?? "<value>"]));
+  const expand = state.expand === "auto" ? (state.traverse.length ? "all" : "top") : state.expand;
+  let a;
+  try {
+    const response = await fetch("/api/code", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({have: state.batch ? state.values : have, batch: state.batch, want: state.want, traverse: state.traverse, policy: state.policy,
+                            review_policy: state.review_policy, confidence_threshold: state.confidence_threshold,
+                            params: state.params, expand, k: state.k, max_expansion: state.max_expansion})});
+    const doc = await response.json();
+    if (!doc.ok) { showError(doc.error || "Could not generate code."); return; }
+    a = doc.artifacts;
+  } catch (e) { showError(String(e)); return; }
   const tabs = [
     ["weave", "Run (CLI)", a.cli_weave],
     ["path", "Route (CLI)", a.cli_path],
@@ -278,12 +331,14 @@ function showCode() {
     ["json", "Braid JSON", JSON.stringify(a.braid, null, 2)],
   ];
   const head = `<div class="tabs">` +
-    tabs.map((t, i) => `<span class="tab${i === 0 ? " on" : ""}" data-i="${i}">${esc(t[1])}</span>`).join("") +
+    tabs.map((t, i) => `<button class="tab${i === 0 ? " on" : ""}" data-i="${i}">${esc(t[1])}</button>`).join("") +
     `</div>`;
   const panes = tabs.map((t, i) =>
     `<div class="pane" data-i="${i}" style="display:${i === 0 ? "block" : "none"}">${copyBlock(t[2])}</div>`
   ).join("");
-  openSheet("Generated code", head + panes);
+  const placeholder = Object.values(have).includes("<value>") ?
+    `<div class="note">Enter your input value, or replace the quoted &lt;value&gt; placeholders before running.</div>` : "";
+  openSheet("Generated code", placeholder + head + panes);
   wireCopies();
   document.querySelectorAll("#sheet-body .tab").forEach((tab) => {
     tab.onclick = () => {
@@ -358,6 +413,9 @@ function buildResultHTML(p) {
       </select>
       <input id="r-k" type="number" min="1" value="3" style="width:48px" title="k">
     </div>
+    <label for="r-limit" class="blabel">Maximum leaves</label>
+    <input id="r-limit" type="number" min="1" value="10000">
+    <div id="r-params"></div>
     <div class="bactions">
       <button class="btn ghost" id="b-code">Code</button>
       <button class="btn ghost" id="b-cite">Citations</button>
@@ -379,42 +437,99 @@ function initLiveAnim(path) {
 
 // Run via Server-Sent Events: the braid lights up live, wave by wave, as the executor's
 // on_event fires server-side. The results open in the Results sheet.
+let activeRun = null;
+function batchState(from) {
+  if (!document.getElementById("b-batch-enabled").checked) return null;
+  return {text: document.getElementById("b-batch-text").value,
+          format: document.getElementById("b-batch-format").value,
+          input_type: document.getElementById("b-batch-type").value.trim() || from[0] || ""};
+}
+
+async function streamRun(body, btn, path) {
+  if (activeRun) return;
+  const controller = new AbortController(); activeRun = controller;
+  clearRunState();
+  btn.textContent = "running…"; btn.disabled = true;
+  const cancel = document.getElementById("b-cancel"), progress = document.getElementById("b-progress");
+  cancel.hidden = false; cancel.onclick = () => controller.abort();
+  progress.textContent = "Validating and running inputs…";
+  if (path) initLiveAnim(path);
+  let finished = false;
+  try {
+    const response = await fetch("/api/run/stream", {method: "POST", signal: controller.signal,
+      headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    if (!response.ok) throw new Error("Server rejected the request: " + response.status);
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value || new Uint8Array(), {stream: !chunk.done});
+      buffer = buffer.replace(/\r\n/g, "\n");
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
+        const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (!data) continue;
+        const event = JSON.parse(data);
+        if (event.event === "progress") {
+          progress.textContent = event.completed_inputs + " / " + event.input_count + " input rows completed.";
+        } else if (event.event === "wave") {
+          if (runAnim) runAnim.revealedWave = event.wave;
+          progress.textContent = "Completed execution wave " + (event.wave + 1) + ".";
+        } else if (event.event === "error") throw new Error(event.error);
+        else if (event.event === "done") {
+          finished = true;
+          if (event.path) { addPlanView(event.path); startRunAnim(event.path, event.result); }
+          progress.textContent = "Finished " + event.summary.inputs + " input row(s).";
+          showResults(event);
+          const rb = document.getElementById("b-results");
+          if (rb) { rb.style.display = ""; rb.onclick = () => showResults(); }
+        }
+      }
+      if (chunk.done) break;
+    }
+    if (!finished) throw new Error("The connection ended before results arrived. Retry the run.");
+  } catch (error) {
+    runAnim = null;
+    if (controller.signal.aborted) progress.textContent = "Run cancelled. No completed batch results were returned.";
+    else { progress.textContent = "Run failed."; showError(String(error)); }
+  } finally {
+    controller.abort();
+    btn.textContent = "Run"; btn.disabled = false;
+    if (activeRun === controller) { activeRun = null; cancel.hidden = true; }
+  }
+}
+
 function runBraid() {
   if (!lastPlan) return;
   const have = parseValues(lastPlan.from, document.getElementById("r-values").value);
-  if (!Object.keys(have).length) return;
-  const expand = document.getElementById("r-expand").value;
-  const k = parseInt(document.getElementById("r-k").value, 10) || 3;
-  const btn = document.getElementById("r-run"); btn.textContent = "running…"; btn.disabled = true;
-  const done = () => { btn.textContent = "Run"; btn.disabled = false; };
-  initLiveAnim(lastPlan.path);
-  const qs = new URLSearchParams({
-    have: JSON.stringify(have), want: lastPlan.to.join(","),
-    policy: lastPlan.policy, expand, k: String(k),
-  });
-  const es = new EventSource("/api/run/stream?" + qs.toString());
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    if (ev.event === "wave") { runAnim.revealedWave = ev.wave; }
-    else if (ev.event === "done") {
-      es.close(); done();
-      addPlanView(ev.path); startRunAnim(ev.path, ev.result); showResults(ev);
-      const rb = document.getElementById("b-results");
-      if (rb) { rb.style.display = ""; rb.onclick = () => showResults(); }
-    } else if (ev.event === "error") { es.close(); done(); showError(ev.error); }
-  };
-  es.onerror = () => { es.close(); done(); };
+  const batch = batchState(lastPlan.from);
+  if (!batch && !Object.keys(have).length) { showError("Enter input values."); return; }
+  return streamRun({have, batch, want: lastPlan.to, policy: lastPlan.policy,
+    expand: document.getElementById("r-expand").value,
+    k: Number(document.getElementById("r-k").value || 3), params: collectParams(),
+    review_policy: document.getElementById("b-review-policy").value,
+    confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
+    max_expansion: Number(document.getElementById("r-limit").value || 10000)},
+    document.getElementById("r-run"), lastPlan.path);
 }
 
 function fmtCell(v) {
   if (v == null) return "";
-  if (Array.isArray(v)) return v.join("; ");
+  if (Array.isArray(v)) return v.some((x) => typeof x === "object") ? JSON.stringify(v) : v.join("; ");
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
 function showError(msg) {
   openSheet("Run failed", `<div class="berr">${esc(msg)}</div>`);
+}
+
+function clearRunState() {
+  lastRun = null;
+  runAnim = null;
+  const results = document.getElementById("b-results");
+  if (results) results.style.display = "none";
 }
 
 // Which columns to show: by default just the requested wants (the rest — intermediate
@@ -426,13 +541,16 @@ function visibleCols() {
   if (resultsShowAll || !(want && want.length)) return columns;
   // Always show EVERY requested want as a column (blank where a row didn't produce it),
   // so a want that resolved for no/some rows still appears — never collapses to one.
-  return want.slice();
+  const essential = lastRun.identity_columns || ["entity", "parent", "status", "source_row", "outcome", "missing", "requires_review"];
+  return [...new Set([...essential.filter((c) => columns.includes(c)), ...want])];
 }
 function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
 
 // Results as a modal page (never overlaps the graph; bounded + scrolls).
 function showResults(d) {
-  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [], errors: d.errors || [] };
+  if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [], errors: d.errors || [],
+                     result: d.result, identity_columns: d.identity_columns, effective_params: d.effective_params || {},
+                     review_policy: d.review_policy || "halt", confidence_threshold: d.confidence_threshold || 0 };
   if (!lastRun) return;
   const { rows, summary, want } = lastRun;
   const columns = visibleCols();
@@ -440,7 +558,13 @@ function showResults(d) {
   const s = summary || { resolved: rows.length, unresolved: 0, errors: 0 };
   let body = `<div class="rcounts">${s.resolved} resolved` +
     (s.unresolved ? `, ${s.unresolved} unresolved` : "") +
-    (s.errors ? `, ${s.errors} error(s)` : "") + `</div>`;
+    (s.review ? `, ${s.review} need review` : "") +
+    (s.errors ? `, ${s.errors} diagnostic(s)` : "") +
+    (s.truncated_forks ? `, ${s.truncated_forks} truncated fork(s)` : "") + `</div>`;
+  body += "<div class=note>Ambiguous matches: " + esc(lastRun.review_policy) + " · minimum confidence: " + esc(String(lastRun.confidence_threshold)) + "</div>";
+  const settings = Object.entries(lastRun.effective_params || {}).flatMap(([cap, ps]) =>
+    Object.entries(ps).map(([name, value]) => `${cap}.${name}: ${value == null ? "unset" : value}`));
+  if (settings.length) body += `<div class="note">Effective parameters: ${esc(settings.join(" · "))}</div>`;
   // Surface the actual error messages so a 0-results run is diagnosable.
   const errs = lastRun.errors || [];
   if (errs.length) {
@@ -461,7 +585,7 @@ function showResults(d) {
       (hidden > 0 ? ` (+${hidden} hidden)` : "") + `</label>`;
   body += `</div>`;
   if (!rows.length) {
-    body += `<div class="note">No resolved rows.</div>`;
+    body += `<div class="note">No terminal rows.</div>`;
   } else {
     const th = columns.map((c) => `<th>${esc(c)}</th>`).join("");
     const trs = rows.map((row) =>
@@ -479,10 +603,13 @@ function exportRows(fmt) {
   const { rows } = lastRun;
   const columns = visibleCols();
   let text, mime;
-  if (fmt === "json") { text = JSON.stringify(rows, null, 2); mime = "application/json"; }
+  if (fmt === "json") { text = JSON.stringify({ rows, result: lastRun.result,
+      effective_params: lastRun.effective_params, review_policy: lastRun.review_policy,
+      confidence_threshold: lastRun.confidence_threshold }, null, 2); mime = "application/json"; }
   else {
     const sep = fmt === "tsv" ? "\t" : ",";
-    const q = (v) => { const s = fmtCell(v); return (fmt === "csv" && /[",\n]/.test(s)) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const q = (v) => { const s = typeof v === "object" && v != null ? JSON.stringify(v) : fmtCell(v);
+      return s.includes(sep) || /["\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     text = [columns.join(sep), ...rows.map((r) => columns.map((c) => q(r[c])).join(sep))].join("\n");
     mime = fmt === "tsv" ? "text/tab-separated-values" : "text/csv";
   }
@@ -512,6 +639,12 @@ async function runPlan() {
     setHash(from, to);
     addPlanView(d.path);
     out.innerHTML = buildResultHTML(d.path);
+    lastParameterCaps = d.parameter_capabilities || [];
+    lastRoutePath = d.path;
+    const controls = document.getElementById("r-params");
+    controls.innerHTML = lastParameterCaps.map((c) => `<div class="pc-h">${esc(c.weaver)} · ${esc(c.capability)}</div>` +
+      c.parameters.map((p) => paramControlHTML(c.capability, p, "typed")).join("")).join("");
+    bindParamControls(controls);
     document.getElementById("r-run").onclick = runBraid;
     document.getElementById("r-values").addEventListener("keydown", (e) => { if (e.key === "Enter") runBraid(); });
     document.getElementById("b-code").onclick = showCode;
@@ -523,13 +656,42 @@ async function runPlan() {
 // Sets the base template's `searchHits` (a Set of node ids to keep lit; null = no filter).
 function applySearch(q) {
   q = (q || "").trim().toLowerCase();
+  const results = document.getElementById("b-search-results");
+  results.innerHTML = "";
   if (!q) { searchHits = null; return; }
   const hits = new Set();
-  (layouts[current].nodes || new Map()).forEach((n) => {
-    const hay = [n.label, n.key, n.weaver, n.capability].filter(Boolean).join(" ").toLowerCase();
-    if (hay.includes(q)) hits.add(n.id);
+  const matching = [];
+  (layouts[current].nodes || new Map()).forEach((node) => {
+    const n = netNodeById(node.id) || node;
+    const outputs = [...new Set([...(n.output_types || []), ...(n.output_leaves || [])])];
+    const hay = [n.label, n.key, n.weaver, n.capability, n.description,
+                 ...outputs, ...Object.values(n.output_descriptions || {})].filter(Boolean).join(" ").toLowerCase();
+    if (hay.includes(q)) {
+      hits.add(n.id);
+      if (n.kind === "type") {
+        matching.push({key: n.key, role: "have", label: "Have: " + n.key});
+        matching.push({key: n.key, role: "want", label: "Want: " + n.key});
+      }
+      if (n.kind === "op" && (n.set_outputs || []).length)
+        matching.push({key: n.capability, role: "through", label: "Pass through: " + n.capability});
+      outputs.filter((key) => (key + " " + ((n.output_descriptions || {})[key] || "")).toLowerCase().includes(q))
+        .forEach((key) => matching.push({key, role: "want", label: "Want: " + key}));
+    }
   });
   searchHits = hits;
+  matching.slice(0, 30).forEach((match) => {
+    const button = document.createElement("button"); button.className = "btn ghost";
+    button.textContent = match.label;
+    button.onclick = () => {
+      if (!buildMode) enterBuild();
+      if (match.role === "have") build.have = [match.key];
+      else if (match.role === "through") { if (!build.through.includes(match.key)) build.through.push(match.key); }
+      else if (!build.want.includes(match.key)) build.want.push(match.key);
+      renderBuild();
+    };
+    results.appendChild(button);
+  });
+  if (!matching.length) results.textContent = hits.size ? "Matching capabilities are highlighted on the graph." : "No matching input or output.";
 }
 
 // ---- recipes (save/load built braids; client-side localStorage) ------------
@@ -548,32 +710,104 @@ function refreshRecipes() {
     Object.keys(recipes).sort().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
 }
 
-function saveRecipe() {
-  const name = (document.getElementById("b-recipe-name").value || "").trim();
-  const have = document.getElementById("b-have").value.trim();
-  const want = document.getElementById("b-want").value.trim();
-  if (!name || (!have && !want)) return;
-  const recipes = loadRecipes();
-  recipes[name] = { have, want, policy: document.getElementById("b-policy").value };
-  localStorage.setItem(RECIPES_KEY, JSON.stringify(recipes));
-  document.getElementById("b-recipe-name").value = "";
-  refreshRecipes();
-  document.getElementById("b-recipes").value = name;
+function experimentState() {
+  const mode = buildMode ? "graph" : "typed";
+  const from = buildMode ? build.have.slice() : splitTypes(document.getElementById("b-have").value);
+  const want = buildMode ? build.want.slice() : splitTypes(document.getElementById("b-want").value);
+  const valueInput = document.getElementById(buildMode ? "bg-value" : "r-values");
+  const values = valueInput ? parseValues(from, valueInput.value) : {};
+  const expandInput = document.getElementById(buildMode ? "bg-expand" : "r-expand");
+  const expand = expandInput ? expandInput.value : "top";
+  const kInput = document.getElementById(buildMode ? "bg-k" : "r-k");
+  const limitInput = document.getElementById(buildMode ? "bg-limit" : "r-limit");
+  return { version: 2, mode, from, want, values, batch: batchState(from), traverse: buildMode ? build.through.slice() : [],
+    policy: document.getElementById("b-policy").value,
+    review_policy: document.getElementById("b-review-policy").value,
+    confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
+    params: collectParams(), expand, k: parseInt(kInput && kInput.value, 10) || 3,
+    max_expansion: parseInt(limitInput && limitInput.value, 10) || 10000 };
 }
 
-function loadRecipe(name) {
+function recipeFeedback(message) {
+  let el = document.getElementById("recipe-feedback");
+  if (!el) { el = document.createElement("div"); el.id = "recipe-feedback";
+    el.className = "note"; el.setAttribute("role", "status");
+    document.getElementById("b-recipes").after(el); }
+  el.textContent = message;
+}
+
+function saveRecipe() {
+  const name = (document.getElementById("b-recipe-name").value || "").trim();
+  const state = experimentState();
+  if (!name || !state.from.length || (!state.want.length && !state.traverse.length)) {
+    recipeFeedback("Enter a name and choose Have plus Want or a pass-through step."); return;
+  }
+  try {
+    const recipes = { ...loadRecipes(), [name]: state };
+    localStorage.setItem(RECIPES_KEY, JSON.stringify(recipes));
+    document.getElementById("b-recipe-name").value = "";
+    refreshRecipes();
+    document.getElementById("b-recipes").value = name;
+    recipeFeedback("Saved " + name + ".");
+  } catch (e) { recipeFeedback("Could not save: " + String(e)); }
+}
+
+async function loadRecipe(name) {
   const r = loadRecipes()[name];
   if (!r) return;
-  document.getElementById("b-have").value = r.have || "";
-  document.getElementById("b-want").value = r.want || "";
-  if (r.policy) document.getElementById("b-policy").value = r.policy;
-  runPlan();
+  if (!r.version) { // legacy typed recipe: have/want are type-name strings
+    if (buildMode) exitBuild();
+    document.getElementById("b-have").value = r.have || "";
+    document.getElementById("b-want").value = r.want || "";
+    if (r.policy) document.getElementById("b-policy").value = r.policy;
+    document.getElementById("b-review-policy").value = "halt";
+    document.getElementById("b-confidence").value = 0;
+    document.getElementById("b-batch-enabled").checked = false;
+    paramVals = {}; await runPlan(); recipeFeedback("Loaded " + name + "."); return;
+  }
+  if (r.version !== 2 || !Array.isArray(r.from) || !Array.isArray(r.want) || !Array.isArray(r.traverse)) {
+    recipeFeedback("This recipe format is unsupported."); return;
+  }
+  document.getElementById("b-policy").value = r.policy || "local_first";
+  document.getElementById("b-review-policy").value = r.review_policy || "halt";
+  document.getElementById("b-confidence").value = r.confidence_threshold || 0;
+  if (r.mode === "graph") {
+    if (!buildMode) enterBuild(); else clearBuild();
+    build.have = r.from.slice(); build.want = r.want.slice(); build.through = r.traverse.slice();
+    paramVals = JSON.parse(JSON.stringify(r.params || {}));
+    document.getElementById("bg-value").value = r.from.length === 1 ? (r.values || {})[r.from[0]] || "" :
+      r.from.filter((key) => key in (r.values || {})).map((key) => key + "=" + r.values[key]).join(", ");
+    document.getElementById("bg-expand").value = r.expand || "auto";
+    document.getElementById("bg-k").value = r.k || 3;
+    document.getElementById("bg-limit").value = r.max_expansion || 10000;
+    renderBuild(); await previewRoute();
+  } else {
+    if (buildMode) exitBuild();
+    document.getElementById("b-have").value = r.from.join(", ");
+    document.getElementById("b-want").value = r.want.join(", ");
+    paramVals = JSON.parse(JSON.stringify(r.params || {}));
+    await runPlan();
+    const values = r.values || {};
+    const valueInput = document.getElementById("r-values");
+    if (valueInput) valueInput.value = r.from.length === 1 ? (values[r.from[0]] || "") :
+      r.from.filter((key) => key in values).map((key) => key + "=" + values[key]).join(", ");
+    const expandInput = document.getElementById("r-expand");
+    if (expandInput) expandInput.value = r.expand || "top";
+    const kInput = document.getElementById("r-k"); if (kInput) kInput.value = r.k || 3;
+    const limitInput = document.getElementById("r-limit"); if (limitInput) limitInput.value = r.max_expansion || 10000;
+  }
+  document.getElementById("b-batch-enabled").checked = !!r.batch;
+  document.getElementById("b-batch-text").value = r.batch ? r.batch.text || "" : "";
+  document.getElementById("b-batch-format").value = r.batch ? r.batch.format || "lines" : "lines";
+  document.getElementById("b-batch-type").value = r.batch ? r.batch.input_type || "" : "";
+  recipeFeedback("Loaded " + name + ".");
 }
 
 // ---- click-to-build: pick have / pass-through / want on the graph ----------
 // build.have/want hold type keys; build.through holds fan capability ids (--for-each).
 const build = { have: [], through: [], want: [] };
 let pickerEl = null;
+let lastParameterCaps = [];
 let lastRoutePath = null;   // last previewed plan (its op nodes name the route's capabilities)
 let paramVals = {};         // {capability_id: {name: value}} — persists across re-renders
 
@@ -582,7 +816,7 @@ function netNodeById(id) { return (DATA.network.nodes || []).find((n) => n.id ==
 function buildChip(role, label, onRemove) {
   const c = document.createElement("span");
   c.className = "chip-sel chip-" + role;
-  c.innerHTML = `<span>${esc(label)}</span><span class="x" title="remove">&times;</span>`;
+  c.innerHTML = `<span>${esc(label)}</span><button class="x" aria-label="Remove ${esc(label)}" title="remove">&times;</button>`;
   c.querySelector(".x").onclick = onRemove;
   return c;
 }
@@ -631,15 +865,17 @@ function refineCaps() {
       (x) => x.kind === "op" && x.capability === capId && (x.parameters || []).length);
     if (n) caps.set(capId, { weaver: n.weaver, capability: capId, parameters: n.parameters });
   };
+  lastParameterCaps.forEach((c) => caps.set(c.capability, c));
   build.through.forEach(add);
   if (lastRoutePath) (lastRoutePath.nodes || []).forEach((n) => { if (n.kind === "op") add(n.capability); });
   return [...caps.values()];
 }
 
 // One control's HTML for a param (value pulled from paramVals so it survives re-renders).
-function paramControlHTML(capId, p) {
+function paramControlHTML(capId, p, scope = "graph") {
   const v = (paramVals[capId] && paramVals[capId][p.name]) || "";
-  const attr = `class="rf-i" data-cap="${esc(capId)}" data-name="${esc(p.name)}"`;
+  const controlId = "param-" + scope + "-" + encodeURIComponent(capId + ":" + p.name);
+  const attr = `id="${controlId}" class="rf-i" data-cap="${esc(capId)}" data-name="${esc(p.name)}"`;
   const defOpt = p.default != null ? ` (${esc(String(p.default))})` : "";
   let ctrl;
   if (p.enum && p.enum.length) {
@@ -654,8 +890,19 @@ function paramControlHTML(capId, p) {
     const ph = p.default != null ? "default: " + p.default : "";
     ctrl = `<input ${attr} type="${t}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off">`;
   }
-  return `<div class="rf-row"><label class="rf-l">${esc(p.name)}</label>${ctrl}` +
+  return `<div class="rf-row"><label class="rf-l" for="${controlId}">${esc(p.name)}</label>${ctrl}` +
     (p.description ? `<div class="rf-desc">${esc(p.description)}</div>` : "") + `</div>`;
+}
+
+function bindParamControls(host) {
+  host.querySelectorAll(".rf-i").forEach((inp) => {
+    const cap = inp.getAttribute("data-cap"), name = inp.getAttribute("data-name");
+    inp.oninput = inp.onchange = () => {
+      paramVals[cap] = paramVals[cap] || {};
+      if (inp.value === "") delete paramVals[cap][name];
+      else paramVals[cap][name] = inp.value;
+    };
+  });
 }
 
 // Floating param cards, one per param-bearing capability on the route, anchored next to
@@ -680,14 +927,7 @@ function renderParamCards() {
     }
     entry.el.innerHTML = `<div class="pc-h">${esc(c.weaver)} · ${esc(c.capability)}</div>` +
       c.parameters.map((p) => paramControlHTML(c.capability, p)).join("");
-    entry.el.querySelectorAll(".rf-i").forEach((inp) => {
-      const cap = inp.getAttribute("data-cap"), name = inp.getAttribute("data-name");
-      inp.oninput = inp.onchange = () => {
-        paramVals[cap] = paramVals[cap] || {};
-        if (inp.value === "") delete paramVals[cap][name];
-        else paramVals[cap][name] = inp.value;
-      };
-    });
+    bindParamControls(entry.el);
   });
   positionParamCards();
 }
@@ -713,7 +953,8 @@ function paramTick() { positionParamCards(); requestAnimationFrame(paramTick); }
 
 function collectParams() {
   const out = {};
-  Object.keys(paramVals).forEach((cap) => {
+  const active = new Set(refineCaps().map((c) => c.capability));
+  Object.keys(paramVals).filter((cap) => active.has(cap)).forEach((cap) => {
     const inner = {};
     Object.keys(paramVals[cap]).forEach((nm) => { if (paramVals[cap][nm] !== "") inner[nm] = paramVals[cap][nm]; });
     if (Object.keys(inner).length) out[cap] = inner;
@@ -731,18 +972,25 @@ function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeo
 
 async function previewRoute() {
   const seq = ++previewSeq;
-  if (!buildMode || build.through.length || !build.have.length || !build.want.length) { routeFocus = null; return; }
+  if (!buildMode || !build.have.length || (!build.want.length && !build.through.length)) {
+    routeFocus = null; lastRoutePath = null; lastParameterCaps = []; renderParamCards(); return;
+  }
   try {
     const r = await fetch("/api/plan", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        from_types: build.have, to_types: build.want,
+        from_types: build.have, to_types: build.want, traverse: build.through,
         policy: document.getElementById("b-policy").value,
+        review_policy: document.getElementById("b-review-policy").value,
+        confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
       }),
     });
     const d = await r.json();
     if (seq !== previewSeq) return;                         // superseded by a newer selection
-    if (!d.ok || !d.path) { routeFocus = null; lastRoutePath = null; renderParamCards(); return; }
+    lastParameterCaps = d.parameter_capabilities || [];
+    if (!d.ok) { routeFocus = null; lastRoutePath = null; renderParamCards();
+      document.getElementById("bg-hint").textContent = "No route: " + (d.error || "unavailable"); return; }
+    if (!d.path) { routeFocus = null; lastRoutePath = null; renderParamCards(); return; }
     const p = d.path, idmap = {};
     (p.nodes || []).forEach((n) => { if (n.kind === "op") idmap[n.id] = "op:" + n.weaver + ":" + n.capability; });
     const nodes = new Set(), edgeKeys = new Set();
@@ -750,7 +998,8 @@ async function previewRoute() {
     (p.edges || []).forEach((e) => edgeKeys.add((idmap[e.source] || e.source) + ">" + (idmap[e.target] || e.target)));
     routeFocus = { nodes, edgeKeys };
     lastRoutePath = p; renderParamCards();   // surface any param-bearing steps on this route
-  } catch (e) { if (seq === previewSeq) routeFocus = null; }
+  } catch (e) { if (seq === previewSeq) { routeFocus = null;
+    document.getElementById("bg-hint").textContent = "Could not preview the route: " + String(e); } }
 }
 
 // Clear all build selection + highlight state synchronously and invalidate any pending plan.
@@ -758,7 +1007,7 @@ function clearBuild() {
   build.have = []; build.through = []; build.want = [];
   const v = document.getElementById("bg-value"); if (v) v.value = "";
   previewSeq++; clearTimeout(previewTimer);
-  routeFocus = null; buildSel = null; lastRoutePath = null; paramVals = {};
+  routeFocus = null; buildSel = null; lastRoutePath = null; lastParameterCaps = []; paramVals = {};
   renderBuild();
 }
 
@@ -823,39 +1072,38 @@ function exitBuild() {
 }
 
 async function runBuild() {
-  if (!build.have.length) { document.getElementById("bg-hint").textContent = "Pick a starting type first."; return; }
-  if (!build.want.length && !build.through.length) {
-    document.getElementById("bg-hint").textContent = "Pick at least one Want, or a pass-through step."; return;
-  }
-  const value = document.getElementById("bg-value").value.trim();
-  if (!value) { document.getElementById("bg-hint").textContent = "Enter a value for " + build.have[0] + "."; return; }
-  const btn = document.getElementById("bg-run"); btn.textContent = "running…"; btn.disabled = true;
-  const done = () => { btn.textContent = "Run"; btn.disabled = false; };
-  try {
-    const r = await fetch("/api/run", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        have: { [build.have[0]]: value },
-        want: build.want,
-        traverse: build.through,
-        params: collectParams(),
-        policy: document.getElementById("b-policy").value,
-        expand: build.through.length ? "all" : "top", k: 5,
-      }),
-    });
-    const d = await r.json(); done();
-    if (!d.ok) { showError(d.error || "no route"); return; }
-    lastRun = { columns: d.columns, rows: d.rows, summary: d.summary };
-    if (d.path) { addPlanView(d.path); startRunAnim(d.path, d.result); }  // light up the route
-    showResults(d);
-  } catch (e) { done(); showError(String(e)); }
+  if (!build.have.length) { showError("Pick a starting type first."); return; }
+  if (!build.want.length && !build.through.length) { showError("Choose outputs or a pass-through step."); return; }
+  const have = parseValues(build.have, document.getElementById("bg-value").value);
+  const batch = batchState(build.have);
+  if (!batch && !Object.keys(have).length) { showError("Enter input values."); return; }
+  await previewRoute();
+  const selected = document.getElementById("bg-expand").value;
+  return streamRun({have, batch, want: build.want, traverse: build.through,
+    policy: document.getElementById("b-policy").value,
+    expand: selected === "auto" ? (build.through.length ? "all" : "top") : selected,
+    k: Number(document.getElementById("bg-k").value || 5), params: collectParams(),
+    review_policy: document.getElementById("b-review-policy").value,
+    confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
+    max_expansion: Number(document.getElementById("bg-limit").value || 10000)},
+    document.getElementById("bg-run"), null);
 }
 
 function setupBuilder() {
   if (!SERVED) return;
   document.getElementById("builder").style.display = "block";
   document.getElementById("b-build").onclick = () => (buildMode ? exitBuild() : enterBuild());
+  document.getElementById("b-batch-file").onchange = async (event) => {
+    const file = event.target.files[0]; if (!file) return;
+    try {
+      document.getElementById("b-batch-text").value = await file.text();
+      document.getElementById("b-batch-format").value = file.name.toLowerCase().endsWith(".csv") ? "csv" : file.name.toLowerCase().endsWith(".tsv") ? "tsv" : "lines";
+      document.getElementById("b-batch-enabled").checked = true;
+      document.getElementById("b-progress").textContent = "Loaded " + file.name + ".";
+    } catch (error) { showError("Could not read the file: " + error); }
+  };
   document.getElementById("bg-run").onclick = runBuild;
+  document.getElementById("bg-code").onclick = showCode;
   document.getElementById("bg-exit").onclick = exitBuild;
   document.getElementById("bg-reset").onclick = clearBuild;
   document.getElementById("bg-value").addEventListener("keydown", (e) => { if (e.key === "Enter") runBuild(); });
@@ -877,7 +1125,18 @@ function setupBuilder() {
   // Sheet dismissal: the close button, backdrop click, and Escape.
   document.getElementById("sheet-x").onclick = closeSheet;
   document.getElementById("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
-  addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+  addEventListener("keydown", (e) => {
+    const sheet = document.getElementById("sheet");
+    if (sheet.hidden) return;
+    if (e.key === "Escape") { e.preventDefault(); closeSheet(); return; }
+    if (e.key === "Tab") {
+      const focusable = [...sheet.querySelectorAll("button, input, select, textarea, [href], [tabindex='0']")]
+        .filter((el) => !el.disabled && el.getClientRects().length);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
   // Deep link: #have=...&want=... pre-fills and auto-plans (shareable braid).
   const m = new URLSearchParams(location.hash.slice(1));
   if (m.get("have") || m.get("want")) {

@@ -17,7 +17,7 @@ verify:  ## Verify a weaver against its spec: make verify SPEC=path PACKAGE=foo_
 	uv run weaverkit verify --spec "$(SPEC)" $(if $(PACKAGE),--package "$(PACKAGE)",)
 
 lint:  ## Lint this package with ruff
-	uvx ruff check src tests
+	uvx ruff==0.16.10 check src tests
 
 fmt:  ## Auto-format this package with ruff
-	uvx ruff format src tests
+	uvx ruff==0.16.10 format src tests

@@ -33,23 +33,23 @@ weaver reliably instead of vibe-coding it. Three pieces:
   values and watch the braid **light up wave-by-wave** (green per step, red + reroute on
   failure), with a results table and CSV/TSV/JSON export and a fan-out control
   (`top`/`top-k`/`all`). Requires the optional extra (`pip install 'weaverkit[serve]'` —
-  FastAPI + uvicorn); the base package stays stdlib-only. Localhost-only; the static
+  FastAPI + uvicorn); the base package depends on braidworks-core (and its networkx/platformdirs dependencies). Localhost-only; the static
   `view` export is unaffected.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
 the `--strict` regimes, dispatcher/backend split) live in
-[docs/decisions.md](docs/decisions.md); the resulting work is tracked in
-[docs/backlog.md](docs/backlog.md).
+[docs/decisions.md](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/docs/decisions.md); the resulting work is tracked in
+[docs/backlog.md](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/docs/backlog.md).
 
 When implementing the generated `# TODO` backend spots, see
-[docs/implementing-backends.md](docs/implementing-backends.md) — the per-function
+[docs/implementing-backends.md](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/docs/implementing-backends.md) — the per-function
 contract the stubs deep-link into. For the wider picture see
-[docs/weaver-implementation-guide.md](../docs/weaver-implementation-guide.md) and
-[AGENTS.md](../AGENTS.md).
+[docs/weaver-implementation-guide.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/weaver-implementation-guide.md) and
+[AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
 
 ## `weaver.spec.toml` field reference
 
-Complete worked examples live in [`tests/fixtures/`](tests/fixtures/) (lookup,
+Complete worked examples live in [`tests/fixtures/`](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/tests/fixtures) (lookup,
 resolver, and bulk). `weaverkit verify --spec ...` reports every field problem at
 once, so write a draft and let it guide you. The fields:
 
@@ -114,3 +114,18 @@ and `validate_spec` turns any structural mistake into a precise error. The spec 
 write-once and machine-validated in a loop, so parse-determinism and clear errors
 outweigh authoring ergonomics — which is exactly where TOML wins. If this were a
 human-tuned config edited daily, YAML would be the better call.
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

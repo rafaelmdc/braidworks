@@ -273,18 +273,18 @@ def test_verify_conforming_generated_package(tmp_path, capsys):
 
 # --- references command -------------------------------------------------------
 
-import json as _json  # noqa: E402
+import json as _json
 
-import weaverkit.view as view_mod  # noqa: E402
-from braidworks.core import (  # noqa: E402
+import weaverkit.view as view_mod
+from braidworks.core import (
     Capability,
     OutputGroup,
     Provenance,
     WeaverManifest,
 )
-from braidworks.core.registry import BraidRegistry  # noqa: E402
-from braidworks.core.weaver import BaseWeaver  # noqa: E402
-from weaverkit.view import Discovery  # noqa: E402
+from braidworks.core.registry import BraidRegistry
+from braidworks.core.weaver import BaseWeaver
+from weaverkit.view import Discovery
 
 
 class _ProvWeaver(BaseWeaver):

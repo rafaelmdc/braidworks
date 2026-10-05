@@ -11,7 +11,6 @@ import copy
 from pathlib import Path
 
 import pytest
-
 from weaverkit.spec import (
     CapabilitySpec,
     GoldenSpec,

@@ -21,14 +21,25 @@ import them lazily and fail with a clear install hint if missing.
 """
 
 import asyncio
+import io
+import shlex
 
 from braidworks.core.braid import BackendPolicy
-from braidworks.core.exceptions import NoPathError, NoPlanError
-from braidworks.core.executor import ExpandPolicy, LocalExecutor
+from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
+from braidworks.core.executor import (
+    ExecutionResult,
+    ExpandPolicy,
+    LocalExecutor,
+    ReviewPolicy,
+    _ExpansionBudget,
+)
+from braidworks.core.inputs import read_input_rows
+from braidworks.core.outcomes import execution_records
+from braidworks.core.parameters import validate_scoped_parameters
 from braidworks.core.planner import Braider
 from braidworks.core.references import references_for
 from braidworks.core.strand import Strand, StrandSet
-from braidworks.core.traverse import resolve_traversal, run_traversed
+from braidworks.core.traverse import resolve_traversal, run_traversed, traversal_route_capabilities
 
 from weaverkit.view import (
     build_data,
@@ -48,31 +59,159 @@ _SERVE_EXTRA_HINT = (
 # --- request logic (FastAPI-free, unit-testable) -----------------------------
 
 
-def _weave_cli_line(from_types: list[str], to_types: list[str]) -> str:
-    """A copyable ``braidworks weave`` command template (values are placeholders)."""
-    have = " ".join(f"--have {t}=<value>" for t in from_types)
-    want = "--want " + ",".join(to_types)
-    return f"braidworks weave {have} {want}".strip()
-
-
-def _path_cli_line(from_types: list[str], to_types: list[str]) -> str:
-    """A copyable ``braidworks path`` command (route inspection, no values needed)."""
-    return f"braidworks path --from {','.join(from_types)} --to {','.join(to_types)}"
-
-
-def _python_snippet(from_types: list[str], to_types: list[str]) -> str:
-    """A minimal runnable Python snippet that reproduces the planned braid."""
-    have = ", ".join(f'Strand("{t}", "<value>")' for t in from_types)
-    want = ", ".join(repr(t) for t in to_types)
-    return (
-        "from braidworks.core import Braider, LocalExecutor, Strand, StrandSet\n"
-        "from braidworks.core.registry import BraidRegistry\n"
-        "# ... register your weavers into `registry` ...\n"
-        f"braid = Braider(registry).plan(frozenset({{{', '.join(map(repr, from_types))}}}), "
-        f"frozenset({{{want}}}))\n"
-        f"ss = StrandSet.from_strands('e1', [{have}])\n"
-        "result = await LocalExecutor(registry).execute(braid, [ss])\n"
+def _experiment_python(
+    have,
+    want,
+    traversals,
+    params,
+    policy,
+    expand,
+    k,
+    max_expansion,
+    review_policy,
+    confidence_threshold,
+):
+    prefix = (
+        "import asyncio\nimport json\n"
+        "from braidworks.core import (BackendPolicy, Braider, ExpandPolicy, LocalExecutor, ReviewPolicy,\n"
+        "    Strand, StrandSet, build_registry_from_entry_points)\n"
+        "from braidworks.core.traverse import run_traversed\n\n"
+        "async def main():\n"
+        "    registry = build_registry_from_entry_points()\n"
+        f"    have = {have!r}\n    want = {want!r}\n    params = {params!r}\n"
+        f"    policy = BackendPolicy({policy.value!r})\n"
+        f"    review = ReviewPolicy({review_policy!r})\n"
+        f"    expand = ExpandPolicy.{'all()' if expand == 'all' else f'top_k({k})' if expand == 'top_k' else 'top()'}\n"
+        "    ss = StrandSet.from_strands('e1', [Strand(key, value) for key, value in have.items()])\n"
+        "    ss.source_row = 1\n"
     )
+    if traversals:
+        body = (
+            f"    result = await run_traversed(registry, [ss], {traversals!r}, frozenset(want),\n"
+            f"        backend_policy=policy, expand_policy=expand, params=params, max_expansion={max_expansion},\n"
+            f"        review_policy=review, confidence_threshold={confidence_threshold!r})\n"
+        )
+    else:
+        body = (
+            "    braid = Braider(registry).plan(frozenset(have), frozenset(want), backend_policy=policy)\n"
+            "    result = await LocalExecutor(registry).execute(braid, [ss], backend_policy=policy,\n"
+            f"        expand_policy=expand, params=params, max_expansion={max_expansion},\n"
+            f"        review_policy=review, confidence_threshold={confidence_threshold!r})\n"
+        )
+    return (
+        prefix
+        + body
+        + "    print(json.dumps(result.to_json(), ensure_ascii=False))\n\nasyncio.run(main())\n"
+    )
+
+
+def code_response(
+    registry,
+    have,
+    want,
+    traverse=None,
+    *,
+    policy=BackendPolicy.LOCAL_FIRST,
+    expand="top",
+    k=1,
+    params=None,
+    max_expansion=10_000,
+    review_policy="halt",
+    confidence_threshold=0.0,
+):
+    """Generate runnable artifacts from the same validated settings used by a run."""
+    if not have or (not want and not traverse):
+        return {"ok": False, "error": "choose Have and Want or a pass-through step"}
+    try:
+        review_policy = ReviewPolicy(review_policy).value
+        if not 0 <= confidence_threshold <= 1:
+            raise ValueError("confidence_threshold must be between 0 and 1")
+        if expand not in {"top", "top_k", "all"} or k < 1 or max_expansion < 1:
+            raise ValueError("invalid expansion settings")
+        traversals = [resolve_traversal(registry, token) for token in traverse or []]
+        if traversals:
+            ss = StrandSet.from_strands(
+                "preview", [Strand(key, value) for key, value in have.items()]
+            )
+            caps = traversal_route_capabilities(
+                registry, [ss], traversals, frozenset(want), backend_policy=policy
+            )
+            path = None
+        else:
+            path = build_path(registry, frozenset(have), frozenset(want), policy=policy)
+            caps = _path_capabilities(registry, path)
+        validated, effective = _effective_parameters(params, caps)
+    except (ValueError, BraidworksError) as exc:
+        return {"ok": False, "error": str(exc)}
+    tokens = ["braidworks", "weave"]
+    for key, value in have.items():
+        tokens += ["--have", f"{key}={value}"]
+    if want:
+        tokens += ["--want", ",".join(want)]
+    for token in traverse or []:
+        tokens += ["--traverse", token]
+    for cid, values in validated.items():
+        for name, value in values.items():
+            tokens += ["--param", f"{cid}:{name}={value}"]
+    cli_expand = "all" if expand == "all" else f"top:{k}" if expand == "top_k" else "none"
+    tokens += [
+        "--policy",
+        policy.value,
+        "--expand",
+        cli_expand,
+        "--max-expansion",
+        str(max_expansion),
+        "--review-policy",
+        review_policy,
+        "--confidence-threshold",
+        str(confidence_threshold),
+    ]
+    return {
+        "ok": True,
+        "effective_params": effective,
+        "artifacts": {
+            "cli_weave": shlex.join(tokens),
+            "cli_path": shlex.join(
+                [
+                    "braidworks",
+                    "path",
+                    "--from",
+                    ",".join(have),
+                    "--to",
+                    ",".join(want),
+                    "--policy",
+                    policy.value,
+                ]
+            )
+            if not traversals
+            else "Traversal has no single type path.",
+            "python": _experiment_python(
+                have,
+                want,
+                traversals,
+                validated,
+                policy,
+                expand,
+                k,
+                max_expansion,
+                review_policy,
+                confidence_threshold,
+            ),
+            "braid": {
+                "have": have,
+                "want": want,
+                "traverse": traverse or [],
+                "policy": policy.value,
+                "expand": expand,
+                "k": k,
+                "max_expansion": max_expansion,
+                "params": validated,
+                "review_policy": review_policy,
+                "confidence_threshold": confidence_threshold,
+                "path": path,
+            },
+        },
+    }
 
 
 def _weaver_ids_in_path(path: dict) -> list[str]:
@@ -90,33 +229,81 @@ def plan_response(
     to_types: list[str],
     *,
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
+    traverse: list[str] | None = None,
 ) -> dict:
-    """Route ``from_types -> to_types`` and project it, with derived artifacts + citations.
-
-    Returns ``{"ok": True, "path", "artifacts", "citations"}`` on success, or
-    ``{"ok": False, "error"}`` with a human "why no path" message when unroutable.
-    Pure function over the registry — no web dependency — so it is unit-testable.
-    """
+    """Preview routes and expose refinements without running any source."""
     frm, to = list(from_types), list(to_types)
-    if not frm or not to:
-        return {"ok": False, "error": "pick at least one 'have' type and one 'want' type"}
+    if not frm or (not to and not traverse):
+        return {"ok": False, "error": "pick at least one Have type and a Want or pass-through step"}
     try:
+        if traverse:
+            traversals = [resolve_traversal(registry, token) for token in traverse]
+            inputs = [StrandSet.from_strands("preview", [Strand(key, None) for key in frm])]
+            caps = traversal_route_capabilities(
+                registry, inputs, traversals, frozenset(to), backend_policy=policy
+            )
+            return {
+                "ok": True,
+                "path": None,
+                "traverse": [cid for _, cid in traversals],
+                "parameter_capabilities": _parameter_capabilities(registry, caps),
+                "citations": [],
+                "artifacts": {},
+            }
         path = build_path(registry, frozenset(frm), frozenset(to), policy=policy)
     except (NoPathError, NoPlanError) as exc:
         return {"ok": False, "error": str(exc)}
-
-    citations = [r.render() for r in references_for(_weaver_ids_in_path(path), registry)]
+    artifacts = code_response(registry, {key: "<value>" for key in frm}, to, policy=policy)[
+        "artifacts"
+    ]
     return {
         "ok": True,
         "path": path,
-        "citations": citations,
-        "artifacts": {
-            "cli_path": _path_cli_line(frm, to),
-            "cli_weave": _weave_cli_line(frm, to),
-            "python": _python_snippet(frm, to),
-            "braid": path,  # the projected plan is the machine-readable braid
-        },
+        "parameter_capabilities": _parameter_capabilities(
+            registry, _path_capabilities(registry, path)
+        ),
+        "citations": [ref.render() for ref in references_for(_weaver_ids_in_path(path), registry)],
+        "artifacts": {**artifacts, "braid": path},
     }
+
+
+def _path_capabilities(registry, path):
+    return {
+        node["capability"]: registry.get_capability(node["weaver"], node["capability"])
+        for node in path.get("nodes", [])
+        if node.get("kind") == "op"
+    }
+
+
+def _parameter_capabilities(registry, caps):
+    owners = {
+        cap.id: manifest.weaver_id
+        for manifest in registry.manifests()
+        for cap in manifest.capabilities
+    }
+    return [
+        {
+            "weaver": owners[cid],
+            "capability": cid,
+            "parameters": [parameter.to_json() for parameter in cap.parameters],
+        }
+        for cid, cap in caps.items()
+        if cap.parameters
+    ]
+
+
+def _effective_parameters(params, caps):
+    if not isinstance(params or {}, dict) or any(
+        not isinstance(value, dict) for value in (params or {}).values()
+    ):
+        raise ValueError("params must map capability IDs to parameter objects")
+    validated = validate_scoped_parameters(params or {}, caps)
+    display = {
+        cid: {p.name: cap.resolve_params(validated.get(cid)).get(p.name) for p in cap.parameters}
+        for cid, cap in caps.items()
+        if cap.parameters
+    }
+    return validated, display
 
 
 def _expand_policy(mode: str, k: int) -> ExpandPolicy:
@@ -128,31 +315,247 @@ def _expand_policy(mode: str, k: int) -> ExpandPolicy:
     return ExpandPolicy.top()
 
 
-def _rows(result_json: dict) -> tuple[list[str], list[dict]]:
-    """Flatten resolved strand-sets into ``(columns, rows)`` for the results table."""
+def _rows(result_json: dict, want: list | None = None) -> tuple[list[str], list[dict]]:
+    """Flatten shared terminal records while retaining identity and diagnostics."""
     rows: list[dict] = []
     columns: list[str] = []
-    for ss in result_json.get("resolved", []):
-        row = {t: s.get("value") for t, s in (ss.get("strands") or {}).items()}
+    for record in execution_records(ExecutionResult.from_json(result_json), []):
+        record["missing"] = [target for target in want or [] if target not in record["values"]]
+        row = {key: value for key, value in record.items() if key != "values"}
+        row.update(record["values"])
         for k in row:
             if k not in columns:
                 columns.append(k)
         rows.append(row)
-    return sorted(columns), rows
+    identity = [
+        key
+        for key in ("entity", "parent", "status", "source_row", "outcome", "missing")
+        if key in columns
+    ]
+    return identity + sorted(set(columns) - set(identity)), rows
 
 
 def _error_list(result_json: dict) -> list[dict]:
     """Flatten the errors bucket into compact rows the GUI can show (message + context)."""
     out: list[dict] = []
     for e in result_json.get("errors", []):
-        out.append({
-            "entity": (e.get("strand_set") or {}).get("entity_id"),
-            "type": e.get("error_type"),
-            "category": e.get("category"),
-            "capability": e.get("capability_id"),
-            "message": e.get("message"),
-        })
+        out.append(
+            {
+                "entity": (e.get("strand_set") or {}).get("entity_id"),
+                "type": e.get("error_type"),
+                "category": e.get("category"),
+                "capability": e.get("capability_id"),
+                "message": e.get("message"),
+            }
+        )
     return out
+
+
+def batch_code_response(registry, have, want, traverse, batch, **options):
+    """Batch artifacts call the same execution helper, with the entire input preserved."""
+    try:
+        sets = batch_inputs(have, batch)
+        policy = options.get("policy", BackendPolicy.LOCAL_FIRST)
+        traversals = [resolve_traversal(registry, token) for token in traverse or []]
+        caps = {}
+        plans = []
+        if traversals:
+            caps = traversal_route_capabilities(
+                registry, sets, traversals, frozenset(want), backend_policy=policy
+            )
+        else:
+            for types in dict.fromkeys(ss.available_types() for ss in sets):
+                braid = Braider(registry).plan(types, frozenset(want), backend_policy=policy)
+                plans.append(braid.to_json())
+                caps.update(
+                    {
+                        step.capability_id: registry.get_capability(
+                            step.weaver_id, step.capability_id
+                        )
+                        for step in braid.steps
+                    }
+                )
+        validated, effective = _effective_parameters(options.get("params"), caps)
+        expand = options.get("expand", "top")
+        k = options.get("k", 1)
+        review = ReviewPolicy(options.get("review_policy", "halt")).value
+        if expand not in {"top", "top_k", "all"} or k < 1:
+            raise ValueError("invalid expansion settings")
+        tokens = ["braidworks", "weave", "--in-file", "-"]
+        if batch.get("format", "lines") == "lines":
+            tokens += ["--in-type", batch["input_type"]]
+        for key, value in have.items():
+            tokens += ["--have", f"{key}={value}"]
+        if want:
+            tokens += ["--want", ",".join(want)]
+        for token in traverse or []:
+            tokens += ["--traverse", token]
+        for cid, values in validated.items():
+            for name, value in values.items():
+                tokens += ["--param", f"{cid}:{name}={value}"]
+        tokens += [
+            "--policy",
+            policy.value,
+            "--expand",
+            "all" if expand == "all" else f"top:{k}" if expand == "top_k" else "none",
+            "--max-expansion",
+            str(options.get("max_expansion", 10_000)),
+            "--review-policy",
+            review,
+            "--confidence-threshold",
+            str(options.get("confidence_threshold", 0)),
+        ]
+        settings = {**options, "policy": policy.value, "params": validated}
+        python_options = {**settings, "policy": policy}
+        python_options.pop("policy")
+        python = (
+            "import asyncio, json\nfrom braidworks.core import BackendPolicy, build_registry_from_entry_points\n"
+            "from weaverkit.serve import execute_batch_response\n\nasync def main():\n"
+            f"    result = await execute_batch_response(build_registry_from_entry_points(), {have!r}, {want!r}, {traverse!r}, {batch!r},\n"
+            f"        policy=BackendPolicy({policy.value!r}), **{python_options!r})\n"
+            "    print(json.dumps(result, ensure_ascii=False))\n\nasyncio.run(main())\n"
+        )
+        return {
+            "ok": True,
+            "effective_params": effective,
+            "artifacts": {
+                "cli_weave": "printf '%s' "
+                + shlex.quote(batch["text"])
+                + " | "
+                + shlex.join(tokens),
+                "cli_path": "The batch plans each distinct input-type group independently.",
+                "python": python,
+                "braid": {
+                    "have": have,
+                    "batch": batch,
+                    "want": want,
+                    "traverse": traverse,
+                    "planned_routes": plans,
+                    **settings,
+                },
+            },
+        }
+    except (ValueError, BraidworksError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def batch_inputs(have, batch):
+    fmt = batch.get("format", "lines")
+    if fmt not in {"lines", "csv", "tsv"}:
+        raise ValueError("batch format must be lines, csv or tsv")
+    input_type = batch.get("input_type") if fmt == "lines" else None
+    if fmt == "lines" and not input_type:
+        raise ValueError("choose a type for one-value-per-line inputs")
+    rows = read_input_rows(
+        io.StringIO(batch.get("text", "")),
+        input_type=input_type,
+        delimiter="," if fmt == "csv" else "\t",
+    )
+    if not rows:
+        raise ValueError("batch contains no input rows")
+    sets = []
+    for i, row in enumerate(rows, 1):
+        ss = StrandSet.from_strands(
+            row[input_type] if input_type else f"e{i}",
+            [Strand(key, value) for key, value in {**have, **row}.items()],
+        )
+        ss.source_row = i
+        sets.append(ss)
+    return sets
+
+
+async def execute_batch_response(
+    registry,
+    have,
+    want,
+    traverse,
+    batch,
+    *,
+    policy=BackendPolicy.LOCAL_FIRST,
+    expand="top",
+    k=1,
+    params=None,
+    max_expansion=10_000,
+    review_policy="halt",
+    confidence_threshold=0.0,
+    on_event=None,
+):
+    """Plan every row group before I/O, then execute with one shared expansion budget."""
+    sets = (
+        batch_inputs(have, batch)
+        if batch is not None
+        else [StrandSet.from_strands("e1", [Strand(key, value) for key, value in have.items()])]
+    )
+    if not sets[0].available_types() or (not want and not traverse):
+        raise ValueError("choose inputs and outputs or a pass-through step")
+    for i, ss in enumerate(sets, 1):
+        ss.source_row = i
+    traversals = [resolve_traversal(registry, token) for token in traverse or []]
+    groups = {}
+    for ss in sets:
+        groups.setdefault(ss.available_types(), []).append(ss)
+    plans = []
+    caps = {}
+    if traversals:
+        caps = traversal_route_capabilities(
+            registry, sets, traversals, frozenset(want), backend_policy=policy
+        )
+    else:
+        for types, group in groups.items():
+            braid = Braider(registry).plan(types, frozenset(want), backend_policy=policy)
+            plans.append((braid, group))
+            caps.update(
+                {
+                    step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
+                    for step in braid.steps
+                }
+            )
+    validated, effective = _effective_parameters(params, caps)
+    if on_event:
+        on_event({"event": "progress", "input_count": len(sets), "completed_inputs": 0})
+    common = {
+        "backend_policy": policy,
+        "expand_policy": _expand_policy(expand, k),
+        "params": validated,
+        "max_expansion": max_expansion,
+        "review_policy": ReviewPolicy(review_policy),
+        "confidence_threshold": confidence_threshold,
+    }
+    if traversals:
+        result = await run_traversed(
+            registry, sets, traversals, frozenset(want), on_event=on_event, **common
+        )
+    else:
+        result = ExecutionResult()
+        executor = LocalExecutor(registry)
+        budget = _ExpansionBudget(max_expansion, len(sets))
+        completed = 0
+        for braid, group in plans:
+            part = await executor.execute(
+                braid, group, _expansion_budget=budget, on_event=on_event, **common
+            )
+            for bucket in ("resolved", "unresolved", "review_queue", "errors", "truncations"):
+                getattr(result, bucket).extend(getattr(part, bucket))
+            completed += len(group)
+            if on_event:
+                on_event(
+                    {"event": "progress", "input_count": len(sets), "completed_inputs": completed}
+                )
+            refs = {ref.weaver_id: ref for ref in result.references + part.references}
+            result.references = [refs[key] for key in sorted(refs)]
+    payload = _traverse_payload(registry, result, want, [cid for _, cid in traversals])
+    if len(plans) == 1:
+        payload["path"] = build_path(
+            registry, sets[0].available_types(), frozenset(want), policy=policy
+        )
+    payload["summary"]["inputs"] = len(sets)
+    return {
+        **payload,
+        "effective_params": effective,
+        "planned_routes": [braid.to_json() for braid, _ in plans],
+        "review_policy": review_policy,
+        "confidence_threshold": confidence_threshold,
+    }
 
 
 def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
@@ -168,19 +571,23 @@ def _run_payload(registry, result, have: dict, want: list, *, policy: BackendPol
     """Assemble the run response from an ``ExecutionResult`` (shared by sync + streaming)."""
     rj = result.to_json()
     runs, _dropped = build_run_views(rj, registry)
-    columns, rows = _rows(rj)
+    columns, rows = _rows(rj, want)
     return {
         "ok": True,
         "path": build_path(registry, frozenset(have), frozenset(want), policy=policy),
         "result": rj,
         "runs": runs,
         "columns": columns,
+        "identity_columns": _identity_columns(registry, columns),
         "rows": rows,
         "want": list(want),  # the requested targets — GUI defaults the table to these
         "errors": _error_list(rj),
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
+            "review": len(rj.get("review_queue", [])),
+            "total": result.total(),
+            "truncated_forks": len(result.truncations),
             "errors": len(rj.get("errors", [])),
         },
     }
@@ -195,6 +602,9 @@ def run_response(
     expand: str = "top",
     k: int = 1,
     params: dict | None = None,
+    max_expansion: int = 10_000,
+    review_policy: str = "halt",
+    confidence_threshold: float = 0.0,
 ) -> dict:
     """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
 
@@ -214,13 +624,33 @@ def run_response(
         return {"ok": False, "error": str(exc)}
 
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
-    result = asyncio.run(
-        LocalExecutor(registry).execute(
-            braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=policy,
-            params=params or None,
+    ss.source_row = 1
+    caps = {
+        step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
+        for step in braid.steps
+    }
+    try:
+        validated, effective = _effective_parameters(params, caps)
+        result = asyncio.run(
+            LocalExecutor(registry).execute(
+                braid,
+                [ss],
+                expand_policy=_expand_policy(expand, k),
+                backend_policy=policy,
+                params=validated,
+                max_expansion=max_expansion,
+                review_policy=ReviewPolicy(review_policy),
+                confidence_threshold=confidence_threshold,
+            )
         )
-    )
-    return _run_payload(registry, result, have, want, policy=policy)
+    except (ValueError, BraidworksError) as exc:
+        return {"ok": False, "error": str(exc)}
+    return {
+        **_run_payload(registry, result, have, want, policy=policy),
+        "effective_params": effective,
+        "review_policy": review_policy,
+        "confidence_threshold": confidence_threshold,
+    }
 
 
 def run_traversed_response(
@@ -233,6 +663,9 @@ def run_traversed_response(
     expand: str = "all",
     k: int = 5,
     params: dict | None = None,
+    max_expansion: int = 10_000,
+    review_policy: str = "halt",
+    confidence_threshold: float = 0.0,
 ) -> dict:
     """Fan *through* one or more relationships (the GUI's "pass through" = --for-each).
 
@@ -254,31 +687,49 @@ def run_traversed_response(
     traverse_ids = [cid for _wid, cid in traversals]
 
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
+    ss.source_row = 1
     try:
+        caps = traversal_route_capabilities(
+            registry, [ss], traversals, frozenset(want), backend_policy=policy
+        )
+        validated, effective = _effective_parameters(params, caps)
         result = asyncio.run(
             run_traversed(
-                registry, [ss], traversals, frozenset(want),
-                backend_policy=policy, expand_policy=_expand_policy(expand, k),
-                params=params or None,
+                registry,
+                [ss],
+                traversals,
+                frozenset(want),
+                backend_policy=policy,
+                expand_policy=_expand_policy(expand, k),
+                params=validated,
+                max_expansion=max_expansion,
+                review_policy=ReviewPolicy(review_policy),
+                confidence_threshold=confidence_threshold,
             )
         )
-    except (NoPathError, NoPlanError) as exc:
+    except (ValueError, BraidworksError) as exc:
         return {"ok": False, "error": str(exc)}
 
-    return _traverse_payload(registry, result, want, traverse_ids)
+    return {
+        **_traverse_payload(registry, result, want, traverse_ids),
+        "effective_params": effective,
+        "review_policy": review_policy,
+        "confidence_threshold": confidence_threshold,
+    }
 
 
 def _traverse_payload(registry, result, want: list, traverse_ids: list) -> dict:
     """Shape a traversal ExecutionResult like run_response (no single ``path``)."""
     rj = result.to_json()
     runs, _dropped = build_run_views(rj, registry)
-    columns, rows = _rows(rj)
+    columns, rows = _rows(rj, want)
     return {
         "ok": True,
         "path": None,  # a traversal is not a single route; the results table is the payload
         "result": rj,
         "runs": runs,
         "columns": columns,
+        "identity_columns": _identity_columns(registry, columns),
         "rows": rows,
         "want": list(want),
         "traverse": traverse_ids,
@@ -286,9 +737,28 @@ def _traverse_payload(registry, result, want: list, traverse_ids: list) -> dict:
         "summary": {
             "resolved": len(rj.get("resolved", [])),
             "unresolved": len(rj.get("unresolved", [])),
+            "review": len(rj.get("review_queue", [])),
+            "total": result.total(),
+            "truncated_forks": len(result.truncations),
             "errors": len(rj.get("errors", [])),
         },
     }
+
+
+def _identity_columns(registry, columns):
+    keys = {
+        key
+        for manifest in registry.manifests()
+        for cap in manifest.capabilities
+        for key in cap.set_outputs
+    }
+    return [
+        column
+        for column in columns
+        if column in keys
+        or column
+        in {"entity", "parent", "status", "source_row", "outcome", "missing", "requires_review"}
+    ]
 
 
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
@@ -313,8 +783,15 @@ def create_app():
         from_types: list[str] = Field(default_factory=list)
         to_types: list[str] = Field(default_factory=list)
         policy: str = "local_first"
+        traverse: list[str] = Field(default_factory=list)
+
+    class BatchInput(BaseModel):
+        text: str
+        format: str = "lines"
+        input_type: str | None = None
 
     class RunRequest(BaseModel):
+        batch: BatchInput | None = None
         have: dict[str, str] = Field(default_factory=dict)
         want: list[str] = Field(default_factory=list)
         policy: str = "local_first"
@@ -322,6 +799,9 @@ def create_app():
         k: int = 3
         traverse: list[str] = Field(default_factory=list)  # fan capabilities to pass through
         params: dict[str, dict[str, str]] = Field(default_factory=dict)  # {cap_id: {name: value}}
+        max_expansion: int = Field(default=10_000, ge=1)
+        review_policy: str = "halt"
+        confidence_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
@@ -340,7 +820,9 @@ def create_app():
             policy = parse_policy(req.policy)
         except ValueError as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-        return plan_response(registry, req.from_types, req.to_types, policy=policy)
+        return plan_response(
+            registry, req.from_types, req.to_types, policy=policy, traverse=req.traverse
+        )
 
     @app.post("/api/run")
     def api_run(req: RunRequest):
@@ -349,19 +831,140 @@ def create_app():
             policy = parse_policy(req.policy)
         except ValueError as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        if req.batch is not None:
+            try:
+                return asyncio.run(
+                    execute_batch_response(
+                        registry,
+                        req.have,
+                        req.want,
+                        req.traverse,
+                        req.batch.model_dump(),
+                        policy=policy,
+                        expand=req.expand,
+                        k=req.k,
+                        params=req.params,
+                        max_expansion=req.max_expansion,
+                        review_policy=req.review_policy,
+                        confidence_threshold=req.confidence_threshold,
+                    )
+                )
+            except (ValueError, BraidworksError) as exc:
+                return {"ok": False, "error": str(exc)}
         if req.traverse:
             return run_traversed_response(
-                registry, req.have, req.want, req.traverse,
-                policy=policy, expand=req.expand, k=req.k, params=req.params,
+                registry,
+                req.have,
+                req.want,
+                req.traverse,
+                policy=policy,
+                expand=req.expand,
+                k=req.k,
+                params=req.params,
+                max_expansion=req.max_expansion,
+                review_policy=req.review_policy,
+                confidence_threshold=req.confidence_threshold,
             )
         return run_response(
-            registry, req.have, req.want, policy=policy, expand=req.expand, k=req.k,
+            registry,
+            req.have,
+            req.want,
+            policy=policy,
+            expand=req.expand,
+            k=req.k,
             params=req.params,
+            max_expansion=req.max_expansion,
+            review_policy=req.review_policy,
+            confidence_threshold=req.confidence_threshold,
         )
 
+    @app.post("/api/code")
+    def api_code(req: RunRequest):
+        try:
+            policy = parse_policy(req.policy)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        if req.batch is not None:
+            return batch_code_response(
+                discover_registry().registry,
+                req.have,
+                req.want,
+                req.traverse,
+                req.batch.model_dump(),
+                policy=policy,
+                expand=req.expand,
+                k=req.k,
+                params=req.params,
+                max_expansion=req.max_expansion,
+                review_policy=req.review_policy,
+                confidence_threshold=req.confidence_threshold,
+            )
+        return code_response(
+            discover_registry().registry,
+            req.have,
+            req.want,
+            req.traverse,
+            policy=policy,
+            expand=req.expand,
+            k=req.k,
+            params=req.params,
+            max_expansion=req.max_expansion,
+            review_policy=req.review_policy,
+            confidence_threshold=req.confidence_threshold,
+        )
+
+    @app.post("/api/run/stream")
+    def api_post_run_stream(req: RunRequest):
+        async def stream():
+            queue = _asyncio.Queue()
+            task = None
+            try:
+                task = _asyncio.create_task(
+                    execute_batch_response(
+                        discover_registry().registry,
+                        req.have,
+                        req.want,
+                        req.traverse,
+                        req.batch.model_dump() if req.batch is not None else None,
+                        policy=parse_policy(req.policy),
+                        expand=req.expand,
+                        k=req.k,
+                        params=req.params,
+                        max_expansion=req.max_expansion,
+                        review_policy=req.review_policy,
+                        confidence_threshold=req.confidence_threshold,
+                        on_event=lambda event: queue.put_nowait(event),
+                    )
+                )
+                while not (task.done() and queue.empty()):
+                    try:
+                        event = await _asyncio.wait_for(queue.get(), timeout=0.1)
+                        yield f"data: {_json.dumps({'event': 'wave', **event})}\n\n"
+                    except TimeoutError:
+                        continue
+                yield f"data: {_json.dumps({'event': 'done', **await task})}\n\n"
+            except (ValueError, BraidworksError) as exc:
+                yield f"data: {_json.dumps({'event': 'error', 'error': str(exc)})}\n\n"
+            finally:
+                if task is not None:
+                    if not task.done():
+                        task.cancel()
+                    await _asyncio.gather(task, return_exceptions=True)
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
     @app.get("/api/run/stream")
-    def api_run_stream(have: str = "{}", want: str = "", policy: str = "local_first",
-                       expand: str = "top", k: int = 3):
+    def api_run_stream(
+        have: str = "{}",
+        want: str = "",
+        policy: str = "local_first",
+        expand: str = "top",
+        k: int = 3,
+        params: str = "{}",
+        max_expansion: int = 10_000,
+        review_policy: str = "halt",
+        confidence_threshold: float = 0.0,
+    ):
         # GET + query params so the browser drives it with a native EventSource (SSE).
         # `have` is a JSON object; `want` is comma-separated.
         def sse(obj) -> str:
@@ -371,7 +974,11 @@ def create_app():
             registry = discover_registry().registry
             try:
                 bpolicy = parse_policy(policy)
+                review = ReviewPolicy(review_policy)
                 have_map = _json.loads(have or "{}")
+                supplied_params = _json.loads(params or "{}")
+                if not isinstance(have_map, dict) or not isinstance(supplied_params, dict):
+                    raise TypeError("have and params must be JSON objects")
             except (ValueError, TypeError) as exc:
                 yield sse({"event": "error", "error": str(exc)})
                 return
@@ -382,25 +989,58 @@ def create_app():
                 return
             try:
                 braid = Braider(registry).plan(frozenset(hm), frozenset(wl), backend_policy=bpolicy)
-            except (NoPathError, NoPlanError) as exc:
+                caps = {
+                    step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
+                    for step in braid.steps
+                }
+                validated, effective = _effective_parameters(supplied_params, caps)
+            except (ValueError, BraidworksError) as exc:
                 yield sse({"event": "error", "error": str(exc)})
                 return
 
             queue: _asyncio.Queue = _asyncio.Queue()
             ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in hm.items()])
-            task = _asyncio.create_task(LocalExecutor(registry).execute(
-                braid, [ss], expand_policy=_expand_policy(expand, k), backend_policy=bpolicy,
-                on_event=lambda ev: queue.put_nowait(ev)))
-            # Drain wave events live until the run finishes, then emit the final payload.
-            while not (task.done() and queue.empty()):
+            ss.source_row = 1
+            task = _asyncio.create_task(
+                LocalExecutor(registry).execute(
+                    braid,
+                    [ss],
+                    expand_policy=_expand_policy(expand, k),
+                    backend_policy=bpolicy,
+                    params=validated,
+                    max_expansion=max_expansion,
+                    review_policy=review,
+                    confidence_threshold=confidence_threshold,
+                    on_event=lambda ev: queue.put_nowait(ev),
+                )
+            )
+            try:
+                # Drain wave events live until the run finishes, then emit the final payload.
+                while not (task.done() and queue.empty()):
+                    try:
+                        ev = await _asyncio.wait_for(queue.get(), timeout=0.1)
+                        yield sse({"event": "wave", **ev})
+                    except TimeoutError:
+                        continue
                 try:
-                    ev = await _asyncio.wait_for(queue.get(), timeout=0.1)
-                    yield sse({"event": "wave", **ev})
-                except _asyncio.TimeoutError:
-                    continue
-            result = await task
-            payload = _run_payload(registry, result, hm, wl, policy=bpolicy)
-            yield sse({"event": "done", **payload})
+                    result = await task
+                except (ValueError, BraidworksError) as exc:
+                    yield sse({"event": "error", "error": str(exc)})
+                    return
+                payload = _run_payload(registry, result, hm, wl, policy=bpolicy)
+                yield sse(
+                    {
+                        "event": "done",
+                        **payload,
+                        "effective_params": effective,
+                        "review_policy": review.value,
+                        "confidence_threshold": confidence_threshold,
+                    }
+                )
+            finally:
+                if not task.done():
+                    task.cancel()
+                await _asyncio.gather(task, return_exceptions=True)
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 

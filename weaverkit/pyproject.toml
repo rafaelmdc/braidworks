@@ -1,13 +1,20 @@
 [project]
 name = "weaverkit"
-version = "0.4.7"
+version = "0.5.0"
 description = "Guardrails for building Braidworks weavers: spec, scaffold, and conformance."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.9.0"]
+dependencies = ["braidworks-core>=0.13.0"]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
 
 [project.optional-dependencies]
-test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+test = ["pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27"]
 # Optional GUI server (`weaverkit serve`). Kept out of the base install so weavers,
 # conformance, scaffold, and CI stay stdlib-only.
 serve = ["fastapi>=0.110", "uvicorn>=0.27"]

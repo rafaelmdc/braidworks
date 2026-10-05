@@ -90,8 +90,10 @@ def _version_drift_warning(spec: WeaverSpec, spec_path: str) -> list[str]:
     proj_version = str(data.get("project", {}).get("version", "")).strip()
     if proj_version and proj_version != spec.version:
         return [
-            f"version drift: spec version {spec.version!r} != pyproject version "
-            f"{proj_version!r} — reconcile so the released artifact matches its tag"
+            (
+                f"version drift: spec version {spec.version!r} != pyproject version "
+                f"{proj_version!r} — reconcile so the released artifact matches its tag"
+            )
         ]
     return []
 
@@ -187,7 +189,7 @@ def _first_runnable_backend(weaver, backends: tuple[str, ...]) -> str | None:
         try:
             fp = weaver.backend_fingerprint(b)
         except Exception:  # noqa: BLE001 - an unconfigured backend just isn't runnable
-            continue
+            fp = None
         text = str(fp).strip().lower()
         if fp and text not in ("", "unknown") and not text.startswith("unconfigured:"):
             return b
@@ -460,22 +462,32 @@ def build_parser() -> argparse.ArgumentParser:
         "view", help="render an interactive HTML view of the weaver network (+ a braid path)"
     )
     p_view.add_argument(
-        "--out", default="braidworks-view.html", help="output HTML file (default: braidworks-view.html)"
+        "--out",
+        default="braidworks-view.html",
+        help="output HTML file (default: braidworks-view.html)",
     )
     p_view.add_argument(
-        "--from", dest="from_type", action="append", metavar="KEY",
+        "--from",
+        dest="from_type",
+        action="append",
+        metavar="KEY",
         help="a starting/available type for the braid path (repeatable)",
     )
     p_view.add_argument(
-        "--to", dest="to_type", action="append", metavar="KEY",
+        "--to",
+        dest="to_type",
+        action="append",
+        metavar="KEY",
         help="a target type for the braid path (repeatable)",
     )
     p_view.add_argument(
-        "--policy", default="local_first",
+        "--policy",
+        default="local_first",
         help="backend policy for the path: local_first|api_first|local_only|api_only",
     )
     p_view.add_argument(
-        "--run", metavar="RESULT.json",
+        "--run",
+        metavar="RESULT.json",
         help="an ExecutionResult.to_json() file; adds a run-lineage (fan-out trace) view "
         "per originating input",
     )
@@ -496,19 +508,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="print source citations for weavers (all, a chosen set, or a braid path)",
     )
     p_refs.add_argument(
-        "--weaver", action="append", metavar="ID",
+        "--weaver",
+        action="append",
+        metavar="ID",
         help="restrict to this weaver id (repeatable; default: all discovered weavers)",
     )
     p_refs.add_argument(
-        "--from", dest="from_type", action="append", metavar="KEY",
+        "--from",
+        dest="from_type",
+        action="append",
+        metavar="KEY",
         help="cite only sources on the braid path from this type (repeatable; needs --to)",
     )
     p_refs.add_argument(
-        "--to", dest="to_type", action="append", metavar="KEY",
+        "--to",
+        dest="to_type",
+        action="append",
+        metavar="KEY",
         help="target type for the braid path (repeatable; needs --from)",
     )
     p_refs.add_argument(
-        "--policy", default="local_first",
+        "--policy",
+        default="local_first",
         help="backend policy for the path: local_first|api_first|local_only|api_only",
     )
     p_refs.add_argument("--json", action="store_true", help="emit JSON instead of text")

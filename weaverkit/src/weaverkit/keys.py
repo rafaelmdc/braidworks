@@ -64,6 +64,7 @@ SHARED_KEYS: dict[str, str] = {
 OUTPUT_KEYS: dict[str, str] = {
     # wikidata_weaver / wikipedia_weaver leaf outputs
     "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
+    "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",
     "wikipedia.pageviews": "Recent English-Wikipedia pageview count for one article — a popularity proxy.",
     # ncbi_weaver leaf outputs
     "ncbi.taxon.parent_id": "The parent taxon of this organism.",
@@ -167,8 +168,10 @@ OUTPUT_KEYS: dict[str, str] = {
     "go.molecular_function": "The molecular functions this protein is annotated with.",
     "go.biological_process": "The biological processes this protein takes part in.",
     "go.cellular_component": "Where in the cell this protein acts.",
-    "go.count": "How many GO terms annotate this protein.",
-    "go.records": "This protein's GO annotations — GO id, name, aspect.",
+    "go.count": "Distinct GO terms in retrieved annotation pages; inspect coverage for completeness.",
+    "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
+    "go.annotation.records": "Source annotation rows, retaining evidence, qualifiers and references.",
+    "go.annotation.coverage": "Pagination coverage, source counts and page-cap completeness.",
     # one GO term's detail (quickgo_weaver describe_go_term — consumes go.term)
     "go.term.name": "The name of this GO term.",
     "go.term.aspect": "This GO term's aspect — molecular_function, biological_process, or cellular_component.",

@@ -7,6 +7,8 @@ is skipped when the optional ``[serve]`` extra is not installed.
 
 from __future__ import annotations
 
+import shlex
+
 import pytest
 from braidworks.core import Provenance
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
@@ -14,7 +16,6 @@ from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
-
 from weaverkit.serve import plan_response, run_response
 
 
@@ -68,8 +69,8 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     # two-step route projected
     assert out["path"]["step_count"] == 2
     arts = out["artifacts"]
-    assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession"
-    assert "--have organism.name=<value>" in arts["cli_weave"]
+    assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
+    assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
     assert "Braider(registry).plan" in arts["python"]
     assert arts["braid"] is out["path"]

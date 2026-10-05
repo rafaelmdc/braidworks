@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from pathlib import Path
 
@@ -142,6 +142,7 @@ def build_network(registry: BraidRegistry) -> dict:
                 "input_types": sorted(cap.consumes),
                 "output_types": shared_out,  # only shared keys are graph nodes
                 "output_leaves": leaf_out,  # descriptive payload (card only)
+                "output_descriptions": {key: _classify(key)[1] for key in sorted(cap.produces)},
                 "set_outputs": set_outputs,  # one→many fan dimensions (card + edge badge)
                 "parameters": params,  # per-run refinements (name/type/enum/default/description)
             }
@@ -460,7 +461,7 @@ def build_data(
     registry = discovery.registry
     data: dict = {
         "meta": {
-            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "problems": discovery.problems,
         },
         "network": build_network(registry),

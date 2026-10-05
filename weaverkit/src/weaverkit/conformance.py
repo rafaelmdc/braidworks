@@ -118,12 +118,8 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                 f"!= spec consumes_any {spec_cap.consumes_any} — {regen}"
             )
 
-        man_params = {
-            p.name: (p.type, tuple(p.enum), p.default) for p in man_cap.parameters
-        }
-        spec_params = {
-            p.name: (p.type, tuple(p.enum), p.default) for p in spec_cap.parameters
-        }
+        man_params = {p.name: (p.type, tuple(p.enum), p.default) for p in man_cap.parameters}
+        spec_params = {p.name: (p.type, tuple(p.enum), p.default) for p in spec_cap.parameters}
         if man_params != spec_params:
             problems.append(
                 f"capability {cap_id!r}: manifest parameters {sorted(man_params)} "
@@ -184,9 +180,11 @@ async def run_golden(
 
     if result.status is not WeaveStatus.OK:
         return [
-            f"golden ({golden.capability}, input={golden.input}): expected OK, "
-            f"got {result.status.value} (errors={list(result.errors)}) — fix: make "
-            f"the {backend!r} backend's fetch resolve this input, or correct the golden"
+            (
+                f"golden ({golden.capability}, input={golden.input}): expected OK, "
+                f"got {result.status.value} (errors={list(result.errors)}) — fix: make "
+                f"the {backend!r} backend's fetch resolve this input, or correct the golden"
+            )
         ]
 
     got = {s.type_id: s.value for s in result.strands}
