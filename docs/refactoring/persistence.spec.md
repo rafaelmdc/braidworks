@@ -1,5 +1,6 @@
 # Round 2 implementation spec: persistence and continuation
 
+Matching plan: [persistence.plan.md](persistence.plan.md).
 Status: specified, not implemented. Tracking:
 [#144](https://github.com/rafaelmdc/braidworks/issues/144),
 [#143](https://github.com/rafaelmdc/braidworks/issues/143).

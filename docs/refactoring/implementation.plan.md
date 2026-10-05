@@ -1,7 +1,8 @@
 # Combined implementation plan
 
 Date: 2026-10-05. Status: specifications complete; new implementation not started.
-[Programme index](README.md). Branch: `refactor/persistence-foundations`.
+[Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
+[persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
 baseline, not another rewrite to perform.
 

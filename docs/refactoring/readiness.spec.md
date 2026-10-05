@@ -1,5 +1,6 @@
 # Round 1 implementation spec: preserve the readiness baseline
 
+Matching plan: [readiness.plan.md](readiness.plan.md).
 Status: implemented locally. Source of truth for historical findings:
 [readiness record](../audits/README.md) and its six linked specs/plans.
 This round contains 45 numbered findings: 43 fixed, one publication deferral and one
