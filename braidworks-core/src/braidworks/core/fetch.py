@@ -27,9 +27,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from braidworks.core.discovery import build_registry_from_entry_points
-from braidworks.core.executor import ExecutionError, LocalExecutor, ReviewPolicy, ReviewQueueItem
+from braidworks.core.executor import ExecutionError, ReviewPolicy, ReviewQueueItem
 from braidworks.core.parameters import map_parameter_items, validate_scoped_parameters
-from braidworks.core.planner import Braider
+from braidworks.core.query import QueryOptions, QueryRequest, execute_query, prepare_query
 from braidworks.core.references import Reference
 from braidworks.core.strand import Strand, StrandSet
 
@@ -166,18 +166,19 @@ async def async_fetch(
     want_types = _as_list(want)
     reg = registry if registry is not None else build_registry_from_entry_points(only=only)
 
-    braid = Braider(reg).plan(
-        available_types=frozenset({have}),
-        target_types=frozenset(want_types),
-    )
     strand_sets = [StrandSet.from_strands(i, [Strand(have, i)]) for i in dict.fromkeys(ids)]
-    result = await LocalExecutor(reg).execute(
-        braid,
-        strand_sets,
-        params=_resolve_params(params, braid, reg),
-        review_policy=review_policy,
-        confidence_threshold=confidence_threshold,
+    prepared = prepare_query(
+        reg,
+        QueryRequest(
+            tuple(strand_sets),
+            frozenset(want_types),
+            params=params or {},
+            options=QueryOptions(
+                review_policy=review_policy, confidence_threshold=confidence_threshold
+            ),
+        ),
     )
+    result = await execute_query(reg, prepared)
 
     out = FetchResult(
         references=list(result.references),

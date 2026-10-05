@@ -85,6 +85,13 @@ from braidworks.core.localdb import (
 from braidworks.core.mapper import map_lookup, map_resolver
 from braidworks.core.outcomes import execution_records
 from braidworks.core.planner import Braider
+from braidworks.core.query import (
+    PreparedQuery,
+    QueryOptions,
+    QueryRequest,
+    execute_query,
+    prepare_query,
+)
 from braidworks.core.records import (
     Candidate,
     LookupRecord,
@@ -155,7 +162,10 @@ __all__ = [
     "NoPlanError",
     "OutputGroup",
     "Parameter",
+    "PreparedQuery",
     "Provenance",
+    "QueryOptions",
+    "QueryRequest",
     "Reference",
     "ResolverRecord",
     "ReviewPolicy",
@@ -186,6 +196,7 @@ __all__ = [
     "default_db_path",
     "download",
     "ensure_local_db",
+    "execute_query",
     "execution_records",
     "explain_error",
     "fan_capabilities",
@@ -201,6 +212,7 @@ __all__ = [
     "map_lookup",
     "map_resolver",
     "md5_file",
+    "prepare_query",
     "references_for",
     "references_for_braid",
     "relationship_name",

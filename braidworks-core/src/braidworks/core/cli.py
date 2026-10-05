@@ -38,9 +38,7 @@ from braidworks.core.executor import (
     ExecutionError,
     ExecutionResult,
     ExpandPolicy,
-    LocalExecutor,
     ReviewPolicy,
-    _ExpansionBudget,
 )
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.outcomes import (
@@ -54,6 +52,13 @@ from braidworks.core.outcomes import (
 )
 from braidworks.core.parameters import map_parameter_items
 from braidworks.core.planner import Braider
+from braidworks.core.query import (
+    QueryOptions,
+    QueryRequest,
+    execute_query,
+    normalize_expansion,
+    prepare_query,
+)
 from braidworks.core.references import (
     format_references,
     references_for,
@@ -62,7 +67,6 @@ from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveStatus
 from braidworks.core.runner import validate_batch_size
 from braidworks.core.strand import StepOutcome, Strand, StrandSet
-from braidworks.core.traverse import resolve_traversal, run_traversed, traversal_route_capabilities
 
 
 # --------------------------------------------------------------------------- #
@@ -380,60 +384,38 @@ def _cmd_weave(args: argparse.Namespace) -> int:
 
     if not want:
         raise SystemExit("error: --want TYPE[,TYPE…] is required")
-    plans = []
     try:
-        for group in _input_groups(sets):
-            available = group[0].available_types() if group else frozenset()
-            plans.append(
-                (
-                    Braider(registry).plan(
-                        available_types=available,
-                        target_types=frozenset(want),
-                        backend_policy=backend_policy,
-                    ),
-                    group,
-                )
-            )
+        prepared = prepare_query(
+            registry,
+            QueryRequest(
+                tuple(sets),
+                frozenset(want),
+                options=QueryOptions(
+                    backend_policy,
+                    normalize_expansion(args.expand),
+                    ReviewPolicy(args.review_policy),
+                    args.confidence_threshold,
+                    args.max_expansion,
+                ),
+                parameter_items=tuple(_parse_params(args.param)),
+            ),
+        )
     except (NoPathError, NoPlanError) as exc:
         _err(f"no route: {exc}")
-        _err("try `braidworks keys` to see what's produced, or `braidworks path --from … --to …`.")
+        _err("try `braidworks keys` to see what is produced, or `braidworks path --from … --to …`.")
         return 1
-
-    step_caps = {
-        s.capability_id: registry.get_capability(s.weaver_id, s.capability_id)
-        for braid, _ in plans
-        for s in braid.steps
-    }
-    params = _map_params(_parse_params(args.param), step_caps)
-    if params is None:
+    except (ValueError, BraidworksError) as exc:
+        _err(f"error: {exc}")
         return 1
-
+    plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
+    step_caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
+    params = prepared.effective_params
     archive = _archive_start(
         args, sets, registry, [b.to_json() for b, _ in plans], step_caps, params
     )
     _err(f"running {sum(len(b.steps) for b, _ in plans)} step(s) over {len(sets)} input(s)…")
-
-    async def execute_groups():
-        result = ExecutionResult()
-        budget = _ExpansionBudget(args.max_expansion, len(sets))
-        executor = LocalExecutor(registry)
-        for braid, group in plans:
-            part = await executor.execute(
-                braid,
-                group,
-                expand_policy=_expand_policy(args.expand),
-                params=params,
-                max_expansion=args.max_expansion,
-                _expansion_budget=budget,
-                backend_policy=backend_policy,
-                review_policy=ReviewPolicy(args.review_policy),
-                confidence_threshold=args.confidence_threshold,
-            )
-            _absorb_result(result, part)
-        return result
-
     try:
-        result = asyncio.run(execute_groups())
+        result = asyncio.run(execute_query(registry, prepared))
     except (ValueError, BraidworksError) as exc:
         _err(f"error: {exc}")
         return 1
@@ -480,52 +462,39 @@ def _weave_traversed(
     we run them in order, re-rooting on every produced value, then plan ``--want`` from
     each child. ``--want`` is optional here — with none you just get the fanned entities.
     """
-    try:
-        traversals = [resolve_traversal(registry, t) for t in tokens]
-    except NoPlanError as exc:
-        _err(f"no traversal: {exc}")
-        return 1
-
     backend_policy = BackendPolicy(args.policy)
-    caps_by_id = traversal_route_capabilities(
-        registry, sets, traversals, frozenset(want), backend_policy=backend_policy
-    )
-    params = _map_params(_parse_params(args.param), caps_by_id)
-    if params is None:
-        return 1
-
-    archive = _archive_start(
-        args,
-        sets,
-        registry,
-        [{"traversals": [list(item) for item in traversals], "want": want}],
-        caps_by_id,
-        params,
-    )
-    # --for-each/--traverse imply fanning ALL produced values unless --expand is given.
-    expand = _expand_policy(args.expand) if args.expand else ExpandPolicy.all()
-
-    # capability ids are already weaver-namespaced (e.g. ncbi.list_orthologs)
-    rels = " → ".join(cid for _wid, cid in traversals)
-    _err(f"fanning through {rels} over {len(sets)} input(s)…")
     try:
-        result = asyncio.run(
-            run_traversed(
-                registry,
-                sets,
-                traversals,
+        prepared = prepare_query(
+            registry,
+            QueryRequest(
+                tuple(sets),
                 frozenset(want),
-                expand_policy=expand,
-                params=params,
-                max_expansion=args.max_expansion,
-                backend_policy=backend_policy,
-                review_policy=ReviewPolicy(args.review_policy),
-                confidence_threshold=args.confidence_threshold,
-            )
+                tuple(tokens),
+                options=QueryOptions(
+                    backend_policy,
+                    normalize_expansion(args.expand, traversal=True),
+                    ReviewPolicy(args.review_policy),
+                    args.confidence_threshold,
+                    args.max_expansion,
+                ),
+                parameter_items=tuple(_parse_params(args.param)),
+            ),
         )
-    except (NoPathError, NoPlanError) as exc:
-        _err(f"no route after traversal: {exc}")
-        return 1
+        caps_by_id = {
+            cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids
+        }
+        archive = _archive_start(
+            args,
+            sets,
+            registry,
+            [{"traversals": [list(item) for item in prepared.traversals], "want": want}],
+            caps_by_id,
+            prepared.effective_params,
+        )
+        _err(
+            f"fanning through {' → '.join(cid for _, cid in prepared.traversals)} over {len(sets)} input(s)…"
+        )
+        result = asyncio.run(execute_query(registry, prepared))
     except (ValueError, BraidworksError) as exc:
         _err(f"error: {exc}")
         return 1

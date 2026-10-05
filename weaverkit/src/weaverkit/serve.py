@@ -31,15 +31,21 @@ from braidworks.core.executor import (
     ExpandPolicy,
     LocalExecutor,
     ReviewPolicy,
-    _ExpansionBudget,
 )
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.outcomes import execution_records
 from braidworks.core.parameters import validate_scoped_parameters
 from braidworks.core.planner import Braider
+from braidworks.core.query import (
+    QueryOptions,
+    QueryRequest,
+    execute_query,
+    normalize_expansion,
+    prepare_query,
+)
 from braidworks.core.references import references_for
 from braidworks.core.strand import Strand, StrandSet
-from braidworks.core.traverse import resolve_traversal, run_traversed, traversal_route_capabilities
+from braidworks.core.traverse import resolve_traversal, traversal_route_capabilities
 
 from weaverkit.view import (
     build_data,
@@ -306,6 +312,14 @@ def _effective_parameters(params, caps):
     return validated, display
 
 
+def _prepared_effective(registry, prepared):
+    return {
+        cid: {p.name: prepared.effective_params[cid].get(p.name) for p in cap.parameters}
+        for wid, cid in prepared.capability_ids
+        if (cap := registry.get_capability(wid, cid)).parameters
+    }
+
+
 def _expand_policy(mode: str, k: int) -> ExpandPolicy:
     """Map the GUI's fan-out choice onto an ``ExpandPolicy`` (top / top-k / all)."""
     if mode == "all":
@@ -490,59 +504,26 @@ async def execute_batch_response(
         raise ValueError("choose inputs and outputs or a pass-through step")
     for i, ss in enumerate(sets, 1):
         ss.source_row = i
-    traversals = [resolve_traversal(registry, token) for token in traverse or []]
-    groups = {}
-    for ss in sets:
-        groups.setdefault(ss.available_types(), []).append(ss)
-    plans = []
-    caps = {}
-    if traversals:
-        caps = traversal_route_capabilities(
-            registry, sets, traversals, frozenset(want), backend_policy=policy
-        )
-    else:
-        for types, group in groups.items():
-            braid = Braider(registry).plan(types, frozenset(want), backend_policy=policy)
-            plans.append((braid, group))
-            caps.update(
-                {
-                    step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
-                    for step in braid.steps
-                }
-            )
-    validated, effective = _effective_parameters(params, caps)
-    if on_event:
-        on_event({"event": "progress", "input_count": len(sets), "completed_inputs": 0})
-    common = {
-        "backend_policy": policy,
-        "expand_policy": _expand_policy(expand, k),
-        "params": validated,
-        "max_expansion": max_expansion,
-        "review_policy": ReviewPolicy(review_policy),
-        "confidence_threshold": confidence_threshold,
-    }
-    if traversals:
-        result = await run_traversed(
-            registry, sets, traversals, frozenset(want), on_event=on_event, **common
-        )
-    else:
-        result = ExecutionResult()
-        executor = LocalExecutor(registry)
-        budget = _ExpansionBudget(max_expansion, len(sets))
-        completed = 0
-        for braid, group in plans:
-            part = await executor.execute(
-                braid, group, _expansion_budget=budget, on_event=on_event, **common
-            )
-            for bucket in ("resolved", "unresolved", "review_queue", "errors", "truncations"):
-                getattr(result, bucket).extend(getattr(part, bucket))
-            completed += len(group)
-            if on_event:
-                on_event(
-                    {"event": "progress", "input_count": len(sets), "completed_inputs": completed}
-                )
-            refs = {ref.weaver_id: ref for ref in result.references + part.references}
-            result.references = [refs[key] for key in sorted(refs)]
+    prepared = prepare_query(
+        registry,
+        QueryRequest(
+            tuple(sets),
+            frozenset(want),
+            tuple(traverse or ()),
+            params or {},
+            QueryOptions(
+                policy,
+                normalize_expansion(expand, k),
+                ReviewPolicy(review_policy),
+                confidence_threshold,
+                max_expansion,
+            ),
+        ),
+    )
+    result = await execute_query(registry, prepared, on_event=on_event)
+    traversals = prepared.traversals
+    plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
+    effective = _prepared_effective(registry, prepared)
     payload = _traverse_payload(registry, result, want, [cid for _, cid in traversals])
     if len(plans) == 1:
         payload["path"] = build_path(
@@ -617,32 +598,26 @@ def run_response(
     have, want, err = _clean_run_inputs(have, want)
     if err:
         return {"ok": False, "error": err}
-    braider = Braider(registry)
-    try:
-        braid = braider.plan(frozenset(have), frozenset(want), backend_policy=policy)
-    except (NoPathError, NoPlanError) as exc:
-        return {"ok": False, "error": str(exc)}
-
     ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
     ss.source_row = 1
-    caps = {
-        step.capability_id: registry.get_capability(step.weaver_id, step.capability_id)
-        for step in braid.steps
-    }
     try:
-        validated, effective = _effective_parameters(params, caps)
-        result = asyncio.run(
-            LocalExecutor(registry).execute(
-                braid,
-                [ss],
-                expand_policy=_expand_policy(expand, k),
-                backend_policy=policy,
-                params=validated,
-                max_expansion=max_expansion,
-                review_policy=ReviewPolicy(review_policy),
-                confidence_threshold=confidence_threshold,
-            )
+        prepared = prepare_query(
+            registry,
+            QueryRequest(
+                (ss,),
+                frozenset(want),
+                params=params or {},
+                options=QueryOptions(
+                    policy,
+                    normalize_expansion(expand, k),
+                    ReviewPolicy(review_policy),
+                    confidence_threshold,
+                    max_expansion,
+                ),
+            ),
         )
+        result = asyncio.run(execute_query(registry, prepared))
+        effective = _prepared_effective(registry, prepared)
     except (ValueError, BraidworksError) as exc:
         return {"ok": False, "error": str(exc)}
     return {
@@ -681,41 +656,24 @@ def run_traversed_response(
     if not have or not tokens:
         return {"ok": False, "error": "pass-through needs a Have value and at least one step"}
     try:
-        traversals = [resolve_traversal(registry, t) for t in tokens]
-    except (NoPathError, NoPlanError) as exc:
-        return {"ok": False, "error": str(exc)}
-    traverse_ids = [cid for _wid, cid in traversals]
-
-    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
-    ss.source_row = 1
-    try:
-        caps = traversal_route_capabilities(
-            registry, [ss], traversals, frozenset(want), backend_policy=policy
-        )
-        validated, effective = _effective_parameters(params, caps)
-        result = asyncio.run(
-            run_traversed(
+        return asyncio.run(
+            execute_batch_response(
                 registry,
-                [ss],
-                traversals,
-                frozenset(want),
-                backend_policy=policy,
-                expand_policy=_expand_policy(expand, k),
-                params=validated,
+                have,
+                want,
+                tokens,
+                None,
+                policy=policy,
+                expand=expand,
+                k=k,
+                params=params,
                 max_expansion=max_expansion,
-                review_policy=ReviewPolicy(review_policy),
+                review_policy=review_policy,
                 confidence_threshold=confidence_threshold,
             )
         )
     except (ValueError, BraidworksError) as exc:
         return {"ok": False, "error": str(exc)}
-
-    return {
-        **_traverse_payload(registry, result, want, traverse_ids),
-        "effective_params": effective,
-        "review_policy": review_policy,
-        "confidence_threshold": confidence_threshold,
-    }
 
 
 def _traverse_payload(registry, result, want: list, traverse_ids: list) -> dict:

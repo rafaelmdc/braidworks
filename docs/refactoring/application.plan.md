@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: planned; no work below is implemented yet. Tracking: #145, #146.
+Status: A01–A02 verified locally as persistence dependencies; A03–A08 planned. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -136,3 +136,23 @@ Preserve public wrappers and readiness invariants. Run affected package tests fi
 then workspace checks at integration points and W14 installed-artifact/browser checks.
 Bump independent packages and floors only when required by their public changes.
 No unrequested frameworks/dependencies, system installs, push, merge or publication.
+
+## A01–A02 implementation evidence — 2026-10-05
+
+core.query supplies QueryOptions, QueryRequest and PreparedQuery JSON values, expansion
+normalization, prepare_query and async execute_query. Preparation copies caller state,
+preflights all heterogeneous groups and resolves effective parameters through existing
+validators. Execution composes existing executor/traversal with one expansion budget,
+deterministic result/reference aggregation and existing progress events.
+CLI routed/traversed weave, async_fetch and browser single/batch/traversal helpers use
+this service. Direct CLI run retains its semantics. Fetch still collapses duplicate IDs;
+query rows preserve duplicates/source_row. Toolkit retains envelopes, human diagnostics,
+archives and unset-parameter displays. Core imports no server/toolkit dependencies.
+Traversal accepts an injected executor and propagates its backend policy to reroutes.
+
+Core 425 tests and toolkit 221 tests pass; full workspace suite passes. New tests cover
+JSON request/prepared roundtrips, duplicate heterogeneity, caller-state isolation,
+all-group preflight and expansion/confidence validation. Existing parameter, review,
+fan-out, archive, CLI/fetch/browser contracts retained. Core 0.14.0, toolkit 0.5.1/floor
+0.14.0. Render/code extraction, stream lifecycle and browser normalization remain A03–05.
+Local commit: see `refactor(query): share preparation and execution across interfaces`.

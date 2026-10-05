@@ -1,6 +1,6 @@
 # Combined implementation plan
 
-Date: 2026-10-05. Status: W01–W03 verified locally; remaining work packages planned.
+Date: 2026-10-05. Status: W01–W04 verified locally; remaining work packages planned.
 [Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
 [persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
@@ -14,7 +14,7 @@ baseline, not another rewrite to perform.
 | W01 | PF01 | SQLite ownership helpers; NCBI explicit handles and schema initialization | W00 | Verified locally; see persistence.plan.md |
 | W02 | PF02 | Safe build-lock ownership and source identity/session checks | W01 | Verified locally; see persistence.plan.md |
 | W03 | PF03 | Separate review repository/history migration; batch thread boundaries | W01–02 | Verified locally; see persistence.plan.md |
-| W04 | AP01–02 | QueryRequest/Options/PreparedQuery; shared prepare/execute service | W00; coordinate W03 APIs | Planned |
+| W04 | AP01–02 | QueryRequest/Options/PreparedQuery; shared prepare/execute service | W00; coordinate W03 APIs | Verified locally; see application.plan.md |
 | W05 | AP03 | Prepared-plan graph/code renderers; CLI/Python artifact equivalence | W04 | Planned |
 | W06 | AP04–05 | Shared GET/POST stream lifecycle; canonical browser request encoder | W04–05 | Planned |
 | W07 | AP06 | Pure scaffold generation/validation and safe writes | W00; align new runtime floor | Planned |

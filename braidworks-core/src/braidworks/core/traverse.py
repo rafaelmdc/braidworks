@@ -157,6 +157,7 @@ async def run_traversed(
     error_policy: ErrorPolicy = ErrorPolicy.RECORD_AND_CONTINUE,
     merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
     cache: StrandCache | None = None,
+    executor: LocalExecutor | None = None,
     max_expansion: int = 10_000,
     _expansion_budget: _ExpansionBudget | None = None,
     on_event: Callable[[dict[str, Any]], None] | None = None,
@@ -174,7 +175,7 @@ async def run_traversed(
     braider = Braider(registry)
     budget = _expansion_budget or _ExpansionBudget(max_expansion, len(input_sets))
     cache = cache if cache is not None else InMemoryStrandCache()
-    executor = LocalExecutor(registry, cache)
+    executor = executor if executor is not None else LocalExecutor(registry, cache)
     params = validate_scoped_parameters(
         params or {},
         traversal_route_capabilities(
@@ -204,6 +205,7 @@ async def run_traversed(
                 error_policy=error_policy,
                 merge_policy=merge_policy,
                 cache=cache,
+                executor=executor,
                 max_expansion=max_expansion,
                 _expansion_budget=budget,
                 on_event=on_event,
@@ -227,6 +229,7 @@ async def run_traversed(
             params=params,
             max_expansion=max_expansion,
             _expansion_budget=budget,
+            backend_policy=backend_policy,
             on_event=on_event,
         )
 
