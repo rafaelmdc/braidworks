@@ -22,6 +22,7 @@ import hashlib
 import json
 import sqlite3
 import urllib.request
+import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,8 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
+                ("schema_version", "1"),
+                ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
                 ("n_experiments", str(len(experiments))),
                 ("n_with_taxid", str(n_with_taxid)),

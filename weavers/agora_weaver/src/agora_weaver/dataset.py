@@ -17,6 +17,7 @@ import csv
 import logging
 import re
 import sqlite3
+import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Iterable, Iterator
@@ -28,6 +29,7 @@ from typing import Any
 # The AGORA2 SBML archive is compressed with Deflate64 (method 9), which the stdlib
 # zipfile cannot decode; importing this monkeypatches zipfile to support it.
 import zipfile_deflate64  # noqa: F401
+from braidworks.core.sqlite import readonly_uri
 
 logger = logging.getLogger("agora_weaver.dataset")
 
@@ -76,7 +78,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 
 def open_ro(db_path: str | Path) -> sqlite3.Connection:
     """Open the reaction DB read-only."""
-    return sqlite3.connect(f"file:{Path(db_path)}?mode=ro", uri=True)
+    return sqlite3.connect(readonly_uri(db_path), uri=True)
 
 
 def db_content_hash(db_path: str | Path) -> str | None:
@@ -204,6 +206,10 @@ def build_reaction_db(
         con.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('release', ?)",
             (CROSSWALK_RELEASE,),
+        )
+        con.executemany(
+            "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+            [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
         )
         con.commit()
         return written

@@ -18,10 +18,12 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from gtdb_weaver import taxonomy, tree
 
@@ -41,16 +43,18 @@ class GtdbLocalBackend(BackendBase):
         # ``None`` means "the default DB path, present-or-not" (introspection form).
         self._db_path = Path(db_path) if db_path is not None else _default_db_path()
         self._tree_paths = [Path(p) for p in (tree_paths or [])]
+        self._source = SourceBinding(
+            self._db_path,
+            lambda con: dict(con.execute("SELECT key, value FROM meta")),
+            components=tuple(self._tree_paths),
+        )
         self._rootpaths: dict[str, tree.RootPath] | None = None  # lazy, cached per instance
 
     def is_configured(self) -> bool:
         return self._db_path.exists() and self._db_path.stat().st_size > 0
 
     def fingerprint(self) -> str:
-        # The GTDB release recorded at DB build is the source of truth; falls back to
-        # a stable non-empty sentinel so conformance never sees "" / "unknown".
-        release = taxonomy.db_release(self._db_path) if self.is_configured() else None
-        return f"gtdb-local-{release or 'none'}"
+        return self._source.fingerprint() if self.is_configured() else "gtdb-local-none"
 
     def _reference_rootpaths(self) -> dict[str, tree.RootPath]:
         """Leaf-accession → root path for the wired reference tree(s); {} if none present."""
@@ -68,13 +72,13 @@ class GtdbLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        con = taxonomy.open_ro(self._db_path)
-        try:
+        return await asyncio.to_thread(self._fetch_sync, capability_id, queries)
+
+    def _fetch_sync(self, capability_id: str, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        with self._source.session() as con:
             if capability_id == _TREE_PLACEMENT:
                 return self._fetch_tree_placement(con, queries)
             return self._fetch_taxonomy(con, queries)
-        finally:
-            con.close()
 
     def _fetch_taxonomy(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         records: list[LookupRecord] = []

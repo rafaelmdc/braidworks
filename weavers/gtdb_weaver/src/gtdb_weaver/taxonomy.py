@@ -9,9 +9,12 @@ A GTDB taxonomy string is a rank-prefixed, ``;``-joined lineage, e.g.
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+
+from braidworks.core.sqlite import readonly_uri
 
 # GTDB rank prefix -> canonical rank name (domain..species).
 _RANKS = {
@@ -100,6 +103,10 @@ def build_crosswalk_db(
             "INSERT OR REPLACE INTO species (name, gtdb_taxonomy, rep_accession) VALUES (?, ?, ?)",
             ((name, tax, acc) for name, (tax, acc) in species.items()),
         )
+        con.executemany(
+            "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+            [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
+        )
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('release', ?)", (release,))
         con.commit()
     finally:
@@ -108,7 +115,7 @@ def build_crosswalk_db(
 
 def open_ro(db_path: str | Path) -> sqlite3.Connection:
     """Open the crosswalk DB read-only."""
-    return sqlite3.connect(f"file:{Path(db_path)}?mode=ro", uri=True)
+    return sqlite3.connect(readonly_uri(db_path), uri=True)
 
 
 def db_release(db_path: str | Path) -> str | None:

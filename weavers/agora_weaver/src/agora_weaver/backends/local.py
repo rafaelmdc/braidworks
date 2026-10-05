@@ -11,10 +11,14 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.exceptions import BackendConfigurationError
+from braidworks.core.source_identity import SourceBinding, artifact_stamp
 
 from agora_weaver import dataset
 
@@ -39,6 +43,11 @@ class AgoraLocalBackend(BackendBase):
         # on demand (the ``model`` group; each model is ~8 MB).
         self._sbml_cache_dir = Path(sbml_cache_dir) if sbml_cache_dir is not None else None
         self._auto_download_models = auto_download_models
+        self._source = SourceBinding(
+            self._reaction_db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
+        self._expected_reaction_stamp = None
+        self._generation_bound = False
 
     def is_configured(self) -> bool:
         # The bundled crosswalk always ships, so ``core`` is always answerable.
@@ -48,9 +57,16 @@ class AgoraLocalBackend(BackendBase):
         return self._reaction_db_path.exists() and self._reaction_db_path.stat().st_size > 0
 
     def fingerprint(self) -> str:
-        # Bundled crosswalk release is stable; the reaction DB adds its content hash.
-        rxn = dataset.db_content_hash(self._reaction_db_path) if self._reaction_db_ready() else None
-        return f"agora-local-{dataset.CROSSWALK_RELEASE}" + (f"-{rxn}" if rxn else "")
+        self._check_generation()
+        rxn = self._source.fingerprint() if self._reaction_db_ready() else "no-reactions"
+        return f"agora-local-{dataset.CROSSWALK_RELEASE}-{rxn}"
+
+    def _check_generation(self) -> None:
+        stamp = artifact_stamp(self._reaction_db_path) if self._reaction_db_ready() else None
+        if self._generation_bound and stamp != self._expected_reaction_stamp:
+            raise BackendConfigurationError("Reaction source changed; reopen the backend")
+        self._expected_reaction_stamp = stamp
+        self._generation_bound = True
 
     async def fetch(
         self,
@@ -61,10 +77,15 @@ class AgoraLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        return await asyncio.to_thread(self._fetch_sync, queries, groups_to_compute)
+
+    def _fetch_sync(
+        self, queries: list[dict[str, Any]], groups_to_compute: frozenset[str]
+    ) -> list[LookupRecord]:
+        self._check_generation()
         want_reactions = "reactions" in groups_to_compute and self._reaction_db_ready()
         want_models = "model" in groups_to_compute
-        con = dataset.open_ro(self._reaction_db_path) if want_reactions else None
-        try:
+        with self._source.session() if want_reactions else nullcontext(None) as con:
             records: list[LookupRecord] = []
             for query in queries:  # one record per query, in order — never reorder/drop
                 taxid = str(query.get("ncbi.taxon.id", "") or "").strip()
@@ -82,9 +103,6 @@ class AgoraLocalBackend(BackendBase):
                         values["microbe.metabolism.sbml"] = models
                 records.append(LookupRecord(query=query, found=True, values=values))
             return records
-        finally:
-            if con is not None:
-                con.close()
 
     def _models_for(self, recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Cached (lazily-downloaded) SBML path per reconstruction — omitting any not available."""

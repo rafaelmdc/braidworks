@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-import threading
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from mondo_weaver.setup import db_is_valid, default_mondo_db_path, normalize_name
 
@@ -73,31 +73,17 @@ class MondoLocalBackend(BackendBase):
         self._db_path = Path(db_path) if db_path else default_mondo_db_path()
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
-        self._local = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
 
     def is_configured(self) -> bool:
         return self._configured
 
     def fingerprint(self) -> str:
-        # MONDO has a real release tag (OBO data-version); use it as the cache key.
-        if self._fingerprint is None:
-            row = (
-                self._connect()
-                .execute("SELECT value FROM meta WHERE key = 'data_version'")
-                .fetchone()
-            )
-            tag = row[0].replace("releases/", "") if row else None
-            self._fingerprint = f"mondo-{tag}" if tag else "unconfigured:local"
-        return self._fingerprint
-
-    def _connect(self) -> sqlite3.Connection:
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(
-                f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False
-            )
-            self._local.con = con
-        return con
+        if not self._configured:
+            return "unconfigured:local"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -111,9 +97,9 @@ class MondoLocalBackend(BackendBase):
         return await asyncio.to_thread(self._lookup_all, capability_id, queries)
 
     def _lookup_all(self, capability_id: str, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        consumed, source = _CAPABILITY_SOURCE[capability_id]
-        return [self._lookup_one(con, q, consumed, source) for q in queries]
+        with self._source.session() as con:
+            consumed, source = _CAPABILITY_SOURCE[capability_id]
+            return [self._lookup_one(con, q, consumed, source) for q in queries]
 
     def _resolve_mondo(self, con: sqlite3.Connection, source: str, value: str) -> str | None:
         if source == "NAME":

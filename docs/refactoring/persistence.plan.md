@@ -188,3 +188,21 @@ old live owner, process termination recovery, repeat release and invalid timeout
 Linux POSIX behavior tested; Windows implementation requires Windows CI validation.
 Atomic build-failure tests retained. No fallback based on stale timestamps or Redis.
 Local commit: see `fix(localdb): use process-owned locks with bounded acquisition`.
+
+## P02b / P03b local-source session evidence — 2026-10-05
+
+SourceIdentity is an immutable JSON value; SourceBinding owns read-only batch sessions
+with a SQLite read transaction, source-local metadata and local artifact stamps.
+Bindings reject replacement/in-place changes and require a new backend. SQLite WAL and
+GTDB tree components participate; no per-query hashing of large files. Metadata/results
+come from one connection snapshot. New builds record schema/build identifiers alongside
+existing release/content metadata. Wikipedia and GTDB reproductions now reject stale
+fingerprints, including unchanged release tags and changed trees. Legacy stamps guard
+local generations but are not portable content digests. No remote immutability claimed.
+
+Wikipedia, Disbiome, GMrepo and MONDO readers close per batch. GTDB and AGORA schedule
+one whole synchronous batch through asyncio.to_thread, retaining ordering/cardinality.
+Tests include JSON roundtrip, same-generation reuse, replacement before/during sessions,
+component identity and async heartbeat. Workspace suite and lint passed before commit.
+NCBI integration depends on P03a and is recorded separately below.
+Local commit: see `refactor(sources): bind local readers to artifact generations`.

@@ -1,12 +1,12 @@
 [project]
 name = "disbiome_weaver"
-version = "0.3.1"
+version = "0.3.2"
 description = "Disbiome microbe–disease associations (taxid -> diseases + direction) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.1.8"]
+dependencies = ["braidworks-core>=0.13.3"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

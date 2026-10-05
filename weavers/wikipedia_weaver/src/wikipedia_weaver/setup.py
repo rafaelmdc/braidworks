@@ -27,6 +27,7 @@ import logging
 import os
 import sqlite3
 import tempfile
+import uuid
 from collections.abc import Iterable
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -128,6 +129,10 @@ def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month
                 _flush(con, batch)
                 n += len(batch)
 
+            con.executemany(
+                "INSERT OR REPLACE INTO metadata VALUES (?, ?)",
+                [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
+            )
             con.execute(
                 "INSERT OR REPLACE INTO metadata(key, value) VALUES ('dump_month', ?)", (month,)
             )

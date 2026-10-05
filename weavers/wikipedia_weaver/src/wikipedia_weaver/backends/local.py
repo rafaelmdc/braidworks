@@ -5,7 +5,7 @@ local ``title -> views`` table (see ``setup.py`` for the dump->SQLite build). Un
 the api backend this is O(1) per title with no network, so it scales to the
 million-title scopes the fame ranking must cover.
 
-One read-only connection per thread (``threading.local``), created lazily; the sync
+One owned read-only connection per batch; the sync
 SELECTs run off the event loop via ``asyncio.to_thread``. Construction is cheap and
 never raises — ``is_configured()`` reports whether the DB is present and built.
 """
@@ -13,12 +13,11 @@ never raises — ``is_configured()`` reports whether the DB is present and built
 from __future__ import annotations
 
 import asyncio
-import sqlite3
-import threading
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from ..setup import db_is_valid
 
@@ -34,30 +33,19 @@ class WikipediaLocalBackend(BackendBase):
         # (factory -> ensure_pageviews_db), so a zero-config introspection build can
         # wire an unconfigured backend (manifest-complete, golden skips) with no download.
         self._db_path = Path(db_path)
-        self._tl = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM metadata"))
+        )
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
 
     def is_configured(self) -> bool:
         return self._configured
 
-    def _con(self) -> sqlite3.Connection:
-        con = getattr(self._tl, "con", None)
-        if con is None:
-            con = sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True)
-            self._tl.con = con
-        return con
-
     def fingerprint(self) -> str:
-        """The dump month backing this DB — the cache key. Stable even when unbuilt."""
-        if self._fingerprint is None:
-            if not self._configured:
-                return "enwiki-pageviews-unbuilt"
-            row = self._con().execute(
-                "SELECT value FROM metadata WHERE key='dump_month'"
-            ).fetchone()
-            self._fingerprint = "enwiki-pageviews-" + (row[0] if row else "unversioned")
-        return self._fingerprint
+        if not self._configured:
+            return "enwiki-pageviews-unbuilt"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -72,22 +60,23 @@ class WikipediaLocalBackend(BackendBase):
         return await asyncio.to_thread(self._lookup, titles)
 
     def _lookup(self, titles: list[str]) -> list[LookupRecord]:
-        con = self._con()
-        out: list[LookupRecord] = []
-        for title in titles:
-            query = {"wikipedia.title": title}
-            if not title:
-                out.append(LookupRecord(query=query, found=False))
-                continue
-            row = con.execute(
-                "SELECT views FROM pageviews WHERE title = ?", (title,)
-            ).fetchone()
-            if row is None:
-                # No row for this article in the dump month → no pageview data.
-                out.append(LookupRecord(query=query, found=False))
-            else:
-                out.append(
-                    LookupRecord(query=query, found=True,
-                                 values={"wikipedia.pageviews": int(row[0])})
-                )
-        return out
+        with self._source.session() as con:
+            out: list[LookupRecord] = []
+            for title in titles:
+                query = {"wikipedia.title": title}
+                if not title:
+                    out.append(LookupRecord(query=query, found=False))
+                    continue
+                row = con.execute(
+                    "SELECT views FROM pageviews WHERE title = ?", (title,)
+                ).fetchone()
+                if row is None:
+                    # No row for this article in the dump month → no pageview data.
+                    out.append(LookupRecord(query=query, found=False))
+                else:
+                    out.append(
+                        LookupRecord(
+                            query=query, found=True, values={"wikipedia.pageviews": int(row[0])}
+                        )
+                    )
+            return out

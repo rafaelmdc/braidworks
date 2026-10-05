@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import urllib.request
+import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -168,6 +169,8 @@ def write_db(target: Path, *, data_version: str | None, terms: list[_Term]) -> N
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
+                ("schema_version", "1"),
+                ("build_id", uuid.uuid4().hex),
                 ("data_version", data_version or "unknown"),
                 ("n_terms", str(len(terms))),
                 ("n_edges", str(n_edges)),

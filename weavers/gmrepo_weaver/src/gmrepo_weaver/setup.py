@@ -27,6 +27,7 @@ import hashlib
 import json
 import sqlite3
 import urllib.request
+import uuid
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -138,7 +139,11 @@ def write_db(
         sorted(phenotypes, key=lambda p: str(p.get("mesh_id", ""))),
         sorted(
             sample_profiles,
-            key=lambda r: (str(r.get("mesh_id", "")), str(r.get("run_id", "")), int(r["ncbi_taxon_id"])),
+            key=lambda r: (
+                str(r.get("mesh_id", "")),
+                str(r.get("run_id", "")),
+                int(r["ncbi_taxon_id"]),
+            ),
         ),
     )
 
@@ -211,6 +216,8 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
+                ("schema_version", "1"),
+                ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
                 ("n_overview", str(len(overview))),
                 ("n_associations", str(len(associations))),
@@ -388,7 +395,9 @@ def _fetch_profiles(
 
         def _one(run_id: str, mesh_id: str = mesh_id) -> list[dict]:
             try:
-                return _run_profile_rows(mesh_id, run_id, post(_PROFILE_ENDPOINT, {"run_id": run_id}))
+                return _run_profile_rows(
+                    mesh_id, run_id, post(_PROFILE_ENDPOINT, {"run_id": run_id})
+                )
             except Exception:  # noqa: BLE001 — one flaky run must not sink the crawl
                 return []
 

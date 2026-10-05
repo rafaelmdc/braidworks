@@ -19,11 +19,11 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import threading
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from disbiome_weaver.setup import _coerce_taxid, db_is_valid, default_disbiome_db_path
 
@@ -66,31 +66,17 @@ class DisbiomeLocalBackend(BackendBase):
         self._db_path = Path(db_path) if db_path else default_disbiome_db_path()
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
-        self._local = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
 
     def is_configured(self) -> bool:
         return self._configured
 
     def fingerprint(self) -> str:
-        # Disbiome has no release tag; the build records a content hash of the
-        # fetched tables. Read it once (only ever called when configured).
-        if self._fingerprint is None:
-            row = (
-                self._connect()
-                .execute("SELECT value FROM meta WHERE key = 'content_sha256'")
-                .fetchone()
-            )
-            self._fingerprint = f"disbiome-{row[0][:16]}" if row else "unconfigured:local"
-        return self._fingerprint
-
-    def _connect(self) -> sqlite3.Connection:
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(
-                f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False
-            )
-            self._local.con = con
-        return con
+        if not self._configured:
+            return "unconfigured:local"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -104,8 +90,8 @@ class DisbiomeLocalBackend(BackendBase):
         return await asyncio.to_thread(self._lookup_all, queries)
 
     def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        return [self._lookup_one(con, q) for q in queries]
+        with self._source.session() as con:
+            return [self._lookup_one(con, q) for q in queries]
 
     def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
         taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))

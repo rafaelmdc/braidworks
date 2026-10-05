@@ -88,3 +88,55 @@ async def test_without_a_tree_placement_misses_but_taxonomy_still_works():
         groups_to_compute=frozenset({"core"}),
     )
     assert taxonomy[0].found and taxonomy[0].values["gtdb.taxon.id"] == "s__Escherichia coli"
+
+
+async def test_whole_batch_runs_off_event_loop(monkeypatch):
+    import asyncio
+    import threading
+
+    backend = _backend()
+    started, release = threading.Event(), threading.Event()
+
+    def slow_batch(capability, queries):
+        started.set()
+        assert release.wait(5)
+        return []
+
+    monkeypatch.setattr(backend, "_fetch_sync", slow_batch)
+    task = asyncio.create_task(
+        backend.fetch(
+            "describe_gtdb_taxonomy",
+            [],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset(),
+        )
+    )
+    try:
+
+        async def heartbeat():
+            while not started.is_set():
+                await asyncio.sleep(0)
+            assert not task.done()
+
+        await asyncio.wait_for(heartbeat(), timeout=2)
+    finally:
+        release.set()
+        await task
+
+
+async def test_tree_change_requires_reopen(tmp_path):
+    from braidworks.core.exceptions import BackendConfigurationError
+
+    path = tmp_path / "tree"
+    path.write_text(fixture_tree_path().read_text())
+    backend = GtdbLocalBackend(fixture_db_path(), tree_paths=[path])
+    first = backend.fingerprint()
+    path.write_text("(replacement:1);")
+    with pytest.raises(BackendConfigurationError, match="reopen"):
+        await backend.fetch(
+            "describe_gtdb_tree_placement",
+            [{"ncbi.taxon.id": _ECOLI}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset(),
+        )
+    assert GtdbLocalBackend(fixture_db_path(), tree_paths=[path]).fingerprint() != first

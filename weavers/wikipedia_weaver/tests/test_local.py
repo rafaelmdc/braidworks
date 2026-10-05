@@ -47,7 +47,8 @@ def test_build_db_sums_access_methods(tmp_path: Path) -> None:
 async def test_local_backend_lookup(tmp_path: Path) -> None:
     backend = WikipediaLocalBackend(_fixture_db(tmp_path))
     assert backend.is_configured()
-    assert backend.fingerprint() == "enwiki-pageviews-202505"
+    assert backend.fingerprint().startswith("local-generation-")
+    assert backend.fingerprint() == backend.fingerprint()
 
     records = await backend.fetch(
         "describe_pageviews",
@@ -65,3 +66,33 @@ def test_unconfigured_backend_is_safe(tmp_path: Path) -> None:
     backend = WikipediaLocalBackend(tmp_path / "missing.sqlite")
     assert not backend.is_configured()
     assert backend.fingerprint() == "enwiki-pageviews-unbuilt"
+
+
+@pytest.mark.asyncio
+async def test_replacement_after_fingerprint_rejects_worker_read(tmp_path):
+    from braidworks.core.exceptions import BackendConfigurationError
+
+    db = _fixture_db(tmp_path)
+    backend = WikipediaLocalBackend(db)
+    original = backend.fingerprint()
+    replacement = tmp_path / "replacement.sqlite"
+    build_pageviews_db(
+        replacement, source=["en.wikipedia Brown_bear 1 desktop 20 x"], month="202506"
+    )
+    replacement.replace(db)
+    with pytest.raises(BackendConfigurationError, match="reopen"):
+        await backend.fetch(
+            "describe_pageviews",
+            [{"wikipedia.title": "Brown_bear"}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset(),
+        )
+    fresh = WikipediaLocalBackend(db)
+    assert fresh.fingerprint() != original
+    result = await fresh.fetch(
+        "describe_pageviews",
+        [{"wikipedia.title": "Brown_bear"}],
+        requested_outputs=frozenset(),
+        groups_to_compute=frozenset(),
+    )
+    assert result[0].values["wikipedia.pageviews"] == 20
