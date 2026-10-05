@@ -2,6 +2,7 @@
 
 Related [audit/spec](persistence-design.spec.md) and [cache/resume #143](https://github.com/rafaelmdc/braidworks/issues/143).
 Tracking: [#144](https://github.com/rafaelmdc/braidworks/issues/144).
+Concrete architecture: [responsibilities, patterns and module refactor](persistence-refactor-design.md).
 Status: proposed, no implementation yet. Work stays in this checkout on
 `refactor/persistence-foundations`, which includes the six unpushed readiness commits.
 
