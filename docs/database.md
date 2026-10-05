@@ -112,3 +112,29 @@ reviews live in the separate file and can be used by older constructors via expl
 a legacy compatibility option, but writes then invalidate a pinned local backend and
 require reopening. Shared read-only reference installations should provide a writable
 review path explicitly. Neither file belongs in git.
+
+## Opt-in lookup persistence (braidworks-core 0.15.0)
+
+```python
+from braidworks.core import SQLiteStrandCache, CachePolicy, execute_query
+
+cache = SQLiteStrandCache("data/lookups.sqlite", policy=CachePolicy(
+    positive_ttl=3600, negative_ttl=300, max_payload_bytes=256 * 1024 * 1024))
+# prepared = prepare_query(registry, request)
+# result = await execute_query(registry, prepared, cache=cache)
+```
+
+The default executor still uses memory. Cache keys include effective parameters,
+weaver/backend/source identity and input values; group coverage is checked separately.
+Ambiguous cached observations preserve review requirements. Errors are not cached.
+A zero TTL disables that category. Expiry is evaluated when reading; writes clean up
+expired rows and evict oldest payloads to fit the configured budget. Payload bytes
+exclude SQLite pages, indexes and WAL; ordinary deletion reuses pages rather than
+shrinking the file. For explicit physical reclamation when no executions use the file,
+SQLite checkpoint/VACUUM operations are an administrative choice, not part of a lookup.
+
+Unknown schema/codec versions fail with a rebuild/new-path instruction. These are
+recomputable observations: retain a copy and choose a new file rather than forcing an
+incompatible cache open. Corrupt entries log a warning and miss. No pickle or arbitrary
+object stringification is used. API contract fingerprints and TTLs do not guarantee a
+frozen provider dataset. Cache writes and durable run advancement are independent.

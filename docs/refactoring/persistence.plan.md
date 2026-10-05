@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01–P03 verified locally; P04–P07 planned. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04 verified locally; P05–P07 planned. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -227,3 +227,26 @@ thread work may complete after cancellation. Core/local source suites, strict ga
 and workspace lint pass; final full workspace verification is recorded in the log.
 Local commits: P02a ed87656; six-source session change 3615baf; NCBI review change see
 `refactor(ncbi): separate reviewed history from read-only reference sessions`.
+
+## P04a–P04b implementation evidence — 2026-10-05
+
+Versioned cache_codec rejects unsupported/nonfinite values rather than stringifying
+persistent identities. Historical finite JSON input fingerprints remain compatible.
+CachePolicy implements the specified configurable 3600s positive/ambiguous and 300s
+negative TTLs, no ERROR admission, zero-category disabling and 256 MiB payload budget.
+SQLiteStrandCache implements the existing port with short owned connections/transactions,
+versioned schema/codec checks, indexed base-key lookup, expiry and deterministic smallest
+valid group-superset selection. Loaded identity/coverage/JSON is validated; corruption is
+logged and treated as a miss. Retention evicts oldest observations deterministically;
+large payloads are not retained. Physical SQLite page/WAL size is not the payload budget.
+Memory remains the default; reviewed decisions stay outside lookup cache. API backend
+identity does not freeze live providers. Cache commits do not establish run progress.
+
+Core 448 tests pass, including adapter coverage contracts, reopen/fake-clock expiry,
+negative/ambiguous review retention, disabled TTL/budget, codec/policy validation,
+corruption/future-schema rejection, deterministic retention and transaction rollback.
+Existing executor coverage admission remains authoritative. Core 0.15.0 exposes
+SQLiteStrandCache and CachePolicy. Human interface configuration is reserved for P07.
+Executed P04 after its AP01–02 dependency while keeping unrelated application tasks
+planned, per the user's request to implement one plan at a time.
+Local commit: see `feat(cache): add opt-in SQLite cache with versioned policy and codec`.

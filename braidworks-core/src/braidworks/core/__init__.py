@@ -13,6 +13,7 @@ from braidworks.core.cache import (
     StrandCacheKey,
     compute_cache_key,
 )
+from braidworks.core.cache_policy import CachePolicy
 from braidworks.core.capability import (
     Capability,
     OutputGroup,
@@ -107,6 +108,7 @@ from braidworks.core.references import (
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
+from braidworks.core.sqlite_cache import SQLiteStrandCache
 from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet
 from braidworks.core.traverse import (
     fan_capabilities,
@@ -137,6 +139,7 @@ __all__ = [
     "Braider",
     "BraidworksError",
     "BuildLock",
+    "CachePolicy",
     "Candidate",
     "CandidateResult",
     "Capability",
@@ -171,6 +174,7 @@ __all__ = [
     "ReviewPolicy",
     "ReviewQueueItem",
     "ReviewRequired",
+    "SQLiteStrandCache",
     "StepOutcome",
     "Strand",
     "StrandCache",

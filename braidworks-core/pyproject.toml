@@ -1,6 +1,6 @@
 [project]
 name = "braidworks-core"
-version = "0.14.0"
+version = "0.15.0"
 description = "Core abstractions for Braidworks: strands, weavers, registry, braider, executor."
 readme = "README.md"
 license = "MIT"
