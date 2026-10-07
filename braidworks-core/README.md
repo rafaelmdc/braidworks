@@ -63,3 +63,36 @@ licenses. The source license in a weaver manifest describes its data, not this c
 For inspectable CLI run records, add `--archive run.json` to `braidworks weave` or
 `braidworks run`. It saves inputs, settings, outcomes, fingerprints and citations in
 a new JSON file. See the [archive and restart scope](https://github.com/rafaelmdc/braidworks/blob/main/docs/usage.md#save-a-run-archive).
+
+### Local cache and saved runs
+
+Persistence is opt-in. Use local paths; ordinary queries keep the memory cache.
+
+```bash
+braidworks weave --have protein.query=TP53 --want gene.symbol \
+  --cache-db data/lookups.sqlite --run-db data/runs.sqlite --run-id example
+braidworks runs --run-db data/runs.sqlite
+braidworks runs example --run-db data/runs.sqlite --format json
+braidworks resume example --run-db data/runs.sqlite --format json
+```
+
+`runs` prints pending review keys and the original candidates. To select a saved
+candidate, use its **zero-based** index, for example
+`braidworks resume example --run-db data/runs.sqlite --decision node:0=select:0`.
+`--decision node:0=accept` approves an OK observation that needs review;
+`--decision node:0=reject` leaves that row unresolved. Decisions are repeatable and
+use internal keys so duplicate input labels remain independent. Approval applies
+only to the selected observation; later steps retain the original review policy.
+
+Resume retains inputs, plans, effective parameters, traversal cursor and expansion
+budget. It rejects changed declared sources/manifests; completed saved waves are not
+restarted. A read interrupted before its wave is saved may repeat. Run archives
+(`--archive`) remain separate observation exports. `--strict` still fails for
+unresolved/review results, including on resume.
+
+Cache controls are `--cache-positive-ttl` (default 3600 seconds),
+`--cache-negative-ttl` (300 seconds), and `--cache-max-bytes` (268435456 payload
+bytes). Zero TTL disables that category. Errors are never cached; cached ambiguity
+still needs review. `--lease-seconds` defaults to 60 and renews during execution.
+An expired owner cannot save; another process can recover after expiry. See
+[database operations](../docs/database.md) for paths, retention and format limits.

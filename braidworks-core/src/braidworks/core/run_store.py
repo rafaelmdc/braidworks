@@ -166,9 +166,15 @@ class RunStore(Protocol):
 class SQLiteRunStore:
     """One complete versioned JSON snapshot per run, atomically replaced."""
 
-    def __init__(self, path: str | Path, *, clock: Callable[[], float] = time.time):
+    def __init__(
+        self, path: str | Path, *, clock: Callable[[], float] = time.time, create: bool = True
+    ):
         self.path = Path(path)
         self.clock = clock
+        if not create:
+            with connection_scope(self.path, readonly=True) as connection:
+                self._schema(connection)
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with connection_scope(self.path) as connection:
             connection.execute("PRAGMA journal_mode=WAL")
@@ -315,3 +321,25 @@ class SQLiteRunStore:
 
     def release(self, run_id, *, revision, owner):
         return self._change(run_id, revision, owner, "release")
+
+
+def run_status(checkpoint: RunCheckpoint) -> dict[str, Any]:
+    """Human-interface data without exposing the opaque owner token or runtime handles."""
+    return decode_json(
+        canonical_json(
+            {
+                "run_id": checkpoint.run_id,
+                "revision": checkpoint.revision,
+                "status": checkpoint.status,
+                "created_at": checkpoint.created_at,
+                "updated_at": checkpoint.updated_at,
+                "lease_until": checkpoint.lease_until,
+                "inputs": len(checkpoint.definition.prepared.request.inputs),
+                "options": checkpoint.definition.prepared.request.options.to_json(),
+                "targets": sorted(checkpoint.definition.prepared.request.targets),
+                "reviews": [item.to_json() for item in checkpoint.state.result.review_queue],
+                "decisions": checkpoint.state.review_decisions,
+                "pending_continuations": len(checkpoint.state.review_continuations),
+            }
+        )
+    )

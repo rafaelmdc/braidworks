@@ -25,12 +25,14 @@ import asyncio
 import csv
 import io
 import json
+import sqlite3
 import sys
 from collections.abc import Sequence
 from typing import Any
 
 from braidworks.core.archive import begin_archive, write_archive
 from braidworks.core.braid import BackendPolicy
+from braidworks.core.cache_policy import CachePolicy
 from braidworks.core.discovery import build_registry_from_entry_points
 from braidworks.core.errors import classify_error, explain_error
 from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
@@ -51,6 +53,7 @@ from braidworks.core.outcomes import (
     strand_record as _record,
 )
 from braidworks.core.parameters import map_parameter_items
+from braidworks.core.persistent_query import continue_run, start_run
 from braidworks.core.planner import Braider
 from braidworks.core.query import (
     QueryOptions,
@@ -65,7 +68,10 @@ from braidworks.core.references import (
 )
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveStatus
+from braidworks.core.review import ReviewDecision
+from braidworks.core.run_store import SQLiteRunStore, run_status
 from braidworks.core.runner import validate_batch_size
+from braidworks.core.sqlite_cache import SQLiteStrandCache
 from braidworks.core.strand import StepOutcome, Strand, StrandSet
 
 
@@ -371,6 +377,147 @@ def _archive_finish(args, archive, records, execution):
     return True
 
 
+def _cache_from_args(args):
+    if not args.cache_db:
+        return None
+    return SQLiteStrandCache(
+        args.cache_db,
+        policy=CachePolicy(args.cache_positive_ttl, args.cache_negative_ttl, args.cache_max_bytes),
+    )
+
+
+async def _execute_prepared(args, registry, prepared):
+    cache = _cache_from_args(args)
+    if not args.run_db:
+        if args.run_id:
+            raise ValueError("--run-id requires --run-db")
+        return await execute_query(registry, prepared, cache=cache)
+    announced = False
+
+    def saved(checkpoint):
+        nonlocal announced
+        if not announced:
+            _err(f"durable run: {checkpoint.run_id} (store: {args.run_db})")
+            announced = True
+
+    checkpoint = await start_run(
+        registry,
+        prepared,
+        SQLiteRunStore(args.run_db),
+        run_id=args.run_id,
+        cache=cache,
+        on_saved=saved,
+        lease_seconds=args.lease_seconds,
+    )
+    _err(f"run status: {checkpoint.status}, revision {checkpoint.revision}")
+    return checkpoint.state.result
+
+
+def _parse_decisions(values):
+    decisions = []
+    for value in values or ():
+        key, sep, action = value.partition("=")
+        if not sep:
+            raise ValueError("decision expects ENTITY_KEY=select:INDEX|accept|reject")
+        verb, colon, index = action.partition(":")
+        if verb == "select" and colon:
+            try:
+                index = int(index)
+            except ValueError as exc:
+                raise ValueError("candidate INDEX must be a zero-based integer") from exc
+        elif colon:
+            raise ValueError("Only select accepts an index")
+        else:
+            index = None
+        decisions.append(ReviewDecision(key, verb, index))
+    return tuple(decisions)
+
+
+def _cmd_runs(args):
+    try:
+        store = SQLiteRunStore(args.run_db, create=False)
+        checkpoints = [store.load(args.run_id)] if args.run_id else store.list()
+        statuses = [run_status(cp) for cp in checkpoints]
+        if args.format == "json":
+            json.dump(
+                statuses[0] if args.run_id else statuses, sys.stdout, ensure_ascii=False, indent=2
+            )
+            print()
+        else:
+            for status in statuses:
+                print(
+                    f"{status['run_id']}  {status['status']}  revision={status['revision']}  inputs={status['inputs']}"
+                )
+                for item in status["reviews"]:
+                    ss = item["strand_set"]
+                    result = item["triggering_result"]
+                    print(
+                        f"  review {ss['execution_key']}  entity={ss['entity_id']}  source_row={ss.get('source_row')}  capability={result['capability_id']}"
+                    )
+                    for index, candidate in enumerate(result["candidates"]):
+                        values = {
+                            strand["type_id"]: strand["value"] for strand in candidate["strands"]
+                        }
+                        print(
+                            f"    select:{index}  confidence={candidate['confidence']}  {json.dumps(values, ensure_ascii=False)}"
+                        )
+                    print("    reject" + (" | accept" if result["status"] == "ok" else ""))
+        return 0
+    except (ValueError, OSError, sqlite3.Error, KeyError) as exc:
+        _err(f"error: could not read run store: {exc}")
+        return 1
+
+
+def _cmd_resume(args):
+    try:
+        store = SQLiteRunStore(args.run_db, create=False)
+        original = store.load(args.run_id)
+        prepared = original.definition.prepared
+        registry = _load_registry(args.only)
+        caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
+        archive = _archive_start(
+            args,
+            list(prepared.request.inputs),
+            registry,
+            [braid.to_json() for braid, _ in prepared.plans],
+            caps,
+            prepared.effective_params,
+        )
+        checkpoint = asyncio.run(
+            continue_run(
+                registry,
+                store,
+                args.run_id,
+                cache=_cache_from_args(args),
+                decisions=_parse_decisions(args.decision),
+                lease_seconds=args.lease_seconds,
+            )
+        )
+        result = checkpoint.state.result
+        want = sorted(prepared.request.targets)
+        records = _result_records(result, want)
+        if not _archive_finish(args, archive, records, result.to_json()):
+            return 1
+        _emit(records, args.format, want)
+        _err(f"run {checkpoint.run_id}: {checkpoint.status}, revision {checkpoint.revision}")
+        _report_errors(result.errors)
+        _report_truncations(result)
+        if args.references:
+            _err(format_references(result.references))
+        return int(
+            bool(
+                result.fatal_errors()
+                or (
+                    args.strict
+                    and (result.unresolved or any(row["requires_review"] for row in records))
+                )
+            )
+        )
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
+        _err(f"error: could not resume run: {exc}")
+        return 1
+
+
 def _cmd_weave(args: argparse.Namespace) -> int:
     registry = _load_registry(args.only)
     backend_policy = BackendPolicy(args.policy)
@@ -404,7 +551,7 @@ def _cmd_weave(args: argparse.Namespace) -> int:
         _err(f"no route: {exc}")
         _err("try `braidworks keys` to see what is produced, or `braidworks path --from … --to …`.")
         return 1
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
     plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
@@ -415,8 +562,8 @@ def _cmd_weave(args: argparse.Namespace) -> int:
     )
     _err(f"running {sum(len(b.steps) for b, _ in plans)} step(s) over {len(sets)} input(s)…")
     try:
-        result = asyncio.run(execute_query(registry, prepared))
-    except (ValueError, BraidworksError) as exc:
+        result = asyncio.run(_execute_prepared(args, registry, prepared))
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
 
@@ -494,8 +641,8 @@ def _weave_traversed(
         _err(
             f"fanning through {' → '.join(cid for _, cid in prepared.traversals)} over {len(sets)} input(s)…"
         )
-        result = asyncio.run(execute_query(registry, prepared))
-    except (ValueError, BraidworksError) as exc:
+        result = asyncio.run(_execute_prepared(args, registry, prepared))
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
 
@@ -587,7 +734,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             )
         )
         validate_batch_size(len(sets), len(results), context=f"{args.capability} [{backend}]")
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
 
@@ -809,6 +956,39 @@ def _add_output_flags(p: argparse.ArgumentParser, *, strict: bool = True) -> Non
         )
 
 
+def _add_persistence_flags(parser, *, start=False):
+    parser.add_argument("--cache-db", metavar="PATH", help="opt-in local SQLite lookup cache")
+    parser.add_argument(
+        "--cache-positive-ttl",
+        type=float,
+        default=3600,
+        help="positive/ambiguous lifetime in seconds; 0 disables admission",
+    )
+    parser.add_argument(
+        "--cache-negative-ttl",
+        type=float,
+        default=300,
+        help="no-match lifetime in seconds; 0 disables admission",
+    )
+    parser.add_argument(
+        "--cache-max-bytes",
+        type=int,
+        default=256 * 1024 * 1024,
+        help="cache payload budget; physical SQLite size may differ",
+    )
+    parser.add_argument(
+        "--run-db", metavar="PATH", required=not start, help="opt-in local durable run store"
+    )
+    parser.add_argument(
+        "--lease-seconds",
+        type=float,
+        default=60,
+        help="run owner lease, renewed while executing (default: 60 seconds)",
+    )
+    if start:
+        parser.add_argument("--run-id", help="new run identity; existing IDs are never overwritten")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="braidworks",
@@ -881,7 +1061,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--references", action="store_true", help="print source citations for the route to stderr."
     )
     _add_output_flags(w)
+    _add_persistence_flags(w, start=True)
     w.set_defaults(func=_cmd_weave)
+
+    runs = sub.add_parser("runs", help="list saved runs or inspect a run's status/review choices")
+    runs.add_argument("run_id", nargs="?")
+    runs.add_argument("--run-db", required=True, metavar="PATH")
+    runs.add_argument("--format", choices=["human", "json"], default="human")
+    runs.set_defaults(func=_cmd_runs)
+    resume = sub.add_parser("resume", help="continue a saved run with its original query settings")
+    resume.add_argument("run_id")
+    resume.add_argument(
+        "--decision",
+        action="append",
+        metavar="ENTITY_KEY=select:INDEX|accept|reject",
+        help="explicit saved review decision; select INDEX is zero-based; repeatable",
+    )
+    resume.add_argument("--references", action="store_true")
+    _add_output_flags(resume)
+    _add_persistence_flags(resume)
+    resume.set_defaults(func=_cmd_resume)
 
     # run
     r = sub.add_parser("run", help="call ONE weaver capability directly (no routing).")

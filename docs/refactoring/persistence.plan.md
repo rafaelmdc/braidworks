@@ -335,3 +335,21 @@ sibling, prior errors, atomic invalid decisions and legacy limits. Full workspac
 passed/48 skipped and lint pass. Core 0.19.0 exports ReviewDecision. P07 CLI/browser/docs
 and final integrated gates remain in progress.
 Local commit: see `feat(review): resume explicit decisions at saved query phases`.
+
+## P07c CLI activation evidence — 2026-10-07
+
+weave exposes explicit cache/run paths, cache TTL/payload knobs, owner lease and optional
+new run identity. runs lists/statuses stores without discovering weavers or creating a
+missing file; human output shows stable review keys, original candidates and zero-based
+selection indices. resume loads original settings and accepts repeatable explicit
+select/accept/reject decisions. Results keep existing formats/strict/reference behavior;
+archives remain independent observation exports. run_status shares JSON presentation
+data without exposing owner tokens. SQLiteRunStore(create=False) validates existing
+stores read-only before continuation. Memory remains the default.
+
+Five command journeys pass: cross-command cache reuse and completed resume without source
+calls, duplicate review select/accept/reject, missing-path status without file creation,
+invalid knobs/no overwrite and resumed archive export. Existing CLI/review client tests
+pass (88 before new journeys). Full workspace 1371 passed/48 skipped; make lint passes.
+Core 0.19.1. P07 browser/shared path-option adapters and integrated gates remain.
+Local commit: see `feat(cli): expose local cache run status and explicit resume decisions`.

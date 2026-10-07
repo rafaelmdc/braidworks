@@ -117,6 +117,7 @@ from braidworks.core.run_store import (
     RunDefinition,
     RunStore,
     SQLiteRunStore,
+    run_status,
 )
 from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
 from braidworks.core.sqlite_cache import SQLiteStrandCache
@@ -242,6 +243,7 @@ __all__ = [
     "references_for_braid",
     "relationship_name",
     "resolve_traversal",
+    "run_status",
     "run_traversed",
     "skip_if_transient",
     "start_query",
