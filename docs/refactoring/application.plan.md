@@ -84,6 +84,9 @@ into a differently named file and call the refactor complete.
 
 ## A06 — Scaffold functional core and publication shell
 
+Detailed [A06 specification](scaffold.spec.md) and [implementation plan](scaffold.plan.md)
+expand this work package into SC01–SC05 and S01–S04. Status: planned, not implemented.
+
 Split scaffold into pure artifact plan, single-pass target-aware rendering, validation
 and filesystem publication. Preserve scaffold wrapper/force/format behavior. Reject
 missing bindings and invalid Python before writes. Inserted placeholder-like data is

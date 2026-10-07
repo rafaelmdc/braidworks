@@ -30,3 +30,6 @@ instruction to implement them before their foundations are ready.
 
 Publishing [#142](https://github.com/rafaelmdc/braidworks/issues/142) stays deferred.
 No publication, pushing, merging, remote release activation or manual tags are included.
+
+A06 scaffold work has a detailed [specification](scaffold.spec.md) and
+[implementation plan](scaffold.plan.md), grounded in the current generator and tests.
