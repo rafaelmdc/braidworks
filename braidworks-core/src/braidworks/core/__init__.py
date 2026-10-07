@@ -110,6 +110,7 @@ from braidworks.core.references import (
 )
 from braidworks.core.registry import BraidRegistry, validate_manifest
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
+from braidworks.core.review import ReviewDecision
 from braidworks.core.run_store import (
     RunCheckpoint,
     RunConflict,
@@ -183,6 +184,7 @@ __all__ = [
     "QueryRequest",
     "Reference",
     "ResolverRecord",
+    "ReviewDecision",
     "ReviewPolicy",
     "ReviewQueueItem",
     "ReviewRequired",

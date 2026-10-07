@@ -117,12 +117,14 @@ class ReviewQueueItem:
     strand_set: StrandSet
     triggering_result: WeaveResult
     remaining_steps: tuple[CapabilityInvocation, ...]
+    continuation: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         return {
             "strand_set": self.strand_set.to_json(),
             "triggering_result": self.triggering_result.to_json(),
             "remaining_steps": [s.to_json() for s in self.remaining_steps],
+            **({"continuation": self.continuation} if self.continuation else {}),
         }
 
     @classmethod
@@ -133,6 +135,7 @@ class ReviewQueueItem:
             remaining_steps=tuple(
                 CapabilityInvocation.from_json(s) for s in data["remaining_steps"]
             ),
+            continuation=dict(data.get("continuation", {})),
         )
 
 
@@ -630,7 +633,14 @@ class LocalExecutor:
             state.live = list(chunk)
             state.terminal = set()
             state.representative = {}
-            state.errored = {}
+            state.errored = {
+                entity_key(ss): {
+                    tuple(pair)
+                    for pair in state.settings.get("prior_errors", {}).get(entity_key(ss), [])
+                }
+                for ss in chunk
+                if state.settings.get("prior_errors", {}).get(entity_key(ss))
+            }
             state.wave_index = 0
             state.chunk_active = True
         live = state.live
@@ -715,7 +725,8 @@ class LocalExecutor:
         representative = state.representative
         errored = state.errored
         spawned = []
-        for step_index, invocation, outs in sorted(wave_results, key=lambda t: t[0]):
+        ordered = sorted(wave_results, key=lambda t: t[0])
+        for step_index, invocation, outs in ordered:
             cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
             for ss, kind, payload in outs:
                 if entity_key(ss) in terminal:
@@ -727,13 +738,15 @@ class LocalExecutor:
                     produced = tuple(sorted(invocation.output_types & ss.available_types()))
                     ss.completion.append(StepOutcome(invocation.capability_id, "", "ok", produced))
                     continue
+                review_count = len(result.review_queue)
+                pending = tuple(inv for si, inv, _ in ordered if si > step_index) + remaining_steps
                 self._apply_result(
                     ss,
                     payload,
                     step_index,
                     invocation,
                     cap.set_outputs,
-                    remaining_steps,
+                    pending,
                     result,
                     terminal,
                     representative,
@@ -747,6 +760,14 @@ class LocalExecutor:
                     confidence_threshold=confidence_threshold,
                     expansion_budget=expansion_budget,
                 )
+                for item in result.review_queue[review_count:]:
+                    item.continuation.update(
+                        invocation=invocation.to_json(),
+                        to_types=sorted(state.braid.to_types),
+                        prior_errors=[
+                            list(pair) for pair in sorted(errored.get(entity_key(ss), set()))
+                        ],
+                    )
 
         if terminal:
             live = [ss for ss in live if entity_key(ss) not in terminal]

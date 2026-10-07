@@ -26,15 +26,18 @@ class QueryExecutionState:
     active: ExecutionState | None = None
     active_kind: str | None = None
     settings_override: dict[str, Any] = field(default_factory=dict)
+    stop_after_group: bool = False
+    review_continuations: list["QueryExecutionState"] = field(default_factory=list)
+    review_decisions: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def done(self) -> bool:
-        return self.phase == "done"
+        return self.phase == "done" and not self.review_continuations
 
     def to_json(self) -> dict[str, Any]:
         return deepcopy(
             {
-                "version": 1,
+                "version": 2,
                 "prepared": self.prepared.to_json(),
                 "inputs": [ss.to_json() for ss in self.inputs],
                 "budget": {
@@ -50,14 +53,23 @@ class QueryExecutionState:
                 "active": self.active.to_json() if self.active else None,
                 "active_kind": self.active_kind,
                 "settings_override": self.settings_override,
+                "stop_after_group": self.stop_after_group,
+                "review_continuations": [frame.to_json() for frame in self.review_continuations],
+                "review_decisions": self.review_decisions,
             }
         )
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> "QueryExecutionState":
-        if data.get("version") != 1:
+    def from_json(cls, data: dict[str, Any], *, _budget=None) -> "QueryExecutionState":
+        if data.get("version") not in (1, 2):
             raise ValueError("Unsupported query execution state version")
-        budget = _ExpansionBudget(**data["budget"])
+        budget = _budget if _budget is not None else _ExpansionBudget(**data["budget"])
+        if _budget is not None and data["budget"] != {
+            "limit": budget.limit,
+            "leaves": budget.leaves,
+            "next_identity": budget.next_identity,
+        }:
+            raise ValueError("Conflicting review continuation expansion budget")
         state = cls(
             PreparedQuery.from_json(data["prepared"]),
             [StrandSet.from_json(ss) for ss in data["inputs"]],
@@ -70,6 +82,12 @@ class QueryExecutionState:
             ExecutionState.from_json(data["active"], _budget=budget) if data["active"] else None,
             data["active_kind"],
             deepcopy(data["settings_override"]),
+            data.get("stop_after_group", False),
+            [
+                cls.from_json(frame, _budget=budget)
+                for frame in data.get("review_continuations", [])
+            ],
+            deepcopy(data.get("review_decisions", [])),
         )
         if state.phase not in ("group", "prelude", "fan", "targets", "done"):
             raise ValueError("Invalid query execution phase")
@@ -144,7 +162,7 @@ async def continue_query(
     def finish_group():
         state.group_index += 1
         state.traversal_index = 0
-        state.phase = "group"
+        state.phase = "done" if state.stop_after_group else "group"
         state.current = []
         if on_event:
             on_event(
@@ -159,12 +177,28 @@ async def continue_query(
         checkpoint()
 
     checkpoint()
+    while state.review_continuations:
+        frame = state.review_continuations[0]
+        await continue_query(
+            registry,
+            frame,
+            executor=executor,
+            on_event=on_event,
+            on_checkpoint=lambda _: checkpoint(),
+        )
+        absorb_result(state.result, frame.result)
+        state.review_continuations.pop(0)
+        checkpoint()
     while not state.done:
         if state.active is not None:
             result = await executor.continue_state(
                 state.active, on_event=on_event, on_checkpoint=lambda _: checkpoint()
             )
             kind = state.active_kind
+            for item in result.review_queue:
+                item.continuation.update(
+                    group_index=state.group_index, traversal_index=state.traversal_index, kind=kind
+                )
             state.active = None
             state.active_kind = None
             if kind in ("route", "targets"):

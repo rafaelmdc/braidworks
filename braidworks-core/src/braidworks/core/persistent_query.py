@@ -57,12 +57,13 @@ async def continue_run(
     on_event: Callable | None = None,
     on_saved: Callable[[RunCheckpoint], None] | None = None,
     lease_seconds: float = 60,
+    decisions: tuple = (),
 ) -> RunCheckpoint:
     """Validate, claim and continue; interruption preserves the last applied snapshot.
 
-    Completed/review queries return their saved observations. This function never makes
-    a human review decision. Review continuation requires a separate explicit decision
-    transition, not changing the saved policy or replaying completed traversals.
+    Completed/review queries return saved observations unless explicit ReviewDecision
+    values are supplied. Choices resume only saved branches/phases, retaining the
+    original policy for future results and the original source observation in history.
     """
     _validate_lease(lease_seconds)
     checkpoint = store.load(run_id)
@@ -71,7 +72,12 @@ async def continue_run(
         expected_prepared.to_json() != checkpoint.definition.prepared.to_json()
     ):
         raise RunConflict("Resume query/options differ from the saved definition")
-    if checkpoint.status in ("complete", "review") and checkpoint.state.done:
+    reviewed = None
+    if decisions:
+        from .review import apply_review_decisions
+
+        reviewed = apply_review_decisions(registry, checkpoint.state, decisions)
+    if checkpoint.status in ("complete", "review") and checkpoint.state.done and not decisions:
         return checkpoint
     checkpoint = store.claim(run_id, revision=checkpoint.revision, lease_seconds=lease_seconds)
     execution = renewal = None
@@ -96,7 +102,7 @@ async def continue_run(
 
     try:
         checkpoint.definition.validate(registry, worker_identity=worker_identity)
-        state = checkpoint.state
+        state = reviewed if reviewed is not None else checkpoint.state
         execution = asyncio.create_task(
             continue_query(registry, state, cache=cache, on_event=on_event, on_checkpoint=save)
         )

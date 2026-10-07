@@ -311,3 +311,27 @@ real cancellation and reconstruction, long query renewal, failed renewal cleanup
 changed worker/source/options and pending review. Core 488 tests pass; full workspace
 1355 passed/48 skipped; make lint passes. Core 0.18.0.
 Local commit: see `feat(resume): manage durable query leases and checkpoint lifecycle`.
+
+## P07b explicit review continuation evidence — 2026-10-07
+
+ReviewDecision identifies a saved stable entity key and select/accept/reject action.
+Selecting requires a saved candidate index; accept requires an OK observation; invalid
+or duplicate decisions leave the run unclaimed. Decisions retain original observation
+and phase context in history. Only that observation is approved below its confidence
+floor; subsequent results retain saved review/confidence settings. Rejection records an
+unresolved terminal row. Duplicate labels remain independent.
+
+Review queues now retain unapplied siblings in their wave and query phase/group/traversal
+context. Serializable continuation frames share the original expansion budget and resume
+only that branch, including remaining traversals/targets. Prior branch failures persist.
+Query snapshot version 2 reads legacy version 1; older readers reject new snapshots rather
+than dropping frames. Legacy review already missing phase context fails with a retain/new
+run instruction. Runtime registry/cache handles remain excluded.
+
+Eleven review tests pass: explicit low-confidence selection, next-step review preserved,
+accept/reject, duplicate partial decisions, repeated traversals under a shared fan cap,
+JSON reconstruction/resumption at every saved continuation boundary, unapplied parallel
+sibling, prior errors, atomic invalid decisions and legacy limits. Full workspace 1366
+passed/48 skipped and lint pass. Core 0.19.0 exports ReviewDecision. P07 CLI/browser/docs
+and final integrated gates remain in progress.
+Local commit: see `feat(review): resume explicit decisions at saved query phases`.
