@@ -22,7 +22,7 @@ baseline, not another rewrite to perform.
 | W09 | PF04 | Versioned cache codec/policy and SQLite cache adapter | W01–04 | Verified locally; see persistence.plan.md |
 | W10 | PF05 | Stable execution identities/state and in-memory continuation equivalence | W04; preserve W06 events | Verified locally; see persistence.plan.md |
 | W11 | PF06 | Transactional RunStore/checkpoint ownership/recovery | W01, W02, W10 | Verified locally; see persistence.plan.md |
-| W12 | PF07 | Cache/run status/resume across CLI/API/browser and human docs | W05–06, W09–11 | Planned |
+| W12 | PF07 | Cache/run status/resume across CLI/API/browser and human docs | W05–06, W09–11 | Verified locally; see persistence.plan.md |
 | W13 | AP08 | NCBI dispatch fit assessment; adapter only if justified | W03–04, W08 | Conditional |
 | W14 | RD01–08 plus all PF/AP | Full integrated validation, migrations, artifacts and user workflows | Required work complete | Planned |
 

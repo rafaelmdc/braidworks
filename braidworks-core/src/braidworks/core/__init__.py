@@ -86,6 +86,7 @@ from braidworks.core.localdb import (
 )
 from braidworks.core.mapper import map_lookup, map_resolver
 from braidworks.core.outcomes import execution_records
+from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
 from braidworks.core.persistent_query import continue_run, start_run
 from braidworks.core.planner import Braider
 from braidworks.core.query import (
@@ -182,6 +183,7 @@ __all__ = [
     "Provenance",
     "QueryExecutionState",
     "QueryOptions",
+    "QueryPersistence",
     "QueryRequest",
     "Reference",
     "ResolverRecord",
@@ -222,6 +224,7 @@ __all__ = [
     "default_db_path",
     "download",
     "ensure_local_db",
+    "execute_managed_query",
     "execute_query",
     "execution_records",
     "explain_error",

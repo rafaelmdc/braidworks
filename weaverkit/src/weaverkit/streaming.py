@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
@@ -39,7 +40,7 @@ async def query_events(
             except TimeoutError:
                 continue
         yield {**await task, "event": "done"}
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
         yield {"event": "error", "error": str(exc)}
     except Exception:  # noqa: BLE001 - preserve server traceback at the transport boundary
         _LOG.exception("Unexpected query stream failure")

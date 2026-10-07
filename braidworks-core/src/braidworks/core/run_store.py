@@ -337,6 +337,10 @@ def run_status(checkpoint: RunCheckpoint) -> dict[str, Any]:
                 "inputs": len(checkpoint.definition.prepared.request.inputs),
                 "options": checkpoint.definition.prepared.request.options.to_json(),
                 "targets": sorted(checkpoint.definition.prepared.request.targets),
+                "request": checkpoint.definition.prepared.request.to_json(),
+                "planned_routes": [
+                    braid.to_json() for braid, _ in checkpoint.definition.prepared.plans
+                ],
                 "reviews": [item.to_json() for item in checkpoint.state.result.review_queue],
                 "decisions": checkpoint.state.review_decisions,
                 "pending_continuations": len(checkpoint.state.review_continuations),

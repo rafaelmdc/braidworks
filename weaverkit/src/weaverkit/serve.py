@@ -22,6 +22,7 @@ import them lazily and fail with a clear install hint if missing.
 
 import asyncio
 import io
+import sqlite3
 
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
@@ -32,6 +33,8 @@ from braidworks.core.executor import (
 )
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.outcomes import execution_records
+from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
+from braidworks.core.persistent_query import continue_run
 from braidworks.core.query import (
     QueryOptions,
     QueryRequest,
@@ -40,6 +43,8 @@ from braidworks.core.query import (
     prepare_query,
 )
 from braidworks.core.references import references_for
+from braidworks.core.review import ReviewDecision
+from braidworks.core.run_store import SQLiteRunStore, run_status
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.traverse import resolve_traversal, traversal_route_capabilities
 
@@ -106,6 +111,7 @@ def code_response(
     review_policy="halt",
     confidence_threshold=0.0,
     _prepared=None,
+    persistence=None,
 ):
     """Render validated query artifacts without repeating planning or execution."""
     options = {
@@ -116,6 +122,7 @@ def code_response(
         "max_expansion": max_expansion,
         "review_policy": review_policy,
         "confidence_threshold": confidence_threshold,
+        "persistence": persistence,
     }
     return _code_response(registry, have, want, traverse, None, options, _prepared)
 
@@ -124,6 +131,7 @@ def _code_response(registry, have, want, traverse, batch, options, prepared=None
     try:
         prepared = prepared or _prepare_experiment(registry, have, want, traverse, batch, **options)
         settings = prepared.request.options
+        persistence = _persistence(options.get("persistence"))
         path = (
             render_path(registry, prepared.plans[0][0], policy=settings.backend_policy)
             if (batch is None and prepared.plans and not prepared.traversals)
@@ -150,13 +158,13 @@ def _code_response(registry, have, want, traverse, batch, options, prepared=None
             "ok": True,
             "effective_params": _prepared_effective(registry, prepared),
             "artifacts": {
-                "cli_weave": cli_artifact(prepared, have, batch=batch),
+                "cli_weave": cli_artifact(prepared, have, batch=batch, persistence=persistence),
                 "cli_path": path_artifact(prepared, have, batch=batch),
-                "python": python_artifact(prepared),
+                "python": python_artifact(prepared, persistence=persistence),
                 "braid": recipe,
             },
         }
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
         return {"ok": False, "error": str(exc)}
 
 
@@ -339,6 +347,7 @@ async def execute_batch_response(
     review_policy="halt",
     confidence_threshold=0.0,
     on_event=None,
+    persistence=None,
 ):
     """Plan every row group before I/O, then execute with one shared expansion budget."""
     prepared = _prepare_experiment(
@@ -356,7 +365,23 @@ async def execute_batch_response(
         confidence_threshold=confidence_threshold,
     )
     sets = list(prepared.request.inputs)
-    result = await execute_query(registry, prepared, on_event=on_event)
+    saved = []
+
+    def checkpoint(cp):
+        saved[:] = [cp]
+        if on_event:
+            on_event(
+                {
+                    "event": "checkpoint",
+                    "run_id": cp.run_id,
+                    "revision": cp.revision,
+                    "status": cp.status,
+                }
+            )
+
+    result = await execute_managed_query(
+        registry, prepared, _persistence(persistence), on_event=on_event, on_saved=checkpoint
+    )
     traversals = prepared.traversals
     plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
     effective = _prepared_effective(registry, prepared)
@@ -368,8 +393,71 @@ async def execute_batch_response(
         **payload,
         "effective_params": effective,
         "planned_routes": [braid.to_json() for braid, _ in plans],
+        **({"run": run_status(saved[-1])} if saved else {}),
         "review_policy": review_policy,
         "confidence_threshold": confidence_threshold,
+    }
+
+
+def _persistence(value):
+    try:
+        return (
+            value
+            if isinstance(value, QueryPersistence)
+            else (QueryPersistence.from_json(value) if value is not None else QueryPersistence())
+        )
+    except (TypeError, AttributeError) as exc:
+        raise ValueError(
+            "Invalid persistence configuration; use a versioned options object"
+        ) from exc
+
+
+async def execute_resume_response(registry, run_id, persistence, decisions=(), *, on_event=None):
+    options = _persistence(persistence)
+    store = options.store(create=False)
+
+    def checkpoint(cp):
+        if on_event:
+            on_event(
+                {
+                    "event": "checkpoint",
+                    "run_id": cp.run_id,
+                    "revision": cp.revision,
+                    "status": cp.status,
+                }
+            )
+
+    checkpoint_value = await continue_run(
+        registry,
+        store,
+        run_id,
+        cache=options.cache(),
+        decisions=tuple(
+            decision if isinstance(decision, ReviewDecision) else ReviewDecision.from_json(decision)
+            for decision in decisions
+        ),
+        lease_seconds=options.lease_seconds,
+        on_saved=checkpoint,
+    )
+    prepared = checkpoint_value.definition.prepared
+    payload = _traverse_payload(
+        registry,
+        checkpoint_value.state.result,
+        sorted(prepared.request.targets),
+        [cid for _, cid in prepared.traversals],
+    )
+    if len(prepared.plans) == 1:
+        payload["path"] = render_path(
+            registry, prepared.plans[0][0], policy=prepared.request.options.backend_policy
+        )
+    payload["summary"]["inputs"] = len(prepared.request.inputs)
+    return {
+        **payload,
+        "run": run_status(checkpoint_value),
+        "effective_params": _prepared_effective(registry, prepared),
+        "planned_routes": [braid.to_json() for braid, _ in prepared.plans],
+        "review_policy": prepared.request.options.review_policy.value,
+        "confidence_threshold": prepared.request.options.confidence_threshold,
     }
 
 
@@ -456,7 +544,7 @@ def run_response(
         )
         result = asyncio.run(execute_query(registry, prepared))
         effective = _prepared_effective(registry, prepared)
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
         return {"ok": False, "error": str(exc)}
     return {
         **_run_payload(registry, result, have, want, policy=policy, braid=prepared.plans[0][0]),
@@ -510,7 +598,7 @@ def run_traversed_response(
                 confidence_threshold=confidence_threshold,
             )
         )
-    except (ValueError, BraidworksError) as exc:
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
         return {"ok": False, "error": str(exc)}
 
 
@@ -587,6 +675,7 @@ def create_app():
 
     class RunRequest(BaseModel):
         batch: BatchInput | None = None
+        persistence: dict | None = None
         have: dict[str, str] = Field(default_factory=dict)
         want: list[str] = Field(default_factory=list)
         policy: str = "local_first"
@@ -597,6 +686,12 @@ def create_app():
         max_expansion: int = Field(default=10_000, ge=1)
         review_policy: str = "halt"
         confidence_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    class ResumeRequest(BaseModel):
+        model_config = {"extra": "forbid"}
+        run_id: str
+        persistence: dict
+        decisions: list[dict] = Field(default_factory=list)
 
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
@@ -626,7 +721,7 @@ def create_app():
             policy = parse_policy(req.policy)
         except ValueError as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-        if req.batch is not None:
+        if req.batch is not None or req.persistence is not None:
             try:
                 return asyncio.run(
                     execute_batch_response(
@@ -634,7 +729,7 @@ def create_app():
                         req.have,
                         req.want,
                         req.traverse,
-                        req.batch.model_dump(),
+                        req.batch.model_dump() if req.batch is not None else None,
                         policy=policy,
                         expand=req.expand,
                         k=req.k,
@@ -642,9 +737,10 @@ def create_app():
                         max_expansion=req.max_expansion,
                         review_policy=req.review_policy,
                         confidence_threshold=req.confidence_threshold,
+                        persistence=req.persistence,
                     )
                 )
-            except (ValueError, BraidworksError) as exc:
+            except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
                 return {"ok": False, "error": str(exc)}
         if req.traverse:
             return run_traversed_response(
@@ -693,6 +789,7 @@ def create_app():
                 max_expansion=req.max_expansion,
                 review_policy=req.review_policy,
                 confidence_threshold=req.confidence_threshold,
+                persistence=req.persistence,
             )
         return code_response(
             discover_registry().registry,
@@ -706,7 +803,52 @@ def create_app():
             max_expansion=req.max_expansion,
             review_policy=req.review_policy,
             confidence_threshold=req.confidence_threshold,
+            persistence=req.persistence,
         )
+
+    @app.get("/api/runs")
+    def api_runs(run_db: str):
+        try:
+            return {
+                "ok": True,
+                "runs": [run_status(cp) for cp in SQLiteRunStore(run_db, create=False).list()],
+            }
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.get("/api/run/status")
+    def api_run_status(run_db: str, run_id: str):
+        try:
+            return {
+                "ok": True,
+                "run": run_status(SQLiteRunStore(run_db, create=False).load(run_id)),
+            }
+        except (ValueError, OSError, sqlite3.Error, KeyError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.post("/api/resume")
+    def api_resume(req: ResumeRequest):
+        try:
+            return asyncio.run(
+                execute_resume_response(
+                    discover_registry().registry, req.run_id, req.persistence, req.decisions
+                )
+            )
+        except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.post("/api/resume/stream")
+    def api_resume_stream(req: ResumeRequest):
+        async def execute(on_event):
+            return await execute_resume_response(
+                discover_registry().registry,
+                req.run_id,
+                req.persistence,
+                req.decisions,
+                on_event=on_event,
+            )
+
+        return StreamingResponse(sse_events(execute), media_type="text/event-stream")
 
     @app.post("/api/run/stream")
     def api_post_run_stream(req: RunRequest):
@@ -724,6 +866,7 @@ def create_app():
                 max_expansion=req.max_expansion,
                 review_policy=req.review_policy,
                 confidence_threshold=req.confidence_threshold,
+                persistence=req.persistence,
                 on_event=on_event,
             )
 

@@ -131,7 +131,28 @@ bundled source samples and provider content retain their separately declared sou
 licenses. The source license in a weaver manifest describes its data, not this code.
 
 Generated single and batch Python examples use the public core query service
-(`braidworks-core>=0.14.0`). They print `ExecutionResult.to_json()` and need neither
+(`braidworks-core>=0.20.0`). They print `ExecutionResult.to_json()` and need neither
 weaverkit nor FastAPI at execution time; batch inputs retain order and source rows.
 The browser keeps its own table/summary response envelope. Generated CLI commands
 quote literal input values and preserve effective parameters and query policies.
+
+
+### Optional cache and saved runs in the browser
+
+Expand **Cache and saved runs** to set a lookup-cache file and/or a run-store file.
+Paths refer to the machine running `weaverkit serve`. Blank paths retain in-memory
+execution. Advanced controls configure cache TTLs, payload budget and the run lease;
+recipes and generated Python/CLI commands preserve these settings.
+
+**Saved runs** lists the selected run-store file. Inspect a run to see its original
+query and planned routes, then continue it using those saved settings. Cancelling
+leaves the last completed checkpoint available; an interrupted source call can repeat.
+Review selectors start at **Leave pending**: choose a candidate, accept an observation,
+or reject a row explicitly before continuing. Duplicate inputs retain separate choices.
+
+POST `/api/run` and `/api/run/stream` accept a version-1 `persistence` object
+from `QueryPersistence.to_json()`. Inspect with GET `/api/runs?run_db=...` and
+`/api/run/status?run_db=...&run_id=...`. POST `/api/resume` or
+`/api/resume/stream` takes `run_id`, `persistence` and optional version-1
+`decisions`; query-policy overrides are rejected. Missing status files are not created.
+See [storage operations](../docs/database.md) for leases, retention and schema limits.

@@ -73,7 +73,7 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
     assert "prepare_query(registry, request)" in arts["python"]
-    assert "execute_query(registry, prepared)" in arts["python"]
+    assert "execute_managed_query(registry, prepared, options" in arts["python"]
     assert arts["braid"] is out["path"]
 
 

@@ -53,12 +53,12 @@ from braidworks.core.outcomes import (
     strand_record as _record,
 )
 from braidworks.core.parameters import map_parameter_items
-from braidworks.core.persistent_query import continue_run, start_run
+from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
+from braidworks.core.persistent_query import continue_run
 from braidworks.core.planner import Braider
 from braidworks.core.query import (
     QueryOptions,
     QueryRequest,
-    execute_query,
     normalize_expansion,
     prepare_query,
 )
@@ -71,7 +71,6 @@ from braidworks.core.result import WeaveStatus
 from braidworks.core.review import ReviewDecision
 from braidworks.core.run_store import SQLiteRunStore, run_status
 from braidworks.core.runner import validate_batch_size
-from braidworks.core.sqlite_cache import SQLiteStrandCache
 from braidworks.core.strand import StepOutcome, Strand, StrandSet
 
 
@@ -377,21 +376,18 @@ def _archive_finish(args, archive, records, execution):
     return True
 
 
-def _cache_from_args(args):
-    if not args.cache_db:
-        return None
-    return SQLiteStrandCache(
+def _persistence_from_args(args):
+    return QueryPersistence(
         args.cache_db,
-        policy=CachePolicy(args.cache_positive_ttl, args.cache_negative_ttl, args.cache_max_bytes),
+        args.run_db,
+        getattr(args, "run_id", None) if args.command == "weave" else None,
+        CachePolicy(args.cache_positive_ttl, args.cache_negative_ttl, args.cache_max_bytes),
+        args.lease_seconds,
     )
 
 
 async def _execute_prepared(args, registry, prepared):
-    cache = _cache_from_args(args)
-    if not args.run_db:
-        if args.run_id:
-            raise ValueError("--run-id requires --run-db")
-        return await execute_query(registry, prepared, cache=cache)
+    persistence = _persistence_from_args(args)
     announced = False
 
     def saved(checkpoint):
@@ -399,18 +395,10 @@ async def _execute_prepared(args, registry, prepared):
         if not announced:
             _err(f"durable run: {checkpoint.run_id} (store: {args.run_db})")
             announced = True
+        if checkpoint.status in ("complete", "review"):
+            _err(f"run status: {checkpoint.status}, revision {checkpoint.revision}")
 
-    checkpoint = await start_run(
-        registry,
-        prepared,
-        SQLiteRunStore(args.run_db),
-        run_id=args.run_id,
-        cache=cache,
-        on_saved=saved,
-        lease_seconds=args.lease_seconds,
-    )
-    _err(f"run status: {checkpoint.status}, revision {checkpoint.revision}")
-    return checkpoint.state.result
+    return await execute_managed_query(registry, prepared, persistence, on_saved=saved)
 
 
 def _parse_decisions(values):
@@ -488,7 +476,7 @@ def _cmd_resume(args):
                 registry,
                 store,
                 args.run_id,
-                cache=_cache_from_args(args),
+                cache=_persistence_from_args(args).cache(),
                 decisions=_parse_decisions(args.decision),
                 lease_seconds=args.lease_seconds,
             )

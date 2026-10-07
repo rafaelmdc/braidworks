@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 in progress. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 verified locally. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -353,3 +353,37 @@ invalid knobs/no overwrite and resumed archive export. Existing CLI/review clien
 pass (88 before new journeys). Full workspace 1371 passed/48 skipped; make lint passes.
 Core 0.19.1. P07 browser/shared path-option adapters and integrated gates remain.
 Local commit: see `feat(cli): expose local cache run status and explicit resume decisions`.
+
+
+## P07d shared interfaces and integrated acceptance — 2026-10-07
+
+Core 0.20.0 introduces versioned QueryPersistence and execute_managed_query: CLI,
+Python examples and browser POST adapters share cache policy, explicit paths and
+managed durable execution. Weaverkit 0.6.0 requires core >=0.20.0. Browser saved-run
+list/status/continuation retains original requests/plans and requires explicit review
+choices. Recipes and generated commands retain operational options. Status opens
+existing files only and never exposes owner tokens. Resume rejects query overrides.
+Storage docs describe defaults, lease renewal/recovery, retention, migration limits,
+interrupted-wave replay and independent observation archives.
+
+Acceptance: workspace 1,383 passed/48 skipped; lint and changed-file formatting pass;
+all 17 strict weaver gates pass. Firefox verified recipe persistence round trips,
+save/cancel after the first applied wave, server task cleanup, paused status, continuation
+with changed form inputs ignored, no repeated completed resolve, and explicit candidate
+approval followed by the saved downstream route. Earlier P07 endpoint/CLI contracts
+also cover duplicate decisions, later review, changed definitions and completed replay.
+Existing Firefox batch upload, duplicate/source-row, encoders and cancel/retry journeys
+passed against the new browser implementation.
+
+All 20 current wheel/sdist pairs built, passed Twine metadata checks and clean
+installation/CLI/archive/server smoke tests. Current weavers' golden examples pass in
+isolated clean installs at declared core floors 0.1.8, 0.13.0 and 0.13.3, using actual
+historical core source rather than relabeling the current code. A generated persistent
+Python script executes with only the core 0.20.0 wheel, no FastAPI/toolkit, preserving
+duplicate rows in a completed run. Toolkit's core 0.20.0 floor is exercised by its clean
+wheel install. All environments/data/artifacts remain isolated and excluded from git.
+
+P01–P07 are verified locally. W14 gates relevant to persistence are satisfied; final
+programme-wide W14 remains pending A06–A08. No API backend changed in this step;
+network/live-source downloads were unnecessary. Windows lock behavior remains a CI
+platform check, not a local Linux result. No push, merge, release tag or publication.

@@ -161,4 +161,56 @@ Unapplied interrupted waves may repeat upstream reads. Cache hits are observatio
 run progress. Use local disk, not cross-host/network SQLite. Run schema version 1 has
 no automatic destructive migration: retain the file for migration and use a new path
 when incompatible. Runs have no automatic retention/deletion policy; keep backups and
-remove an old store only when no owners use it. CLI/browser controls are still planned.
+remove an old store only when no owners use it. CLI, Python and browser controls are available as described below.
+
+
+## Human interfaces and managed continuation (core 0.20.0)
+
+CLI queries accept `--cache-db data/lookups.sqlite` and
+`--run-db data/runs.sqlite` independently. Use `--run-id NAME` to name a new run;
+otherwise the generated ID is printed to stderr before execution. Cache controls are
+`--cache-positive-ttl`, `--cache-negative-ttl`, and `--cache-max-bytes`;
+run ownership uses `--lease-seconds`. Default TTLs are 3600/300 seconds, payload
+budget 256 MiB and lease 60 seconds.
+
+```bash
+braidworks runs --run-db data/runs.sqlite
+braidworks runs RUN_ID --run-db data/runs.sqlite --format json
+braidworks resume RUN_ID --run-db data/runs.sqlite --format json
+braidworks resume RUN_ID --run-db data/runs.sqlite --decision node:0=select:0
+```
+
+Status exposes stable review keys and original candidates. Selection indices are
+zero-based; `node:0=accept` approves a review-required successful observation and
+`node:0=reject` leaves that row unresolved. Repeat `--decision` for independent
+rows. Approval applies to that observation only: a later ambiguity still needs review.
+Observation archives remain independent exports and are not resumable checkpoints.
+
+```python
+from braidworks.core import (
+    QueryPersistence, ReviewDecision, continue_run, execute_managed_query,
+)
+options = QueryPersistence(cache_db="data/lookups.sqlite", run_db="data/runs.sqlite")
+# result = await execute_managed_query(registry, prepared, persistence=options)
+store = options.store(create=False)
+# checkpoint = store.load(run_id)
+# state = await continue_run(
+#     registry, store, run_id, cache=options.cache(),
+#     decisions=(ReviewDecision("node:0", "select", 0),),
+# )
+```
+
+The managed service renews ownership while running and releases the last saved
+checkpoint on cancellation. Resume validates source identities and saved settings;
+completed runs return saved results without new source calls. A run left by a crashed
+process can be claimed after lease expiry. An in-flight synchronous backend thread
+may finish after cancellation, but its unapplied result does not advance the checkpoint.
+
+Browser controls use the same options; paths are local to the server, not the browser.
+Recipes and generated commands retain operational paths, so review them before sharing.
+Lookup-cache files can be recreated. Run stores contain original inputs, observations
+and decisions: back them up if that history matters. Close all owners before removing
+a file; there is no automatic retention or deletion. Query-state version 2 reads
+version 1, but older review checkpoints without continuation context cannot safely
+apply choices: retain their history and start a new run. Unknown storage/schema versions
+fail rather than overwrite data. No persistence is enabled without explicit paths.

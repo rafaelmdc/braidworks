@@ -178,7 +178,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.19.1"
+version = "0.20.0"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -1052,7 +1052,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.5.4"
+version = "0.6.0"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

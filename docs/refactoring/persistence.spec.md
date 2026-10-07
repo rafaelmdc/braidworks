@@ -1,7 +1,7 @@
 # Round 2 implementation spec: persistence and continuation
 
 Matching plan: [persistence.plan.md](persistence.plan.md).
-Status: PF01–PF06 verified locally; PF07 planned. Tracking:
+Status: PF01–PF07 verified locally. Tracking:
 [#144](https://github.com/rafaelmdc/braidworks/issues/144),
 [#143](https://github.com/rafaelmdc/braidworks/issues/143).
 Evidence: [P01–P10](../audits/persistence-design.spec.md).

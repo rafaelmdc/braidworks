@@ -202,6 +202,21 @@ SERVE_HTML = """
     <textarea id="b-batch-text" rows="6" style="width:100%;box-sizing:border-box" placeholder="TP53&#10;BRCA1"></textarea>
     <div class="note">Table headers are type IDs. Empty cells are absent inputs. Duplicates keep separate source rows. Row values override shared values.</div>
   </details>
+  <details id="b-persistence" style="margin-top:12px">
+    <summary class="blabel">Cache and saved runs (optional)</summary>
+    <p class="note">Files are stored on the machine running Braidworks. Leave paths empty for memory-only execution.</p>
+    <label class="blabel" for="b-cache-db">Lookup cache file</label><input id="b-cache-db" placeholder="data/lookups.sqlite">
+    <label class="blabel" for="b-run-db">Saved runs file</label><input id="b-run-db" placeholder="data/runs.sqlite">
+    <label class="blabel" for="b-run-id">New run name (optional)</label><input id="b-run-id" placeholder="automatic unique name">
+    <button class="btn" id="b-runs" style="margin-top:8px">Saved runs</button>
+    <div id="b-saved-run" class="note" role="status"></div>
+    <details><summary class="blabel">Retention and ownership settings</summary>
+      <label class="blabel" for="b-cache-positive">Positive cache lifetime (seconds)</label><input id="b-cache-positive" type="number" min="0" value="3600">
+      <label class="blabel" for="b-cache-negative">No-match lifetime (seconds)</label><input id="b-cache-negative" type="number" min="0" value="300">
+      <label class="blabel" for="b-cache-bytes">Cache payload budget (bytes)</label><input id="b-cache-bytes" type="number" min="0" value="268435456">
+      <label class="blabel" for="b-lease">Run ownership timeout (seconds)</label><input id="b-lease" type="number" min="0.001" step="any" value="60">
+    </details>
+  </details>
   <div id="b-progress" role="status" aria-live="polite"></div>
   <button id="b-cancel" class="btn" hidden>Cancel run</button>
   <details style="margin-top:12px">
@@ -441,18 +456,19 @@ function batchState(from) {
           input_type: document.getElementById("b-batch-type").value.trim() || from[0] || ""};
 }
 
-async function streamRun(body, btn, path) {
+async function streamRun(body, btn, path, endpoint = "/api/run/stream") {
   if (activeRun) return;
   const controller = new AbortController(); activeRun = controller;
   clearRunState();
+  const originalLabel = btn.textContent;
   btn.textContent = "running…"; btn.disabled = true;
   const cancel = document.getElementById("b-cancel"), progress = document.getElementById("b-progress");
   cancel.hidden = false; cancel.onclick = () => controller.abort();
   progress.textContent = "Validating and running inputs…";
   if (path) initLiveAnim(path);
-  let finished = false;
+  let finished = false, runIdentity = body.run_id || (body.persistence || {}).run_id;
   try {
-    const response = await fetch("/api/run/stream", {method: "POST", signal: controller.signal,
+    const response = await fetch(endpoint, {method: "POST", signal: controller.signal,
       headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
     if (!response.ok) throw new Error("Server rejected the request: " + response.status);
     const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -467,7 +483,10 @@ async function streamRun(body, btn, path) {
         const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
         if (!data) continue;
         const event = JSON.parse(data);
-        if (event.event === "progress") {
+        if (event.event === "checkpoint") {
+          runIdentity = event.run_id;
+          document.getElementById("b-saved-run").textContent = "Saved run: " + event.run_id + " (" + event.status + ")";
+        } else if (event.event === "progress") {
           progress.textContent = event.completed_inputs + " / " + event.input_count + " input rows completed.";
         } else if (event.event === "wave") {
           if (runAnim) runAnim.revealedWave = event.wave;
@@ -487,11 +506,11 @@ async function streamRun(body, btn, path) {
     if (!finished) throw new Error("The connection ended before results arrived. Retry the run.");
   } catch (error) {
     runAnim = null;
-    if (controller.signal.aborted) progress.textContent = "Run cancelled. No completed batch results were returned.";
+    if (controller.signal.aborted) progress.textContent = runIdentity ? "Run cancelled. Continue saved run " + runIdentity + " from Saved runs." : "Run cancelled. No completed batch results were returned.";
     else { progress.textContent = "Run failed."; showError(String(error)); }
   } finally {
     controller.abort();
-    btn.textContent = "Run"; btn.disabled = false;
+    btn.textContent = originalLabel; btn.disabled = false;
     if (activeRun === controller) { activeRun = null; cancel.hidden = true; }
   }
 }
@@ -541,7 +560,7 @@ function toggleShowAll() { resultsShowAll = !resultsShowAll; showResults(); }
 function showResults(d) {
   if (d) lastRun = { columns: d.columns, rows: d.rows, summary: d.summary, want: d.want || [], errors: d.errors || [],
                      result: d.result, identity_columns: d.identity_columns, effective_params: d.effective_params || {},
-                     review_policy: d.review_policy || "halt", confidence_threshold: d.confidence_threshold || 0 };
+                     review_policy: d.review_policy || "halt", confidence_threshold: d.confidence_threshold || 0, run: d.run || null };
   if (!lastRun) return;
   const { rows, summary, want } = lastRun;
   const columns = visibleCols();
@@ -701,6 +720,86 @@ function refreshRecipes() {
     Object.keys(recipes).sort().map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
 }
 
+function normalizePersistence(value = {}) {
+  const policy = value.cache_policy || {};
+  const configuration = {version: 1, cache_db: value.cache_db || null, run_db: value.run_db || null,
+    run_id: value.run_id || null, lease_seconds: Number(value.lease_seconds ?? 60),
+    cache_policy: {positive_ttl: Number(policy.positive_ttl ?? 3600), negative_ttl: Number(policy.negative_ttl ?? 300),
+                   max_payload_bytes: Number(policy.max_payload_bytes ?? 268435456)}};
+  if ((configuration.run_id && !configuration.run_db) || !Number.isFinite(configuration.lease_seconds) || configuration.lease_seconds <= 0 ||
+      !Number.isFinite(configuration.cache_policy.positive_ttl) || configuration.cache_policy.positive_ttl < 0 ||
+      !Number.isFinite(configuration.cache_policy.negative_ttl) || configuration.cache_policy.negative_ttl < 0 ||
+      !Number.isInteger(configuration.cache_policy.max_payload_bytes) || configuration.cache_policy.max_payload_bytes < 0)
+    throw new Error("Check cache lifetimes, payload budget, saved runs path and ownership timeout.");
+  return configuration;
+}
+
+function persistenceState() {
+  return normalizePersistence({cache_db: document.getElementById("b-cache-db").value.trim(),
+    run_db: document.getElementById("b-run-db").value.trim(), run_id: document.getElementById("b-run-id").value.trim(),
+    cache_policy: {positive_ttl: document.getElementById("b-cache-positive").value,
+                   negative_ttl: document.getElementById("b-cache-negative").value,
+                   max_payload_bytes: document.getElementById("b-cache-bytes").value},
+    lease_seconds: document.getElementById("b-lease").value});
+}
+
+function restorePersistence(value) {
+  const options = normalizePersistence(value || {});
+  document.getElementById("b-cache-db").value = options.cache_db || "";
+  document.getElementById("b-run-db").value = options.run_db || "";
+  document.getElementById("b-run-id").value = options.run_id || "";
+  document.getElementById("b-cache-positive").value = options.cache_policy.positive_ttl;
+  document.getElementById("b-cache-negative").value = options.cache_policy.negative_ttl;
+  document.getElementById("b-cache-bytes").value = options.cache_policy.max_payload_bytes;
+  document.getElementById("b-lease").value = options.lease_seconds;
+}
+
+async function showSavedRuns() {
+  try {
+    const path = document.getElementById("b-run-db").value.trim();
+    if (!path) throw new Error("Enter the saved runs file path first.");
+    const response = await fetch("/api/runs?run_db=" + encodeURIComponent(path));
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error);
+    openSheet("Saved runs", data.runs.length ? data.runs.map((run) =>
+      `<div class="summary"><b>${esc(run.run_id)}</b> · ${esc(run.status)} · ${run.inputs} inputs
+       <div class="bactions"><button class="btn inspect-run" data-run-id="${esc(run.run_id)}">Inspect</button></div></div>`).join("") : "<p>No saved runs in this file.</p>");
+    document.querySelectorAll(".inspect-run").forEach((button) => button.onclick = () => inspectSavedRun(button.dataset.runId));
+  } catch (error) { showError(String(error)); }
+}
+
+async function inspectSavedRun(runId) {
+  try {
+    const options = persistenceState(); options.run_id = null;
+    const response = await fetch("/api/run/status?" + new URLSearchParams({run_db: options.run_db, run_id: runId}));
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error);
+    const run = data.run;
+    const reviews = run.reviews.map((item, i) => {
+      const row = item.strand_set, observation = item.triggering_result;
+      const candidates = observation.candidates.map((candidate, index) => {
+        const values = Object.fromEntries(candidate.strands.map((strand) => [strand.type_id, strand.value]));
+        return `<option value="select:${index}">Candidate ${index+1} (confidence ${candidate.confidence}): ${esc(JSON.stringify(values))}</option>`;
+      }).join("");
+      return `<label class="blabel" for="review-${i}">Row ${row.source_row ?? ""}: ${esc(row.entity_id)} · ${esc(observation.capability_id)} (${esc(row.execution_key)})</label>
+        <select id="review-${i}" class="review-choice" data-key="${esc(row.execution_key)}"><option value="">Leave pending</option>${candidates}
+        ${observation.status === "ok" ? '<option value="accept">Accept this observation</option>' : ''}<option value="reject">Reject this row</option></select>`;
+    }).join("");
+    openSheet("Run " + runId, `<p class="note">${esc(run.status)} · revision ${run.revision} · ${run.inputs} inputs. Saved query settings apply when continuing.</p>
+      <details><summary>Saved query settings</summary><pre>${esc(JSON.stringify({request:run.request,planned_routes:run.planned_routes},null,2))}</pre></details>
+      ${reviews}<div class="bactions"><button id="resume-saved" class="btn primary">${run.status === 'complete' ? 'View results' : 'Continue saved run'}</button></div>`);
+    document.getElementById("resume-saved").onclick = () => {
+      const decisions = [...document.querySelectorAll(".review-choice")].filter((el) => el.value).map((el) => {
+        const [action, index] = el.value.split(":");
+        return {version:1,entity_key:el.dataset.key,action,candidate_index:action === "select" ? Number(index) : null};
+      });
+      if (run.status === "review" && !decisions.length) { showError("Choose an explicit review decision first."); return; }
+      const button = document.getElementById("resume-saved");
+      return streamRun({run_id:runId,persistence:options,decisions}, button, null, "/api/resume/stream");
+    };
+  } catch (error) { showError(String(error)); }
+}
+
 // Pure experiment values: DOM reading, execution data and animation stay separate.
 function normalizeExperiment(value) {
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -708,7 +807,7 @@ function normalizeExperiment(value) {
   const state = {version: 2, mode: value.mode === "graph" ? "graph" : "typed",
     from: types(value.from), want: types(value.want), traverse: (value.traverse || []).slice(),
     values: clone(value.values || {}), batch: value.batch ? clone(value.batch) : null,
-    params: clone(value.params || {}), policy: value.policy || "local_first",
+    params: clone(value.params || {}), persistence: normalizePersistence(value.persistence || {}), policy: value.policy || "local_first",
     review_policy: value.review_policy || "halt",
     confidence_threshold: Number(value.confidence_threshold ?? 0),
     expand: value.expand || "top", k: Number(value.k ?? 3),
@@ -729,7 +828,7 @@ function toQueryRequest(value, {placeholders = false} = {}) {
   return {have, batch: state.batch, want: state.want, traverse: state.traverse,
     policy: state.policy, review_policy: state.review_policy, confidence_threshold: state.confidence_threshold,
     params: state.params, expand: state.expand === "auto" ? (state.traverse.length ? "all" : "top") : state.expand,
-    k: state.k, max_expansion: state.max_expansion};
+    k: state.k, max_expansion: state.max_expansion, persistence: state.persistence};
 }
 
 function toPlanRequest(value) {
@@ -748,7 +847,7 @@ function experimentState() {
   const expand = expandInput ? expandInput.value : "top";
   const kInput = document.getElementById(buildMode ? "bg-k" : "r-k");
   const limitInput = document.getElementById(buildMode ? "bg-limit" : "r-limit");
-  return normalizeExperiment({ version: 2, mode, from, want, values, batch: batchState(from), traverse: buildMode ? build.through.slice() : [],
+  return normalizeExperiment({ version: 2, mode, from, want, values, persistence: persistenceState(), batch: batchState(from), traverse: buildMode ? build.through.slice() : [],
     policy: document.getElementById("b-policy").value,
     review_policy: document.getElementById("b-review-policy").value,
     confidence_threshold: Number(document.getElementById("b-confidence").value || 0),
@@ -792,6 +891,7 @@ async function loadRecipe(name) {
     document.getElementById("b-review-policy").value = "halt";
     document.getElementById("b-confidence").value = 0;
     document.getElementById("b-batch-enabled").checked = false;
+    restorePersistence(null);
     paramVals = {}; await runPlan(); recipeFeedback("Loaded " + name + "."); return;
   }
   if (r.version !== 2 || !Array.isArray(r.from) || !Array.isArray(r.want) || !Array.isArray(r.traverse)) {
@@ -799,6 +899,7 @@ async function loadRecipe(name) {
   }
   try { r = normalizeExperiment(r); }
   catch (e) { recipeFeedback(String(e)); return; }
+  restorePersistence(r.persistence);
   document.getElementById("b-policy").value = r.policy || "local_first";
   document.getElementById("b-review-policy").value = r.review_policy || "halt";
   document.getElementById("b-confidence").value = r.confidence_threshold || 0;
@@ -1111,6 +1212,7 @@ async function runBuild() {
 function setupBuilder() {
   if (!SERVED) return;
   document.getElementById("builder").style.display = "block";
+  document.getElementById("b-runs").onclick = showSavedRuns;
   document.getElementById("b-build").onclick = () => (buildMode ? exitBuild() : enterBuild());
   document.getElementById("b-batch-file").onchange = async (event) => {
     const file = event.target.files[0]; if (!file) return;
