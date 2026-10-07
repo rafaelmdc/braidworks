@@ -3,7 +3,7 @@
 Spec: [persistence.spec.md](persistence.spec.md). Design:
 [persistence boundaries](../audits/persistence-refactor-design.md).
 Cross-round order: [W01–03, W09–12](implementation.plan.md).
-Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 planned. Tracking: #144, #143, #146.
+Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 in progress. Tracking: #144, #143, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -294,3 +294,20 @@ Core 481 tests pass; full workspace 1335 passed/48 skipped; make lint passes. Co
 exports the narrow storage contracts. Human interface activation and lease renewal around
 long async execution belong to P07. No API backend changed; no network/data downloads.
 Local commit: see `feat(resume): add atomic SQLite run snapshots and ownership leases`.
+
+## P07a shared lifecycle evidence — 2026-10-07
+
+Public start_run/continue_run compose the existing query state engine and RunStore.
+They validate saved source/manifest/worker identity and optional expected settings,
+claim with a revision, renew leases while awaiting sources, save post-application
+checkpoints and finish with ownership released. Cancellation/observer failure releases
+the last complete saved state; unapplied mutable state is never serialized. Lost
+renewal cancels and joins execution. Complete/review observations load without source
+replay or implicit candidate selection. This is the shared lifecycle, not completed
+review-decision or CLI/browser activation. P07 remains in progress.
+
+Seven lifecycle tests pass: memory/durable equivalence, duplicate rows, completed resume,
+real cancellation and reconstruction, long query renewal, failed renewal cleanup,
+changed worker/source/options and pending review. Core 488 tests pass; full workspace
+1355 passed/48 skipped; make lint passes. Core 0.18.0.
+Local commit: see `feat(resume): manage durable query leases and checkpoint lifecycle`.

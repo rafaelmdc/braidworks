@@ -86,6 +86,7 @@ from braidworks.core.localdb import (
 )
 from braidworks.core.mapper import map_lookup, map_resolver
 from braidworks.core.outcomes import execution_records
+from braidworks.core.persistent_query import continue_run, start_run
 from braidworks.core.planner import Braider
 from braidworks.core.query import (
     PreparedQuery,
@@ -214,6 +215,7 @@ __all__ = [
     "classify_status",
     "compute_cache_key",
     "continue_query",
+    "continue_run",
     "default_db_path",
     "download",
     "ensure_local_db",
@@ -241,5 +243,6 @@ __all__ = [
     "run_traversed",
     "skip_if_transient",
     "start_query",
+    "start_run",
     "validate_manifest",
 ]
