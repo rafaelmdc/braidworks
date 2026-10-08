@@ -117,6 +117,8 @@ context. Commit independently from query/stream layers.
 
 ### A07a implementation evidence — 2026-10-08
 
+Implementation commit: `40dbb94` on `refactor/persistence-foundations` (local, unpushed).
+
 Verified locally. Core exposes `DiscoveryPolicy`, `DiscoveryFailure`, `DiscoveryReport`
 and `discover_registry`; strict `build_registry_from_entry_points` and builder iteration
 remain compatible. One shared metadata filter precedes plugin imports. Reports contain
