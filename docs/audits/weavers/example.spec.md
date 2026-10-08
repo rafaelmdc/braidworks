@@ -19,3 +19,8 @@ keep core floor unchanged unless an implementation actually requires a newer API
 Do not add automatic discovery, external data sources, fuzzy resolution, generic
 repository abstractions or a new public record hierarchy. Requirement 006 is optional
 and may be deferred independently; other requirements await review.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

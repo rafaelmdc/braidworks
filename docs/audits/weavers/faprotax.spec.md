@@ -13,3 +13,8 @@ Status proposed. [Evidence](faprotax.audit.md).
 
 Retain bundled source unmodified and notices; no scientific confidence invented. Community
 abundance aggregation requires separate spec. Patch package version sites for semantics.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

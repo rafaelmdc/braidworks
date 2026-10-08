@@ -23,3 +23,7 @@ and lint; run live E2E after every API backend change as AGENTS requires. Record
 credentials/network limitations honestly. Regenerate catalogs after manifest changes.
 Broader artifact/minimum-floor checks apply if shared APIs/packaging change and at
 final acceptance. Local commits only; no push, tags or publication.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

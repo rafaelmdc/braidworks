@@ -15,3 +15,8 @@ Status: proposed. [Evidence](pdbe.audit.md).
 Preserve full fan set versus capped display and true count. Keep core domain-neutral.
 Features 004/007 need accepted scope; ligand/assembly expansion deferred. Runtime or
 manifest changes patch all three version sites and regenerate selectively in scratch.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

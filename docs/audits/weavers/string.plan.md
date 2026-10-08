@@ -12,3 +12,7 @@ No cohort network/enrichment engine in these packages. Accepted actionable issue
 before coding. Preserve contracts, strict and existing batching; add real source
 samples, live E2E for API edits and identity known-truth tests. Package versions,
 catalogs/floors consistent. No push or publication.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

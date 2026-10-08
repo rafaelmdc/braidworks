@@ -1,7 +1,7 @@
 # Individual weaver audit programme
 
 Date: 2026-10-08. Status: S01–S03 completed locally; S04 scope review pending.
-All17 reports/proposed specs/plans: [index](weavers/README.md);
+All 17 reports/proposed specs/plans: [index](weavers/README.md);
 [consolidated findings and proposed order](weavers/summary.md). No implementation started.
 
 ## Objective and scope
@@ -24,8 +24,9 @@ that every source-specific behavior is correct.
   Do not presume custom implementations are wrong merely because they are custom.
 - Keep biological assumptions in weavers. Propose shared changes separately, with
   concrete consumers and compatibility evidence.
-- Keep existing public behavior unless a finding establishes a reason to change it.
-  Identify migration costs for names, keys, outputs, defaults and saved queries.
+- Necessary breaking changes are permitted by the user (2026-10-08). Prioritize
+  truthful contracts; identify affected names, keys, outputs, defaults, saved queries
+  and dependent-project migrations rather than preserving incorrect behavior.
 - Use isolated tooling already available under `.audit-local`; no global installs.
   Keep scratch data and captures outside tracked files; avoid full database downloads.
 - Small read-only upstream probes are allowed. Record authentication, rate limits,
@@ -231,10 +232,15 @@ Programme tracker: [#147](https://github.com/rafaelmdc/braidworks/issues/147).
 This stage's documentation remains on the audit branch. Future implementation branches should descend
 from that local history rather than duplicating earlier changes.
 
-When audit execution starts, create a dedicated programme issue. After a report is
-reviewed, create a per-weaver tracker and actionable implementation issues for its
-accepted work packages before coding them. Link finding/requirement IDs, acceptance
-criteria and dependencies. Use separate shared-infrastructure issues where needed.
+The dedicated programme issue #147 now has 9 shared group issues and 17 source-specific
+group issues, with one individual issue for each of the 122 findings. The second pass
+assigns 81 findings primarily to shared groups and 41 to source-specific groups. Mixed
+concerns cross-link groups instead of duplicating finding issues. The
+[issue hierarchy review](weavers/issue-hierarchy.md) and
+[issue mapping](weavers/issue-map.tsv) record every native parent relationship.
+Optional features remain proposed; tracking does not approve implementing all of them.
+Use the existing finding issues for acceptance and implementation evidence rather than
+creating duplicate work-package issues solely for bookkeeping.
 Record local commit hashes and verification on issues; distinguish implemented
 locally from remotely delivered. Do not close delivery trackers solely on local work.
 Do not repurpose the completed earlier programme's trackers for this new scope.

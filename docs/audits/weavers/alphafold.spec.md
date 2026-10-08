@@ -14,3 +14,8 @@ Status proposed. [Evidence](alphafold.audit.md).
 Keep current IDs/output types backward compatible. Features003/006 require scope
 review. No AlphaFold job submission or complex-prediction engine. Patch all version
 sites for behavior/manifest changes; do not regenerate over existing backend.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

@@ -64,6 +64,12 @@ No speculative completion-time estimate is presented as measured effort.
 
 ## Shared opportunities with one owner
 
+The second pass expands these six initial workstreams to nine: semantic source
+identity, stable/deterministic identity and collections, and group-aware measured
+work. See [issue hierarchy and second-pass review](issue-hierarchy.md) for the
+complete allocation: 81 findings primarily shared, 41 source-specific. Overlapping
+concerns are cross-linked; each finding has one primary issue parent.
+
 | Owner | Affected sources/examples | Proposed shared action and boundary |
 |---|---|---|
 | WV-EXAMPLE-001 | All scaffolded contributor docs; NCBI explicitly exempt | Safe scratch generation/diff/selective update instructions in template and package docs; never overwrite implemented backends |
@@ -72,6 +78,9 @@ No speculative completion-time estimate is presented as measured effort.
 | WV-NCBI-003 | UniProt003, AGORA001, GMrepo001/002 | Explicit requested-group completion/coverage. First assess existing record/warning APIs; shared extension only with concrete compatible consumers, no cache-engine rewrite |
 | WV-GTDB-005 | NCBI001, AGORA005 | Safe complete replacement in public builders; reuse existing localdb staging/validation rather than parallel publish implementations |
 | WV-GMREPO-006 | Local acquisition urllib loops; STRING007 source request advice | Polite acquisition budgets/pacing separate from executor-only runtime pacing; only share mechanics, source-specific defaults stay explicit |
+| WV-PDBE-001 | QuickGO002, Reactome001, STRING004, GTDB004, MONDO006, Wikipedia003/006 | Effective source/release/config/resource-scope identity and validation; source-specific descriptors, reuse existing SourceBinding |
+| WV-UNIPROT-002 | Exact identity, correlation, ordering/dedup and scientific selection findings across 10 sources | Shared invariants and test conventions; stable IDs, truthful ambiguity and distinct collections; selection semantics remain source-specific |
+| WV-DISBIOME-002 | MONDO005, GTDB007, AGORA007, FAPROTAX006, Disbiome006 | Group-aware projection and measured performance; optional optimization follows evidence, no universal repository layer |
 
 Per-source IDs remain stable even when linked to a shared owner. Shared issue creation
 should cite all relevant IDs so implementation isn't repeated or counted as independent
@@ -89,6 +98,11 @@ pattern names. Pure helpers are often the smallest adequate choice.
 | MONDO mappings/names | Preserve alignment relation and candidates; exact-only default unless reviewed | Lower confident resolution can be more truthful than selecting arbitrary broader xref |
 | Wikipedia metric | One explicit period/agent/project/access contract across source modes | Scalar/default migration and local multi-month availability must be specified |
 | Optional expansion scope | Start with identity/drill-down/evidence for existing workflows | Statistical analysis/classification remains separately scoped |
+
+User clarification after the audit: necessary breaking changes are permitted because
+current dependent projects are owned by the user. Compatibility preservation above
+is a proposed default, not a constraint: favor truthful contracts and document affected
+interfaces, migrations and version updates. Optional features still need scope review.
 
 These decisions should be made before the dependent implementation package. Credentials
 or laptop-wide installs are not currently blocking the audit. The isolated environment

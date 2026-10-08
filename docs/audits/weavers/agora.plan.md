@@ -13,3 +13,7 @@ Accepted issues before coding; package tests/strict/lint, opt-in individual-mode
 E2E if acquisition changes. No multi-GB live download gate without deliberate need.
 Preserve conformance and explain behavior-specific test changes; bump version sites/floor
 as needed. No cache/resume implementation in this proposal.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

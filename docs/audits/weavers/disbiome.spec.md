@@ -13,3 +13,8 @@ Status proposed. [Evidence](disbiome.audit.md).
 
 Retain raw contradictory outcomes and experiment count semantics. No causal inference or
 cross-study automatic effect pooling. Register new keys, version all accepted behavior sites.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

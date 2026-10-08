@@ -12,3 +12,7 @@ Status proposed. [Spec](faprotax.spec.md).
 Open accepted work issues before coding. Package tests/strict/lint; no live backend/build
 required. Preserve bundled source and contracts, patch version sites, regenerate catalogs
 only for accepted manifest changes. No unnecessary inheritance/repository framework.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

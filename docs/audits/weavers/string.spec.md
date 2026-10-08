@@ -15,3 +15,8 @@ Status proposed; [audit](string.audit.md).
 Stable ID bridge/filter additions require scope and migration review. Dataset network
 and enrichment capabilities deferred as separate cohort semantics. No binding-strength
 claim or universal model/repository hierarchy. Patch version sites; core neutral.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

@@ -16,3 +16,7 @@ coding; per-package tests/strict/lint, live E2E for API edits, version sites and
 floor as required. Keep handwritten vocab in lockstep; regenerate catalogs for manifest
 changes. Reuse safe existing acquisition/resolver ownership, avoid a second repository
 layer or generic biological core abstraction. No implementation in this audit.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

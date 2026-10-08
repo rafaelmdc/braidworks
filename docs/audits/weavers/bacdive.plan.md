@@ -12,3 +12,7 @@ Status proposed. [Spec](bacdive.spec.md).
 Accepted work issues before coding; package tests/strict/lint/live E2E for API edits,
 version sites and catalogs for manifest changes. Shared runtime remains. Cache/resume
 implementation and cohort phenotype search remain separately reviewed.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

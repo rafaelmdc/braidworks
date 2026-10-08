@@ -15,3 +15,8 @@ Status proposed. [Evidence](wikidata.audit.md).
 Retain true resolver ambiguity, bulk POST and chunk isolation; do not rewrite lookup as
 first-hit. Public shapes use existing JSON boundaries; register accepted bridges and patch
 versions/floor. Local dumps/full graph mirror out of scope.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

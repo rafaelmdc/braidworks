@@ -11,3 +11,7 @@ Status proposed. [Spec](disbiome.spec.md).
 Accepted issues before coding; package tests/strict/lint and bounded live build/known query
 when acquisition changes. Preserve SourceBinding/contracts and raw full records; patch
 versions/core floor and catalogs as needed. No mandatory new repository hierarchy.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

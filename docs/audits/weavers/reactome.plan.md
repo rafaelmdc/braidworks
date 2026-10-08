@@ -11,3 +11,7 @@ Status proposed; [spec](reactome.spec.md).
 Correctness first; keep analysis service expansion separate. Accepted issues before
 implementation. Strict/package tests/lint and live E2E after API changes; versions,
 catalogs and core floors consistent. No pushes, releases or full database downloads.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

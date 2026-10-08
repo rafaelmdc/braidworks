@@ -15,3 +15,8 @@ Preserve warning export and existing meaning of unfiltered term inventory. Never
 silently drop NOT evidence from raw records. New filtering/ontology features require
 scope review and source samples; enrichment statistics/background selection deferred.
 Patch version sites and regenerate vocab selectively for accepted behavior changes.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

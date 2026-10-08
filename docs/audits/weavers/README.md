@@ -33,3 +33,5 @@ distinguish supported workflows from claims about frequency of use.
 Research confidence: all 16 real sources have primary-source workflow evidence;
 reports distinguish full page reads, indexed text and live observations. Example is
 a teaching fixture. No usage-frequency rankings or full live certification claimed.
+
+[GitHub issue hierarchy and second-pass grouping review](issue-hierarchy.md).

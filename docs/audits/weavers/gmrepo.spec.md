@@ -14,3 +14,8 @@ Status proposed. [Evidence](gmrepo.audit.md).
 
 Preserve local generation binding, complete raw summary data and existing noncausal scope.
 New keys/parameters reviewed, all version sites updated for accepted behavior.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

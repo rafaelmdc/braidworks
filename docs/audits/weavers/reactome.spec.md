@@ -14,3 +14,8 @@ Status proposed; [audit](reactome.audit.md).
 Retain membership capability IDs and full fan sets. Cohort enrichment/expression and
 species comparison remain deferred as separate contracts. Runtime/manifest fixes bump
 all version sites and selectively regenerate; no core biological assumptions.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

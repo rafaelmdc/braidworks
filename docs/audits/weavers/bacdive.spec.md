@@ -15,3 +15,8 @@ Status proposed. [Evidence](bacdive.audit.md).
 Preserve existing representative capability unless reviewed migration; no majority-vote
 species traits by default. New identifiers registered; fan dimensions complete/distinct,
 coverage explicit. Behavior changes patch all version sites, floor only as needed.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

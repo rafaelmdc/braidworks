@@ -17,3 +17,8 @@ Status proposed. [Evidence](gtdb.audit.md).
 Review taxonomy/geometry compatibility before changing public contract. Preserve source
 binding and reopen guards. No embedded GTDB-Tk, full genome download, arbitrary cross-tree
 normalization or core biological types. Version all three sites for accepted behavior.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

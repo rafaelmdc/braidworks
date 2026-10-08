@@ -13,3 +13,7 @@ Status proposed. [Spec](alphafold.spec.md).
 Package tests, strict verification, lint and live E2E for API changes; known-truth
 canonical, isoform and fragment samples where available. Patch all version sites and
 catalogs when needed. No downloads of full proteomes, pushes or publication.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

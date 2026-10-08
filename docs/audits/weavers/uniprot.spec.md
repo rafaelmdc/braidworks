@@ -23,3 +23,8 @@ only where actually needed. Do not regenerate over implemented backend files.
 Feature 009 is proposed separately from correctness fixes. Proteome enumeration,
 peptide/PTM/variation integration and automatic resolver conversion remain deferred
 pending scope decisions. No generic async-job framework or domain logic in core.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

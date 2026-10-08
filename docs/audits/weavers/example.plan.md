@@ -1,7 +1,7 @@
 # Example proposed implementation plan
 
 Status: proposed. [Spec](example.spec.md); [audit](example.audit.md).
-No implementation issues opened yet because these proposals have not been accepted.
+Finding issues are now tracked under #147; optional proposals remain scope decisions.
 
 | Package | Requirements | Work and validation |
 |---|---|---|
@@ -19,3 +19,7 @@ Acceptance: package Make tests, strict verification, affected lint, executable R
 example and spec/vocab agreement. Check installed CSV only if packaging/resources
 change. No live E2E necessary: there is no API backend. Record local commit hashes
 and outcomes on accepted implementation issues; do not push or close delivery trackers.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

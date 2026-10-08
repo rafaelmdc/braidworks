@@ -12,3 +12,7 @@ Accepted implementation issues before coding; package tests/strict/lint and exis
 bounded live mini-build for acquisition changes, not full multi-thousand-call crawl.
 Preserve contracts/source binding; version/floor/catalog updates as needed. Incremental
 profile extension, cache/resume and downstream statistics require separate review.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

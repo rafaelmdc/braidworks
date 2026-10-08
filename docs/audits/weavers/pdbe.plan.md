@@ -14,3 +14,7 @@ Create accepted work-package issues before coding; preserve contracts, patch pac
 versions consistently, verify strict + package tests + lint and live E2E after API
 changes. Catalogs after manifest changes; installed/minimum-floor checks if imports
 or packaging change. No push/publication.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

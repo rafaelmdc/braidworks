@@ -11,3 +11,7 @@ Status proposed. [Spec](wikidata.spec.md).
 Accepted issues before coding; package tests/strict/lint/live E2E after API edits.
 Retain conformance, review candidates and pacing; patch versions and catalogs as needed.
 No generic query engine or class hierarchy per property.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

@@ -12,3 +12,7 @@ Status proposed. [Spec](mondo.spec.md).
 Accepted issues before implementation. Package tests/strict/lint and live build/known query
 if source ingestion changes; no obligatory large-download audit. Preserve contracts,
 source binding and version sites; catalogs for manifest changes.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

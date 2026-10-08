@@ -14,3 +14,7 @@ Accepted implementation issues before coding; retain tests/conformance/source-ch
 guards. Per-package tests, strict, lint and live E2E for API changes; version sites/floor
 and regenerated catalogs as required. New public boundary types round-trip JSON. Do not
 replace working shared dispatch or invent generic source repositories.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.

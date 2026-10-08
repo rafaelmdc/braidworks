@@ -18,3 +18,8 @@ Status proposed. [Evidence](ncbi.audit.md). Preserve A08 custom-runtime decision
 Do not force ResolverRecord conversion, lose identifying review strands or weaken
 conformance. Historical taxonomy redirects/local descendants require explicit scope
 review; sequence downloads remain deferred. Patch versions consistently for behavior.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

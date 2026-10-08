@@ -15,3 +15,8 @@ Status proposed. [Evidence](mondo.audit.md).
 Preserve multiple-parent DAG/self-ancestor semantics and source-binding guards. No ontology
 depth-as-clinical-similarity claim. Manifest/lookup-resolver migration reviewed before code;
 register keys and patch all version sites as needed.
+
+Compatibility clarification (2026-10-08): the user permits necessary breaking changes.
+Earlier preservation/default recommendations are revisable; prioritize correct, truthful
+contracts and document affected interfaces, migration and version updates. Feature
+proposals remain scope decisions. See the [issue hierarchy review](issue-hierarchy.md).

@@ -13,3 +13,7 @@ Correctness before expansion. Preserve existing coverage/evidence tests and conf
 Accepted work issues before coding, patch package sites/core floor only as needed,
 package tests + strict + lint + live E2E for API edits. Catalog regeneration for
 manifest changes. Do not introduce a universal page hierarchy or enrichment engine.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.
