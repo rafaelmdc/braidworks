@@ -1,6 +1,8 @@
 # Individual weaver audit programme
 
-Date: 2026-10-08. Status: planned; individual audits have not started.
+Date: 2026-10-08. Status: S01–S03 completed locally; S04 scope review pending.
+All17 reports/proposed specs/plans: [index](weavers/README.md);
+[consolidated findings and proposed order](weavers/summary.md). No implementation started.
 
 ## Objective and scope
 
@@ -181,23 +183,23 @@ features. Finish each audit's documents before moving to the next source.
 
 | Order | Weaver | Initial investigation target | Status |
 |---|---|---|---|
-| 01 | Example | Scaffold conventions, extension instructions and teaching fidelity | Planned |
-| 02 | UniProt | Search ambiguity, identifier mapping jobs, annotation coverage and hub connectivity | Planned |
-| 03 | PDBe | Structure discovery/details, protein coverage and experimental metadata | Planned |
-| 04 | AlphaFold | Prediction retrieval, versions, confidence interpretation and model coverage | Planned |
-| 05 | QuickGO | Annotation evidence, filtering, pagination and ontology term semantics | Planned |
-| 06 | Reactome | Pathway membership, hierarchy, species mapping and evidence | Planned |
-| 07 | STRING | Identifier resolution, interaction evidence, networks and score meaning | Planned |
-| 08 | NCBI | Taxonomy/review, datasets, gene/genome workflows and justified custom dispatch | Planned |
-| 09 | GTDB | Release builds, taxonomy crosswalks and tree placement semantics | Planned |
-| 10 | BacDive | Strain identity, trait evidence, batch support and access requirements | Planned |
-| 11 | AGORA | Reconstruction identity, model access, release builds and model contents | Planned |
-| 12 | FAPROTAX | Taxonomic inference, coverage and uncertainty of functional assignments | Planned |
-| 13 | Disbiome | Association direction, study evidence, identifiers and disease drill-down | Planned |
-| 14 | GMrepo | Cohort/sample metadata, abundance interpretation and phenotype linkage | Planned |
-| 15 | MONDO | Ontology builds, crosswalk ambiguity, synonyms and hierarchy semantics | Planned |
-| 16 | Wikidata | Taxon identity, query behavior, sitelinks and evidence/provenance | Planned |
-| 17 | Wikipedia | Title/language identity, pageview dimensions, time coverage and redirects | Planned |
+| 01 | Example | Scaffold conventions, extension instructions and teaching fidelity | Audited locally |
+| 02 | UniProt | Search ambiguity, identifier mapping jobs, annotation coverage and hub connectivity | Audited locally |
+| 03 | PDBe | Structure discovery/details, protein coverage and experimental metadata | Audited locally |
+| 04 | AlphaFold | Prediction retrieval, versions, confidence interpretation and model coverage | Audited locally |
+| 05 | QuickGO | Annotation evidence, filtering, pagination and ontology term semantics | Audited locally |
+| 06 | Reactome | Pathway membership, hierarchy, species mapping and evidence | Audited locally |
+| 07 | STRING | Identifier resolution, interaction evidence, networks and score meaning | Audited locally |
+| 08 | NCBI | Taxonomy/review, datasets, gene/genome workflows and justified custom dispatch | Audited locally |
+| 09 | GTDB | Release builds, taxonomy crosswalks and tree placement semantics | Audited locally |
+| 10 | BacDive | Strain identity, trait evidence, batch support and access requirements | Audited locally |
+| 11 | AGORA | Reconstruction identity, model access, release builds and model contents | Audited locally |
+| 12 | FAPROTAX | Taxonomic inference, coverage and uncertainty of functional assignments | Audited locally |
+| 13 | Disbiome | Association direction, study evidence, identifiers and disease drill-down | Audited locally |
+| 14 | GMrepo | Cohort/sample metadata, abundance interpretation and phenotype linkage | Audited locally |
+| 15 | MONDO | Ontology builds, crosswalk ambiguity, synonyms and hierarchy semantics | Audited locally |
+| 16 | Wikidata | Taxon identity, query behavior, sitelinks and evidence/provenance | Audited locally |
+| 17 | Wikipedia | Title/language identity, pageview dimensions, time coverage and redirects | Audited locally |
 
 Example establishes the scaffold baseline. The protein/annotation group then tests
 shared API conventions and connected workflows; NCBI and local-data sources exercise
@@ -223,10 +225,10 @@ independent work where possible.
 
 ## Issue, branch and implementation handoff
 
-The current branch is `refactor/persistence-foundations`; earlier completed work
-remains unpushed. Create `audit/individual-weavers` from the current local HEAD when
-recording this new programme, retaining all previous work without merges. Keep this
-stage's documentation on that branch. Future implementation branches should descend
+The audit branch `audit/individual-weavers` was created from local HEAD `284a021`
+on `refactor/persistence-foundations`, retaining earlier unpushed work without merges.
+Programme tracker: [#147](https://github.com/rafaelmdc/braidworks/issues/147).
+This stage's documentation remains on the audit branch. Future implementation branches should descend
 from that local history rather than duplicating earlier changes.
 
 When audit execution starts, create a dedicated programme issue. After a report is

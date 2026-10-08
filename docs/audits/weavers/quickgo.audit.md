@@ -72,3 +72,6 @@ Source/API/config/spec/fixtures and all API/live tests inspected; source unchang
 [spec](../../../weavers/quickgo_weaver/weaver.spec.toml),
 [docs](../../../weavers/quickgo_weaver/README.md).
 [Proposed spec](quickgo.spec.md), [plan](quickgo.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

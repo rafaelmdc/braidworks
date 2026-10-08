@@ -125,3 +125,6 @@ Code: [API backend](../../../weavers/uniprot_weaver/src/uniprot_weaver/backends/
 [tests](../../../weavers/uniprot_weaver/tests/test_api.py),
 [live tests](../../../weavers/uniprot_weaver/tests/test_e2e_live.py).
 See [proposed spec](uniprot.spec.md) and [plan](uniprot.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

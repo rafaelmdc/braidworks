@@ -8,7 +8,7 @@ in [A08](../../refactoring/ncbi-dispatch-assessment.md).
 
 | ID | Priority/confidence | Evidence and implication | Action |
 |---|---|---|---|
-| WV-NCBI-001 | P1 reproduced | Direct database builder clears and commits existing reference tables before parsing; malformed nodes erase 12 fixture taxa. CLI uses this direct builder | Stage, validate and atomically publish every public build path; preserve old target on any failure |
+| WV-NCBI-001 | P0 reproduced | Direct database builder clears and commits existing reference tables before parsing; malformed nodes erase 12 fixture taxa. CLI uses this direct builder | Stage, validate and atomically publish every public build path; preserve old target on any failure |
 | WV-NCBI-002 | P1 reproduced | A valid CLI build ends with AttributeError accessing removed `lineage_cache_count`; current CLI tests cover download helper only | Render current summary fields and exercise actual CLI run/report/exit |
 | WV-NCBI-003 | P1 reproduced | Products/sequence gather drops exceptions; requested products with 503 becomes OK, no strands/warnings, products group marked computed | Represent requested enrichment failure explicitly; do not claim/cache completed group |
 | WV-NCBI-004 | P1 reproduced/code | Gene symbol correlation uses first echoed result via setdefault; ambiguous fixture selects first source gene. Fuzzy candidate ordering follows source order | Explicit deterministic ambiguity/representative policy, review where identity is uncertain |
@@ -93,3 +93,6 @@ products 503→OK/computed products and first-hit gene selection without network
 [factory](../../../weavers/ncbi_weaver/src/ncbi_weaver/factory.py),
 [intermediate](../../../weavers/ncbi_weaver/src/ncbi_weaver/intermediate.py).
 [Proposed spec](ncbi.spec.md), [plan](ncbi.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

@@ -66,3 +66,6 @@ with46 rows. No full live suite/analysis run, no large downloads.
 [spec](../../../weavers/reactome_weaver/weaver.spec.toml),
 [tests](../../../weavers/reactome_weaver/tests/test_api.py).
 [Spec](reactome.spec.md), [plan](reactome.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

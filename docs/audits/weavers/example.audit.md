@@ -116,3 +116,6 @@ Inspect [backend](../../../weavers/example_weaver/src/example_weaver/backends/lo
 Proceed with teaching/correctness polish after review. Defer parser extraction unless
 it improves the lesson or validation; reject unrelated database features and new
 framework abstractions. See [proposed spec](example.spec.md) and [plan](example.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

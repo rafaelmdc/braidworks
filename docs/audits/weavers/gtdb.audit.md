@@ -1,6 +1,6 @@
 # GTDB weaver audit
 
-Date2026-10-08; source revision `d5e7543`; package0.2.3, core floor0.13.3.
+Date: 2026-10-08; source revision `d5e7543`; package 0.2.3, core floor 0.13.3.
 Status audited locally; proposed changes only.
 
 ## Findings
@@ -89,3 +89,6 @@ API selection. No large downloads/live GTDB suite run. Source:
 [API](../../../weavers/gtdb_weaver/src/gtdb_weaver/backends/api.py),
 [factory](../../../weavers/gtdb_weaver/src/gtdb_weaver/factory.py).
 [Spec](gtdb.spec.md), [plan](gtdb.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

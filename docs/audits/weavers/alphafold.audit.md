@@ -81,3 +81,6 @@ Evidence: [backend](../../../weavers/alphafold_weaver/src/alphafold_weaver/backe
 [tests](../../../weavers/alphafold_weaver/tests/test_api.py),
 [README](../../../weavers/alphafold_weaver/README.md).
 See [spec](alphafold.spec.md), [plan](alphafold.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

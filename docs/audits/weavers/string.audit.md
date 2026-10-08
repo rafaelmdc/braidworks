@@ -1,6 +1,6 @@
 # STRING weaver audit
 
-Date2026-10-08; revision `d5e7543`; version `0.1.6`, core floor `0.13.0`.
+Date: 2026-10-08; revision `d5e7543`; version `0.1.6`, core floor `0.13.0`.
 Status audited locally; proposals not implemented.
 
 | ID | Priority/confidence | Finding/evidence | Recommendation |
@@ -76,3 +76,6 @@ or enrichment run performed. No claim that mixed-species batches currently fail.
 [tests](../../../weavers/string_weaver/tests/test_api.py),
 [docs](../../../weavers/string_weaver/README.md).
 [Spec](string.spec.md), [plan](string.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.

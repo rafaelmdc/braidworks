@@ -79,3 +79,6 @@ Evidence: [backend](../../../weavers/pdbe_weaver/src/pdbe_weaver/backends/api.py
 [factory](../../../weavers/pdbe_weaver/src/pdbe_weaver/factory.py),
 [docs](../../../weavers/pdbe_weaver/README.md).
 See [spec](pdbe.spec.md) and [plan](pdbe.plan.md).
+
+The [complete capability/interface/scaffold comparison](coverage.md) accounts for all
+declared inputs/outputs/backends/parameters and common Python/CLI/browser limits.
