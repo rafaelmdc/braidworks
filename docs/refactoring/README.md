@@ -38,3 +38,7 @@ A06 scaffold work has a detailed [specification](scaffold.spec.md) and
 [Final local acceptance](final-acceptance.md) is verified: required implementation
 work is complete, including A08's documented rejection and final browser regression fixes.
 Remote delivery and publication remain separate; see the report for evidence and limits.
+
+The next programme is the [individual weaver audit plan](../audits/weavers.plan.md):
+17 package audits covering implementation/build design and researched database workflows.
+It is planned separately from the completed refactoring programme above.
