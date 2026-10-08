@@ -5,7 +5,7 @@ Matching [implementation plan](scaffold.plan.md). Parent:
 [A06](application.plan.md#a06--scaffold-functional-core-and-publication-shell).
 Tracking: [#145](https://github.com/rafaelmdc/braidworks/issues/145),
 [#146](https://github.com/rafaelmdc/braidworks/issues/146).
-Date: 2026-10-08. Status: specified; implementation not started.
+Date: 2026-10-08. Status: SC01–SC05 verified locally on 2026-10-08; remote delivery pending.
 
 ## Problem and observed behavior
 

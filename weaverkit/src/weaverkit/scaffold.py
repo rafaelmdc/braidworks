@@ -19,17 +19,19 @@ because it is structured code, not boilerplate.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
-from weaverkit.spec import WeaverSpec
+from weaverkit.spec import WeaverSpec, validate_spec
 
 
 class ScaffoldError(Exception):
-    """The destination is unsafe to write (exists and ``force`` was not set)."""
+    """The spec, generated artifacts or destination cannot be scaffolded safely."""
 
 
 def _camel(db_name: str) -> str:
@@ -408,8 +410,8 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
         ),
         "- [ ] register the weaver where the app assembles its `WeaverFactory` (see README)",
         (
-            f"- [ ] after merge, tag the release `{pkg}-v{spec.version}` — `make tags` does this "
-            "for every bumped package (CI also auto-tags on merge to main)"
+            f"- [ ] bump the package version before merging; CI creates `{pkg}-v{spec.version}` "
+            "automatically after merge to main (do not create tags by hand)"
         ),
         "",
     ]
@@ -454,7 +456,7 @@ def _contributing_md_source(spec: WeaverSpec) -> str:
         "2. If it's a new *leaf* output, catalog it in `weaverkit.keys.OUTPUT_KEYS`; if it's a",
         "   genuine *join key* others will consume, add it to `SHARED_KEYS` instead.",
         "3. Regenerate vocab: `weaverkit new --spec weaver.spec.toml --dest . --force`",
-        "   (this only re-stamps generated files; your backend code is yours to edit).",
+        "   (force replaces generated backend files too; back up and review your changes first).",
         "4. Map it in each backend's `fetch` (`record.values[<type_id>] = ...`).",
         "5. Add/adjust a `[[golden]]` example so the new output is verified.",
         "",
@@ -492,8 +494,8 @@ def _contributing_md_source(spec: WeaverSpec) -> str:
 _PYPROJECT = """\
 [project]
 name = "{{DBWEAVER}}"
-version = "{{VERSION}}"
-description = "{{TITLE}} — a Braidworks weaver."
+version = {{VERSION_TOML}}
+description = {{DESCRIPTION_TOML}}
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [{{DEPS}}]
@@ -581,8 +583,8 @@ fmt:
 \tuvx ruff==0.16.10 format .
 """
 
-_INIT = '''\
-"""{{DBWEAVER}} — {{TITLE}} weaver for Braidworks."""
+_INIT = """\
+{{INIT_DOC}}
 
 from {{DBWEAVER}}.factory import build_{{DBWEAVER}}
 from {{DBWEAVER}}.provider import {{CLASS}}WeaverProvider, register
@@ -594,7 +596,7 @@ __all__ = [
     "{{CLASS}}Weaver",
     "{{CLASS}}WeaverProvider",
 ]
-'''
+"""
 
 
 # Per-kind body of the backend stub's fetch TODO (spliced in as {{FETCH_HINT}}).
@@ -662,7 +664,7 @@ class {{BACKEND_CLASS}}(BackendBase):
         # It is part of the cache key, so it must change when the data changes and
         # be identical for identical data. NEVER return "" or "unknown" (that
         # silently disables cache invalidation; conformance rejects it).
-        # Spec's declared source of truth for the version: {{FINGERPRINT_SOURCE}}.
+        # Spec's declared source of truth for the version: {{FINGERPRINT_COMMENT}}.
         # See: weaverkit/docs/implementing-backends.md#fingerprint
         return "{{DBWEAVER}}-{{BACKEND}}-TODO"
 
@@ -723,7 +725,7 @@ class {{BACKEND_CLASS}}(BackendBase):
     def fingerprint(self) -> str:
         # TODO(fingerprint): read the version recorded when the DB was built (e.g.
         # a metadata row) and return it. Never "" or "unknown".
-        # Spec's declared source of truth: {{FINGERPRINT_SOURCE}}.
+        # Spec's declared source of truth: {{FINGERPRINT_COMMENT}}.
         # See: weaverkit/docs/implementing-backends.md#fingerprint
         return "{{DBWEAVER}}-{{BACKEND}}-TODO"
 
@@ -785,7 +787,7 @@ class {{BACKEND_CLASS}}(BackendBase):
         # TODO(fingerprint): return a STABLE, version-specific string for this API's
         # data/contract. A live API with no version surface: name the contract, not
         # "live"-of-now, e.g. "{{DBWEAVER}}-{{BACKEND}}-v1". NEVER "" or "unknown".
-        # Spec's declared source of truth for the version: {{FINGERPRINT_SOURCE}}.
+        # Spec's declared source of truth for the version: {{FINGERPRINT_COMMENT}}.
         # See: weaverkit/docs/implementing-backends.md#fingerprint
         return "{{DBWEAVER}}-{{BACKEND}}-TODO"
 
@@ -834,7 +836,7 @@ from braidworks.core.http_pacing import PacedHTTPClient
 {{RECORD_IMPORT}}
 
 # Base URL of the {{BACKEND}} service.
-BASE_URL = "{{SOURCE_URL}}"
+BASE_URL = {{SOURCE_URL_PY}}
 
 
 class {{BACKEND_CLASS}}(BackendBase):
@@ -865,7 +867,7 @@ class {{BACKEND_CLASS}}(BackendBase):
     def fingerprint(self) -> str:
         # TODO(fingerprint): a STABLE id for this API's contract/version, e.g.
         # "{{DBWEAVER}}-{{BACKEND}}-v1". NEVER "" or "unknown" (conformance rejects it).
-        # Spec's declared source of truth for the version: {{FINGERPRINT_SOURCE}}.
+        # Spec's declared source of truth for the version: {{FINGERPRINT_COMMENT}}.
         # See: weaverkit/docs/implementing-backends.md#fingerprint
         return "{{DBWEAVER}}-{{BACKEND}}-TODO"
 
@@ -985,8 +987,8 @@ from braidworks.core.localdb import default_db_path as _default_db_path
 from braidworks.core.localdb import ensure_local_db
 
 _NAMESPACE = "{{DB}}"
-_DB_FILENAME = "{{BULK_FILENAME}}"
-ARCHIVE_URL = "{{ARCHIVE_URL}}"
+_DB_FILENAME = {{BULK_FILENAME_PY}}
+ARCHIVE_URL = {{ARCHIVE_URL_PY}}
 
 
 def default_db_path() -> Path:
@@ -1072,12 +1074,7 @@ if __name__ == "__main__":  # pragma: no cover
 
 
 _WEAVER = '''\
-"""{{CLASS}}Weaver — the concrete Braidworks weaver for {{TITLE}}.
-
-The routing/batching/mapping runtime is shared: this subclasses core's
-``BackendDispatchWeaver`` and only declares its MANIFEST (from the generated vocab)
-and which shared mapper to use (``{{MAPPER}}``). The novel work is in the backends.
-"""
+{{WEAVER_DOC}}
 
 from __future__ import annotations
 
@@ -1212,11 +1209,16 @@ class TestConformance(WeaverConformanceTests):
 '''
 
 
-def _render(template: str, tokens: dict[str, str]) -> str:
-    out = template
-    for key, value in tokens.items():
-        out = out.replace("{{" + key + "}}", value)
-    return out
+def _render(template: str, tokens: dict[str, str], *, artifact: str = "template") -> str:
+    """Bind original placeholders once; inserted text is never interpreted."""
+
+    def bind(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in tokens:
+            raise ScaffoldError(f"{artifact}: missing binding {key}")
+        return tokens[key]
+
+    return re.sub(r"\{\{([A-Z][A-Z0-9_]*)\}\}", bind, template)
 
 
 def _ruff_format(paths: list[Path]) -> None:
@@ -1242,34 +1244,33 @@ def _ruff_format(paths: list[Path]) -> None:
             continue
 
 
-def scaffold(
-    spec: WeaverSpec,
-    dest: Path | str,
-    *,
-    spec_toml: str,
-    force: bool = False,
-    format_output: bool = True,
-) -> list[Path]:
-    """Generate a full weaver package for ``spec`` under ``dest``. Returns files written.
-
-    ``spec_toml`` is the raw text of the spec, copied verbatim into the package as
-    ``weaver.spec.toml`` (the contract travels with the code). Set ``force`` to
-    overwrite an existing destination. ``format_output`` runs a best-effort
-    ``ruff format`` over the result so it is lint/format-clean from the start.
-    """
-    dest = Path(dest)
+def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
+    """Return deterministic relative artifacts without filesystem access."""
+    problems = validate_spec(spec)
+    if problems:
+        raise ScaffoldError("Invalid scaffold spec:\n" + "\n".join(problems))
+    dest = Path()
     pkg = spec.package
     cls = _camel(spec.db_name)
     first_backend = spec.backends[0]
-
-    if dest.exists() and any(dest.iterdir()) and not force:
-        raise ScaffoldError(f"{dest} already exists and is not empty (use force=True)")
 
     tokens = {
         "DBWEAVER": pkg,
         "CLASS": cls,
         "WEAVER_ID": spec.resolved_weaver_id,
         "TITLE": spec.title,
+        "WEAVER_DOC": repr(
+            f"{cls}Weaver — the concrete Braidworks weaver for {spec.title}.\n\n"
+            "The routing/batching/mapping runtime is shared: this subclasses core's\n"
+            "BackendDispatchWeaver and declares its MANIFEST and shared mapper."
+        ),
+        "INIT_DOC": repr(f"{pkg} — {spec.title} weaver for Braidworks."),
+        "VERSION_TOML": json.dumps(spec.version, ensure_ascii=False),
+        "DESCRIPTION_TOML": json.dumps(spec.title + " — a Braidworks weaver.", ensure_ascii=False),
+        "SOURCE_URL_PY": repr(spec.source_url),
+        "FINGERPRINT_COMMENT": spec.fingerprint_source.replace("\n", "\n        # ").replace(
+            "\r", ""
+        ),
         "VERSION": spec.version,
         "LICENSE": spec.license,
         "CITATION": spec.citation or "(none — see source)",
@@ -1313,6 +1314,8 @@ def scaffold(
         tokens["SCRIPTS_BLOCK"] = f'[project.scripts]\n{pkg}-ensure = "{pkg}.ensure:main"\n'
         tokens["ENSURE_TARGET"] = "\nensure:\n\tuv run {pkg}-ensure\n".replace("{pkg}", pkg)
         tokens["ARCHIVE_URL"] = bulk.archive_url
+        tokens["ARCHIVE_URL_PY"] = repr(bulk.archive_url)
+        tokens["BULK_FILENAME_PY"] = repr(bulk.filename)
         tokens["BULK_FILENAME"] = bulk.filename
         tokens["BULK_BACKEND"] = bulk.backend
     else:
@@ -1373,32 +1376,38 @@ def scaffold(
 
     src = dest / "src" / pkg
     files: dict[Path, str] = {
-        dest / "pyproject.toml": _render(_PYPROJECT, tokens),
-        dest / "README.md": _render(_README, tokens),
+        dest / "pyproject.toml": _render(_PYPROJECT, tokens, artifact="_PYPROJECT"),
+        dest / "README.md": _render(_README, tokens, artifact="_README"),
         dest / "IMPLEMENTATION.md": _implementation_md_source(spec),
         dest / "CONTRIBUTING.md": _contributing_md_source(spec),
-        dest / "Makefile": _render(_MAKEFILE, tokens),
+        dest / "Makefile": _render(_MAKEFILE, tokens, artifact="_MAKEFILE"),
         dest / "weaver.spec.toml": spec_toml,
-        src / "__init__.py": _render(_INIT, tokens),
+        src / "__init__.py": _render(_INIT, tokens, artifact="_INIT"),
         src / "vocab.py": _vocab_source(spec),
-        src / "weaver.py": _render(_WEAVER, tokens),
-        src / "factory.py": _render(_FACTORY, factory_tokens),
-        src / "provider.py": _render(_PROVIDER, tokens),
-        src / "backends" / "__init__.py": _render(_BACKENDS_INIT, tokens),
-        dest / "tests" / "test_conformance.py": _render(_TEST_CONFORMANCE, tokens),
+        src / "weaver.py": _render(_WEAVER, tokens, artifact="_WEAVER"),
+        src / "factory.py": _render(_FACTORY, factory_tokens, artifact="_FACTORY"),
+        src / "provider.py": _render(_PROVIDER, tokens, artifact="_PROVIDER"),
+        src / "backends" / "__init__.py": _render(
+            _BACKENDS_INIT, tokens, artifact="_BACKENDS_INIT"
+        ),
+        dest / "tests" / "test_conformance.py": _render(
+            _TEST_CONFORMANCE, tokens, artifact="_TEST_CONFORMANCE"
+        ),
         dest / "tests" / "test_contract.py": _contract_test_source(spec),
     }
 
     # api weavers get a gated live-E2E stub; keyless api weavers also get an offline
     # MockTransport fixture (build_<pkg>_fixture wires it in factory.py).
     if has_api:
-        files[dest / "tests" / "test_e2e_live.py"] = _render(_TEST_E2E_API, tokens)
+        files[dest / "tests" / "test_e2e_live.py"] = _render(
+            _TEST_E2E_API, tokens, artifact="_TEST_E2E_API"
+        )
     if keyless_api:
-        files[src / "fixture.py"] = _render(_FIXTURE_API, tokens)
+        files[src / "fixture.py"] = _render(_FIXTURE_API, tokens, artifact="_FIXTURE_API")
 
     if bulk is not None:
-        files[src / "setup.py"] = _render(_SETUP, tokens)
-        files[src / "ensure.py"] = _render(_ENSURE_CLI, tokens)
+        files[src / "setup.py"] = _render(_SETUP, tokens, artifact="_SETUP")
+        files[src / "ensure.py"] = _render(_ENSURE_CLI, tokens, artifact="_ENSURE_CLI")
 
     api_key_env = f"{spec.db_name.upper()}_API_KEY"
     for b in spec.backends:
@@ -1420,17 +1429,88 @@ def scaffold(
             stub = _BACKEND_STUB_API_KEYLESS
         else:
             stub = _BACKEND_STUB
-        files[src / "backends" / f"{b}.py"] = _render(stub, bt)
+        files[src / "backends" / f"{b}.py"] = _render(
+            stub, bt, artifact=f"src/{pkg}/backends/{b}.py"
+        )
 
-    written: list[Path] = []
-    for path, content in files.items():
+    return {
+        path: content
+        if path == Path("weaver.spec.toml") or content.endswith("\n")
+        else content + "\n"
+        for path, content in files.items()
+    }
+
+
+def validate_files(files: dict[Path, str]) -> None:
+    """Validate the complete artifact map without importing generated code."""
+    paths: set[Path] = set()
+    for raw, content in files.items():
+        path = Path(raw)
+        if path.is_absolute() or ".." in path.parts or not path.parts:
+            raise ScaffoldError(f"Unsafe artifact path: {raw}")
+        if path in paths:
+            raise ScaffoldError(f"Duplicate artifact path: {raw}")
+        paths.add(path)
+        try:
+            if path.suffix == ".py":
+                compile(content, str(path), "exec")
+            elif path.suffix == ".toml":
+                tomllib.loads(content)
+        except (SyntaxError, ValueError) as exc:
+            raise ScaffoldError(f"Invalid artifact {path}: {exc}") from exc
+    for path in paths:
+        if any(parent in paths for parent in path.parents):
+            raise ScaffoldError(f"Artifact parent is also a file: {path}")
+
+
+def _preflight(files: dict[Path, str], dest: Path, *, force: bool) -> None:
+    for target in [dest, *(dest / path for path in files)]:
+        for component in reversed((target, *target.parents)):
+            if component.is_symlink():
+                raise ScaffoldError(f"Refusing symlink: {component}")
+            if component.exists():
+                is_file_target = target != dest and component == target
+                if is_file_target:
+                    if not component.is_file():
+                        raise ScaffoldError(f"Artifact target is not a regular file: {component}")
+                elif not component.is_dir():
+                    raise ScaffoldError(f"Destination parent is not a directory: {component}")
+    if dest.exists() and any(dest.iterdir()) and not force:
+        raise ScaffoldError(f"{dest} already exists and is not empty (use force=True)")
+
+
+def write_files(
+    files: dict[Path, str], dest: Path | str, *, force: bool = False, format_output: bool = True
+) -> list[Path]:
+    """Validate/preflight, then write UTF-8 artifacts. Writes are not transactional."""
+    validate_files(files)
+    dest = Path(dest)
+    _preflight(files, dest, force=force)
+    written = []
+    for relative, content in files.items():
+        path = dest / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content if content.endswith("\n") else content + "\n")
+        path.write_text(content, encoding="utf-8")
         written.append(path)
-
     if format_output:
-        py_files = [p for p in written if p.suffix == ".py"]
+        py_files = [path for path in written if path.suffix == ".py"]
         if py_files:
             _ruff_format(py_files)
-
     return sorted(written)
+
+
+def scaffold(
+    spec: WeaverSpec,
+    dest: Path | str,
+    *,
+    spec_toml: str,
+    force: bool = False,
+    format_output: bool = True,
+) -> list[Path]:
+    """Generate and write a package; force replaces generated backend files too."""
+    return write_files(
+        generate_files(spec, spec_toml=spec_toml),
+        dest,
+        force=force,
+        format_output=format_output,
+    )

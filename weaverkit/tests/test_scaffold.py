@@ -315,7 +315,10 @@ def test_lookup_weaver_is_thin_and_uses_core(tmp_path):
     for gone in ("intermediate.py", "mapper.py", "dispatch.py"):
         assert not (pkg_dir / gone).exists(), f"{gone} should no longer be generated"
     assert not (pkg_dir / "backends" / "base.py").exists()
-    assert "from braidworks.core import LookupRecord" in (pkg_dir / "backends" / "local.py").read_text()
+    assert (
+        "from braidworks.core import LookupRecord"
+        in (pkg_dir / "backends" / "local.py").read_text()
+    )
     assert "map_lookup" in (pkg_dir / "weaver.py").read_text()
 
 
@@ -620,7 +623,9 @@ def test_generated_weaver_wires_core_dispatch(tmp_path):
             def fingerprint(self):
                 return "capture-v1"
 
-            async def fetch(self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None):
+            async def fetch(
+                self, capability_id, queries, *, requested_outputs, groups_to_compute, params=None
+            ):
                 captured["groups"] = groups_to_compute
                 return [ResolverRecord(query=q) for q in queries]
 
@@ -641,3 +646,204 @@ def test_generated_weaver_wires_core_dispatch(tmp_path):
         for name in list(sys.modules):
             if name == "resolverdemo_weaver" or name.startswith("resolverdemo_weaver."):
                 del sys.modules[name]
+
+
+@pytest.mark.parametrize("raw", ["../escape.py", "/absolute.py", "."])
+def test_write_rejects_unsafe_paths_before_creation(tmp_path, raw):
+    from weaverkit.scaffold import write_files
+
+    dest = tmp_path / "out"
+    with pytest.raises(ScaffoldError):
+        write_files({Path(raw): "pass\n"}, dest)
+    assert not dest.exists()
+
+
+def test_generation_is_pure_and_preserves_raw_spec(tmp_path, monkeypatch):
+    from weaverkit.scaffold import generate_files
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("generation performed I/O")
+
+    spec = load_spec(FIXTURE)
+    raw = FIXTURE.read_text().rstrip("\n")
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "mkdir", forbidden)
+    monkeypatch.setattr("subprocess.run", forbidden)
+    files = generate_files(spec, spec_toml=raw)
+    assert files == generate_files(spec, spec_toml=raw)
+    assert all(not path.is_absolute() for path in files)
+    assert files[Path("weaver.spec.toml")] == raw
+
+
+def test_invalid_direct_spec_has_actionable_error():
+    from dataclasses import replace
+
+    from weaverkit.scaffold import generate_files
+
+    spec = replace(load_spec(FIXTURE), backends=[], capabilities=[])
+    with pytest.raises(ScaffoldError, match="Invalid scaffold spec"):
+        generate_files(spec, spec_toml="")
+
+
+def test_metadata_delimiters_round_trip():
+    import ast
+    import tomllib
+    from dataclasses import replace
+
+    from weaverkit.scaffold import _render, generate_files, validate_files
+
+    text = 'literal {{VERSION}} """ \\ café\nnext line'
+    spec = replace(
+        load_spec(FIXTURE), title=text, source_url=text, citation=text, fingerprint_source=text
+    )
+    files = generate_files(spec, spec_toml=FIXTURE.read_text())
+    validate_files(files)
+    project = tomllib.loads(files[Path("pyproject.toml")])
+    assert project["project"]["description"] == text + " — a Braidworks weaver."
+    vocab = ast.parse(files[Path("src/madin_weaver/vocab.py")])
+    title = next(
+        node
+        for node in vocab.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "WEAVER_TITLE"
+    )
+    assert ast.literal_eval(title.value) == text
+    assert text in files[Path("README.md")]
+    assert _render("{{TITLE}}", {"TITLE": "{{VERSION}}", "VERSION": "changed"}) == "{{VERSION}}"
+    with pytest.raises(ScaffoldError, match="artifact.py.*MISSING"):
+        _render("{{MISSING}}", {}, artifact="artifact.py")
+
+
+@pytest.mark.parametrize("bad", ["broken.py", "broken.toml", "parent", "symlink"])
+def test_preflight_failures_preserve_existing_bytes(tmp_path, bad):
+    from weaverkit.scaffold import write_files
+
+    dest = tmp_path / "out"
+    dest.mkdir()
+    original = dest / "first.py"
+    original.write_text("original")
+    files = {Path("first.py"): "pass\n"}
+    if bad == "broken.py":
+        files[Path(bad)] = "def ("
+    elif bad == "broken.toml":
+        files[Path(bad)] = "[broken"
+    elif bad == "parent":
+        (dest / "late").write_text("parent sentinel")
+        files[Path("late/child.py")] = "pass\n"
+    else:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (dest / "late").symlink_to(outside, target_is_directory=True)
+        files[Path("late/child.py")] = "pass\n"
+    with pytest.raises(ScaffoldError):
+        write_files(files, dest, force=True, format_output=False)
+    assert original.read_text() == "original"
+
+
+def test_conflicting_artifact_parents_and_aliases(tmp_path):
+    from weaverkit.scaffold import write_files
+
+    for files in [{Path("a"): "x", Path("a/b"): "y"}, {"a": "x", Path("a"): "y"}]:
+        with pytest.raises(ScaffoldError):
+            write_files(files, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
+def test_write_failure_propagates_and_format_is_last(tmp_path, monkeypatch):
+    from weaverkit.scaffold import write_files
+
+    def fail(*args, **kwargs):
+        raise OSError("disk failure")
+
+    monkeypatch.setattr(Path, "write_text", fail)
+    monkeypatch.setattr(
+        importlib.import_module("weaverkit.scaffold"),
+        "_ruff_format",
+        lambda _: pytest.fail("formatted early"),
+    )
+    with pytest.raises(OSError, match="disk failure"):
+        write_files({Path("ok.py"): "pass\n"}, tmp_path / "out")
+
+
+@pytest.mark.parametrize("key", ["none", "optional", "required"])
+def test_api_metadata_and_bulk_literals_are_encoded(tmp_path, key):
+    import ast
+    from dataclasses import replace
+
+    from weaverkit.scaffold import generate_files, validate_files
+
+    raw = _API_SPEC.format(api_key=key)
+    spec_path = tmp_path / "api.toml"
+    spec_path.write_text(raw)
+    text = 'https://example.test/"{{VERSION}}"\\path\nnext'
+    spec = replace(load_spec(spec_path), source_url=text)
+    files = generate_files(spec, spec_toml=raw)
+    validate_files(files)
+    if key == "none":
+        tree = ast.parse(files[Path("src/apidemo_weaver/backends/api.py")])
+        url = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "BASE_URL"
+        )
+        assert ast.literal_eval(url.value) == text
+    bulk = load_spec(BULK_FIXTURE)
+    bulk = replace(bulk, bulk=replace(bulk.bulk, archive_url=text, filename='data"\\file.sqlite'))
+    files = generate_files(bulk, spec_toml=BULK_FIXTURE.read_text())
+    validate_files(files)
+    tree = ast.parse(files[Path("src/bulkdemo_weaver/setup.py")])
+    values = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in ("ARCHIVE_URL", "_DB_FILENAME")
+    }
+    assert values == {"ARCHIVE_URL": text, "_DB_FILENAME": 'data"\\file.sqlite'}
+
+
+def test_destination_file_and_symlink_are_refused(tmp_path):
+    from weaverkit.scaffold import write_files
+
+    regular = tmp_path / "regular"
+    regular.write_text("sentinel")
+    link = tmp_path / "link"
+    link.symlink_to(regular)
+    for dest in (regular, link):
+        with pytest.raises(ScaffoldError):
+            write_files({Path("ok.py"): "pass\n"}, dest, force=True)
+    assert regular.read_text() == "sentinel"
+
+
+def test_invalid_last_artifact_does_not_create_destination(tmp_path):
+    from weaverkit.scaffold import write_files
+
+    with pytest.raises(ScaffoldError):
+        write_files({Path("ok.py"): "pass\n", Path("last.py"): "def ("}, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
+def test_force_replaces_backend_and_keeps_unrelated_files(tmp_path):
+    spec, dest, _ = _generate(tmp_path)
+    backend = dest / "src/madin_weaver/backends/local.py"
+    backend.write_text("implemented backend")
+    sentinel = dest / "notes.txt"
+    sentinel.write_text("keep me")
+    scaffold(spec, dest, spec_toml=FIXTURE.read_text(), force=True, format_output=False)
+    assert "NotImplementedError" in backend.read_text()
+    assert sentinel.read_text() == "keep me"
+
+
+def test_formatter_unavailable_is_best_effort(tmp_path, monkeypatch):
+    from weaverkit.scaffold import write_files
+
+    def absent(*args, **kwargs):
+        raise FileNotFoundError("no formatter")
+
+    monkeypatch.setattr("subprocess.run", absent)
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    written = write_files({Path("ok.py"): "pass\n"}, tmp_path / "out")
+    assert written[0].read_text() == "pass\n"

@@ -1,7 +1,7 @@
 # A06 implementation plan: scaffold generation and validated writes
 
 Matching [specification](scaffold.spec.md); parent [application plan](application.plan.md).
-Tracking: #145, #146. Date: 2026-10-08. Status: planned, not implemented.
+Tracking: #145, #146. Date: 2026-10-08. Status: S01–S04 verified locally; remote delivery pending.
 Branch: `refactor/persistence-foundations`. Execute A06 before A07; no agents or
 parallel edits are required. Package publication remains deferred.
 
@@ -107,4 +107,30 @@ ordinary write failures have the documented partial-publication limit.
 
 ## Implementation evidence
 
-Pending. This planning commit changes documentation only and does not implement A06.
+S01–S04 complete on 2026-10-08. Public `generate_files`, `validate_files` and
+`write_files` are exported alongside the compatible `scaffold` facade. Inline templates
+remain in the module; no new dependency or core API was introduced. Raw spec text stays
+exact, other artifacts end in a newline, inserted placeholder text stays literal, and
+Python/TOML data uses target-specific encoding. Complete-map validation and destination
+preflight precede writes; symlinks and filesystem conflicts are refused even with force.
+Ordinary write failures propagate, with the documented nontransactional limit.
+
+- Workspace `make test`: **1,402 passed, 48 skipped** (plus release-tool unittest suite).
+  Toolkit: **257 passed**, including **58 scaffold tests**; existing contracts unchanged.
+- `make lint`, changed-file Ruff format check and `git diff --check`: passed.
+- Toolkit **0.6.1** wheel and sdist built; Twine checks and archive contents passed.
+- Clean temporary installed-wheel environment with exact **braidworks-core 0.20.0**:
+  lookup, resolver, bulk, keyless/optional-key/required-key API packages generated,
+  compiled/parsed, imported and matched manifests. Strict verification refused unfinished
+  TODO stubs in all six variants. No biological downloads or live API calls were needed.
+- Toolkit patch version and `uv.lock` updated; core/weaver versions and floors unchanged.
+  Dependencies stayed in isolated environments; temporary installation environment removed.
+
+Local evidence: `.audit-local/a06-tests.log`, `a06-lint.log`, `a06-build.log`,
+`a06-twine.log`, `a06-installed.log`. Regression coverage includes literal placeholders,
+multiline/quoted metadata, complete preflight failures preserving existing bytes, absent
+new destinations, force backend replacement/unrelated retention, symlinks, conflicting
+artifact paths, unavailable formatting and propagation of write failure.
+
+Implementation commit: see parent application plan and local git history; #145/#146 remain
+open for remote delivery. A07/A08 and final programme acceptance remain separate work.

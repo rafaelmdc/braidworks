@@ -1,6 +1,6 @@
 # Combined implementation plan
 
-Date: 2026-10-05. Status: W01–W04 verified locally; remaining work packages planned.
+Date: 2026-10-05. Status: W01–W07 and W09–W12 verified locally; W08/W14 planned, W13 conditional.
 [Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
 [persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
@@ -17,7 +17,7 @@ baseline, not another rewrite to perform.
 | W04 | AP01–02 | QueryRequest/Options/PreparedQuery; shared prepare/execute service | W00; coordinate W03 APIs | Verified locally; see application.plan.md |
 | W05 | AP03 | Prepared-plan graph/code renderers; CLI/Python artifact equivalence | W04 | Verified locally; see application.plan.md |
 | W06 | AP04–05 | Shared GET/POST stream lifecycle; canonical browser request encoder | W04–05 | Verified locally; see application.plan.md |
-| W07 | AP06 | Pure scaffold generation/validation and safe writes | W00; align new runtime floor | Planned |
+| W07 | AP06 | Pure scaffold generation/validation and safe writes | W00; align new runtime floor | Verified locally; see scaffold.plan.md |
 | W08 | AP07 | Structured discovery and explicit worker retry decisions | W00 | Planned |
 | W09 | PF04 | Versioned cache codec/policy and SQLite cache adapter | W01–04 | Verified locally; see persistence.plan.md |
 | W10 | PF05 | Stable execution identities/state and in-memory continuation equivalence | W04; preserve W06 events | Verified locally; see persistence.plan.md |

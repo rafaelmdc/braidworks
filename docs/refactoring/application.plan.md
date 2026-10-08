@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A05 verified locally as persistence dependencies; A06–A08 planned. Tracking: #145, #146.
+Status: A01–A06 verified locally; A07 planned and A08 conditional. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -85,7 +85,11 @@ into a differently named file and call the refactor complete.
 ## A06 — Scaffold functional core and publication shell
 
 Detailed [A06 specification](scaffold.spec.md) and [implementation plan](scaffold.plan.md)
-expand this work package into SC01–SC05 and S01–S04. Status: planned, not implemented.
+expand this work package into SC01–SC05 and S01–S04. Status: verified locally.
+
+Acceptance: toolkit 0.6.1; workspace 1,402 passed/48 skipped, lint/format clean;
+wheel/sdist and six installed scaffold variants at exact core 0.20.0 passed.
+See the detailed plan for preflight, metadata and strict TODO-gate evidence.
 
 Split scaffold into pure artifact plan, single-pass target-aware rendering, validation
 and filesystem publication. Preserve scaffold wrapper/force/format behavior. Reject

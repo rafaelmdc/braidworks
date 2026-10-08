@@ -20,7 +20,7 @@ from weaverkit.index import (
     write_index,
 )
 from weaverkit.keys import OUTPUT_KEYS, SHARED_KEYS, is_known_output, is_shared_key
-from weaverkit.scaffold import ScaffoldError, scaffold
+from weaverkit.scaffold import ScaffoldError, generate_files, scaffold, validate_files, write_files
 from weaverkit.spec import (
     BulkSpec,
     CapabilitySpec,
@@ -51,6 +51,7 @@ __all__ = [
     "check_golden",
     "check_manifest",
     "discover_specs",
+    "generate_files",
     "is_known_output",
     "is_shared_key",
     "load_spec",
@@ -58,6 +59,8 @@ __all__ = [
     "run_golden",
     "scaffold",
     "uncatalogued_outputs",
+    "validate_files",
     "validate_spec",
+    "write_files",
     "write_index",
 ]
