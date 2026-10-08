@@ -1,6 +1,6 @@
 # Combined implementation plan
 
-Date: 2026-10-05. Status: W01–W12 verified locally; W13 conditional, W14 planned.
+Date: 2026-10-05. Status: W01–W12 verified locally; W13 assessed/rejected, W14 in progress.
 [Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
 [persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
@@ -23,8 +23,8 @@ baseline, not another rewrite to perform.
 | W10 | PF05 | Stable execution identities/state and in-memory continuation equivalence | W04; preserve W06 events | Verified locally; see persistence.plan.md |
 | W11 | PF06 | Transactional RunStore/checkpoint ownership/recovery | W01, W02, W10 | Verified locally; see persistence.plan.md |
 | W12 | PF07 | Cache/run status/resume across CLI/API/browser and human docs | W05–06, W09–11 | Verified locally; see persistence.plan.md |
-| W13 | AP08 | NCBI dispatch fit assessment; adapter only if justified | W03–04, W08 | Conditional |
-| W14 | RD01–08 plus all PF/AP | Full integrated validation, migrations, artifacts and user workflows | Required work complete | Planned |
+| W13 | AP08 | NCBI dispatch fit assessment; adapter only if justified | W03–04, W08 | Assessed; adapter rejected with evidence |
+| W14 | RD01–08 plus all PF/AP | Full integrated validation, migrations, artifacts and user workflows | Required work complete | In progress |
 
 Execute sequentially in this checkout. Independent rows describe dependency flexibility,
 not authorization to spawn agents or create parallel edits. A work package may need

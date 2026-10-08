@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A07 verified locally; A08 conditional. Tracking: #145, #146.
+Status: A01–A07 verified locally; A08 assessed, adapter rejected with evidence. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -216,6 +216,17 @@ Record capability equivalence table and implementation or rejection rationale. I
 implemented, run NCBI direct/routed, resolver/lookup, parameter/group/cardinality and
 conformance tests; changed API behavior also requires live E2E. A documented justified
 rejection satisfies AP08; no change solely to eliminate a second dispatch class.
+
+### A08 assessment evidence — 2026-10-08
+
+Completed conditional assessment: [capability comparison and decision](ncbi-dispatch-assessment.md).
+Keep the source-local runtime. Six capabilities already share core lookup mapping;
+generic taxonomy conversion demonstrably changes ambiguous candidate projection and
+loses warnings. A custom mixed-mapper adapter is possible but retains the same source
+branches plus a forwarding layer, without a second reusable mixed-source requirement.
+No core hooks/records were widened; no backend/vocab/version changes. NCBI 126 passed,
+11 skipped, plus local mapper/parameter counterexample probe. AP08/W13 satisfied by
+specified documented rejection; final W14 acceptance remains.
 
 ## Evidence, validation and exit
 
