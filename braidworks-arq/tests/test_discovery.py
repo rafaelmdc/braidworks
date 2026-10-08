@@ -32,3 +32,24 @@ def test_installed_weavers_are_discoverable():
     discovered = {m.weaver_id for m in reg.manifests()}
     assert discovered <= names
     assert {"ncbi", "bacdive", "disbiome"} & names, names
+
+
+def test_worker_cache_lifetime_remains_local(monkeypatch):
+    built = []
+
+    def build():
+        registry = registry_with(EchoWeaver())
+        built.append(registry)
+        return registry
+
+    monkeypatch.setattr(discovery, "build_registry_from_entry_points", build)
+    discovery.set_registry(None)
+    try:
+        first = discovery.get_registry()
+        assert discovery.get_registry() is first
+        assert len(built) == 1
+        discovery.set_registry(None)
+        assert discovery.get_registry() is not first
+        assert len(built) == 2
+    finally:
+        discovery.set_registry(None)

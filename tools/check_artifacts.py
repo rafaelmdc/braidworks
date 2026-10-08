@@ -75,6 +75,13 @@ def check_core_requirement(project: Path, config: dict) -> None:
             if node.module in {"braidworks.core.http_pacing", "braidworks.core.inputs"}:
                 required = max(required, (0, 13, 0))
             for symbol in node.names:
+                if symbol.name in {
+                    "DiscoveryFailure",
+                    "DiscoveryPolicy",
+                    "DiscoveryReport",
+                    "discover_registry",
+                }:
+                    required = max(required, (0, 21, 0))
                 if symbol.name == "format_exc":
                     required = max(required, (0, 7, 1))
                 if symbol.name == "map_bounded":

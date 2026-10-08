@@ -19,10 +19,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from importlib.metadata import entry_points
 from pathlib import Path
 
 from braidworks.core.braid import BackendPolicy, Braid
+from braidworks.core.discovery import DiscoveryPolicy
+from braidworks.core.discovery import discover_registry as discover_core_registry
 from braidworks.core.exceptions import NoPathError, NoPlanError
 from braidworks.core.planner import Braider
 from braidworks.core.references import references_for
@@ -33,7 +34,6 @@ from weaverkit.index import ENTRY_DESCRIPTION, ENTRY_KEYS
 from weaverkit.keys import OUTPUT_KEYS, SHARED_KEYS
 
 _DATA_PLACEHOLDER = "__BRAIDWORKS_DATA__"
-_ENTRY_POINT_GROUP = "braidworks.weavers"
 
 
 @dataclass
@@ -44,21 +44,16 @@ class Discovery:
     problems: list[str]
 
 
-def discover_registry() -> Discovery:
-    """Build a registry from the ``braidworks.weavers`` entry points.
-
-    A weaver whose zero-config builder raises is skipped with a recorded problem,
-    not propagated — a partial view is more useful than no view.
-    """
-    registry = BraidRegistry()
-    problems: list[str] = []
-    for ep in entry_points(group=_ENTRY_POINT_GROUP):
-        try:
-            weaver = ep.load()()
-            registry.register(weaver)
-        except Exception as exc:  # noqa: BLE001 - one bad weaver shouldn't sink the view
-            problems.append(f"{ep.name}: {type(exc).__name__}: {exc}")
-    return Discovery(registry=registry, problems=problems)
+def discover_registry(*, only: frozenset[str] | None = None) -> Discovery:
+    """Tolerant view adapter over shared discovery; retain friendly problem text."""
+    report = discover_core_registry(only=only, policy=DiscoveryPolicy.TOLERANT)
+    return Discovery(
+        registry=report.registry,
+        problems=[
+            f"{failure.name}: {failure.exception_type}: {failure.message}"
+            for failure in report.failures
+        ],
+    )
 
 
 # --- key classification ------------------------------------------------------

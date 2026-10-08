@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A06 verified locally; A07 planned and A08 conditional. Tracking: #145, #146.
+Status: A01–A06 and A07a verified locally; A07b planned and A08 conditional. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -114,6 +114,36 @@ mechanics in toolkit; arq owns worker-local registry lifetime. No global core si
 Tests fake entry points to prove excluded imports never occur, strict failures raise,
 partial views report failures and valid plugins register. Preserve user-facing error
 context. Commit independently from query/stream layers.
+
+### A07a implementation evidence — 2026-10-08
+
+Verified locally. Core exposes `DiscoveryPolicy`, `DiscoveryFailure`, `DiscoveryReport`
+and `discover_registry`; strict `build_registry_from_entry_points` and builder iteration
+remain compatible. One shared metadata filter precedes plugin imports. Reports contain
+entry-point name/value, load/build/register stage, exception type and message; failures
+round-trip JSON without retaining tracebacks. The report holds live registry instances
+and is deliberately not a serialized registry format.
+
+Strict discovery re-raises the original exception with an entry-point/stage note.
+Tolerant mode continues after per-plugin failures; metadata enumeration errors and
+process-control exceptions propagate. Toolkit's existing Discovery wrapper retains its
+registry/problems shape and friendly text. Arq's cached registry stays worker-local;
+its implementation and version are unchanged. No global core registry or retry changes.
+
+- Core **0.21.0** for additive public discovery APIs; toolkit **0.6.2**, floor
+  **core>=0.21.0**, lock synced in the isolated environment. Weaver versions unchanged.
+- Targeted discovery/view/CLI/worker suites passed; full workspace **1,415 passed,
+  48 skipped** plus release-tool unittests. Core 523, toolkit 258, arq 52 passed.
+- Lint, changed-file formatting and diff whitespace checks passed.
+- All **20 packages** built wheel/sdist; Twine, metadata/resource checks and clean
+  installed CLI/fixture/server smoke passed. Artifact floor guard recognizes new APIs.
+- Separate clean installed core/toolkit minimum-floor check with real PDBe and an
+  intentionally broken plugin passed strict exception context, pre-import exclusion,
+  partial discovery and matching friendly view diagnostics. Temporary environments removed.
+
+Evidence: `.audit-local/a07a-tests.log`, `a07a-lint.log`, `a07a-build.log`,
+`a07a-twine.log`, `a07a-artifact-check.log`, `a07a-installed.log`. No backend changes
+or live API calls. A07b remains planned; AP07/W08 are only partially complete.
 
 ## A07b — Retry decisions
 

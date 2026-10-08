@@ -24,7 +24,11 @@ from braidworks.core.capability import (
 from braidworks.core.concurrency import map_bounded
 from braidworks.core.discovery import (
     ENTRY_POINT_GROUP,
+    DiscoveryFailure,
+    DiscoveryPolicy,
+    DiscoveryReport,
     build_registry_from_entry_points,
+    discover_registry,
     iter_weaver_builders,
 )
 from braidworks.core.dispatch import BackendDispatchWeaver
@@ -157,6 +161,9 @@ __all__ = [
     "CandidateResult",
     "Capability",
     "CapabilityInvocation",
+    "DiscoveryFailure",
+    "DiscoveryPolicy",
+    "DiscoveryReport",
     "ErrorCategory",
     "ErrorPolicy",
     "ExecutionError",
@@ -222,6 +229,7 @@ __all__ = [
     "continue_query",
     "continue_run",
     "default_db_path",
+    "discover_registry",
     "download",
     "ensure_local_db",
     "execute_managed_query",

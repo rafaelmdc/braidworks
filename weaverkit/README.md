@@ -177,3 +177,9 @@ Validation and preflight failures leave the destination untouched. The subsequen
 multi-file write is not transactional: disk errors or interruption can leave partial
 output, and write errors propagate to the caller. `scaffold` composes generation and
 writing with its existing arguments and sorted returned paths.
+
+
+The network view and references command use shared core discovery in tolerant mode:
+a broken plugin is skipped and reported as `name: ExceptionType: message`, while valid
+plugins remain available. Strict query/worker discovery continues to raise failures.
+`weaverkit.view.discover_registry(only=frozenset({...}))` filters before importing plugins.
