@@ -177,6 +177,8 @@ pacing checks are preserved. Broader error taxonomy (#133) is unchanged.
 
 ### A07b acceptance evidence
 
+Implementation commit: `e8c2852` on `refactor/persistence-foundations` (local, unpushed).
+
 `retry.should_retry` is a pure worker-local allowlist; `weave_step` uses it before
 raising arq Retry. Final-attempt and nonretryable failures preserve the original
 exception; retry signals retain the exception as their cause. The existing batch
