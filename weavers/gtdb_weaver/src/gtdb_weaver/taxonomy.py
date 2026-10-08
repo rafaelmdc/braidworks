@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from braidworks.core.localdb import ensure_local_db
 from braidworks.core.sqlite import readonly_uri
 
 # GTDB rank prefix -> canonical rank name (domain..species).
@@ -66,7 +67,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 
-def build_crosswalk_db(
+def _build_crosswalk_db(
     rows: Iterable[tuple[int, str, bool, str]], db_path: str | Path, *, release: str
 ) -> None:
     """Build the crosswalk SQLite from ``(ncbi_taxid, gtdb_taxonomy, is_rep, accession)`` rows.
@@ -89,6 +90,11 @@ def build_crosswalk_db(
             name = _species_name(taxonomy)
             if name and name not in species:
                 species[name] = (taxonomy, accession)
+
+    if not best:
+        raise ValueError("GTDB crosswalk has no usable taxonomy rows")
+    if not release.strip():
+        raise ValueError("GTDB crosswalk requires a nonempty release")
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,3 +183,45 @@ def rep_accession(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
         "SELECT rep_accession FROM species WHERE name = ?", (species_name,)
     ).fetchone()
     return row[0] if row and row[0] else None
+
+
+def crosswalk_is_valid(path: Path) -> bool:
+    """Check the complete query schema and required identity, without modifying it."""
+    try:
+        con = open_ro(path)
+    except sqlite3.Error:
+        return False
+    try:
+        con.execute("SELECT ncbi_taxid, gtdb_taxonomy, is_rep FROM taxon LIMIT 0")
+        con.execute("SELECT name, gtdb_taxonomy, rep_accession FROM species LIMIT 0")
+        metadata = dict(con.execute("SELECT key, value FROM meta"))
+        return (
+            metadata.get("schema_version") == "1"
+            and bool(metadata.get("release"))
+            and bool(metadata.get("build_id"))
+            and con.execute("SELECT 1 FROM taxon LIMIT 1").fetchone() is not None
+            and con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+        )
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+
+
+def build_crosswalk_db(
+    rows: Iterable[tuple[int, str, bool, str]], db_path: str | Path, *, release: str
+) -> None:
+    """Publish a complete validated replacement; preserve the target on failure.
+
+    Explicit local builds reuse the shared staging/lock/publish orchestration;
+    consent and large-download disk margins belong to the acquisition entry point.
+    """
+    ensure_local_db(
+        Path(db_path),
+        is_valid=crosswalk_is_valid,
+        build=lambda staged: _build_crosswalk_db(rows, staged, release=release),
+        consent_message="",
+        auto=True,
+        refresh=True,
+        min_free_bytes=0,
+    )

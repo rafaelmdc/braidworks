@@ -67,3 +67,20 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/agora_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Safe local database rebuilds
+
+Direct builders and acquisition builds stage a fresh database beside the target,
+validate its query schema and publish it atomically under the existing build lock.
+Successful rebuilds remove rows from older datasets; failed input, validation or
+publication leaves the original database unchanged. Allow space for both databases
+and close writable target connections before replacement. Keep application-owned
+tables in a separate database. Explicit local builds do not enforce the large
+download disk margin used by consent-gated acquisition.
+
+`build_reaction_db()` records the SBML content hash and the annotation row count,
+SHA-256 and source. Optional `annotation_source=` and `sbml_source=` identify source
+URLs; without them, metadata labels annotations caller-supplied and records the
+local archive path. The annotation digest covers ordered JSON rows, not raw HTTP
+bytes; it provides reproducibility evidence rather than a canonical dataset ID.
+The XML parser releases processed elements, including nonreaction data.

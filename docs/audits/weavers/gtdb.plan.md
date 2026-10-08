@@ -18,3 +18,16 @@ replace working shared dispatch or invent generic source repositories.
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+## Shared replacement implementation
+
+WV-GTDB-005 implemented locally as part of shared #152. Direct builds
+reuse core ensure_local_db staging/lock/validation/publication, replacing the
+complete reference database and preserving previous targets on failure. Version
+0.2.4; other findings and work-package portions remain proposed.
+
+Validation: 58 passed, 2 live tests skipped; strict conformance/golden and lint
+passed. Regression tests cover stale taxon/species removal, incomplete query
+schema rejection and iterator/empty-input/release/publication failures with and
+without existing targets. Release bundle coherence and ingestion memory work
+(WV-GTDB-004/007) remain open. No API backend changes.

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
@@ -108,18 +107,7 @@ def default_db_path() -> Path:
 
 def db_is_valid(path: Path) -> bool:
     """Return whether ``path`` is a readable, populated reaction DB."""
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    except sqlite3.Error:
-        return False
-    try:
-        return con.execute("SELECT 1 FROM reaction LIMIT 1").fetchone() is not None
-    except sqlite3.Error:
-        return False
-    finally:
-        con.close()
+    return dataset.reaction_db_is_valid(path)
 
 
 def _consent_message(db_path: Path) -> str:
@@ -165,14 +153,20 @@ def _build_reaction_db(tmp_db: Path, *, sbml_url: str, reactions_api: str) -> No
     """Build callback for ``ensure_local_db``: download SBML zip + fetch crosswalk -> SQLite."""
     archive = tmp_db.parent / "AGORA2_SBML.zip"
     logger.info("acquiring AGORA2 SBML archive -> %s (%s)", archive, sbml_url)
-    _download(sbml_url, archive, label="Downloading AGORA2 SBML archive")
-    content_hash = _md5_file(archive)
-    rxn_info = list(_fetch_reaction_crosswalk(reactions_api))
-    written = dataset.build_reaction_db(archive, rxn_info, tmp_db, content_hash=content_hash)
-    archive.unlink(missing_ok=True)
-    if written == 0:
-        raise ValueError("no reactions parsed from the AGORA2 SBML archive (download corrupt?)")
-    logger.info("AGORA2 reaction DB built: %s (%d reaction rows)", tmp_db, written)
+    try:
+        _download(sbml_url, archive, label="Downloading AGORA2 SBML archive")
+        content_hash = _md5_file(archive)
+        written = dataset.build_reaction_db(
+            archive,
+            _fetch_reaction_crosswalk(reactions_api),
+            tmp_db,
+            content_hash=content_hash,
+            annotation_source=reactions_api,
+            sbml_source=sbml_url,
+        )
+        logger.info("AGORA2 reaction DB built: %s (%d reaction rows)", tmp_db, written)
+    finally:
+        archive.unlink(missing_ok=True)
 
 
 def ensure_agora_db(

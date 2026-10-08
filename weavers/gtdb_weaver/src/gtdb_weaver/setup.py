@@ -15,7 +15,6 @@ from __future__ import annotations
 import csv
 import gzip
 import logging
-import sqlite3
 import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
@@ -107,18 +106,7 @@ def ensure_gtdb_trees(
 
 def db_is_valid(path: Path) -> bool:
     """Return whether ``path`` is a readable, populated crosswalk DB."""
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    except sqlite3.Error:
-        return False
-    try:
-        return con.execute("SELECT 1 FROM taxon LIMIT 1").fetchone() is not None
-    except sqlite3.Error:
-        return False
-    finally:
-        con.close()
+    return taxonomy.crosswalk_is_valid(path)
 
 
 def _consent_message(db_path: Path) -> str:

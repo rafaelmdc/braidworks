@@ -27,3 +27,12 @@ All scripts checked with the existing Ruff executable. Findings refer to unchang
 source revision `d5e7543`; outputs should change when accepted fixes are implemented.
 
 [Audit index](../weavers/README.md), [summary](../weavers/summary.md).
+
+AGORA parser memory characterization (synthetic local XML, no downloads):
+
+```bash
+.audit-local/tools/venv/bin/python docs/audits/reproductions/weaver_sbml_memory.py
+```
+
+The script consumes reactions without retaining the parsed XML. It measures parser
+allocations, not SQLite/native allocations or full-archive ingestion.

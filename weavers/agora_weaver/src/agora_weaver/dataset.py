@@ -14,6 +14,8 @@ Two data sources, joined at query time:
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import logging
 import re
 import sqlite3
@@ -29,6 +31,7 @@ from typing import Any
 # The AGORA2 SBML archive is compressed with Deflate64 (method 9), which the stdlib
 # zipfile cannot decode; importing this monkeypatches zipfile to support it.
 import zipfile_deflate64  # noqa: F401
+from braidworks.core.localdb import ensure_local_db
 from braidworks.core.sqlite import readonly_uri
 
 logger = logging.getLogger("agora_weaver.dataset")
@@ -144,21 +147,30 @@ def iter_sbml_reactions(sbml_bytes_or_stream: Any) -> Iterator[str]:
     Streams with ``iterparse`` and clears elements, so an 8 MB model never fully
     materialises. Tolerant of namespaced or bare ``<reaction>`` tags.
     """
-    for _event, elem in ET.iterparse(sbml_bytes_or_stream, events=("end",)):
+    parents: list[ET.Element] = []
+    for event, elem in ET.iterparse(sbml_bytes_or_stream, events=("start", "end")):
+        if event == "start":
+            parents.append(elem)
+            continue
         tag = elem.tag
         if tag == _RXN_TAG or tag.rsplit("}", 1)[-1] == "reaction":
             rid = elem.get("id") or ""
             if rid.startswith("R_"):
                 yield _decode_sbml_id(rid[2:])
-            elem.clear()
+        parents.pop()
+        if parents:
+            parents[-1].remove(elem)
+        elem.clear()
 
 
-def build_reaction_db(
+def _build_reaction_db(
     sbml_zip: str | Path,
     rxn_info: Iterable[tuple[str, str | None, str | None, str | None, str | None]],
     db_path: str | Path,
     *,
     content_hash: str,
+    annotation_source: str | None = None,
+    sbml_source: str | None = None,
 ) -> int:
     """Build the reaction SQLite from the AGORA2 SBML zip + the VMH reaction crosswalk.
 
@@ -166,6 +178,19 @@ def build_reaction_db(
     membership; ``rxn_info`` rows are ``(abbreviation, subsystem, ec, kegg, rhea)``.
     Returns the number of membership rows written.
     """
+    if not content_hash.strip():
+        raise ValueError("AGORA reaction build requires a nonempty source content hash")
+    annotation_digest = hashlib.sha256()
+    annotation_count = 0
+
+    def annotated_rows():
+        nonlocal annotation_count
+        for row in rxn_info:
+            annotation_digest.update(json.dumps(row, separators=(",", ":")).encode())
+            annotation_digest.update(b"\n")
+            annotation_count += 1
+            yield row
+
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db_path)
@@ -174,7 +199,7 @@ def build_reaction_db(
         con.executemany(
             "INSERT OR REPLACE INTO rxn_info (abbreviation, subsystem, ec, kegg, rhea) "
             "VALUES (?, ?, ?, ?, ?)",
-            rxn_info,
+            annotated_rows(),
         )
         written = 0
         skipped = 0
@@ -197,6 +222,8 @@ def build_reaction_db(
                     rows,
                 )
                 written += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        if written == 0:
+            raise ValueError("no reactions parsed from the AGORA2 SBML archive")
         if skipped:
             logger.warning("skipped %d malformed SBML model(s) of the archive", skipped)
         con.execute(
@@ -209,9 +236,77 @@ def build_reaction_db(
         )
         con.executemany(
             "INSERT OR REPLACE INTO meta VALUES (?, ?)",
-            [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
+            [
+                ("schema_version", "1"),
+                ("build_id", uuid.uuid4().hex),
+                ("annotation_sha256", annotation_digest.hexdigest()),
+                ("annotation_rows", str(annotation_count)),
+                ("annotation_source", annotation_source or "caller-supplied"),
+                ("sbml_source", sbml_source or str(sbml_zip)),
+                ("annotation_hash_encoding", "ordered-json-rows-v1"),
+            ],
         )
         con.commit()
         return written
     finally:
         con.close()
+
+
+def reaction_db_is_valid(path: Path) -> bool:
+    """Validate the complete reaction query schema and source identity."""
+    try:
+        con = open_ro(path)
+    except sqlite3.Error:
+        return False
+    try:
+        con.execute("SELECT reconstruction, abbreviation FROM reaction LIMIT 0")
+        con.execute("SELECT abbreviation, subsystem, ec, kegg, rhea FROM rxn_info LIMIT 0")
+        metadata = dict(con.execute("SELECT key, value FROM meta"))
+        return (
+            bool(metadata.get("content_hash"))
+            and con.execute("SELECT 1 FROM reaction LIMIT 1").fetchone() is not None
+            and con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+        )
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+
+
+def build_reaction_db(
+    sbml_zip: str | Path,
+    rxn_info: Iterable[tuple[str, str | None, str | None, str | None, str | None]],
+    db_path: str | Path,
+    *,
+    content_hash: str,
+    annotation_source: str | None = None,
+    sbml_source: str | None = None,
+) -> int:
+    """Stage, validate and publish a complete replacement, preserving targets on failure.
+
+    Records the archive identity and digest/count/source of the ingested annotation
+    rows. Missing source URLs are explicitly identified as caller-supplied/local.
+    """
+    written = 0
+
+    def build(staged: Path) -> None:
+        nonlocal written
+        written = _build_reaction_db(
+            sbml_zip,
+            rxn_info,
+            staged,
+            content_hash=content_hash,
+            annotation_source=annotation_source,
+            sbml_source=sbml_source,
+        )
+
+    ensure_local_db(
+        Path(db_path),
+        is_valid=reaction_db_is_valid,
+        build=build,
+        consent_message="",
+        auto=True,
+        refresh=True,
+        min_free_bytes=0,
+    )
+    return written

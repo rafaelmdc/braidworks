@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -366,7 +366,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "gtdb-weaver"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "weavers/gtdb_weaver" }
 dependencies = [
     { name = "braidworks-core" },

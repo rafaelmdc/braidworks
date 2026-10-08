@@ -17,3 +17,22 @@ as needed. No cache/resume implementation in this proposal.
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+## Shared replacement implementation
+
+WV-AGORA-005 implemented locally as part of shared #152. Direct builds
+reuse core ensure_local_db staging/lock/validation/publication, replacing the
+complete reference database and preserving previous targets on failure. Version
+0.2.3; other findings and work-package portions remain proposed.
+
+Validation: 32 passed, 1 skipped; strict conformance/golden and lint passed.
+The existing restricted-license warning remains conservative. Acquisition cleanup
+is tested even when VMH retrieval fails. Annotation source/digest/count metadata
+and fresh replacement are covered by regression tests. Parser releases all
+processed elements rather than retaining nonreaction subtrees. Bounded offline
+measurement: 1,000 / 20,000 / 100,000 species (60 KB / 1.23 MB / 6.19 MB XML) used
+275,380 / 200,004 / 201,660 peak traced Python bytes and 0.011 / 0.202 / 0.985 seconds
+on this laptop. See [measurement script](../reproductions/weaver_sbml_memory.py).
+This measures the parser, not whole-archive/native memory; reaction rows remain
+materialized per model to preserve existing malformed-model behavior. Model coverage
+tracking (WV-AGORA-003) and individual-model publication (WV-AGORA-002) remain open.
