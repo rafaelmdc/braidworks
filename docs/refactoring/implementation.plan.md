@@ -1,6 +1,6 @@
 # Combined implementation plan
 
-Date: 2026-10-05. Status: W01–W12 verified locally; W13 assessed/rejected, W14 in progress.
+Date: 2026-10-05. Status: W01–W12 verified locally; W13 assessed/rejected, W14 verified locally.
 [Programme index](README.md). Matching detailed plans: [readiness](readiness.plan.md),
 [persistence](persistence.plan.md), [application](application.plan.md). Branch: `refactor/persistence-foundations`.
 No push/merge/publication is part of this programme. Round 1 is the existing local
@@ -24,7 +24,7 @@ baseline, not another rewrite to perform.
 | W11 | PF06 | Transactional RunStore/checkpoint ownership/recovery | W01, W02, W10 | Verified locally; see persistence.plan.md |
 | W12 | PF07 | Cache/run status/resume across CLI/API/browser and human docs | W05–06, W09–11 | Verified locally; see persistence.plan.md |
 | W13 | AP08 | NCBI dispatch fit assessment; adapter only if justified | W03–04, W08 | Assessed; adapter rejected with evidence |
-| W14 | RD01–08 plus all PF/AP | Full integrated validation, migrations, artifacts and user workflows | Required work complete | In progress |
+| W14 | RD01–08 plus all PF/AP | Full integrated validation, migrations, artifacts and user workflows | Required work complete | Verified locally; see final-acceptance.md |
 
 Execute sequentially in this checkout. Independent rows describe dependency flexibility,
 not authorization to spawn agents or create parallel edits. A work package may need
@@ -100,3 +100,13 @@ change. No remote CI/fleet/release certification unless actually exercised.
 Independent versions must agree across affected specs/pyproject/generated vocab; raise
 core floors for new dependencies. Preserve NCBI's handwritten-vocab exception. Never
 stage `.audit-local`, databases, environments, downloads or archives. Publish no tags.
+
+
+## Final local acceptance — 2026-10-08
+
+All required work packages are complete locally; W13 is satisfied by the specified
+[documented adapter rejection](ncbi-dispatch-assessment.md). [W14 evidence](final-acceptance.md)
+records 1,481 passed/48 skipped, 17 strict gates, all 20 package distributions,
+minimum-core goldens and clean installed browser/scaffold/CLI checks. Two final browser
+regressions were fixed in `98bfd83`. Runtime versions: core 0.21.0, toolkit 0.6.3,
+arq 0.2.1. Existing delivery issues stay open; no push, merge, tag or publication.

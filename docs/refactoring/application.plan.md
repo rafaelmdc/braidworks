@@ -220,13 +220,23 @@ rejection satisfies AP08; no change solely to eliminate a second dispatch class.
 ### A08 assessment evidence — 2026-10-08
 
 Completed conditional assessment: [capability comparison and decision](ncbi-dispatch-assessment.md).
-Keep the source-local runtime. Six capabilities already share core lookup mapping;
+Assessment commit: `b5f9d8f` (local, unpushed). Keep the source-local runtime.
+Six capabilities already share core lookup mapping;
 generic taxonomy conversion demonstrably changes ambiguous candidate projection and
 loses warnings. A custom mixed-mapper adapter is possible but retains the same source
 branches plus a forwarding layer, without a second reusable mixed-source requirement.
 No core hooks/records were widened; no backend/vocab/version changes. NCBI 126 passed,
 11 skipped, plus local mapper/parameter counterexample probe. AP08/W13 satisfied by
-specified documented rejection; final W14 acceptance remains.
+specified documented rejection; W14 is verified in the final acceptance report.
+
+### W14 browser regressions
+
+The final Firefox baseline exposed a stale `have` variable in the code-dialog presenter
+and typed planning retaining graph mode, causing its Run button to read graph settings.
+Local fix commit: `98bfd83`. Toolkit 0.6.3 fixes both: use canonical request inputs for code placeholders, and leave
+graph mode when planning the typed route. Full workspace 1,481 passed/48 skipped and
+clean installed Firefox code/keyboard/export/review and persistence journeys passed. See the
+[final acceptance report](final-acceptance.md) for the completed W14 evidence and remaining remote delivery.
 
 ## Evidence, validation and exit
 

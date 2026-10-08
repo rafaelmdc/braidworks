@@ -33,3 +33,8 @@ No publication, pushing, merging, remote release activation or manual tags are i
 
 A06 scaffold work has a detailed [specification](scaffold.spec.md) and
 [implementation plan](scaffold.plan.md), grounded in the current generator and tests.
+
+
+[Final local acceptance](final-acceptance.md) is verified: required implementation
+work is complete, including A08's documented rejection and final browser regression fixes.
+Remote delivery and publication remain separate; see the report for evidence and limits.

@@ -111,3 +111,13 @@ Record evidence in the active plan task/issue before each local implementation c
 Commit docs/metadata changes with the behavior they explain where practical. Final
 readiness record lists remaining limitations and exact local hashes; it does not claim
 remote CI or publication. This plan completes at W14 when RD01–08 acceptance holds.
+
+
+## W14 acceptance — 2026-10-08
+
+R01–R08 baseline invariants remain verified locally in the [final acceptance](final-acceptance.md):
+workspace and strict gates, current package/floor checks, real installed browser journeys,
+archives, catalogs, document links and workflow lint passed. The final browser rehearsal
+found and fixed two application regressions (`98bfd83`), without weakening contracts.
+Publishing remains deferred; live upstream, real Redis and remote deployment assurance
+are outside these completed local gates.
