@@ -1,6 +1,6 @@
 # NCBI proposed implementation plan
 
-Status proposed. [Spec](ncbi.spec.md).
+Status: WP-NCBI-01 implemented locally; remaining packages proposed. [Spec](ncbi.spec.md).
 
 | Work package | Findings | Work and validation |
 |---|---|---|
@@ -20,3 +20,15 @@ layer or generic biological core abstraction. No implementation in this audit.
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+## WP-NCBI-01 implementation evidence
+
+Issues #222 and #223: public builder stages a fresh database under the existing
+BuildLock, rejects failed validation, closes SQLite before atomic replacement and
+cleans staging on failure. Unified/standalone build CLI reports current summary
+fields and actionable failures. NCBI version bumped to 0.2.5.
+
+Regression coverage includes malformed nodes/names, validation and publication
+failures with/without an existing target, complete successful replacement with
+source digest metadata, and real subprocess CLI builds/JSON reports/errors.
+Package suite: 137 passed, 11 live tests skipped. API backends unchanged.

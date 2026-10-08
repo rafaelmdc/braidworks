@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
+import tarfile
 import urllib.request
 from pathlib import Path
 from typing import TextIO
 
+from braidworks.core import BackendConfigurationError
 from taxonomy_resolver.build import build_taxonomy_database
 
 DEFAULT_TAXDUMP_URL = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
@@ -122,9 +125,7 @@ class BuildProgressPrinter:
             print(file=self.stream, flush=True)
             self._active_stage = None
 
-    def _render_line(
-        self, stage: str, message: str, current: int | None, total: int | None
-    ) -> str:
+    def _render_line(self, stage: str, message: str, current: int | None, total: int | None) -> str:
         """Render one build progress line (download stage counts bytes, others count rows)."""
 
         if current is None:
@@ -187,16 +188,25 @@ def run(args: argparse.Namespace) -> None:
 
     dump_path = Path(args.dump)
     progress_printer = BuildProgressPrinter()
-    if args.download:
-        print(f"Downloading NCBI taxdump to {dump_path}")
-        download_taxdump(args.download_url, dump_path)
-
-    summary = build_taxonomy_database(
-        dump_path,
-        Path(args.db),
-        progress_callback=progress_printer,
-    )
-    progress_printer.finish()
+    try:
+        if args.download:
+            print(f"Downloading NCBI taxdump to {dump_path}")
+            download_taxdump(args.download_url, dump_path)
+        summary = build_taxonomy_database(
+            dump_path, Path(args.db), progress_callback=progress_printer
+        )
+    except (
+        OSError,
+        ValueError,
+        IndexError,
+        tarfile.TarError,
+        sqlite3.Error,
+        BackendConfigurationError,
+    ) as exc:
+        print(f"Taxonomy build failed for {args.db}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+    finally:
+        progress_printer.finish()
 
     if args.report_json:
         report_path = Path(args.report_json)
@@ -209,7 +219,8 @@ def run(args: argparse.Namespace) -> None:
     print(f"Names: {summary.name_count}")
     print(f"Scientific names: {summary.scientific_name_count}")
     print(f"Synonyms/non-scientific names: {summary.synonym_count}")
-    print(f"Lineage cache rows: {summary.lineage_cache_count}")
+    print(f"Root taxa: {summary.root_taxid_count}")
+    print(f"Source SHA-256: {summary.source_dump_sha256}")
     print(f"Validation checks: {json.dumps(summary.validation_checks, sort_keys=True)}")
 
 

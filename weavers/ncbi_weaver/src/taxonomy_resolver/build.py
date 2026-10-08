@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import tempfile
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -12,6 +14,7 @@ from pathlib import Path
 from tarfile import TarFile, TarInfo, is_tarfile
 from typing import BinaryIO
 
+from braidworks.core.localdb import BuildLock
 from braidworks.core.sqlite import connection_scope
 
 from .db import (
@@ -346,7 +349,7 @@ def _optimize_database(
     db_handle.commit()
 
 
-def build_taxonomy_database(
+def _build_staged_database(
     dump_path: Path | str,
     db_path: Path | str,
     *,
@@ -441,6 +444,8 @@ def build_taxonomy_database(
             expected_scientific_name_count=scientific_name_count,
         )
         root_taxid_count = _get_root_taxid_count(build_connection)
+        if not all(validation_checks.values()):
+            raise ValueError(f"Taxonomy database failed validation: {validation_checks}")
 
         _notify_progress(
             progress_callback,
@@ -478,12 +483,6 @@ def build_taxonomy_database(
         )
         _apply_sqlite_pragmas(build_connection, RUNTIME_PRAGMA_STATEMENTS)
         build_connection.commit()
-        _notify_progress(
-            progress_callback,
-            stage="done",
-            message="Build complete",
-            final=True,
-        )
 
     return TaxonomyBuildSummary(
         db_path=str(db_path),
@@ -500,3 +499,32 @@ def build_taxonomy_database(
         rankedlineage_present="rankedlineage.dmp" in available_members,
         validation_checks=validation_checks,
     )
+
+
+def build_taxonomy_database(
+    dump_path: Path | str,
+    db_path: Path | str,
+    *,
+    progress_callback: ProgressCallback | None = None,
+) -> TaxonomyBuildSummary:
+    """Build and validate a replacement before atomically publishing it.
+
+    Existing targets are never modified on parse, validation or publication failure.
+    Builders for the same target share the acquisition lock. Staging requires space
+    for the complete new database alongside any existing database. Close writable
+    SQLite connections to the target before rebuilding it.
+    """
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        BuildLock(db_path),
+        tempfile.TemporaryDirectory(prefix=".taxonomy-build-", dir=db_path.parent) as tmp,
+    ):
+        staged_path = Path(tmp) / db_path.name
+        summary = _build_staged_database(
+            dump_path, staged_path, progress_callback=progress_callback
+        )
+        os.replace(staged_path, db_path)
+    summary.db_path = str(db_path)
+    _notify_progress(progress_callback, stage="done", message="Build complete", final=True)
+    return summary

@@ -45,6 +45,24 @@ braidworks run ncbi ncbi.resolve_gene --have protein.query=TP53
 braidworks run ncbi ncbi.list_orthologs --have gene.ncbi.id=7157 --param taxon_filter=40674
 ```
 
+## Building or replacing the local database
+
+```bash
+ncbi-weaver build-db --dump taxdump.tar.gz --db data/ncbi_taxonomy.sqlite \
+    --report-json build-report.json
+```
+
+Both `build-db` and Python's `build_taxonomy_database()` build in a temporary directory
+beside the target, validate the result, then replace the target atomically. A failed
+parse or validation preserves the existing database; temporary build files are cleaned
+up. Builds for the same target use the existing cross-process build lock. Allow disk
+space for the complete replacement alongside the old database, and close writable
+SQLite connections before replacing it. A successful replacement contains only the new
+reference database, so keep application-owned tables in a separate database.
+
+The human summary and optional JSON report include counts, validation checks and the
+source archive SHA-256. Invalid archives exit with status 1 and an error message.
+
 ## Choosing a backend
 
 ```python
