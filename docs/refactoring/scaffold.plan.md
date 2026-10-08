@@ -132,5 +132,5 @@ multiline/quoted metadata, complete preflight failures preserving existing bytes
 new destinations, force backend replacement/unrelated retention, symlinks, conflicting
 artifact paths, unavailable formatting and propagation of write failure.
 
-Implementation commit: see parent application plan and local git history; #145/#146 remain
+Implementation commit: `ce33f19` on `refactor/persistence-foundations`; #145/#146 remain
 open for remote delivery. A07/A08 and final programme acceptance remain separate work.

@@ -87,6 +87,8 @@ into a differently named file and call the refactor complete.
 Detailed [A06 specification](scaffold.spec.md) and [implementation plan](scaffold.plan.md)
 expand this work package into SC01–SC05 and S01–S04. Status: verified locally.
 
+Implementation commit: `ce33f19` (local, unpushed).
+
 Acceptance: toolkit 0.6.1; workspace 1,402 passed/48 skipped, lint/format clean;
 wheel/sdist and six installed scaffold variants at exact core 0.20.0 passed.
 See the detailed plan for preflight, metadata and strict TODO-gate evidence.
