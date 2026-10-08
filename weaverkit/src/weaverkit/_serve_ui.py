@@ -326,9 +326,9 @@ function wireCopies() {
 }
 
 async function showCode() {
-  let a;
+  let a, body;
   try {
-    const body = toQueryRequest(experimentState(), {placeholders: true});
+    body = toQueryRequest(experimentState(), {placeholders: true});
     const response = await fetch("/api/code", {method: "POST", headers: {"content-type": "application/json"},
       body: JSON.stringify(body)});
     const doc = await response.json();
@@ -347,7 +347,7 @@ async function showCode() {
   const panes = tabs.map((t, i) =>
     `<div class="pane" data-i="${i}" style="display:${i === 0 ? "block" : "none"}">${copyBlock(t[2])}</div>`
   ).join("");
-  const placeholder = Object.values(have).includes("<value>") ?
+  const placeholder = Object.values(body.have).includes("<value>") ?
     `<div class="note">Enter your input value, or replace the quoted &lt;value&gt; placeholders before running.</div>` : "";
   openSheet("Generated code", placeholder + head + panes);
   wireCopies();
@@ -630,6 +630,7 @@ function exportRows(fmt) {
 }
 
 async function runPlan() {
+  if (buildMode) exitBuild();
   const out = document.getElementById("b-out");
   const from = splitTypes(document.getElementById("b-have").value);
   const to = splitTypes(document.getElementById("b-want").value);
