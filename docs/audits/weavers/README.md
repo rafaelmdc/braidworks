@@ -10,11 +10,11 @@ are not accepted or implemented merely because an audit is complete.
 | 02 | UniProt | Audited locally | Exact-ID selection, mapping duplicates/group coverage, malformed payloads, lifecycle and annotation gaps | [Report](uniprot.audit.md), [spec](uniprot.spec.md), [plan](uniprot.plan.md) |
 | 03 | PDBe | Audited locally | Source/limit identity, response validation and structure-detail coverage | [Report](pdbe.audit.md), [spec](pdbe.spec.md), [plan](pdbe.plan.md) |
 | 04 | AlphaFold | Audited locally | Fragment coverage, response validation and confidence/model-list gaps | [Report](alphafold.audit.md), [spec](alphafold.spec.md), [plan](alphafold.plan.md) |
-| 05 | QuickGO | Planned | — | — |
-| 06 | Reactome | Planned | — | — |
-| 07 | STRING | Planned | — | — |
-| 08 | NCBI | Planned | — | — |
-| 09 | GTDB | Planned | — | — |
+| 05 | QuickGO | Audited locally | Single-input correlation, coverage identity and ontology/filter gaps | [Report](quickgo.audit.md), [spec](quickgo.spec.md), [plan](quickgo.plan.md) |
+| 06 | Reactome | Audited locally | Limit/source identity, response validation and hierarchy/detail gaps | [Report](reactome.audit.md), [spec](reactome.spec.md), [plan](reactome.plan.md) |
+| 07 | STRING | Audited locally | Stable partner identity, restricted coverage, duplicate edges and mutable version | [Report](string.audit.md), [spec](string.spec.md), [plan](string.plan.md) |
+| 08 | NCBI | Audited locally | Unsafe direct rebuild, broken build CLI, silent enrichment failure and ambiguity | [Report](ncbi.audit.md), [spec](ncbi.spec.md), [plan](ncbi.plan.md) |
+| 09 | GTDB | Audited locally | Crosswalk ambiguity, disconnected tree distance, release bundles and build validation | [Report](gtdb.audit.md), [spec](gtdb.spec.md), [plan](gtdb.plan.md) |
 | 10 | BacDive | Planned | — | — |
 | 11 | AGORA | Planned | — | — |
 | 12 | FAPROTAX | Planned | — | — |
