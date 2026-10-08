@@ -101,10 +101,30 @@ restricts a worker to the weavers whose data it holds.
 
 - arq stores jobs in Redis and re-queues a job whose worker died mid-run (the
   in-progress lock expires), bounded by `max_tries`.
-- `weave_step` distinguishes failure kinds: control-flow exceptions
-  (`BackendUnavailable` / `BackendConfigurationError`) propagate immediately so the
-  orchestrator's backend fallback handles them; any other exception is retried with
-  backoff (arq `Retry`) until `MAX_TRIES`, then surfaces as `WeaveStatus.ERROR`.
+- `weave_step` retries only known connection/timeout exceptions, with the existing
+  jittered exponential delay and **three total attempts**. On the last attempt the
+  original exception propagates. Each attempt executes the batch once.
+- `BackendUnavailable` propagates for executor fallback; configuration/unsupported
+  requests, contract violations, programming errors and unknown exceptions fail
+  immediately. `BackendConfigurationError` aborts the run rather than invoking fallback.
+- `NO_MATCH` / `ERROR` results are returned unchanged for executor policy. Worker retry
+  does not infer transience from result messages or source HTTP status codes.
+
+| Exception/result | Worker decision |
+|---|---|
+| Python `ConnectionError` / `TimeoutError` | Retry within the attempt limit |
+| Redis connection/timeout errors | Retry, excluding authentication/authorization errors |
+| HTTPX `NetworkError` / `TimeoutException`, when HTTPX is installed | Retry within the attempt limit |
+| Domain errors, Redis auth errors, programming/unknown exceptions, other local I/O errors | Propagate immediately |
+| HTTP status exception (including 429/5xx) | Propagate; status policy belongs in the source backend |
+| Returned `NO_MATCH` / `ERROR` | Return unchanged; executor owns fallback |
+| Cancellation | Propagate immediately |
+
+The pure `braidworks_arq.retry.should_retry` function makes this decision. It uses
+concrete exception types rather than message matching. HTTPX stays optional for workers
+serving non-HTTP sources; no core HTTP dependency or exception hierarchy changed.
+Retry covers exceptions raised during batch execution (including request-budget charges);
+identity, input and worker setup checks retain their immediate failure behavior.
 
 ## Tests
 

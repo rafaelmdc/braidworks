@@ -54,7 +54,7 @@ async def test_control_exception_propagates_not_retried():
 async def test_transient_error_defers_retry_then_surfaces():
     class Boom(EchoWeaver):
         async def execute_batch(self, *a, **k):
-            raise RuntimeError("upstream hiccup")
+            raise TimeoutError("upstream hiccup")
 
     discovery.set_registry(registry_with(Boom()))
     # Early attempt → arq Retry (deferred).
@@ -63,7 +63,7 @@ async def test_transient_error_defers_retry_then_surfaces():
             {"job_try": 1, "redis": None}, "fake", "fake.resolve", "local", _payload("x"), [TAXID]
         )
     # Final attempt → the original error surfaces.
-    with pytest.raises(RuntimeError, match="upstream hiccup"):
+    with pytest.raises(TimeoutError, match="upstream hiccup"):
         await weave_step(
             {"job_try": 3, "redis": None}, "fake", "fake.resolve", "local", _payload("x"), [TAXID]
         )

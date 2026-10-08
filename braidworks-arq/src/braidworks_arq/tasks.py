@@ -16,23 +16,19 @@ import random
 from typing import Any
 
 from arq.worker import Retry
-from braidworks.core.exceptions import BackendConfigurationError, BackendUnavailable
+from braidworks.core.exceptions import BackendConfigurationError
 from braidworks.core.http_pacing import request_budget
 from braidworks.core.strand import StrandSet
 
 from braidworks_arq.discovery import get_registry
 from braidworks_arq.ratelimit import TokenBucket, load_limits, rate_for
-
-# Control-flow exceptions: how a backend signals "can't run / misconfigured" so the
-# *orchestrator* can fall back to another backend. They must propagate untouched —
-# retrying them in-task would defeat fallback and waste backoff.
-_NO_RETRY = (BackendUnavailable, BackendConfigurationError)
+from braidworks_arq.retry import should_retry
 
 MAX_TRIES = 3
 
 
 def _retry_defer(job_try: int) -> float:
-    """Exponential backoff with full jitter, so fanned-out retries desynchronize.
+    """Exponential backoff with jitter, so fanned-out retries desynchronize.
 
     Without jitter, a batch of workers that all 429 at once would retry in lockstep
     and re-storm the upstream. Jitter spreads them across the backoff window.
@@ -70,9 +66,9 @@ async def weave_step(
 ) -> list[dict[str, Any]]:
     """Run one weave-step batch on this worker; return ``[WeaveResult.to_json(), ...]``.
 
-    Retry policy: control-flow exceptions (:data:`_NO_RETRY`) propagate immediately so
-    the orchestrator's backend fallback handles them; any other exception is treated
-    as transient and retried with backoff (via arq ``Retry``) until ``MAX_TRIES``.
+    Retry policy: known connection/timeout exceptions retry with bounded jitter.
+    Domain, programming and unknown exceptions propagate immediately. Normal result
+    values remain unchanged for the orchestrator's classification/fallback policy.
     """
     registry = get_registry()
     weaver = registry.get_weaver(weaver_id)
@@ -106,11 +102,9 @@ async def weave_step(
                 backend=backend,
                 params=params or None,
             )
-    except _NO_RETRY:
-        raise  # orchestrator-level control flow; never retry, never swallow
-    except Exception:
+    except Exception as exc:
         tries = ctx.get("job_try", 1)
-        if tries >= MAX_TRIES:
+        if not should_retry(exc) or tries >= MAX_TRIES:
             raise
-        raise Retry(defer=_retry_defer(tries))
+        raise Retry(defer=_retry_defer(tries)) from exc
     return [r.to_json() for r in results]

@@ -1,7 +1,7 @@
 # Round 3 implementation spec: application boundaries
 
 Matching plan: [application.plan.md](application.plan.md).
-Status: AP01–AP06 verified locally; AP07 discovery verified, retry planned; AP08 conditional. Tracking:
+Status: AP01–AP07 verified locally; AP08 conditional. Tracking:
 [#145](https://github.com/rafaelmdc/braidworks/issues/145).
 Evidence: [N01–N09](../audits/application-patterns.spec.md).
 Detailed module/method design: [application plan](../audits/application-patterns.plan.md).

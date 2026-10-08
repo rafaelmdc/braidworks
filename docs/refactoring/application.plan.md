@@ -3,7 +3,7 @@
 Spec: [application.spec.md](application.spec.md). Detailed design:
 [application refactor](../audits/application-patterns.plan.md).
 Cross-round order: [W04–08, W13](implementation.plan.md).
-Status: A01–A06 and A07a verified locally; A07b planned and A08 conditional. Tracking: #145, #146.
+Status: A01–A07 verified locally; A08 conditional. Tracking: #145, #146.
 
 | Task | Requirement | Deliverable | Dependency |
 |---|---|---|---|
@@ -145,7 +145,7 @@ its implementation and version are unchanged. No global core registry or retry c
 
 Evidence: `.audit-local/a07a-tests.log`, `a07a-lint.log`, `a07a-build.log`,
 `a07a-twine.log`, `a07a-artifact-check.log`, `a07a-installed.log`. No backend changes
-or live API calls. A07b remains planned; AP07/W08 are only partially complete.
+or live API calls. A07a was completed separately; see A07b evidence below for AP07/W08 completion.
 
 ## A07b — Retry decisions
 
@@ -157,6 +157,51 @@ values and source-specific HTTP policy. Coordinate larger exception-taxonomy wor
 Tests mock worker retries, attempts and nonretryable failures; preserve cardinality,
 identity and pacing assertions. Do not broaden core transport dependencies. Record
 any exception-category decisions before commit. AP07 completes when both tasks pass.
+
+### A07b decision table — verified locally, 2026-10-08
+
+Worker retry is an allowlist of concrete Python connection/timeout, Redis
+connection/timeout and optional HTTPX NetworkError/TimeoutException types. Domain
+exceptions and Redis AuthenticationError/AuthorizationError take precedence and do not
+retry. Unsupported/configuration/contract/programming/unknown errors propagate, as do
+HTTP status exceptions; source HTTP policy stays in backends. NO_MATCH/ERROR values,
+request pacing, identity checks, cancellation and transport translation are unchanged.
+The existing three-attempt bound and delay range `[0.5, 1.5) * 2**(attempt-1)` stay intact.
+HTTPX is optional at runtime, explicit in arq test extras; no new required/core dependency.
+Arq patch version becomes 0.2.1; its actual core>=0.13.0 floor remains unchanged.
+
+The old general retry test used RuntimeError as a transient stand-in. It now uses an
+explicit TimeoutError, and a new regression proves RuntimeError propagates without retry.
+This changes the tested retry contract deliberately per AP07; conformance/batch/identity/
+pacing checks are preserved. Broader error taxonomy (#133) is unchanged.
+
+### A07b acceptance evidence
+
+`retry.should_retry` is a pure worker-local allowlist; `weave_step` uses it before
+raising arq Retry. Final-attempt and nonretryable failures preserve the original
+exception; retry signals retain the exception as their cause. The existing batch
+execution scope, jitter function, fallback/result translation and request budgets stay
+intact. Arq 0.2.1 and lock updated; core, toolkit and weaver versions unchanged.
+
+- Full workspace **1,481 passed, 48 skipped** plus release-tool unittests; arq
+  **118 passed, 2 skipped**, including 66 new retry cases. Pacing, cardinality,
+  identity and fallback regressions remain green.
+- Concrete transient/nonretryable exceptions tested at attempts 1, 2 and 3; fixed
+  random input proves the preserved backoff delay. Empty HTTPX timeout text,
+  misleading programmer-error text, Redis auth inheritance, cancellation and normal
+  NO_MATCH/ERROR results are covered.
+- Lint, changed-file Ruff format and whitespace checks passed.
+- All **20 packages** built wheel/sdist; Twine, metadata/resources and clean installed
+  fixture/CLI/server smoke passed. Separate clean installation with exact historical
+  **core 0.13.0** and **no HTTPX** passed batch execution, bounded retry and immediate
+  unsupported-capability failure. Temporary environments removed.
+- Evidence: `.audit-local/a07b-tests.log`, `a07b-lint.log`, `a07b-build.log`,
+  `a07b-twine.log`, `a07b-artifact-check.log`, `a07b-installed.log`.
+
+AP07/W08 now verified locally (A07a plus A07b). No core exception-taxonomy rewrite
+or source backend changes; #133 stays separate. Opt-in real Redis integration tests
+remain skipped; worker policy was exercised with deterministic doubles, not a live
+broker. A08 assessment and final programme acceptance remain.
 
 ## A08 — Optional NCBI adapter assessment
 
