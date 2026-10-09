@@ -19,8 +19,10 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from collections import deque
 from copy import deepcopy
 from dataclasses import replace
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import Any
 
@@ -44,17 +46,51 @@ _CAPABILITY_SOURCE = {
 }
 
 _ANCESTORS_SQL = """
-WITH RECURSIVE anc(id, depth) AS (
-    SELECT ?, 0
+WITH RECURSIVE anc(id) AS (
+    SELECT ?
     UNION
-    SELECT isa.parent, anc.depth + 1 FROM isa JOIN anc ON isa.child = anc.id
+    SELECT isa.parent FROM isa JOIN anc ON isa.child = anc.id
 )
-SELECT anc.id, MIN(anc.depth) AS d, term.name,
-       NOT EXISTS (SELECT 1 FROM isa WHERE isa.child = anc.id) AS is_root
+SELECT anc.id, term.name, isa.parent
 FROM anc JOIN term ON term.mondo_id = anc.id
-GROUP BY anc.id
-ORDER BY d, anc.id
+LEFT JOIN isa ON isa.child = anc.id
+ORDER BY anc.id, isa.parent
 """
+
+
+class _InvalidGraph(ValueError):
+    """A stored ontology graph cannot establish valid ancestor/depth evidence."""
+
+
+def _ancestor_rows(con: sqlite3.Connection, origin: str) -> list[tuple]:
+    """Read each reachable identity once, reject cycles, compute shortest DAG depths."""
+    names: dict[str, str] = {}
+    parents: dict[str, set[str]] = {}
+    for identifier, name, parent in con.execute(_ANCESTORS_SQL, (origin,)):
+        names[identifier] = name
+        parents.setdefault(identifier, set())
+        if parent is not None:
+            parents[identifier].add(parent)
+    if origin not in names or any(
+        parent not in names for group in parents.values() for parent in group
+    ):
+        raise _InvalidGraph("MONDO ancestor graph contains missing terms")
+    try:
+        TopologicalSorter(parents).prepare()
+    except CycleError as exc:
+        raise _InvalidGraph("MONDO ancestor graph contains a cycle") from exc
+    depths = {origin: 0}
+    pending = deque([origin])
+    while pending:
+        identifier = pending.popleft()
+        for parent in sorted(parents[identifier]):
+            if parent not in depths:
+                depths[parent] = depths[identifier] + 1
+                pending.append(parent)
+    return [
+        (identifier, depth, names[identifier], not parents[identifier])
+        for identifier, depth in sorted(depths.items(), key=lambda row: (row[1], row[0]))
+    ]
 
 
 def _coerce_id(value: Any) -> str | None:
@@ -187,7 +223,10 @@ class MondoLocalBackend(BackendBase):
         graph = None
         if groups & {"term", "ancestors"}:
             if mondo_id not in graphs:
-                graphs[mondo_id] = con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
+                try:
+                    graphs[mondo_id] = _ancestor_rows(con, mondo_id)
+                except _InvalidGraph as exc:
+                    return LookupRecord(query=query, error=str(exc))
             graph = graphs[mondo_id]
             name = next(row[2] for row in graph if row[0] == mondo_id)
         else:

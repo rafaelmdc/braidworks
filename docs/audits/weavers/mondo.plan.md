@@ -36,3 +36,7 @@ work packages remain separately tracked.
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source correctness acceptance
+
+#277 is implemented; see [mondo implementation and validation](SRC-MONDO.implementation.md). Other work packages remain separately tracked.

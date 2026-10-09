@@ -159,3 +159,7 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### Source validation
+
+Malformed cyclic or dangling ancestry data returns an error rather than a partial match. Valid DAGs retain shortest ancestor depths.
