@@ -8,7 +8,8 @@ emits ``pathway.reactome.id`` (every distinct stId — the one→many fan dimens
 ``pathway.reactome.names`` (top ``limit``), ``pathway.reactome.count`` (true total),
 and ``pathway.reactome.records`` (``{st_id, name, in_disease}``).
 
-**Determinism:** the fixed sort means the same accession always yields the same list.
+**Determinism:** fixed ordering applies to the same observed response; live source
+updates can change pathways. Conflicting duplicate stable IDs are source errors.
 An accession with no pathways (Reactome 404/400, or an empty list) is a clean ``NO_MATCH``.
 
 The HTTP client is injectable (``client=``) so tests drive it with an
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -43,6 +45,7 @@ def _validated_rows(body: Any, requested: list[str] | None = None) -> list[dict[
     """Keep source schema and correlation rules at the Reactome boundary."""
     if not isinstance(body, list):
         raise _InvalidResponse("Reactome response must be a list")
+    by_id: dict[str, dict[str, Any]] = {}
     for row in body:
         if not isinstance(row, dict) or not isinstance(row.get("stId"), str) or not row["stId"]:
             raise _InvalidResponse("Reactome row must contain a stable identifier")
@@ -51,8 +54,12 @@ def _validated_rows(body: Any, requested: list[str] | None = None) -> list[dict[
         for field in ("displayName", "speciesName", "releaseDate", "schemaClass"):
             if row.get(field) is not None and not isinstance(row[field], str):
                 raise _InvalidResponse(f"Reactome {field} must be a string or null")
-        if row.get("isInDisease") is not None and not isinstance(row["isInDisease"], bool):
-            raise _InvalidResponse("Reactome isInDisease must be a boolean or null")
+        for field in ("isInDisease", "isInferred"):
+            if row.get(field) is not None and not isinstance(row[field], bool):
+                raise _InvalidResponse(f"Reactome {field} must be a boolean or null")
+        previous = by_id.setdefault(row["stId"], row)
+        if previous != row:
+            raise _InvalidResponse(f"Conflicting Reactome rows for {row['stId']}")
     return body
 
 
@@ -67,6 +74,9 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
             "st_id": st_id,
             "name": raw.get("displayName"),
             "in_disease": raw.get("isInDisease"),
+            "species": raw.get("speciesName"),
+            "is_inferred": raw.get("isInferred"),
+            "source": deepcopy(raw),
         }
     records = sorted(by_id.values(), key=lambda p: p["st_id"])
     top = records[:limit]

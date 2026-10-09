@@ -1,6 +1,6 @@
 [project]
 name = "reactome_weaver"
-version = "0.1.11"
+version = "0.1.12"
 description = "Reactome pathways (accession -> pathways) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

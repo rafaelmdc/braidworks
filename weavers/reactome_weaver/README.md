@@ -102,3 +102,18 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Listing evidence and source updates
+
+Compact pathway records retain `species`, `is_inferred` and a `source` object containing
+the observed listing row. Missing species/inference fields remain unknown; disease
+membership is a separate property. Reactome includes curated and inferred orthologous
+pathways; listing membership does not itself prove experimental evidence for a protein.
+See the [provider's Content Service documentation](https://reactome.org/dev/content-service).
+
+Identical duplicate stable IDs collapse; conflicting rows return a source error in either
+order instead of picking the first. Sorting is deterministic for a fixed source response.
+The live service can change between calls: the endpoint fingerprint identifies configuration,
+not a frozen release. `releaseDate`, if present, is a source field, not proof of the whole
+database release; absent release metadata is not invented. Retaining observed evidence
+adds no version request or extra upstream calls.
