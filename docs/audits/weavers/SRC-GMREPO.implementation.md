@@ -11,3 +11,5 @@ Units were checked against the [GMrepo v2 paper](https://pmc.ncbi.nlm.nih.gov/ar
 ## Verification
 
 Package suite: **65 passed, 2 skipped**. Strict verification and repository checks are recorded with the issue closure. Other source findings remain open; this report closes only the issue named above.
+
+Repository verification: `make lint` passed; `make test` passed (2045 pytest cases, 56 opt-in skips, plus the tool unittest suite). `weaverkit verify --strict` passed for this package. All tooling used the isolated audit environment.

@@ -58,19 +58,19 @@ to pass tests, authorize publishing, or reopen deferred cache/resume implementat
 |---|---|---|
 | [example](example.audit.md) | [#157](https://github.com/rafaelmdc/braidworks/issues/157) | 4 complete ([evidence](SRC-EXAMPLE.implementation.md)) |
 | [uniprot](uniprot.audit.md) | [#158](https://github.com/rafaelmdc/braidworks/issues/158) | 3 complete ([evidence](SRC-UNIPROT.implementation.md)) |
-| [pdbe](pdbe.audit.md) | [#159](https://github.com/rafaelmdc/braidworks/issues/159) | 2 |
+| [pdbe](pdbe.audit.md) | [#159](https://github.com/rafaelmdc/braidworks/issues/159) | 2: 1 complete ([evidence](SRC-PDBE.implementation.md)), #193 pending |
 | [alphafold](alphafold.audit.md) | [#160](https://github.com/rafaelmdc/braidworks/issues/160) | 3 |
 | [quickgo](quickgo.audit.md) | [#161](https://github.com/rafaelmdc/braidworks/issues/161) | 2 |
 | [reactome](reactome.audit.md) | [#162](https://github.com/rafaelmdc/braidworks/issues/162) | 2 |
 | [string](string.audit.md) | [#163](https://github.com/rafaelmdc/braidworks/issues/163) | 2 |
 | [ncbi](ncbi.audit.md) | [#164](https://github.com/rafaelmdc/braidworks/issues/164) | 3 |
-| [gtdb](gtdb.audit.md) | [#165](https://github.com/rafaelmdc/braidworks/issues/165) | 3 |
+| [gtdb](gtdb.audit.md) | [#165](https://github.com/rafaelmdc/braidworks/issues/165) | 3: 1 complete ([evidence](SRC-GTDB.implementation.md)), #234/#240 pending |
 | [bacdive](bacdive.audit.md) | [#166](https://github.com/rafaelmdc/braidworks/issues/166) | 1 |
 | [agora](agora.audit.md) | [#167](https://github.com/rafaelmdc/braidworks/issues/167) | 3 |
 | [faprotax](faprotax.audit.md) | [#168](https://github.com/rafaelmdc/braidworks/issues/168) | 4 |
 | [disbiome](disbiome.audit.md) | [#169](https://github.com/rafaelmdc/braidworks/issues/169) | 3 |
-| [gmrepo](gmrepo.audit.md) | [#170](https://github.com/rafaelmdc/braidworks/issues/170) | 2 |
-| [mondo](mondo.audit.md) | [#171](https://github.com/rafaelmdc/braidworks/issues/171) | 2 |
+| [gmrepo](gmrepo.audit.md) | [#170](https://github.com/rafaelmdc/braidworks/issues/170) | 2: 1 complete ([evidence](SRC-GMREPO.implementation.md)), #272 pending |
+| [mondo](mondo.audit.md) | [#171](https://github.com/rafaelmdc/braidworks/issues/171) | 2: 1 complete ([evidence](SRC-MONDO.implementation.md)), #278 pending |
 | [wikidata](wikidata.audit.md) | [#172](https://github.com/rafaelmdc/braidworks/issues/172) | 1 |
 | [wikipedia](wikipedia.audit.md) | [#173](https://github.com/rafaelmdc/braidworks/issues/173) | 1 |
 
