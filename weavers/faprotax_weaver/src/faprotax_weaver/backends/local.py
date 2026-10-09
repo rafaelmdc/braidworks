@@ -13,8 +13,11 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Mapping
 from functools import lru_cache
 from importlib.resources import files
+from types import MappingProxyType
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
@@ -27,7 +30,7 @@ _FUNCTIONAL_GROUPS = "microbe.ecology.functional_groups"
 
 
 @lru_cache(maxsize=1)
-def _load_groups() -> dict[str, tuple[tuple[str, ...], ...]]:
+def _load_groups() -> Mapping[str, tuple[tuple[str, ...], ...]]:
     """Parse the bundled FAPROTAX.txt into ``{group_name: (member_patterns,)}``.
 
     A member pattern is a tuple of lowercased taxon tokens (from ``*A*B*``).
@@ -75,7 +78,7 @@ def _load_groups() -> dict[str, tuple[tuple[str, ...], ...]]:
 
     for name in parsed:
         resolved[name] = tuple(patterns_for(name, frozenset()))
-    return resolved
+    return MappingProxyType(resolved)
 
 
 def _is_subsequence(pattern: tuple[str, ...], lineage_lower: list[str]) -> bool:
@@ -136,10 +139,17 @@ class FaprotaxLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        return await asyncio.to_thread(self._fetch_sync, queries)
+
+    def _fetch_sync(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        matches: dict[tuple[str, ...], tuple[str, ...]] = {}
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             names = _lineage_names(query.get("ncbi.taxon.lineage"))
-            groups = _functional_groups(names) if names else []
+            key = tuple(name.lower() for name in names)
+            if key not in matches:
+                matches[key] = tuple(_functional_groups(names)) if names else ()
+            groups = list(matches[key])
             if groups:
                 records.append(
                     LookupRecord(query=query, found=True, values={_FUNCTIONAL_GROUPS: groups})

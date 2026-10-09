@@ -28,3 +28,7 @@ Related work packages/findings remain separately tracked.
 Primary shared identity findings are implemented under #155; see
 [SH-08 implementation and validation](SH-08.implementation.md). Source-specific
 work packages with additional feature proposals remain tracked by their own groups.
+
+Shared group #156 implementation and measurements are recorded in
+[SH-09](SH-09.implementation.md). Source-owned capability proposals and other
+work packages remain separately tracked.

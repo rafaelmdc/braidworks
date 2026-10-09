@@ -1,6 +1,6 @@
 [project]
 name = "faprotax_weaver"
-version = "0.1.1"
+version = "0.1.2"
 description = "FAPROTAX ecological function (organism lineage -> functional groups) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

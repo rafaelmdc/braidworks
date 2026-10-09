@@ -79,44 +79,50 @@ def _build_crosswalk_db(
     representative/identity ordering, but public lookup rejects competing taxonomies
     rather than presenting that representative as an authoritative crosswalk.
     """
-    best: dict[int, tuple[str, bool]] = {}
-    species: dict[str, tuple[str, str]] = {}
-    classifications = set()
-    species_candidates = set()
-    for taxid, taxonomy, is_rep, accession in rows:
-        if taxonomy:
-            classifications.add((int(taxid), taxonomy, bool(is_rep), str(accession or "")))
-    for taxid, taxonomy, is_rep, accession in sorted(
-        classifications, key=lambda row: (row[0], not row[2], row[1], row[3])
-    ):
-        best.setdefault(taxid, (taxonomy, is_rep))
-        if is_rep:
-            name = _species_name(taxonomy)
-            if name:
-                species_candidates.add((name, taxonomy, accession))
-                species.setdefault(name, (taxonomy, accession))
-
-    if not best:
-        raise ValueError("GTDB crosswalk has no usable taxonomy rows")
     if not release.strip():
         raise ValueError("GTDB crosswalk requires a nonempty release")
-
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db_path)
     try:
         con.executescript(_SCHEMA)
-        con.executemany("INSERT INTO classification VALUES (?, ?, ?, ?)", sorted(classifications))
-        con.executemany(
-            "INSERT INTO species_candidate VALUES (?, ?, ?)", sorted(species_candidates)
+        buffer: list[tuple[int, str, bool, str]] = []
+
+        def flush() -> None:
+            con.executemany("INSERT OR IGNORE INTO classification VALUES (?, ?, ?, ?)", buffer)
+            con.executemany(
+                "INSERT OR IGNORE INTO species_candidate VALUES (?, ?, ?)",
+                (
+                    (name, tax, acc)
+                    for _, tax, rep, acc in buffer
+                    if rep and (name := _species_name(tax))
+                ),
+            )
+            buffer.clear()
+
+        for taxid, taxonomy, is_rep, accession in rows:
+            if taxonomy:
+                buffer.append((int(taxid), taxonomy, bool(is_rep), str(accession or "")))
+                if len(buffer) == 1000:
+                    flush()
+        flush()
+        if con.execute("SELECT 1 FROM classification LIMIT 1").fetchone() is None:
+            raise ValueError("GTDB crosswalk has no usable taxonomy rows")
+        # Let SQLite retain and sort source-sized data; Python retains one chunk.
+        con.execute(
+            "INSERT OR REPLACE INTO taxon "
+            "SELECT ncbi_taxid, gtdb_taxonomy, is_rep FROM ("
+            "SELECT *, ROW_NUMBER() OVER (PARTITION BY ncbi_taxid "
+            "ORDER BY is_rep DESC, gtdb_taxonomy, accession) AS position FROM classification"
+            ") WHERE position = 1"
+        )
+        candidates = con.execute(
+            "SELECT gtdb_taxonomy, accession FROM classification WHERE is_rep = 1 "
+            "ORDER BY ncbi_taxid, gtdb_taxonomy, accession"
         )
         con.executemany(
-            "INSERT OR REPLACE INTO taxon (ncbi_taxid, gtdb_taxonomy, is_rep) VALUES (?, ?, ?)",
-            ((t, tax, int(rep)) for t, (tax, rep) in best.items()),
-        )
-        con.executemany(
-            "INSERT OR REPLACE INTO species (name, gtdb_taxonomy, rep_accession) VALUES (?, ?, ?)",
-            ((name, tax, acc) for name, (tax, acc) in species.items()),
+            "INSERT OR IGNORE INTO species VALUES (?, ?, ?)",
+            ((name, tax, acc) for tax, acc in candidates if (name := _species_name(tax))),
         )
         con.executemany(
             "INSERT OR REPLACE INTO meta VALUES (?, ?)",
@@ -175,7 +181,8 @@ def lookup(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
     taxonomies = sorted({row[0] for row in rows})
     if len(taxonomies) > 1:
         raise AmbiguousClassification(
-            "Conflicting GTDB classifications require review: " + json.dumps([list(row) for row in rows])
+            "Conflicting GTDB classifications require review: "
+            + json.dumps([list(row) for row in rows])
         )
     return taxonomies[0] if taxonomies else None
 

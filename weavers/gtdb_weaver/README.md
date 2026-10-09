@@ -111,3 +111,17 @@ Rebuild schema-1 crosswalks using `refresh=True`. Name lookup accepts a unique
 classification; API search accepts exact species names only. Equal representative
 hits use stable accession/canonical-evidence ordering. Unrelated hits are misses;
 competing exact lineages return review evidence.
+
+## Bounded build and tree storage (0.2.7)
+
+Crosswalk builders consume the source iterable once, inserting chunks of at most
+1,000 classifications. SQLite retains and orders source-sized data; Python no
+longer retains every row in sets and dictionaries. Classification conflicts and
+representative ordering are preserved. Schema 2 remains compatible.
+
+Local tree backends retain one parent/depth entry per node and materialize only
+requested root paths. Node IDs, forest order and branch lengths match the existing
+root-path helpers. Public paths are detached from the retained index.
+
+See [the measured-work report](../../docs/audits/weavers/SH-09.implementation.md)
+for fixture measurements and the separate real-release measurement target.

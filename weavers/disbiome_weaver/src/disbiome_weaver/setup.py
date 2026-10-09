@@ -123,7 +123,9 @@ def write_db(
     try:
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
         con.execute(
-            "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER, full_json TEXT)"
+            "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER, full_json TEXT, "
+            "disease_name, meddra_id, meddra_level, qualitative_outcome, "
+            "sample_name, host_type, method_name)"
         )
         rows = []
         n_with_taxid = 0
@@ -133,14 +135,31 @@ def write_db(
                 n_with_taxid += 1
             joined = join_record(exp, diseases_by_id, organisms_by_id, publications_by_id)
             rows.append(
-                (ncbi_id, int(exp["experiment_id"]), json.dumps(joined, ensure_ascii=False))
+                (
+                    ncbi_id,
+                    int(exp["experiment_id"]),
+                    json.dumps(joined, ensure_ascii=False),
+                    *(
+                        joined.get(key)
+                        for key in (
+                            "disease_name",
+                            "meddra_id",
+                            "meddra_level",
+                            "qualitative_outcome",
+                            "sample_name",
+                            "host_type",
+                            "method_name",
+                        )
+                    ),
+                )
             )
-        con.executemany("INSERT INTO association VALUES (?, ?, ?)", rows)
+        con.executemany("INSERT INTO association VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
         con.execute("CREATE INDEX ix_association_ncbi ON association(ncbi_id)")
+        con.execute("CREATE INDEX ix_association_summary ON association(ncbi_id, disease_name)")
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "1"),
+                ("schema_version", "2"),
                 ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
                 ("n_experiments", str(len(experiments))),
@@ -162,6 +181,12 @@ def db_is_valid(path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
+        schema = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+        if schema != ("2",):
+            return False
+        con.execute(
+            "SELECT disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name FROM association LIMIT 0"
+        )
         has_hash = con.execute("SELECT value FROM meta WHERE key = 'content_sha256'").fetchone()
         count = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]
         return bool(has_hash) and count > 0

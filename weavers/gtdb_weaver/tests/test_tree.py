@@ -66,3 +66,16 @@ def test_quoted_and_internal_labels():
 def test_whitespace_and_no_trailing_semicolon():
     paths = build_rootpaths(parse_newick("(A:1.0,\n B:2.0)R"))
     assert cophenetic(paths["A"], paths["B"]) == pytest.approx(3.0)
+
+
+def test_parent_link_index_matches_legacy_forest_paths_and_detaches_results():
+    from gtdb_weaver.tree import load_rootpath_index, load_rootpaths
+
+    forest = ["((a:1,b:2):3,c):4;", "(d:5,e:6);"]
+    expected = load_rootpaths(forest)
+    index = load_rootpath_index(iter(forest))
+    for label in reversed(list(expected)):
+        assert index.path_for(label) == expected[label]
+    assert index.path_for("absent") is None
+    index.path_for("a").clear()
+    assert index.path_for("a") == expected["a"]

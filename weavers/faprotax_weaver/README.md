@@ -67,3 +67,10 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/faprotax_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Batch-local matching (0.1.2)
+
+Parsed bundled rules are immutable. Matching runs in a worker thread and scans
+once per distinct case-insensitive lineage within a batch. Each result receives
+a separate list; query results are not cached across batches. This preserves the
+ordered-subsequence matching rules and miss semantics.

@@ -1,6 +1,6 @@
 [project]
 name = "disbiome_weaver"
-version = "0.3.2"
+version = "0.3.3"
 description = "Disbiome microbe–disease associations (taxid -> diseases + direction) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

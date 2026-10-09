@@ -96,3 +96,10 @@ Reaction database schema 2 persists every processed/skipped XML model, its sourc
 member, distinct reaction count and parse error. A processed model with zero
 reactions is a known empty repertoire; a skipped or unacquired model is unavailable.
 Existing databases without this manifest must be rebuilt before serving reactions.
+
+## Bounded local work (0.2.5)
+
+The bundled crosswalk is retained as immutable tuples; public lookups return
+detached dictionaries and lists. Reaction lookup deduplicates model IDs and uses
+two SQL queries per chunk of at most 250 models. Processed empty models remain
+valid empty repertoires; skipped or missing coverage remains an error.

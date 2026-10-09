@@ -16,3 +16,7 @@ only for accepted manifest changes. No unnecessary inheritance/repository framew
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+Shared group #156 implementation and measurements are recorded in
+[SH-09](SH-09.implementation.md). Source-owned capability proposals and other
+work packages remain separately tracked.

@@ -71,7 +71,7 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
-	tools/check_artifacts.py tools/stage_release.py tools/tests \
+	tools/check_artifacts.py tools/stage_release.py tools/benchmark_weaver_work.py tools/tests \
 	$(WEAVER_LINT_PATHS)
 
 RUFF_VERSION := 0.16.10

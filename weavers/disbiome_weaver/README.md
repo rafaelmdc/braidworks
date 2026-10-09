@@ -12,7 +12,7 @@ the organism layer; chains straight behind `ncbi_weaver`.
 
 | Capability | Consumes | Produces (by group) |
 |---|---|---|
-| `disbiome.list_diseases` | `ncbi.taxon.id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
+| `disbiome.list_diseases` | `ncbi.taxon.species_id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
 
 Output slices, light → heavy (the mapper emits only the requested group):
 
@@ -77,3 +77,14 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Group-aware local reads (0.3.3)
+
+Schema 2 keeps indexed summary and compact evidence columns alongside the complete
+joined JSON. Summary requests aggregate counts/names without reading full JSON;
+compact requests read only their columns. Full records remain unchanged. Repeated
+species IDs share SQL/parsing within a single batch, with detached results.
+
+Schema-1 databases must be rebuilt using
+`build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
+The input is `ncbi.taxon.species_id`; resolve species-level identity before chaining.

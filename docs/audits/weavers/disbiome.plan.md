@@ -15,3 +15,8 @@ versions/core floor and catalogs as needed. No mandatory new repository hierarch
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+SH-09 update: measured group projection and batch-local SQL reuse are implemented
+under #263/#267; see [implementation evidence](SH-09.implementation.md). Optional
+evidence filter decisions from finding 006 remain open as #296 under #169,
+coordinated with #264/WP-DISBIOME-03. Other source work packages remain pending.

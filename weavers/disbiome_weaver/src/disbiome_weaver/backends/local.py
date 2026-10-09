@@ -1,9 +1,9 @@
 """The local backend for disbiome_weaver.
 
 Serves microbe→disease lookups from the small SQLite built by ``setup.py`` (one
-row per Disbiome experiment, keyed by NCBI taxid). A single indexed query returns
-every experiment for a taxid; from those rows the backend fills all produced
-outputs and the shared mapper emits only the requested slice:
+row per Disbiome experiment, keyed by NCBI species taxid). Summary queries aggregate
+indexed light columns; compact queries read projected columns. Full JSON is parsed
+only for the full group. Distinct inputs share work within one batch:
 
 - ``microbe.disease.names``        — distinct disease names (summary)
 - ``microbe.disease.count``        — number of experiment records (summary)
@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -43,17 +45,6 @@ def _association_row(record: dict[str, Any]) -> dict[str, Any]:
         "sample": record.get("sample_name"),
         "host": record.get("host_type"),
         "method": record.get("method_name"),
-    }
-
-
-def _values_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Fill every produced output from a taxid's experiment records (mapper filters)."""
-    names = sorted({r["disease_name"] for r in records if r.get("disease_name")})
-    return {
-        NAMES: names,
-        COUNT: len(records),
-        ASSOCIATIONS: [_association_row(r) for r in records],
-        RECORDS: records,
     }
 
 
@@ -87,21 +78,97 @@ class DisbiomeLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        return await asyncio.to_thread(self._lookup_all, queries)
+        return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
-    def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _lookup_all(
+        self, queries: list[dict[str, Any]], groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        # Per-call work reuse, bounded by this batch; results remain detached.
         with self._source.session() as con:
-            return [self._lookup_one(con, q) for q in queries]
+            resolved: dict[int | None, LookupRecord] = {}
+            records = []
+            for query in queries:
+                taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))
+                if taxid not in resolved:
+                    resolved[taxid] = self._lookup_one(con, query, taxid, groups)
+                records.append(
+                    replace(resolved[taxid], query=query, values=deepcopy(resolved[taxid].values))
+                )
+            return records
 
-    def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
-        taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))
+    def _lookup_one(
+        self,
+        con: sqlite3.Connection,
+        query: dict[str, Any],
+        taxid: int | None,
+        groups: frozenset[str],
+    ) -> LookupRecord:
         if taxid is None:
             return LookupRecord(query=query, found=False)
-        rows = con.execute(
-            "SELECT full_json FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
-            (taxid,),
-        ).fetchall()
-        if not rows:
+        values: dict[str, Any] = {}
+        if "full" in groups:
+            rows = con.execute(
+                "SELECT full_json FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
+                (taxid,),
+            ).fetchall()
+            records = [json.loads(row[0]) for row in rows]
+            if not records:
+                return LookupRecord(query=query, found=False)
+            values[RECORDS] = records
+            if "summary" in groups:
+                values.update(
+                    {
+                        NAMES: sorted(
+                            {r["disease_name"] for r in records if r.get("disease_name")}
+                        ),
+                        COUNT: len(records),
+                    }
+                )
+            if "associations" in groups:
+                values[ASSOCIATIONS] = [_association_row(record) for record in records]
+        elif "associations" in groups:
+            rows = con.execute(
+                "SELECT disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name "
+                "FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
+                (taxid,),
+            ).fetchall()
+            if not rows:
+                return LookupRecord(query=query, found=False)
+            keys = (
+                "disease_name",
+                "meddra_id",
+                "meddra_level",
+                "qualitative_outcome",
+                "sample_name",
+                "host_type",
+                "method_name",
+            )
+            records = [dict(zip(keys, row)) for row in rows]
+            values[ASSOCIATIONS] = [_association_row(record) for record in records]
+            if "summary" in groups:
+                values.update(
+                    {
+                        NAMES: sorted(
+                            {r["disease_name"] for r in records if r.get("disease_name")}
+                        ),
+                        COUNT: len(records),
+                    }
+                )
+        elif "summary" in groups:
+            rows = con.execute(
+                "SELECT disease_name, COUNT(*) FROM association WHERE ncbi_id = ? GROUP BY disease_name",
+                (taxid,),
+            ).fetchall()
+            if not rows:
+                return LookupRecord(query=query, found=False)
+            values.update(
+                {
+                    NAMES: sorted(row[0] for row in rows if row[0]),
+                    COUNT: sum(row[1] for row in rows),
+                }
+            )
+        elif not con.execute(
+            "SELECT 1 FROM association WHERE ncbi_id = ? LIMIT 1", (taxid,)
+        ).fetchone():
             return LookupRecord(query=query, found=False)
-        records = [json.loads(r[0]) for r in rows]
-        return LookupRecord(query=query, found=True, values=_values_from_records(records))
+        return LookupRecord(query=query, found=True, values=values)

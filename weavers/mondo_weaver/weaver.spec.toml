@@ -17,7 +17,7 @@ db_name = "mondo"
 weaver_id = "mondo"
 kind = "lookup"
 title = "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
-version = "0.2.4"
+version = "0.2.5"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1101/2022.04.13.22273750"
 attribution = "Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)"
@@ -41,9 +41,15 @@ id = "mondo.lookup_by_mesh"
 consumes = ["disease.mesh.id"]
 
   # Lightest slice — the resolved MONDO identity + how specific it is.
+always_computed_groups = ["identity"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records"]
+
   [[capability.group]]
   id = "term"
-  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records", "disease.ontology.parents", "disease.ontology.depth"]
+  outputs = ["disease.ontology.parents", "disease.ontology.depth"]
 
   # The feature — the full is-a ancestor lineage.
   [[capability.group]]
@@ -54,9 +60,15 @@ consumes = ["disease.mesh.id"]
 id = "mondo.lookup_by_meddra"
 consumes = ["disease.meddra.id"]
 
+always_computed_groups = ["identity"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records"]
+
   [[capability.group]]
   id = "term"
-  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records", "disease.ontology.parents", "disease.ontology.depth"]
+  outputs = ["disease.ontology.parents", "disease.ontology.depth"]
 
   [[capability.group]]
   id = "ancestors"
@@ -69,9 +81,15 @@ consumes = ["disease.meddra.id"]
 id = "mondo.lookup_by_name"
 consumes = ["disease.name"]
 
+always_computed_groups = ["identity"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records"]
+
   [[capability.group]]
   id = "term"
-  outputs = ["disease.mondo.id", "disease.ontology.name", "disease.ontology.mapping.records", "disease.ontology.parents", "disease.ontology.depth"]
+  outputs = ["disease.ontology.parents", "disease.ontology.depth"]
 
   [[capability.group]]
   id = "ancestors"

@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -236,7 +236,7 @@ wheels = [
 
 [[package]]
 name = "disbiome-weaver"
-version = "0.3.2"
+version = "0.3.3"
 source = { editable = "weavers/disbiome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -302,7 +302,7 @@ lua = [
 
 [[package]]
 name = "faprotax-weaver"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "weavers/faprotax_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -366,7 +366,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "gtdb-weaver"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "weavers/gtdb_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -563,7 +563,7 @@ wheels = [
 
 [[package]]
 name = "mondo-weaver"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "weavers/mondo_weaver" }
 dependencies = [
     { name = "braidworks-core" },

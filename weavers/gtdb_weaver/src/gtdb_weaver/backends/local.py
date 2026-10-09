@@ -50,7 +50,7 @@ class GtdbLocalBackend(BackendBase):
             lambda con: dict(con.execute("SELECT key, value FROM meta")),
             components=tuple(self._tree_paths),
         )
-        self._rootpaths: dict[str, tree.RootPath] | None = None  # lazy, cached per instance
+        self._rootpaths: tree._RootPathIndex | None = None  # lazy, cached per instance
 
     def is_configured(self) -> bool:
         return self._db_path.exists() and self._db_path.stat().st_size > 0
@@ -58,7 +58,7 @@ class GtdbLocalBackend(BackendBase):
     def fingerprint(self) -> str:
         return self._source.fingerprint() if self.is_configured() else "gtdb-local-none"
 
-    def _reference_rootpaths(self, con: Any) -> dict[str, tree.RootPath]:
+    def _reference_rootpaths(self, con: Any) -> tree._RootPathIndex:
         """Leaf-accession → root path for the wired reference tree(s); {} if none present."""
         if self._rootpaths is None:
             row = con.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
@@ -77,8 +77,8 @@ class GtdbLocalBackend(BackendBase):
                         raise BackendConfigurationError(
                             "GTDB trees do not match the crosswalk release/checksum bundle"
                         )
-            texts = [p.read_text(encoding="utf-8") for p in self._tree_paths if p.exists()]
-            self._rootpaths = tree.load_rootpaths(texts) if texts else {}
+            texts = (p.read_text(encoding="utf-8") for p in self._tree_paths if p.exists())
+            self._rootpaths = tree.load_rootpath_index(texts)
         return self._rootpaths
 
     async def fetch(
@@ -128,7 +128,7 @@ class GtdbLocalBackend(BackendBase):
             except taxonomy.AmbiguousClassification as exc:
                 records.append(LookupRecord(query=query, error=str(exc)))
                 continue
-            path = rootpaths.get(accession) if accession else None
+            path = rootpaths.path_for(accession) if accession else None
             if not path:  # unknown organism, or its species' leaf isn't in the tree
                 records.append(LookupRecord(query=query, found=False))
                 continue

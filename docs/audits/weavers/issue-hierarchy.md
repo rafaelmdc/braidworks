@@ -50,7 +50,7 @@ to pass tests, authorize publishing, or reopen deferred cache/resume implementat
 | SH-06: Bounded batching and polite acquisition | [#153](https://github.com/rafaelmdc/braidworks/issues/153) | 3 | Complete | Use supported bulk endpoints, deduplicate inputs and bound concurrent single-ID work. Apply source-specific pacing, retry and call budgets to acquisition as well as runtime paths. Preserve batch order/correlation/cancellation. Coordinate related concurrency aspects in SH-02 children; no implementation of incremental resume without later scope review. |
 | SH-07: Semantic source identity and coherent resource selection | [#154](https://github.com/rafaelmdc/braidworks/issues/154) | 8 | Complete | Identify the effective endpoint, release, result-affecting limits/policies and requested resource scope without exposing secrets. Pin coherent multi-resource releases and validate requested month/version against actual metadata. Reuse SourceBinding; source descriptor choices remain source-specific. Fingerprint correctness is current work, not a durable-cache implementation. |
 | SH-08: Stable identity, deterministic selection and distinct collections | [#155](https://github.com/rafaelmdc/braidworks/issues/155) | 15 | Complete ([implementation](SH-08.implementation.md)) | Correlate to stable identities, deduplicate by source identity and use deterministic ID tie-breaks. Do not turn ambiguity, non-equivalence or different taxonomic granularity into confident identity. Shared invariants/testing conventions are useful; selection and scientific mapping policies are source-specific and must not become a generic universal selector. |
-| SH-09: Group-aware work and measured performance | [#156](https://github.com/rafaelmdc/braidworks/issues/156) | 6 | Pending | Avoid expensive unrequested group projection and unnecessary repeat parsing/SQL/source work. Measure bounded representative cases before adding memoization, batching or immutable projections. Keep optional P3 optimizations conditional on evidence; do not add a repository layer merely to match a pattern. |
+| SH-09: Group-aware work and measured performance | [#156](https://github.com/rafaelmdc/braidworks/issues/156) | 6 | Complete locally ([implementation](SH-09.implementation.md)) | Avoid expensive unrequested group projection and unnecessary repeat parsing/SQL/source work. Measure bounded representative cases before adding memoization, batching or immutable projections. Keep optional P3 optimizations conditional on evidence; do not add a repository layer merely to match a pattern. |
 
 ## Remaining source-specific groups
 
@@ -225,3 +225,10 @@ Unique finding IDs, single primary ownership and 122 source spec/work-package re
 were checked before creation. The mapping includes cross-links for mixed concerns.
 Eight offline reproductions passed execution again; these are evidence scripts, not
 tests proving behavior is correct. No production source changes, push, tags or publishing.
+
+## Follow-up scope split
+
+[#296](https://github.com/rafaelmdc/braidworks/issues/296) is a native sub-issue of
+Disbiome group #169. It retains the optional evidence-filter proposal split from
+#267 during SH-09. The original 122-finding register remains historical; this
+follow-up does not claim a newly discovered finding or implemented feature.

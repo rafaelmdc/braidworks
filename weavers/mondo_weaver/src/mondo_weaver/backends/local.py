@@ -2,10 +2,10 @@
 
 Serves disease→ontology lookups from the SQLite built by ``setup.py``. Given a MeSH or
 MedDRA disease id (per capability), it resolves the unified MONDO id via the ``xref``
-index (preferring ``MONDO:equivalentTo`` matches), then fills all produced outputs:
+index (accepting one explicitly equivalent identity), then fills requested groups:
 
-- ``disease.mondo.id``            — the resolved MONDO id (summary/term)
-- ``disease.ontology.name``       — the MONDO term name (term)
+- ``disease.mondo.id``            — the resolved MONDO id (identity)
+- ``disease.ontology.name``       — the MONDO term name (identity)
 - ``disease.ontology.parents``    — direct is-a parents (term)
 - ``disease.ontology.depth``      — shortest is-a distance to a MONDO root (term)
 - ``disease.ontology.ancestors``  — the term + its full is-a ancestor lineage (ancestors)
@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +49,8 @@ WITH RECURSIVE anc(id, depth) AS (
     UNION
     SELECT isa.parent, anc.depth + 1 FROM isa JOIN anc ON isa.child = anc.id
 )
-SELECT anc.id, MIN(anc.depth) AS d, term.name
+SELECT anc.id, MIN(anc.depth) AS d, term.name,
+       NOT EXISTS (SELECT 1 FROM isa WHERE isa.child = anc.id) AS is_root
 FROM anc JOIN term ON term.mondo_id = anc.id
 GROUP BY anc.id
 ORDER BY d, anc.id
@@ -99,12 +102,24 @@ class MondoLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        return await asyncio.to_thread(self._lookup_all, capability_id, queries)
+        return await asyncio.to_thread(self._lookup_all, capability_id, queries, groups_to_compute)
 
-    def _lookup_all(self, capability_id: str, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _lookup_all(
+        self, capability_id: str, queries: list[dict[str, Any]], groups: frozenset[str]
+    ) -> list[LookupRecord]:
         with self._source.session() as con:
             consumed, source = _CAPABILITY_SOURCE[capability_id]
-            return [self._lookup_one(con, q, consumed, source) for q in queries]
+            resolved: dict[str | None, LookupRecord] = {}
+            graphs: dict[str, list] = {}
+            records = []
+            for query in queries:
+                value = _coerce_id(query.get(consumed))
+                key = normalize_name(value) if value and source == "NAME" else value
+                if key not in resolved:
+                    resolved[key] = self._lookup_one(con, query, consumed, source, groups, graphs)
+                record = resolved[key]
+                records.append(replace(record, query=query, values=deepcopy(record.values)))
+            return records
 
     def _resolve_mondo(
         self, con: sqlite3.Connection, source: str, value: str
@@ -152,7 +167,13 @@ class MondoLocalBackend(BackendBase):
         return identities[0], evidence
 
     def _lookup_one(
-        self, con: sqlite3.Connection, query: dict[str, Any], consumed: str, source: str
+        self,
+        con: sqlite3.Connection,
+        query: dict[str, Any],
+        consumed: str,
+        source: str,
+        groups: frozenset[str],
+        graphs: dict[str, list],
     ) -> LookupRecord:
         xref_id = _coerce_id(query.get(consumed))
         if xref_id is None:
@@ -163,40 +184,28 @@ class MondoLocalBackend(BackendBase):
             return LookupRecord(query=query, error=str(exc))
         if mondo_id is None:
             return LookupRecord(query=query, found=False)
-
-        name_row = con.execute("SELECT name FROM term WHERE mondo_id = ?", (mondo_id,)).fetchone()
-        lineage = [
-            {"mondo_id": rid, "name": rname}
-            for rid, _depth, rname in con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
-        ]
-        parents = [
-            {"mondo_id": pid, "name": pname}
-            for pid, pname in con.execute(
-                "SELECT isa.parent, term.name FROM isa JOIN term ON term.mondo_id = isa.parent "
-                "WHERE isa.child = ? ORDER BY isa.parent",
-                (mondo_id,),
-            ).fetchall()
-        ]
-        depth = self._depth_to_root(con, mondo_id)
-        return LookupRecord(
-            query=query,
-            found=True,
-            values={
-                MONDO_ID: mondo_id,
-                "disease.ontology.mapping.records": evidence,
-                NAME: name_row[0] if name_row else None,
-                PARENTS: parents,
-                DEPTH: depth,
-                ANCESTORS: lineage,
-            },
-        )
-
-    def _depth_to_root(self, con: sqlite3.Connection, mondo_id: str) -> int:
-        """Shortest is-a distance from ``mondo_id`` to a root (a term with no parents)."""
-        rows = con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
-        best: int | None = None
-        for rid, depth, _name in rows:
-            has_parent = con.execute("SELECT 1 FROM isa WHERE child = ? LIMIT 1", (rid,)).fetchone()
-            if not has_parent and (best is None or depth < best):
-                best = depth
-        return best if best is not None else 0
+        graph = None
+        if groups & {"term", "ancestors"}:
+            if mondo_id not in graphs:
+                graphs[mondo_id] = con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
+            graph = graphs[mondo_id]
+            name = next(row[2] for row in graph if row[0] == mondo_id)
+        else:
+            row = con.execute("SELECT name FROM term WHERE mondo_id = ?", (mondo_id,)).fetchone()
+            name = row[0] if row else None
+        values = {MONDO_ID: mondo_id, NAME: name, "disease.ontology.mapping.records": evidence}
+        if "term" in groups:
+            values[PARENTS] = sorted(
+                [
+                    {"mondo_id": rid, "name": label}
+                    for rid, depth, label, _root in graph
+                    if depth == 1
+                ],
+                key=lambda parent: parent["mondo_id"],
+            )
+            values[DEPTH] = min((depth for _rid, depth, _label, root in graph if root), default=0)
+        if "ancestors" in groups:
+            values[ANCESTORS] = [
+                {"mondo_id": rid, "name": label} for rid, _depth, label, _root in graph
+            ]
+        return LookupRecord(query=query, found=True, values=values)

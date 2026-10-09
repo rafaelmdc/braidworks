@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.2.4"
+WEAVER_VERSION = "0.2.5"
 WEAVER_TITLE = (
     "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
 )
@@ -52,20 +52,23 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
                                 "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
             Capability(
                 id="mondo.lookup_by_meddra",
@@ -82,20 +85,23 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
                                 "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
             Capability(
                 id="mondo.lookup_by_name",
@@ -112,20 +118,23 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
                                 "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
         ),
     )

@@ -42,3 +42,7 @@ tracking (WV-AGORA-003) and individual-model publication (WV-AGORA-002) remain o
 The #151 findings are implemented and verified in
 [SH-04 implementation and migration evidence](SH-04.implementation.md).
 Other work packages in this source plan remain separately tracked.
+
+Shared group #156 implementation and measurements are recorded in
+[SH-09](SH-09.implementation.md). Source-owned capability proposals and other
+work packages remain separately tracked.

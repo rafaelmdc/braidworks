@@ -22,10 +22,11 @@ import sqlite3
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 # The AGORA2 SBML archive is compressed with Deflate64 (method 9), which the stdlib
@@ -42,30 +43,29 @@ _CROSSWALK_FILE = "agora2_crosswalk.tsv"
 
 
 @lru_cache(maxsize=1)
-def load_crosswalk() -> dict[str, list[dict[str, str]]]:
-    """``ncbi_taxid -> [{reconstruction_id, gcf_id}, ...]`` from the bundled TSV.
-
-    A taxid may carry several strains (distinct reconstructions), so each maps to a
-    list, ordered by ``reconstruction_id`` for determinism.
-    """
+def _crosswalk_index() -> Mapping[str, tuple[tuple[str, str], ...]]:
+    """Immutable source index; callers receive detached projections."""
     raw = (files("agora_weaver") / "data" / _CROSSWALK_FILE).read_text(encoding="utf-8")
-    table: dict[str, list[dict[str, str]]] = {}
+    table: dict[str, list[tuple[str, str]]] = {}
     for row in csv.DictReader(raw.splitlines(), delimiter="\t"):
         taxid = (row.get("ncbi_taxid") or "").strip()
         microbe_id = (row.get("microbe_id") or "").strip()
-        if not taxid or not microbe_id:
-            continue
-        table.setdefault(taxid, []).append(
-            {"reconstruction_id": microbe_id, "gcf_id": (row.get("gcf") or "").strip()}
-        )
-    for recs in table.values():
-        recs.sort(key=lambda r: r["reconstruction_id"])
-    return table
+        if taxid and microbe_id:
+            table.setdefault(taxid, []).append((microbe_id, (row.get("gcf") or "").strip()))
+    return MappingProxyType({key: tuple(sorted(rows)) for key, rows in table.items()})
 
 
 def reconstructions_for(taxid: str) -> list[dict[str, str]]:
-    """The AGORA2 reconstruction(s) for one NCBI taxid (empty list = miss)."""
-    return load_crosswalk().get(str(taxid).strip(), [])
+    """Detached, deterministically ordered reconstructions for one taxid."""
+    return [
+        {"reconstruction_id": rid, "gcf_id": gcf}
+        for rid, gcf in _crosswalk_index().get(str(taxid).strip(), ())
+    ]
+
+
+def load_crosswalk() -> dict[str, list[dict[str, str]]]:
+    """Return a detached full crosswalk; single-taxid queries use the private index."""
+    return {taxid: reconstructions_for(taxid) for taxid in _crosswalk_index()}
 
 
 # --- Reaction DB (built by setup.ensure_agora_db) -------------------------------
@@ -116,22 +116,33 @@ def reactions_for(
     not emitted as null). Ordered by (reconstruction_id, abbreviation).
     """
     out: list[dict[str, Any]] = []
-    for rid in reconstruction_ids:
-        coverage = con.execute(
-            "SELECT status, error FROM model_coverage WHERE reconstruction = ?", (rid,)
-        ).fetchone()
-        if coverage is None or coverage[0] != "processed":
-            reason = coverage[1] if coverage else "model not acquired"
-            raise IncompleteModelCoverage(f"reaction repertoire unavailable for {rid}: {reason}")
+    ids = sorted(set(reconstruction_ids))
+    # Stay below SQLite's conservative parameter limit and bound intermediate rows.
+    for start in range(0, len(ids), 250):
+        chunk = ids[start : start + 250]
+        placeholders = ",".join("?" for _ in chunk)
+        coverage = {
+            rid: (status, error)
+            for rid, status, error in con.execute(
+                f"SELECT reconstruction, status, error FROM model_coverage "
+                f"WHERE reconstruction IN ({placeholders})",
+                chunk,
+            )
+        }
+        for rid in chunk:
+            status, reason = coverage.get(rid, (None, "model not acquired"))
+            if status != "processed":
+                raise IncompleteModelCoverage(
+                    f"reaction repertoire unavailable for {rid}: {reason}"
+                )
         rows = con.execute(
-            """
-            SELECT r.abbreviation, i.subsystem, i.ec, i.kegg, i.rhea
-            FROM reaction r LEFT JOIN rxn_info i ON i.abbreviation = r.abbreviation
-            WHERE r.reconstruction = ? ORDER BY r.abbreviation
-            """,
-            (rid,),
-        ).fetchall()
-        for abbrev, subsystem, ec, kegg, rhea in rows:
+            "SELECT r.reconstruction, r.abbreviation, i.subsystem, i.ec, i.kegg, i.rhea "
+            "FROM reaction r LEFT JOIN rxn_info i ON i.abbreviation = r.abbreviation "
+            f"WHERE r.reconstruction IN ({placeholders}) "
+            "ORDER BY r.reconstruction, r.abbreviation",
+            chunk,
+        )
+        for rid, abbrev, subsystem, ec, kegg, rhea in rows:
             rec: dict[str, Any] = {"reconstruction_id": rid, "abbreviation": abbrev}
             for key, val in (("subsystem", subsystem), ("ec", ec), ("kegg", kegg), ("rhea", rhea)):
                 if val:

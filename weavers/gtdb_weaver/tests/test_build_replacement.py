@@ -59,3 +59,27 @@ def test_incomplete_schema_is_not_reusable(tmp_path):
         con.execute("CREATE TABLE taxon (ncbi_taxid INTEGER)")
         con.execute("INSERT INTO taxon VALUES (1)")
     assert not setup.db_is_valid(target)
+
+
+def test_source_rows_are_consumed_once_in_bounded_chunks(tmp_path, monkeypatch):
+    from gtdb_weaver import taxonomy
+
+    original = taxonomy._species_name
+    projected = []
+
+    def species_name(value):
+        projected.append(value)
+        return original(value)
+
+    monkeypatch.setattr(taxonomy, "_species_name", species_name)
+
+    def rows():
+        for index in range(2001):
+            if index == 1000:
+                assert len(projected) == 1000  # flushed before consuming the next chunk
+            yield index, f"d__Bacteria;s__Species {index}", True, f"GCF_{index}"
+
+    path = tmp_path / "crosswalk.sqlite"
+    taxonomy.build_crosswalk_db(rows(), path, release="fixture")
+    with taxonomy.open_ro(path) as con:
+        assert con.execute("SELECT COUNT(*) FROM classification").fetchone()[0] == 2001

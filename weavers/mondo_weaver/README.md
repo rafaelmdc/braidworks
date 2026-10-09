@@ -92,3 +92,15 @@ multiple equivalent IDs also require review. Rebuild schema-2 databases.
 The distinction follows the provider's
 [mapping semantics](https://mondo.monarchinitiative.org/pages/faq/) and
 [quality-control relation codes](https://mondo.readthedocs.io/en/latest/editors-guide/quality-control-tests/).
+
+## Group-aware graph reads (0.2.5)
+
+The always-computed `identity` group now contains MONDO ID, name and mapping
+evidence. `term` contains parents and depth; `ancestors` remains separate.
+Requests for identity alone do not traverse the graph. When graph fields are
+requested, one traversal supplies names, direct parents and shortest root depth,
+reused for the same resolved term within a batch. Result projections are detached.
+
+Migration: clients selecting groups explicitly should include `identity` for
+identity fields previously in `term`. Output-key requests need no change. This
+change uses the existing schema-3 database and does not require rebuilding it.
