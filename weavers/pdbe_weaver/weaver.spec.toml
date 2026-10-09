@@ -48,8 +48,8 @@ source_sample = """
 }
 """
 
-# One accession -> one best_structures call. PDBe has no batch endpoint that preserves
-# per-query grouping, so batches fan out per accession.
+# Distinct accessions share POST /mappings/best_structures chunks of 100, keyed
+# by accession in the response; a singleton uses GET. Query duplicates retain positions.
 [[capability]]
 id = "list_structures"
 consumes = ["protein.uniprot.accession"]

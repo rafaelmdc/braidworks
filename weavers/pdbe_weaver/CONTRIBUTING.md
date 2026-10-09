@@ -66,6 +66,11 @@ See [README.md](README.md) and `weaver.spec.toml` for the current output keys an
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.
+- `list_structures` uses bulk best_structures POST for multiple distinct accessions
+  and GET for a singleton; `describe_structure` uses summary POST chunks of 200.
+  Preserve keyed correlation, input order and independent chunk failures.
+- Display limit affects IDs/records, not the uncapped PDB fan set or true count.
+- Stable selection is relative to the observed source response, not a frozen PDBe
+  release. Keep original chain/entity/range rows and deterministic chain ties.
+- Quality, biological assembly and ligand services need explicit separately selected
+  groups, observed schemas and request-cost tests before extending descriptions.

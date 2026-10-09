@@ -25,7 +25,8 @@ PDBe's `best_structures` returns one row per (structure, chain), so the backend 
 to **distinct PDB structures** (keeping the best-covering chain) and orders them
 best-first — **coverage descending, then resolution ascending, then pdb_id**. `count` is
 the true total distinct; `ids`/`records` are the top `limit` (default 25); `pdb.id` is the
-full distinct set (uncapped — the fan dimension). Same accession → same list. An accession
+full distinct set (uncapped — the fan dimension). Ordering is deterministic for the
+same observed source data; PDBe updates can change the list, coverage or ranking. An accession
 with no structures (PDBe 404, or an empty mapping) is a clean `NO_MATCH`.
 
 ## Use it
@@ -110,3 +111,28 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Complete configured Python example
+
+```python
+import asyncio
+from braidworks.core import Strand, StrandSet
+from pdbe_weaver import build_pdbe_weaver
+
+async def main():
+    async with build_pdbe_weaver(base_url="https://www.ebi.ac.uk/pdbe/api", limit=5) as weaver:
+        inputs = [StrandSet.from_strands("p53", [Strand("protein.uniprot.accession", "P04637")])]
+        result = (await weaver.execute_batch(
+            "list_structures", inputs, backend="api",
+            requested_outputs=frozenset({"structure.pdb.records", "structure.pdb.count"}),
+        ))[0]
+        print(result.to_json())
+
+asyncio.run(main())
+```
+
+The displayed records are capped at five; the count represents all distinct
+structures observed in that response. Chain rows in the records retain source
+entity/range evidence. Resolution and sequence coverage are useful ranking fields,
+not a complete structure-quality assessment. Additional validation, assembly and
+ligand services are not queried by these capabilities.
