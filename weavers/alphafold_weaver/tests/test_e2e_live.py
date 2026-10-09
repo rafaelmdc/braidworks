@@ -31,6 +31,7 @@ async def _model(weaver, accession):
                     "structure.alphafold.entry_id",
                     "structure.alphafold.mean_plddt",
                     "structure.alphafold.model_url",
+                    "structure.alphafold.records",
                 }
             ),
             backend="api",
@@ -52,6 +53,9 @@ async def test_live_tp53_canonical_model():
     assert produced["structure.alphafold.entry_id"] == "AF-P04637-F1"
     assert 0.0 <= produced["structure.alphafold.mean_plddt"] <= 100.0
     assert produced["structure.alphafold.model_url"].endswith(".pdb")
+    coverage = produced["structure.alphafold.records"]["coverage"]
+    assert coverage["uniprot_start"] == 1 and coverage["uniprot_end"] == 393
+    assert coverage["sequence_length"] == 393 and coverage["status"] == "full_sequence"
 
 
 async def test_live_malformed_accession_is_no_match():

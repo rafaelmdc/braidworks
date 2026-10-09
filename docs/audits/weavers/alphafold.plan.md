@@ -32,3 +32,7 @@ configuration work remains owned by its existing issues.
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source audit pack acceptance
+
+Issues #197 are implemented; see [ALPHAFOLD implementation, migrations and evidence](SRC-ALPHAFOLD.implementation.md). Other conditional work remains separately tracked.

@@ -20,8 +20,12 @@ For the returned response, the backend prefers entry ID `AF-{accession}-F1`;
 otherwise it selects the lexicographically lowest entry ID. This is a representative
 selection rule, not a guarantee of full-sequence coverage or canonical isoform
 identity. The records group describes only the selected entry (URLs, version and
-confidence breakdown). It does not expose all returned alternatives or source
-sequence ranges; full fragment/isoform coverage remains tracked in #197.
+confidence breakdown). Its `coverage` object retains the observed 1-based inclusive
+UniProt start/end, sequence length, model length and fragment number. Status is
+`full_sequence`, `partial` or `unknown` when evidence is missing. Partial models carry
+a warning even on scalar-only requests. F1 can be the first overlapping fragment of
+a long protein; it does not guarantee a complete model. Model listing remains a
+separate proposal (#202).
 
 A valid UniProt accession can lack a model. Coverage depends on the provider’s
 datasets and sequence exclusions; isoforms and fragments need separate inspection.

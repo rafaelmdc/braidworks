@@ -10,7 +10,7 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.8"
+version = "0.1.9"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
@@ -24,6 +24,8 @@ source_sample = """
   {
     "entryId": "AF-P04637-F1",
     "uniprotAccession": "P04637",
+    "uniprotStart": 1,
+    "uniprotEnd": 393,
     "organismScientificName": "Homo sapiens",
     "latestVersion": 6,
     "globalMetricValue": 75.06,
@@ -39,7 +41,8 @@ source_sample = """
 """
 
 # One accession -> one prediction call. The endpoint may return several models (the
-# canonical isoform plus alternative isoforms); the backend picks the canonical one.
+# preferred F1 entry, fragments or isoforms); the backend picks a representative F1
+# entry and preserves observed coverage in records, warning on partial coverage.
 [[capability]]
 id = "describe_model"
 consumes = ["protein.uniprot.accession"]

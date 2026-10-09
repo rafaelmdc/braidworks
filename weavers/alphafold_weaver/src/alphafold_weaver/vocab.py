@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "alphafold"
-WEAVER_VERSION = "0.1.8"
+WEAVER_VERSION = "0.1.9"
 WEAVER_TITLE = "AlphaFold predicted structure (accession -> model + confidence)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

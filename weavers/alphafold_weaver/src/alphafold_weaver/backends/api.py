@@ -2,13 +2,14 @@
 
 Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 ``GET /api/prediction/{accession}``. The endpoint returns a list of models — the
-**canonical** one (``AF-{accession}-F1``) plus, for some proteins, alternative-isoform
-models. The backend picks the canonical model (falling back to the lexicographically
+**preferred F1** one (``AF-{accession}-F1``) plus, for some proteins, alternative-isoform
+models. The backend picks the representative F1 model (falling back to the lexicographically
 smallest entry id) and emits its model file URL, mean pLDDT confidence, PAE plot, and
 version, plus a full ``records`` metadata blob (incl. the pLDDT confidence breakdown).
 
-**Determinism:** the canonical-first pick means the same accession always yields the
-same model. An accession with no AlphaFold model (404) is a clean ``NO_MATCH``.
+**Determinism:** the F1-first pick is stable within one observed source response.
+F1 can be a partial fragment, not a complete protein model. An accession with no
+AlphaFold model (404) is a clean ``NO_MATCH``.
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -20,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from typing import Any
 
 import httpx
@@ -47,6 +49,23 @@ def _validated_entries(body: Any) -> list[dict[str, Any]]:
             or not entry["entryId"]
         ):
             raise _InvalidResponse("AlphaFold entry must contain an entryId")
+        for field in ("uniprotStart", "uniprotEnd"):
+            value = entry.get(field)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 1
+            ):
+                raise _InvalidResponse(f"AlphaFold {field} must be a positive integer or null")
+        for field in ("uniprotSequence", "sequence"):
+            if entry.get(field) is not None and not isinstance(entry[field], str):
+                raise _InvalidResponse(f"AlphaFold {field} must be a string or null")
+        start, end = entry.get("uniprotStart"), entry.get("uniprotEnd")
+        sequence = entry.get("uniprotSequence")
+        if (
+            start is not None
+            and end is not None
+            and (start > end or (sequence and end > len(sequence)))
+        ):
+            raise _InvalidResponse("AlphaFold residue range is inconsistent with sequence")
         for field in ("pdbUrl", "cifUrl", "paeImageUrl"):
             if entry.get(field) is not None and not isinstance(entry[field], str):
                 raise _InvalidResponse(f"AlphaFold {field} must be a string or null")
@@ -69,16 +88,38 @@ def _validated_entries(body: Any) -> list[dict[str, Any]]:
 
 
 def _pick(entries: list[dict[str, Any]], accession: str) -> dict[str, Any]:
-    """The canonical model ``AF-{accession}-F1`` if present, else the lowest entry id."""
+    """Prefer ``AF-{accession}-F1``; F1 may be a partial overlapping fragment."""
     canonical_id = f"AF-{accession}-F1"
     canonical = next((e for e in entries if e.get("entryId") == canonical_id), None)
     return canonical or min(entries, key=lambda e: e.get("entryId") or "")
+
+
+def _coverage(entry: dict[str, Any]) -> dict[str, Any]:
+    start, end = entry.get("uniprotStart"), entry.get("uniprotEnd")
+    sequence = entry.get("uniprotSequence")
+    length = len(sequence) if sequence else None
+    status = "unknown"
+    if start is not None and end is not None:
+        if start > 1 or (length is not None and end < length):
+            status = "partial"
+        elif length is not None and start == 1 and end == length:
+            status = "full_sequence"
+    fragment = re.search(r"-F(\d+)$", entry["entryId"])
+    return {
+        "uniprot_start": start,
+        "uniprot_end": end,
+        "sequence_length": length,
+        "model_length": end - start + 1 if start is not None and end is not None else None,
+        "fragment_number": int(fragment[1]) if fragment else None,
+        "status": status,
+    }
 
 
 def _extract(entry: dict[str, Any]) -> dict[str, Any]:
     """Map one AlphaFold prediction entry to produced type_ids (omitting absent fields)."""
     records = {
         "entry_id": entry.get("entryId"),
+        "coverage": _coverage(entry),
         "mean_plddt": entry.get("globalMetricValue"),
         "version": entry.get("latestVersion"),
         "model_url": entry.get("pdbUrl"),
@@ -179,4 +220,12 @@ class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
 
         if not entries:
             return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_extract(_pick(entries, accession)))
+        selected = _pick(entries, accession)
+        values = _extract(selected)
+        coverage = values["structure.alphafold.records"]["coverage"]
+        warnings = []
+        if coverage["status"] == "partial":
+            warnings.append(
+                "Selected AlphaFold model covers a partial sequence fragment; F1 does not imply full protein coverage"
+            )
+        return LookupRecord(query=query, found=True, values=values, warnings=tuple(warnings))
