@@ -15,10 +15,10 @@ list of `{rank, name}` from domain to species). The consumed inputs are alternat
 
 ## Backends
 
-- **local** (preferred, authoritative) — a small SQLite NCBI-taxid / species-name →
+- **local** (preferred, observed genome crosswalk) — a small SQLite NCBI-taxid / species-name →
   GTDB crosswalk, built by streaming the GTDB metadata TSVs (`bac120` + `ar53`) into
   `~/.cache` via `ensure_gtdb_db` (consent-gated, ~283 MB for R232 download). Resolves by taxid
-  (authoritative) or GTDB species name.
+  (unique observed classification) or GTDB species name.
 - **api** (online fallback, keyless) — the live GTDB search API
   (`gtdb-api.ecogenomic.org/search/gtdb`). Name-based only; a taxid-only query is a
   miss here (use the local backend for taxids).
@@ -95,8 +95,19 @@ database and cleans temporary downloads. Existing local generation checks remain
 Custom metadata URLs must be supplied together. They get a custom content identity
 and recorded hashes; a caller's declared release is retained as a declaration,
 without borrowing a separately fetched official release label. Supply explicit
-matching `tree_paths` for custom/legacy crosswalks. Old crosswalks remain usable for
+matching `tree_paths` for custom/legacy crosswalks. Old crosswalks require a schema-2 rebuild for
 taxonomy, but must be refreshed to obtain verified automatic tree acquisition.
 Custom tree URL acquisition under an official label is rejected; prepare custom
 local tree files and pass their paths explicitly. No automatic bulk download runs
 at import or during an ordinary lookup.
+
+### Crosswalk identity policy
+
+Schema 2 retains every distinct genome classification and representative species
+candidate. An NCBI taxid with competing GTDB lineages produces an error containing
+the classifications/accessions for review, including during tree placement. It
+does not collapse multiple classifications into an authoritative taxon identity.
+Rebuild schema-1 crosswalks using `refresh=True`. Name lookup accepts a unique
+classification; API search accepts exact species names only. Equal representative
+hits use stable accession/canonical-evidence ordering. Unrelated hits are misses;
+competing exact lineages return review evidence.

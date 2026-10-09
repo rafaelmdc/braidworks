@@ -35,6 +35,7 @@ FROM_DB: dict[str, str] = {
     "gene.hgnc.id": "HGNC",
     "nucleotide.insdc.accession": "EMBL-GenBank-DDBJ",
     "pdb.id": "PDB",
+    "string.id": "STRING",
 }
 
 # strand type produced -> UniProt `to` db (out of the hub).

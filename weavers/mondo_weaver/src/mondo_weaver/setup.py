@@ -74,7 +74,7 @@ def normalize_name(name: str) -> str:
 
 
 class _Term:
-    __slots__ = ("mondo_id", "name", "obsolete", "parents", "synonyms", "xrefs")
+    __slots__ = ("mondo_id", "name", "obsolete", "parents", "synonyms", "xref_evidence", "xrefs")
 
     def __init__(self, mondo_id: str) -> None:
         self.mondo_id = mondo_id
@@ -82,6 +82,7 @@ class _Term:
         self.obsolete = False
         self.parents: list[str] = []
         self.xrefs: list[tuple[str, str, bool]] = []  # (source_tag, id, is_equivalent)
+        self.xref_evidence: list[tuple[str, str, str, str]] = []
         self.synonyms: list[str] = []  # EXACT synonym strings only
 
 
@@ -127,7 +128,29 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
             source, _, xref_id = token.partition(":")
             norm = normalize_xref(source, xref_id)
             if norm is not None:
-                current.xrefs.append((norm[0], norm[1], "MONDO:equivalentTo" in value))
+                predicates = set(re.findall(r"MONDO:[A-Za-z]+|skos:[A-Za-z]+", value))
+                relation_codes = {
+                    "MONDO:equivalentTo": "equivalent",
+                    "skos:exactMatch": "exact_match",
+                    "MONDO:mondoIsBroaderThanSource": "mondo_broader",
+                    "MONDO:mondoIsNarrowerThanSource": "mondo_narrower",
+                    "MONDO:relatedTo": "related",
+                    "MONDO:directSiblingOf": "sibling",
+                    "skos:broadMatch": "broad_match",
+                    "skos:narrowMatch": "narrow_match",
+                    "skos:relatedMatch": "related",
+                    "skos:closeMatch": "close_match",
+                }
+                relations = sorted(
+                    {
+                        relation_codes[predicate]
+                        for predicate in predicates
+                        if predicate in relation_codes
+                    }
+                ) or ["unspecified"]
+                relation = relations[0] if len(relations) == 1 else "conflicting"
+                current.xrefs.append((norm[0], norm[1], relation == "equivalent"))
+                current.xref_evidence.append((norm[0], norm[1], relation, value))
     if current is not None and not current.obsolete and current.name:
         terms.append(current)
     return data_version, terms
@@ -161,6 +184,7 @@ def write_db(
                 "name": t.name,
                 "parents": sorted(t.parents),
                 "xrefs": sorted(t.xrefs),
+                "xref_evidence": sorted(t.xref_evidence),
                 "synonyms": sorted(t.synonyms),
             }
             for t in sorted(terms, key=lambda t: t.mondo_id)
@@ -185,7 +209,8 @@ def write_db(
         con.execute("CREATE TABLE term (mondo_id TEXT PRIMARY KEY, name TEXT)")
         con.execute("CREATE TABLE isa (child TEXT, parent TEXT)")
         con.execute(
-            "CREATE TABLE xref (source TEXT, xref_id TEXT, mondo_id TEXT, is_equivalent INTEGER)"
+            "CREATE TABLE xref (source TEXT, xref_id TEXT, mondo_id TEXT, is_equivalent INTEGER, "
+            "relation TEXT NOT NULL DEFAULT 'unspecified', evidence TEXT)"
         )
         # name index: normalized label/exact-synonym -> mondo id (priority 0=label, 1=synonym).
         con.execute("CREATE TABLE name (norm TEXT, mondo_id TEXT, priority INTEGER)")
@@ -204,10 +229,20 @@ def write_db(
             "INSERT INTO isa VALUES (?, ?)",
             [(t.mondo_id, p) for t in terms for p in t.parents if p in valid_ids],
         )
-        con.executemany(
-            "INSERT INTO xref VALUES (?, ?, ?, ?)",
-            [(src, xid, t.mondo_id, int(eq)) for t in terms for (src, xid, eq) in t.xrefs],
-        )
+        xref_rows = set()
+        for term in terms:
+            observed = {(src, xid) for src, xid, relation, evidence in term.xref_evidence}
+            for src, xid, relation, evidence in term.xref_evidence:
+                xref_rows.add(
+                    (src, xid, term.mondo_id, int(relation == "equivalent"), relation, evidence)
+                )
+            for src, xid, equivalent in term.xrefs:
+                if (src, xid) not in observed:
+                    relation = "equivalent" if equivalent else "unspecified"
+                    xref_rows.add(
+                        (src, xid, term.mondo_id, int(equivalent), relation, "caller-supplied")
+                    )
+        con.executemany("INSERT INTO xref VALUES (?, ?, ?, ?, ?, ?)", sorted(xref_rows))
         con.execute("CREATE INDEX ix_isa_child ON isa(child)")
         con.execute("CREATE INDEX ix_xref_lookup ON xref(source, xref_id)")
         con.execute("CREATE INDEX ix_name_lookup ON name(norm)")
@@ -216,7 +251,7 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "2"),
+                ("schema_version", "3"),
                 ("build_id", uuid.uuid4().hex),
                 ("data_version", version),
                 ("release_known", str(known_version).lower()),
@@ -244,7 +279,7 @@ def db_is_valid(path: Path) -> bool:
     try:
         meta = dict(con.execute("SELECT key, value FROM meta"))
         if (
-            meta.get("schema_version") != "2"
+            meta.get("schema_version") != "3"
             or not re.fullmatch(r"[0-9a-f]{64}", meta.get("source_sha256", ""))
             or meta.get("data_version", "").lower() in {"", "unknown", "latest"}
         ):
@@ -258,6 +293,10 @@ def db_is_valid(path: Path) -> bool:
             meta["release_known"] == "false"
             and meta["data_version"] != "unversioned:sha256:" + meta["source_sha256"]
         ):
+            return False
+        if con.execute(
+            "SELECT 1 FROM xref WHERE relation IS NULL OR is_equivalent != (relation = 'equivalent') LIMIT 1"
+        ).fetchone():
             return False
         terms = []
         by_id = {}

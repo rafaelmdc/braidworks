@@ -25,6 +25,7 @@ SHARED_KEYS: dict[str, str] = {
     # Molecular layer (uniprot_weaver hinge + hubs)
     "protein.query": "The text you start from — a gene symbol, protein name, or accession.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "string.id": "Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping.",
     "gene.ncbi.id": "NCBI Gene id for one gene.",
     "gene.ensembl.id": "Ensembl gene id for one gene.",
     "gene.symbol": "A gene's official symbol, e.g. TP53 — joins gene databases.",
@@ -100,6 +101,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "gene.ortholog.records": "This gene's orthologs — gene id, symbol, organism.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "This microbe's Gram stain — positive or negative.",
+    "microbe.trait.records": "Selected strain identity, scope and raw phenotype evidence with conflicts.",
     "microbe.trait.optimum_temp": "The temperature this microbe grows best at.",
     "microbe.trait.metabolism": "How this microbe gets energy — aerobe, anaerobe, …",
     "microbe.trait.cell_shape": "This microbe's cell shape — rod, coccus, …",
@@ -137,6 +139,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "community-flux / seed-set metabolic-complementarity analysis.",
     # disease-ontology outputs (mondo_weaver) — the disease-side feature source
     "disease.ontology.name": "The MONDO term name for this disease.",
+    "disease.ontology.mapping.records": "Observed MONDO mapping relations and source evidence.",
     "disease.ontology.parents": "This disease's direct is-a parents in MONDO — a list of "
     "{mondo_id, name}.",
     "disease.ontology.ancestors": "This disease's full is-a ancestor lineage in MONDO (up to "
@@ -162,7 +165,6 @@ OUTPUT_KEYS: dict[str, str] = {
     "eggnog.group": "This protein's eggNOG orthologous-group id.",
     "chembl.id": "This protein's ChEMBL target id.",
     "drugbank.id": "This protein's DrugBank id.",
-    "string.id": "This protein's STRING id.",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "The proteins this protein interacts with.",
     "protein.interaction.count": "Number of edges observed within the configured STRING retrieval limit.",

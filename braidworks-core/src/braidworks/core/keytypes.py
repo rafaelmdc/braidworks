@@ -37,6 +37,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "wikipedia.title": str,
     "protein.query": str,
     "protein.uniprot.accession": str,
+    "string.id": str,
     "gene.ncbi.id": int,
     "gene.ensembl.id": str,
     "gene.symbol": str,

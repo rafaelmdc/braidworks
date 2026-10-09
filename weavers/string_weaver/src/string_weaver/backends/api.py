@@ -81,42 +81,58 @@ def _validate_rows(body: Any, path: str, identifiers: list[str]) -> list[dict[st
                     or not math.isfinite(value)
                 ):
                     raise _InvalidResponse(f"STRING {field} must be a finite number or null")
+        id_fields = (
+            ("stringId",) if path.endswith("get_string_ids") else ("stringId_A", "stringId_B")
+        )
+        taxa = []
+        for field in id_fields:
+            taxon, separator, protein = row[field].partition(".")
+            if not separator or not taxon.isdigit() or int(taxon) < 1 or not protein:
+                raise _InvalidResponse("STRING identifier must preserve taxon and protein identity")
+            taxa.append(int(taxon))
+        if len(set(taxa)) != 1 or (
+            row.get("ncbiTaxonId") is not None and str(row["ncbiTaxonId"]) != str(taxa[0])
+        ):
+            raise _InvalidResponse("STRING identity conflicts with reported taxon")
     return body
 
 
-def _edge(raw: dict[str, Any]) -> dict[str, Any] | None:
-    """One STRING edge -> a compact record, or None if it has no partner name."""
-    partner = raw.get("preferredName_B")
-    if not partner:
-        return None
-    channels = {name: raw.get(key) for key, name in _CHANNELS.items() if raw.get(key)}
+def _edge(raw: dict[str, Any]) -> dict[str, Any]:
     return {
-        "partner": partner,
-        "string_id": raw.get("stringId_B"),
+        "partner": raw["preferredName_B"],
+        "string_id": raw["stringId_B"],
+        "source_id": raw["stringId_A"],
+        "taxon_id": int(raw["stringId_B"].split(".", 1)[0]),
         "score": raw.get("score"),
-        "channels": channels,
+        "channels": {label: raw[key] for key, label in _CHANNELS.items() if raw.get(key)},
     }
 
 
 def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
-    """Map STRING's edge list to produced type_ids, in a deterministic order."""
-    rows = [e for e in (_edge(r) for r in payload) if e is not None]
-    rows.sort(key=lambda r: (-(r["score"] or 0.0), r["partner"]))
-    # The fan dimension (set_outputs): each partner's name as a protein.query, so a caller
-    # can fan out one child per partner. uniprot.resolve_protein consumes protein.query, so
-    # "protein -> retrieved interaction partners -> each resolved protein" chains end-to-end.
-    # De-duped, order preserved (best-first).
-    queries: list[str] = []
-    seen: set[str] = set()
-    for r in rows:
-        if r["partner"] not in seen:
-            seen.add(r["partner"])
-            queries.append(r["partner"])
+    # Collapse logical source/target edges; keep all distinct observed evidence.
+    by_edge: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    for raw in payload:
+        by_edge.setdefault((raw["stringId_A"], raw["stringId_B"]), {})[
+            json.dumps(raw, sort_keys=True)
+        ] = raw
+    records = []
+    for evidence in by_edge.values():
+        observed = sorted(
+            evidence.values(),
+            key=lambda row: (
+                -(row.get("score") or 0.0),
+                json.dumps(row, sort_keys=True),
+            ),
+        )
+        record = _edge(observed[0])
+        record["evidence"] = observed
+        records.append(record)
+    records.sort(key=lambda row: (-(row["score"] or 0.0), row["string_id"], row["source_id"]))
     return {
-        "protein.query": queries,
-        "protein.interaction.partners": [r["partner"] for r in rows],
-        "protein.interaction.count": len(rows),
-        "protein.interaction.records": rows,
+        "string.id": list(dict.fromkeys(row["string_id"] for row in records)),
+        "protein.interaction.partners": [row["partner"] for row in records],
+        "protein.interaction.count": len(records),
+        "protein.interaction.records": records,
     }
 
 
@@ -211,8 +227,8 @@ class StringApiBackend(BackendBase):
                 values["protein.interaction.coverage"] = {
                     "scope": "retrieved_interaction_partners",
                     "request_limit": self._limit,
-                    "observed_edges": len(edges),
-                    "observed_partners": len(values["protein.query"]),
+                    "observed_edges": values["protein.interaction.count"],
+                    "observed_partners": len(values["string.id"]),
                     "complete": None,
                     "count_scope": "observed_edges",
                     "fan_scope": "retrieved_partners",
@@ -251,8 +267,14 @@ class StringApiBackend(BackendBase):
             ) as exc:
                 errors.update(dict.fromkeys(chunk, f"STRING API error: {format_exc(exc)}"))
                 continue
+            matches: dict[str, set[str]] = {}
             for row in rows:
-                out.setdefault(row["queryItem"], row["stringId"])
+                matches.setdefault(row["queryItem"], set()).add(row["stringId"])
+            for query, identities in matches.items():
+                if len(identities) != 1:
+                    errors[query] = "Ambiguous STRING identity: " + json.dumps(sorted(identities))
+                else:
+                    out[query] = next(iter(identities))
         return out, errors
 
     async def _partners(

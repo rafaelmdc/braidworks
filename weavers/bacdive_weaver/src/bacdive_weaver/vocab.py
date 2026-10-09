@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "bacdive"
-WEAVER_VERSION = "0.1.9"
+WEAVER_VERSION = "0.1.10"
 WEAVER_TITLE = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -46,6 +46,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "microbe.trait.optimum_ph",
                         "microbe.trait.optimum_temp",
                         "microbe.trait.oxygen_tolerance",
+                        "microbe.trait.records",
                         "microbe.trait.spore_formation",
                     }
                 ),
@@ -70,6 +71,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                             {"microbe.trait.optimum_ph", "microbe.trait.optimum_temp"}
                         ),
                     ),
+                    OutputGroup(id="evidence", outputs=frozenset({"microbe.trait.records"})),
                 ),
                 backends=backends,
                 max_batch_size=50,

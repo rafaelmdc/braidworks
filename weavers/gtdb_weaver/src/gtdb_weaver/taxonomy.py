@@ -8,6 +8,7 @@ A GTDB taxonomy string is a rank-prefixed, ``;``-joined lineage, e.g.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from collections.abc import Iterable
@@ -63,6 +64,8 @@ def _species_name(taxonomy: str) -> str | None:
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS taxon (ncbi_taxid INTEGER PRIMARY KEY, gtdb_taxonomy TEXT NOT NULL, is_rep INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS species (name TEXT PRIMARY KEY, gtdb_taxonomy TEXT NOT NULL, rep_accession TEXT);
+CREATE TABLE IF NOT EXISTS classification (ncbi_taxid INTEGER NOT NULL, gtdb_taxonomy TEXT NOT NULL, is_rep INTEGER NOT NULL, accession TEXT NOT NULL, PRIMARY KEY(ncbi_taxid, gtdb_taxonomy, accession, is_rep));
+CREATE TABLE IF NOT EXISTS species_candidate (name TEXT NOT NULL, gtdb_taxonomy TEXT NOT NULL, accession TEXT NOT NULL, PRIMARY KEY(name, gtdb_taxonomy, accession));
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -72,24 +75,26 @@ def _build_crosswalk_db(
 ) -> None:
     """Build the crosswalk SQLite from ``(ncbi_taxid, gtdb_taxonomy, is_rep, accession)`` rows.
 
-    One taxonomy per ncbi_taxid (representative rows win over non-rep, else first
-    seen — deterministic, never trusting row order for the tiebreak). The species
-    index is keyed by lowercased GTDB species name from representative rows, and
-    carries that representative genome's ``accession`` — the label of the species' leaf
-    in the GTDB reference tree, the join to tree-placement (see ``tree``).
+    Retain every distinct genome classification. Compatibility indexes use stable
+    representative/identity ordering, but public lookup rejects competing taxonomies
+    rather than presenting that representative as an authoritative crosswalk.
     """
     best: dict[int, tuple[str, bool]] = {}
     species: dict[str, tuple[str, str]] = {}
+    classifications = set()
+    species_candidates = set()
     for taxid, taxonomy, is_rep, accession in rows:
-        if not taxonomy:
-            continue
-        prev = best.get(taxid)
-        if prev is None or (is_rep and not prev[1]):
-            best[taxid] = (taxonomy, is_rep)
+        if taxonomy:
+            classifications.add((int(taxid), taxonomy, bool(is_rep), str(accession or "")))
+    for taxid, taxonomy, is_rep, accession in sorted(
+        classifications, key=lambda row: (row[0], not row[2], row[1], row[3])
+    ):
+        best.setdefault(taxid, (taxonomy, is_rep))
         if is_rep:
             name = _species_name(taxonomy)
-            if name and name not in species:
-                species[name] = (taxonomy, accession)
+            if name:
+                species_candidates.add((name, taxonomy, accession))
+                species.setdefault(name, (taxonomy, accession))
 
     if not best:
         raise ValueError("GTDB crosswalk has no usable taxonomy rows")
@@ -101,6 +106,10 @@ def _build_crosswalk_db(
     con = sqlite3.connect(db_path)
     try:
         con.executescript(_SCHEMA)
+        con.executemany("INSERT INTO classification VALUES (?, ?, ?, ?)", sorted(classifications))
+        con.executemany(
+            "INSERT INTO species_candidate VALUES (?, ?, ?)", sorted(species_candidates)
+        )
         con.executemany(
             "INSERT OR REPLACE INTO taxon (ncbi_taxid, gtdb_taxonomy, is_rep) VALUES (?, ?, ?)",
             ((t, tax, int(rep)) for t, (tax, rep) in best.items()),
@@ -111,7 +120,7 @@ def _build_crosswalk_db(
         )
         con.executemany(
             "INSERT OR REPLACE INTO meta VALUES (?, ?)",
-            [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
+            [("schema_version", "2"), ("build_id", uuid.uuid4().hex)],
         )
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('release', ?)", (release,))
         con.commit()
@@ -139,30 +148,36 @@ def db_release(db_path: str | Path) -> str | None:
         con.close()
 
 
-def lookup(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
-    """Resolve one query strand-map to a GTDB taxonomy string, or None.
+class AmbiguousClassification(ValueError):
+    """Observed classifications cannot establish a single GTDB identity."""
 
-    Dispatches on the present input: NCBI taxid (authoritative crosswalk) first,
-    else GTDB species name (case-insensitive).
-    """
+
+def lookup(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
+    """Resolve only a unique classification; retain competing genome evidence."""
     taxid = query.get("ncbi.taxon.id")
     if taxid not in (None, ""):
         try:
-            row = con.execute(
-                "SELECT gtdb_taxonomy FROM taxon WHERE ncbi_taxid = ?", (int(taxid),)
-            ).fetchone()
+            taxid = int(taxid)
         except (ValueError, TypeError):
-            row = None
-        if row:
-            return row[0]
-    name = query.get("organism.scientific_name")
-    if name:
-        row = con.execute(
-            "SELECT gtdb_taxonomy FROM species WHERE name = ?", (str(name).strip().lower(),)
-        ).fetchone()
-        if row:
-            return row[0]
-    return None
+            return None
+        rows = con.execute(
+            "SELECT gtdb_taxonomy, accession, is_rep FROM classification "
+            "WHERE ncbi_taxid = ? ORDER BY gtdb_taxonomy, accession, is_rep DESC",
+            (taxid,),
+        ).fetchall()
+    else:
+        name = query.get("organism.scientific_name")
+        rows = con.execute(
+            "SELECT gtdb_taxonomy, accession, 1 FROM species_candidate "
+            "WHERE name = ? ORDER BY gtdb_taxonomy, accession",
+            (str(name or "").strip().lower(),),
+        ).fetchall()
+    taxonomies = sorted({row[0] for row in rows})
+    if len(taxonomies) > 1:
+        raise AmbiguousClassification(
+            "Conflicting GTDB classifications require review: " + json.dumps([list(row) for row in rows])
+        )
+    return taxonomies[0] if taxonomies else None
 
 
 def rep_accession(con: sqlite3.Connection, query: dict[str, Any]) -> str | None:
@@ -194,9 +209,13 @@ def crosswalk_is_valid(path: Path) -> bool:
     try:
         con.execute("SELECT ncbi_taxid, gtdb_taxonomy, is_rep FROM taxon LIMIT 0")
         con.execute("SELECT name, gtdb_taxonomy, rep_accession FROM species LIMIT 0")
+        con.execute(
+            "SELECT ncbi_taxid, gtdb_taxonomy, is_rep, accession FROM classification LIMIT 0"
+        )
+        con.execute("SELECT name, gtdb_taxonomy, accession FROM species_candidate LIMIT 0")
         metadata = dict(con.execute("SELECT key, value FROM meta"))
         return (
-            metadata.get("schema_version") == "1"
+            metadata.get("schema_version") == "2"
             and bool(metadata.get("release"))
             and bool(metadata.get("build_id"))
             and con.execute("SELECT 1 FROM taxon LIMIT 1").fetchone() is not None

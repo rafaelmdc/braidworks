@@ -14,7 +14,7 @@ Supplied by the user at the start of a braid.
 | `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | — | `gmrepo:gmrepo.sample_profiles`, `mondo:mondo.lookup_by_mesh` |
 | `disease.name` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_name` |
 | `organism.name` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_name` |
-| `protein.query` | The text you start from — an organism name or a gene/protein query. | `string:list_interactions` | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
+| `protein.query` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
 
 ## Shared join keys
 
@@ -47,6 +47,7 @@ Registered bridge keys — what links weavers together.
 | `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:map_from_accession` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
+| `string.id` | Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping. | `string:list_interactions`, `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `wikidata.qid` | Wikidata item id (Qxxxx) for one taxon — joins Wikidata/Wikipedia datasets. | `wikidata:resolve_taxon` | — |
 | `wikipedia.title` | English Wikipedia article title for one taxon — the pageviews join key. | `wikidata:resolve_taxon` | `wikipedia:describe_pageviews` |
 
@@ -59,6 +60,7 @@ Descriptive payload fields; nothing joins on them.
 | `chembl.id` | This protein's ChEMBL target id. | `uniprot:map_from_accession` | — |
 | `disease.ontology.ancestors` | This disease's full is-a ancestor lineage in MONDO (up to the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `disease.ontology.depth` | This disease's minimum is-a distance to a MONDO root (how specific the term is). | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
+| `disease.ontology.mapping.records` | Observed MONDO mapping relations and source evidence. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `disease.ontology.name` | The MONDO term name for this disease. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `disease.ontology.parents` | This disease's direct is-a parents in MONDO — a list of {mondo_id, name}. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `drugbank.id` | This protein's DrugBank id. | `uniprot:map_from_accession` | — |
@@ -114,6 +116,7 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.trait.optimum_ph` | The pH this microbe grows best at. | `bacdive:describe_traits` | — |
 | `microbe.trait.optimum_temp` | The temperature this microbe grows best at. | `bacdive:describe_traits`, `example:describe_traits` | — |
 | `microbe.trait.oxygen_tolerance` | How this microbe relates to oxygen — aerobe, anaerobe, facultative, … | `bacdive:describe_traits` | — |
+| `microbe.trait.records` | Selected strain identity, scope and raw phenotype evidence with conflicts. | `bacdive:describe_traits` | — |
 | `microbe.trait.spore_formation` | Whether this microbe forms spores. | `bacdive:describe_traits` | — |
 | `ncbi.taxon.children_count` | How many child taxa this organism has at the requested rank. | `ncbi:ncbi.list_children` | — |
 | `ncbi.taxon.children_records` | This organism's child taxa — taxid, name, rank. | `ncbi:ncbi.list_children` | — |
@@ -141,7 +144,6 @@ Descriptive payload fields; nothing joins on them.
 | `protein.reviewed` | Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL). | `uniprot:resolve_protein` | — |
 | `protein.uniprot.mapping.count` | How many ids this protein mapped to. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `protein.uniprot.mapping.records` | The ids this protein mapped to — id plus reviewed/db. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
-| `string.id` | This protein's STRING id. | `uniprot:map_from_accession` | — |
 | `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model` | — |
 | `structure.alphafold.mean_plddt` | The AlphaFold model's mean pLDDT confidence, 0–100. | `alphafold:describe_model` | — |
 | `structure.alphafold.model_url` | Where to download this protein's AlphaFold model. | `alphafold:describe_model` | — |

@@ -28,3 +28,9 @@ Other work packages in this source plan remain separately tracked.
 The #153 findings are implemented and verified in
 [SH-06 implementation and configuration evidence](SH-06.implementation.md).
 Other work packages/findings in this source plan remain separately tracked.
+
+## SH-08 identity implementation
+
+Primary shared identity findings are implemented under #155; see
+[SH-08 implementation and validation](SH-08.implementation.md). Source-specific
+work packages with additional feature proposals remain tracked by their own groups.

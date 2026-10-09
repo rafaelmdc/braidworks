@@ -56,14 +56,18 @@ def _handler(request: httpx.Request) -> httpx.Response:
     # target db; GeneID 7157 -> P04637 (both reviewed and full jobs), so the golden is a
     # single deterministic accession (count = 1).
     if path.endswith("/idmapping/run"):
-        to_db = (parse_qs(request.content.decode()).get("to") or [""])[0]
-        return httpx.Response(200, content=json.dumps({"jobId": f"job-{to_db}"}))
+        form = parse_qs(request.content.decode())
+        to_db = (form.get("to") or [""])[0]
+        source = (form.get("ids") or [""])[0]
+        return httpx.Response(200, content=json.dumps({"jobId": f"job-{to_db}|{source}"}))
     if "/idmapping/status/" in path:
         return httpx.Response(200, content=json.dumps({"jobStatus": "FINISHED"}))
     if "/idmapping/results/" in path:
-        return httpx.Response(
-            200, content=json.dumps({"results": [{"from": "7157", "to": "P04637"}]})
+        source = path.rsplit("|", 1)[-1]
+        rows = (
+            [{"from": source, "to": "P04637"}] if source in {"7157", "9606.ENSP00000269305"} else []
         )
+        return httpx.Response(200, content=json.dumps({"results": rows}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 
 

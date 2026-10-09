@@ -15,7 +15,7 @@ from string_weaver.backends.api import StringApiBackend
 CAP = "list_interactions"
 ALL = frozenset(
     {
-        "protein.query",
+        "string.id",
         "protein.interaction.partners",
         "protein.interaction.count",
         "protein.interaction.records",
@@ -31,7 +31,7 @@ def _edge(name, score, **channels):
         "preferredName_A": "TP53",
         "preferredName_B": name,
         "stringId_A": STRING_ID,
-        "stringId_B": f"id_{name}",
+        "stringId_B": f"9606.id_{name}",
         "score": score,
         **channels,
     }
@@ -75,7 +75,7 @@ async def test_extracts_partners_count_records():
     assert v["protein.interaction.records"][0]["partner"] == "MDM2"
     assert v["protein.interaction.records"][0]["channels"] == {"experimental": 0.9}
     # the fan dimension: each partner name as a protein.query (chains into uniprot)
-    assert v["protein.query"] == ["MDM2", "SFN"]
+    assert v["string.id"] == ["9606.id_MDM2", "9606.id_SFN"]
 
 
 async def test_ordering_is_deterministic_score_then_name():
@@ -123,7 +123,7 @@ async def test_resolves_batch_in_two_bulk_calls():
             "preferredName_A": "BRCA1",
             "preferredName_B": "BARD1",
             "stringId_A": "9606.ENSP_BRCA1",
-            "stringId_B": "id_BARD1",
+            "stringId_B": "9606.id_BARD1",
             "score": 0.9,
         },
     ]
@@ -160,3 +160,33 @@ async def test_short_response_does_not_claim_complete_network():
 
 def test_retrieval_limit_changes_fingerprint():
     assert StringApiBackend(limit=1).fingerprint() != StringApiBackend(limit=25).fingerprint()
+
+
+async def test_same_name_distinct_partners_and_duplicate_edges_preserve_ids():
+    rows = [{**_edge("SAME", 0.9), "stringId_B": identity} for identity in ["9606.B", "9606.A"]]
+    values = []
+    for permuted in (rows, list(reversed(rows)), rows + [rows[0]]):
+        record = await _one(_backend(permuted), "P04637")
+        values.append(record.values)
+    assert values[0] == values[1] == values[2]
+    assert values[0]["string.id"] == ["9606.A", "9606.B"]
+    assert values[0]["protein.interaction.count"] == 2
+    assert values[0]["protein.interaction.partners"] == ["SAME", "SAME"]
+    assert [row["taxon_id"] for row in values[0]["protein.interaction.records"]] == [9606, 9606]
+
+
+async def test_conflicting_edge_measurements_have_stable_display_and_full_evidence():
+    rows = [_edge("MDM2", 0.8), _edge("MDM2", 0.9)]
+    records = [
+        (await _one(_backend(permuted), "P04637")).values
+        for permuted in (rows, list(reversed(rows)))
+    ]
+    assert records[0] == records[1]
+    assert records[0]["protein.interaction.count"] == 1
+    edge = records[0]["protein.interaction.records"][0]
+    assert edge["score"] == 0.9 and len(edge["evidence"]) == 2
+
+
+async def test_edge_taxon_mismatch_is_an_error():
+    record = await _one(_backend([{**_edge("MDM2", 0.9), "ncbiTaxonId": 10090}]), "P04637")
+    assert record.error and not record.found

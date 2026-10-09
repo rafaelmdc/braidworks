@@ -140,3 +140,6 @@ Explicit accession-shaped queries only accept that accession, including unreview
 entries; absent accessions and organism mismatches do not fall back to gene or text
 search. ID-mapping outputs are distinct sorted sets across pages; mappings into
 UniProt place reviewed IDs first, then sort within each review class.
+
+`map_to_accession` also accepts taxon-scoped `string.id` through the provider's
+STRING source; it never converts that identity into a free-text protein name.

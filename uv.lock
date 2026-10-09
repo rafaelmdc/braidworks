@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.9"
+version = "0.1.10"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.3"
+version = "0.21.4"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -366,7 +366,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "gtdb-weaver"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "weavers/gtdb_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -563,7 +563,7 @@ wheels = [
 
 [[package]]
 name = "mondo-weaver"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "weavers/mondo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -968,7 +968,7 @@ wheels = [
 
 [[package]]
 name = "string-weaver"
-version = "0.1.9"
+version = "0.1.10"
 source = { editable = "weavers/string_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1015,7 +1015,7 @@ wheels = [
 
 [[package]]
 name = "uniprot-weaver"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "weavers/uniprot_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.4"
+version = "0.6.5"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

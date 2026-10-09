@@ -48,7 +48,7 @@ def test_validator_rejects_corrupted_graph_and_provenance(tmp_path, defect):
         elif defect == "dangling":
             con.execute("INSERT INTO isa VALUES ('MONDO:0000001','MONDO:9999999')")
         elif defect == "xref":
-            con.execute("INSERT INTO xref VALUES ('MESH','D2','MONDO:9999999',1)")
+            con.execute("INSERT INTO xref (source,xref_id,mondo_id,is_equivalent) VALUES ('MESH','D2','MONDO:9999999',1)")
         else:
             con.execute("DELETE FROM meta WHERE key='source_sha256'")
     assert not setup.db_is_valid(path)

@@ -101,7 +101,11 @@ class GtdbLocalBackend(BackendBase):
     def _fetch_taxonomy(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
-            gtdb_taxonomy = taxonomy.lookup(con, query)
+            try:
+                gtdb_taxonomy = taxonomy.lookup(con, query)
+            except taxonomy.AmbiguousClassification as exc:
+                records.append(LookupRecord(query=query, error=str(exc)))
+                continue
             if not gtdb_taxonomy:
                 records.append(LookupRecord(query=query, found=False))  # a miss is normal
                 continue
@@ -119,7 +123,11 @@ class GtdbLocalBackend(BackendBase):
         rootpaths = self._reference_rootpaths(con)
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
-            accession = taxonomy.rep_accession(con, query)
+            try:
+                accession = taxonomy.rep_accession(con, query)
+            except taxonomy.AmbiguousClassification as exc:
+                records.append(LookupRecord(query=query, error=str(exc)))
+                continue
             path = rootpaths.get(accession) if accession else None
             if not path:  # unknown organism, or its species' leaf isn't in the tree
                 records.append(LookupRecord(query=query, found=False))

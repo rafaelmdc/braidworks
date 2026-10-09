@@ -68,7 +68,7 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 ## Source response and failure handling
 
-Taxon-search HTTP 400/404 is a miss. A failed /fetch request for identifiers already returned by the source is an error, including 404. Taxon IDs, page envelope and returned strain records are validated; missing phenotype measurements remain legitimate sparse data. The first-type-strain and scan-cap policies are unchanged and remain separate coverage/selection work.
+Taxon-search HTTP 400/404 is a miss. A failed /fetch request for identifiers already returned by the source is an error, including 404. Taxon IDs, page envelope and returned strain records are validated; missing phenotype measurements remain legitimate sparse data. Stable type-strain identity and bounded scan coverage follow the policy below.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
 
@@ -96,3 +96,17 @@ worker limit. The HTTP hook uses a conservative project default of two requests
 per second across local BacDive clients; this is not a claimed provider quota.
 An executor request budget or `BRAIDWORKS_RATE_LIMITS=bacdive:api=...` overrides
 that default. Concurrency and request pacing are separate controls.
+
+### Species scope and phenotype evidence
+
+The existing lookup accepts an unqualified binomial species name. Genus-only,
+subspecies, strain and qualifier inputs return an error rather than discarding
+their taxonomic scope. Strain records must echo the requested species. Complete
+ID listings are deduplicated/sorted before the bounded detail scan; the smallest
+matching type-strain ID is the deterministic representative.
+
+Request `microbe.trait.records` (group `evidence`) for its strain ID, matched
+taxonomy, explicit type-strain scope, complete source fields/references/units and
+conflicting observations. Scalars are emitted only when observations agree;
+conflicting traits are omitted with a warning and retained evidence. These are
+type-strain observations, not an assertion of species-wide consensus.

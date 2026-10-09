@@ -146,3 +146,19 @@ async def test_live_map_to_accession_unknown_is_no_match():
         "map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession"
     )
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_map_to_accession_from_taxon_scoped_string_id():
+    weaver = build_uniprot_weaver()
+    result = (
+        await weaver.execute_batch(
+            "map_to_accession",
+            [StrandSet.from_strands("string-tp53", [Strand("string.id", "9606.ENSP00000269305")])],
+            requested_outputs=frozenset({"protein.uniprot.accession"}),
+            backend="api",
+        )
+    )[0]
+    assert result.status is WeaveStatus.OK
+    assert "P04637" in next(
+        strand.value for strand in result.strands if strand.type_id == "protein.uniprot.accession"
+    )

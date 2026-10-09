@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.1.9"
+WEAVER_VERSION = "0.1.10"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -44,7 +44,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "protein.interaction.coverage",
                         "protein.interaction.partners",
                         "protein.interaction.records",
-                        "protein.query",
+                        "string.id",
                     }
                 ),
                 output_groups=(
@@ -55,7 +55,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                                 "protein.interaction.count",
                                 "protein.interaction.coverage",
                                 "protein.interaction.partners",
-                                "protein.query",
+                                "string.id",
                             }
                         ),
                     ),
@@ -63,7 +63,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 ),
                 backends=backends,
                 max_batch_size=25,
-                set_outputs=frozenset({"protein.query"}),
+                set_outputs=frozenset({"string.id"}),
             ),
         ),
     )

@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.2.3"
+WEAVER_VERSION = "0.2.4"
 WEAVER_TITLE = (
     "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
 )
@@ -45,6 +45,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
@@ -56,6 +57,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                             {
                                 "disease.mondo.id",
                                 "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
                                 "disease.ontology.parents",
                             }
@@ -73,6 +75,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
@@ -84,6 +87,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                             {
                                 "disease.mondo.id",
                                 "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
                                 "disease.ontology.parents",
                             }
@@ -101,6 +105,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
@@ -112,6 +117,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                             {
                                 "disease.mondo.id",
                                 "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
                                 "disease.ontology.parents",
                             }

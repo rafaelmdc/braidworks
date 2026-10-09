@@ -403,3 +403,25 @@ async def test_idmapping_deduplicates_across_result_pages():
     ) as client:
         result = await UniprotApiBackend(client=client)._idmap("GeneID", "UniProtKB", ["7157"])
     assert result == {"7157": ["A0A087WT22", "P04637", "Q99999"]}
+
+
+async def test_string_ids_use_exact_bulk_mapping_without_name_search():
+    calls = []
+    backend = _idmap_backend(
+        {
+            ("STRING", "UniProtKB-Swiss-Prot"): {
+                "9606.PROTEIN_A": ["P04637"],
+                "10090.PROTEIN_A": ["P02340"],
+            },
+            ("STRING", "UniProtKB"): {"9606.PROTEIN_A": ["P04637"], "10090.PROTEIN_A": ["P02340"]},
+        },
+        run_calls=calls,
+    )
+    records = await backend.fetch(
+        "map_to_accession",
+        [{"string.id": identity} for identity in ["9606.PROTEIN_A", "10090.PROTEIN_A"]],
+        requested_outputs=frozenset({ACC}),
+        groups_to_compute=frozenset(),
+    )
+    assert [record.values[ACC] for record in records] == [["P04637"], ["P02340"]]
+    assert calls == [("STRING", "UniProtKB-Swiss-Prot"), ("STRING", "UniProtKB")]

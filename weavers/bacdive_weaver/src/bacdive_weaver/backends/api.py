@@ -5,8 +5,8 @@ Strategy (MVP — type strain as the species representative):
     up via ``GET /taxon/{genus}/{species}``, which returns a paginated list of
     *strain* BacDive IDs (BacDive is strain-level; there is no species summary).
   * IDs are fetched in batches via ``GET /fetch/{id1;id2;...}`` (semicolon-joined,
-    ≤100 per call) and we **short-circuit on the first record flagged
-    ``type strain == "yes"``** — the nomenclatural representative.
+    ≤100 per call), after sorting the complete distinct ID listing. The smallest
+    ID flagged ``type strain == "yes"`` is the explicit representative policy.
   * That record's phenotype fields are normalized into a ``LookupRecord``.
 
 Cost: there is no "type strains only" filter, so finding the type strain means
@@ -18,7 +18,7 @@ modes that lift this MVP's remaining limitations.
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport``. JSON paths were validated against real records (fetch/24,
 fetch/4409); subfields are a dict for one entry, a list of dicts for many, so every
-read goes through ``_first`` / ``_as_list``.
+read collects all observations through ``_as_list``.
 """
 
 from __future__ import annotations
@@ -75,13 +75,14 @@ def _validated_record(record: Any) -> dict[str, Any]:
         ("Physiology and metabolism", ("oxygen tolerance", "spore formation")),
         ("Culture and growth conditions", ("culture temp", "culture pH")),
     ):
-        for key in keys:
-            value = _section(record, section).get(key)
-            if value is not None and (
-                not isinstance(value, (dict, list))
-                or (isinstance(value, list) and any(not isinstance(row, dict) for row in value))
-            ):
-                raise _InvalidResponse(f"BacDive {key} must be an object or object list")
+        for section_row in _as_list(record.get(section)):
+            for key in keys:
+                value = section_row.get(key)
+                if value is not None and (
+                    not isinstance(value, (dict, list))
+                    or (isinstance(value, list) and any(not isinstance(row, dict) for row in value))
+                ):
+                    raise _InvalidResponse(f"BacDive {key} must be an object or object list")
     return record
 
 
@@ -94,52 +95,84 @@ def _as_list(value: Any) -> list[Any]:
     return [value]
 
 
-def _first(value: Any) -> dict[str, Any]:
-    """First entry of a dict-or-list subfield, as a dict ({} if absent)."""
-    items = _as_list(value)
-    if items and isinstance(items[0], dict):
-        return items[0]
-    return {}
-
-
-def _section(record: dict[str, Any], name: str) -> dict[str, Any]:
-    """A top-level BacDive section, collapsed to a single dict."""
-    return _first(record.get(name))
-
-
-def _optimum(entries: Any, value_key: str) -> str | None:
-    """From a list of growth-condition entries, the value tagged ``type == optimum``."""
-    for entry in _as_list(entries):
-        if isinstance(entry, dict) and entry.get("type") == "optimum":
-            val = entry.get(value_key)
-            if val is not None:
-                return str(val)
-    return None
-
-
 def _is_type_strain(record: dict[str, Any]) -> bool:
-    taxo = _section(record, "Name and taxonomic classification")
-    return str(taxo.get("type strain", "")).strip().lower() == "yes"
+    flags = {
+        str(row.get("type strain", "")).strip().lower()
+        for row in _as_list(record.get("Name and taxonomic classification"))
+    }
+    if "yes" in flags and "no" in flags:
+        raise _InvalidResponse("Conflicting BacDive type-strain flags require review")
+    return "yes" in flags
+
+
+def _canonical_evidence(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _canonical_evidence(item) for key, item in sorted(value.items())}
+    if isinstance(value, list):
+        return sorted(
+            (_canonical_evidence(item) for item in value),
+            key=lambda item: json.dumps(item, sort_keys=True),
+        )
+    return value
+
+
+def _trait_projection(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list[str]]]:
+    """Project only agreeing observations; raw evidence retains units/references."""
+    observations: dict[str, set[str]] = {}
+    fields = (
+        ("Morphology", "cell morphology", "gram stain", "microbe.trait.gram_stain", False),
+        ("Morphology", "cell morphology", "cell shape", "microbe.trait.cell_shape", False),
+        ("Morphology", "cell morphology", "motility", "microbe.trait.motility", False),
+        (
+            "Physiology and metabolism",
+            "spore formation",
+            "spore formation",
+            "microbe.trait.spore_formation",
+            False,
+        ),
+        (
+            "Physiology and metabolism",
+            "spore formation",
+            "ability",
+            "microbe.trait.spore_formation",
+            False,
+        ),
+        (
+            "Physiology and metabolism",
+            "oxygen tolerance",
+            "oxygen tolerance",
+            "microbe.trait.oxygen_tolerance",
+            False,
+        ),
+        (
+            "Culture and growth conditions",
+            "culture temp",
+            "temperature",
+            "microbe.trait.optimum_temp",
+            True,
+        ),
+        ("Culture and growth conditions", "culture pH", "pH", "microbe.trait.optimum_ph", True),
+    )
+    for section, field, key, output, optimum in fields:
+        for section_row in _as_list(record.get(section)):
+            for observation in _as_list(section_row.get(field)):
+                if isinstance(observation, dict) and (
+                    not optimum or observation.get("type") == "optimum"
+                ):
+                    value = observation.get(key)
+                    if value is not None:
+                        observations.setdefault(output, set()).add(str(value))
+    values = {
+        key: next(iter(observed)) for key, observed in observations.items() if len(observed) == 1
+    }
+    conflicts = {
+        key: sorted(observed) for key, observed in sorted(observations.items()) if len(observed) > 1
+    }
+    return values, conflicts
 
 
 def _extract_traits(record: dict[str, Any]) -> dict[str, Any]:
-    """Map one BacDive strain record to produced trait type_ids (omitting absent)."""
-    morphology = _first(_section(record, "Morphology").get("cell morphology"))
-    physiology = _section(record, "Physiology and metabolism")
-    oxygen = _first(physiology.get("oxygen tolerance"))
-    spore = _first(physiology.get("spore formation"))
-    culture = _section(record, "Culture and growth conditions")
-
-    candidates = {
-        "microbe.trait.gram_stain": morphology.get("gram stain"),
-        "microbe.trait.cell_shape": morphology.get("cell shape"),
-        "microbe.trait.motility": morphology.get("motility"),
-        "microbe.trait.spore_formation": spore.get("spore formation") or spore.get("ability"),
-        "microbe.trait.oxygen_tolerance": oxygen.get("oxygen tolerance"),
-        "microbe.trait.optimum_temp": _optimum(culture.get("culture temp"), "temperature"),
-        "microbe.trait.optimum_ph": _optimum(culture.get("culture pH"), "pH"),
-    }
-    return {k: str(v) for k, v in candidates.items() if v is not None}
+    return _trait_projection(record)[0]
 
 
 def _split_name(name: str) -> tuple[str, str | None]:
@@ -226,6 +259,11 @@ class BacdiveApiBackend(BackendBase):
         genus, species = _split_name(name)
         if not genus:
             return LookupRecord(query=query, found=False)
+        if len(name.split()) != 2 or species.lower() in {"sp.", "spp.", "cf.", "aff."}:
+            return LookupRecord(
+                query=query,
+                error="BacDive type-strain lookup requires an unqualified binomial species name; genus/subspecies/strain inputs are unsupported",
+            )
         try:
             type_strain = await self._find_type_strain(genus, species)
         except (
@@ -239,23 +277,44 @@ class BacdiveApiBackend(BackendBase):
 
         if type_strain is None:
             return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_extract_traits(type_strain))
+        values, conflicts = _trait_projection(type_strain)
+        values["microbe.trait.records"] = {
+            "scope": "type_strain_representative",
+            "strain_id": type_strain["_braidworks_strain_id"],
+            "matched_taxonomy": _canonical_evidence(
+                type_strain["Name and taxonomic classification"]
+            ),
+            "conflicts": conflicts,
+            "source": {
+                key: _canonical_evidence(value)
+                for key, value in type_strain.items()
+                if key != "_braidworks_strain_id"
+            },
+        }
+        return LookupRecord(
+            query=query,
+            found=True,
+            values=values,
+            warnings=tuple(
+                f"Conflicting BacDive observations for {key}; scalar omitted: {observed}"
+                for key, observed in conflicts.items()
+            ),
+        )
 
     async def _find_type_strain(self, genus: str, species: str | None) -> dict[str, Any] | None:
-        """Page the taxon ID list, batch-fetch records, return the first type strain."""
-        path = f"/taxon/{genus}/{species}" if species else f"/taxon/{genus}"
-        scanned = 0
+        """Sort the complete ID listing before bounded detail scans; smallest type ID wins."""
+        path = f"/taxon/{genus}/{species}"
         seen_pages: set[str] = set()
+        identifiers: set[int] = set()
         while path:
             if path in seen_pages or len(seen_pages) >= self._max_strains_scanned:
                 raise _InvalidResponse(
-                    f"incomplete strain scan: pagination cycle/budget; scanned={scanned}, "
-                    f"limit={self._max_strains_scanned}, complete=false"
+                    "incomplete strain scan: pagination cycle/budget; complete=false"
                 )
             seen_pages.add(path)
             resp = await self._http().get(path)
             if is_not_found_status(resp.status_code):
-                if scanned or len(seen_pages) > 1:
+                if len(seen_pages) > 1:
                     raise _InvalidResponse("incomplete strain scan: continuation page unavailable")
                 return None
             resp.raise_for_status()
@@ -264,27 +323,33 @@ class BacdiveApiBackend(BackendBase):
                 raise _InvalidResponse("BacDive taxon response must contain an identifier list")
             if page.get("next") is not None and not isinstance(page["next"], str):
                 raise _InvalidResponse("BacDive next page must be a URL string or null")
-            ids = [_strain_id(i) for i in page["results"]]
-            for start in range(0, len(ids), _FETCH_BATCH):
-                remaining = self._max_strains_scanned - scanned
-                chunk = ids[start : start + min(_FETCH_BATCH, remaining)]
-                records = await self._fetch_records(chunk)
-                for strain_id in chunk:
-                    record = records.get(strain_id)
-                    if record is None:
-                        raise _InvalidResponse("incomplete strain scan: requested strain missing")
-                    scanned += 1
-                    if _is_type_strain(record):
-                        return record
-                if scanned >= self._max_strains_scanned and (
-                    start + len(chunk) < len(ids) or page.get("next")
+            identifiers.update(_strain_id(identifier) for identifier in page["results"])
+            path = page.get("next")
+        ids = sorted(identifiers)
+        budgeted = ids[: self._max_strains_scanned]
+        expected = f"{genus} {species}".casefold()
+        for start in range(0, len(budgeted), _FETCH_BATCH):
+            chunk = budgeted[start : start + _FETCH_BATCH]
+            records = await self._fetch_records(chunk)
+            for identifier in chunk:
+                record = records[identifier]
+                taxonomy_rows = _as_list(record["Name and taxonomic classification"])
+                names = {str(row.get("species") or "").strip().casefold() for row in taxonomy_rows}
+                if not names or "" in names:
+                    raise _InvalidResponse("BacDive record lacks matched species identity")
+                if names != {expected} or any(
+                    row.get("genus") and str(row["genus"]).casefold() != genus.casefold()
+                    for row in taxonomy_rows
                 ):
                     raise _InvalidResponse(
-                        f"incomplete strain scan: scanned={scanned}, "
-                        f"limit={self._max_strains_scanned}, complete=false; "
-                        "type-strain absence is not established"
+                        "BacDive record species conflicts with requested binomial"
                     )
-            path = page.get("next")
+                if _is_type_strain(record):
+                    return {**record, "_braidworks_strain_id": identifier}
+        if len(ids) > len(budgeted):
+            raise _InvalidResponse(
+                f"incomplete strain scan: scanned={len(budgeted)}, limit={self._max_strains_scanned}, complete=false; type-strain absence is not established"
+            )
         return None
 
     async def _fetch_records(self, strain_ids: list[int]) -> dict[int, dict[str, Any]]:

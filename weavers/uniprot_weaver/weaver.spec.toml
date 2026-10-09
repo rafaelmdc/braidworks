@@ -15,7 +15,7 @@ db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
 title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
-version = "0.2.6"
+version = "0.2.7"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -92,7 +92,7 @@ always_computed_groups = ["identity"]
 id = "map_to_accession"
 consumes = [
   "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "gene.symbol",
-  "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id",
+  "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id", "string.id",
 ]
 consumes_any = true
 max_batch_size = 1000
@@ -181,3 +181,10 @@ expect = { "protein.uniprot.accession" = "P04637", "protein.gene" = "TP53" }
 capability = "map_to_accession"
 input = { "gene.ncbi.id" = "7157" }
 expect = { "protein.uniprot.accession" = ["P04637"], "protein.uniprot.mapping.count" = 1 }
+
+# Observed supported input: https://rest.uniprot.org/configure/idmapping/fields
+# STRING has from=true/to=true; taxon-scoped TP53 identifier maps to P04637.
+[[golden]]
+capability = "map_to_accession"
+input = { "string.id" = "9606.ENSP00000269305" }
+expect = { "protein.uniprot.accession" = ["P04637"] }

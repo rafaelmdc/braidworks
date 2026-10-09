@@ -25,14 +25,29 @@ async def test_bounded_distinct_scans_keep_bulk_details_and_input_order():
         peak = max(peak, active)
         try:
             await asyncio.sleep(0.01)
+            species_names = {1: "A a", 3: "B b", 5: "C c"}
             if "/taxon/" in request.url.path:
-                return httpx.Response(200, json={"results": [1, 2], "next": None})
+                name = " ".join(request.url.path.split("/")[-2:])
+                first = next(
+                    identifier for identifier, species in species_names.items() if species == name
+                )
+                return httpx.Response(200, json={"results": [first, first + 1], "next": None})
+            identifiers = [
+                int(identifier) for identifier in request.url.path.rsplit("/", 1)[-1].split(";")
+            ]
             return httpx.Response(
                 200,
                 json={
                     "results": {
-                        "1": {"Name and taxonomic classification": {"type strain": "no"}},
-                        "2": {"Name and taxonomic classification": {"type strain": "yes"}},
+                        str(identifier): {
+                            "Name and taxonomic classification": {
+                                "type strain": "yes" if identifier % 2 == 0 else "no",
+                                "species": species_names[
+                                    identifier if identifier % 2 else identifier - 1
+                                ],
+                            }
+                        }
+                        for identifier in identifiers
                     }
                 },
             )
@@ -53,7 +68,7 @@ async def test_bounded_distinct_scans_keep_bulk_details_and_input_order():
             records = await fetch(BacdiveApiBackend(client=client, max_concurrency=2), queries)
     assert peak == 2 and active == 0
     assert len(calls) == len(charges) == 6
-    assert sum(path.endswith("/fetch/1;2") for path in calls) == 3
+    assert sum("/fetch/" in path and ";" in path for path in calls) == 3
     assert [r.query for r in records] == queries and all(r.found for r in records)
     assert records[0] is not records[2]
 

@@ -37,3 +37,9 @@ without existing targets. Release bundle coherence and ingestion memory work
 The #154 findings are implemented and verified in
 [SH-07 implementation and migration evidence](SH-07.implementation.md).
 Related work packages/findings remain separately tracked.
+
+## SH-08 identity implementation
+
+Primary shared identity findings are implemented under #155; see
+[SH-08 implementation and validation](SH-08.implementation.md). Source-specific
+work packages with additional feature proposals remain tracked by their own groups.

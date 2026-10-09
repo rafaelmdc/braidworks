@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.6"
+WEAVER_VERSION = "0.2.7"
 WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -94,6 +94,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "pdb.id",
                         "protein.ensembl.id",
                         "refseq.protein.id",
+                        "string.id",
                     }
                 ),
                 produces=frozenset(

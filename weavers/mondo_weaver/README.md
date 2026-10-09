@@ -78,3 +78,17 @@ Builders and validators check unique term identifiers, names, parent references,
 acyclic `is_a` edges, referential coherence of name/xref tables and recorded counts.
 Invalid graphs are rejected before writing. Schema 1 databases require rebuilding
 to obtain source provenance and the stronger validation gate.
+
+### Identity and mapping evidence
+
+Schema 3 retains mapping relationships and original xref text, including equivalent,
+MONDO-broader/narrower, related, sibling, SKOS exact/close/broad/narrow and unspecified
+relationships. `disease.ontology.mapping.records` exposes observed evidence. Only a
+unique explicit `MONDO:equivalentTo` supplies confident cross-reference identity.
+Other relations, including SKOS exact match, require review; they are preserved in
+the error evidence without silently becoming equivalence. Ambiguous names or
+multiple equivalent IDs also require review. Rebuild schema-2 databases.
+
+The distinction follows the provider's
+[mapping semantics](https://mondo.monarchinitiative.org/pages/faq/) and
+[quality-control relation codes](https://mondo.readthedocs.io/en/latest/editors-guide/quality-control-tests/).

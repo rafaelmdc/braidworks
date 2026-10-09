@@ -3,7 +3,7 @@
 Resolves a GTDB *species name* via ``GET /search/gtdb?search=<name>`` on
 ``gtdb-api.ecogenomic.org`` — the online fallback when the local crosswalk isn't
 built. It is name-based only: a query carrying just an NCBI taxid (no name) is a
-miss here (the local backend is authoritative for taxids). The HTTP client is
+miss here (the local backend serves observed genome classifications for taxids). The HTTP client is
 **injectable** (``client=``) so tests drive it offline with an ``httpx.MockTransport``
 (see ``fixture.py`` / ``build_gtdb_weaver_fixture``).
 
@@ -14,6 +14,7 @@ Worked example: weavers/ncbi_weaver/src/ncbi_weaver/backends/datasets_v2.py
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -99,7 +100,10 @@ class GtdbApiBackend(BackendBase):
                 return LookupRecord(query={"organism.scientific_name": name}, found=False)
             raise
         rows = resp.json().get("rows") or []
-        row = _best_row(rows, name)
+        try:
+            row = _best_row(rows, name)
+        except taxonomy.AmbiguousClassification as exc:
+            return LookupRecord(query={"organism.scientific_name": name}, error=str(exc))
         if row is None:
             return LookupRecord(query={"organism.scientific_name": name}, found=False)
         gtdb_taxonomy = row.get("gtdbTaxonomy") or ""
@@ -122,7 +126,7 @@ def _query_name(query: dict[str, Any]) -> str | None:
 
 
 def _best_row(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
-    """Pick the row best matching ``name``: exact species match wins, then a rep, then first."""
+    """Accept exact species matches only; reject competing classifications."""
     if not rows:
         return None
     target = name.strip().lower()
@@ -134,11 +138,21 @@ def _best_row(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
         return None
 
     exact = [r for r in rows if species_of(r) == target]
-    pool = exact or rows
-    for r in pool:
-        if r.get("isGtdbSpeciesRep"):
-            return r
-    return pool[0]
+    if not exact:
+        return None
+    taxonomies = sorted({r.get("gtdbTaxonomy") or "" for r in exact})
+    if len(taxonomies) > 1:
+        raise taxonomy.AmbiguousClassification(
+            "Conflicting GTDB API classifications require review: " + json.dumps(taxonomies)
+        )
+    return min(
+        exact,
+        key=lambda row: (
+            not bool(row.get("isGtdbSpeciesRep")),
+            str(row.get("accession") or row.get("gid") or ""),
+            json.dumps(row, sort_keys=True),
+        ),
+    )
 
 
 def _relabel(record: LookupRecord, query: dict[str, Any]) -> LookupRecord:

@@ -17,6 +17,7 @@ DB carries only edges. Queries run via ``asyncio.to_thread`` so SQLite never blo
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,10 @@ def _coerce_id(value: Any) -> str | None:
     return None
 
 
+class _IdentityReview(ValueError):
+    """A name or cross-reference cannot establish a unique equivalent identity."""
+
+
 class MondoLocalBackend(BackendBase):
     """local backend reading the built MONDO SQLite."""
 
@@ -101,19 +106,50 @@ class MondoLocalBackend(BackendBase):
             consumed, source = _CAPABILITY_SOURCE[capability_id]
             return [self._lookup_one(con, q, consumed, source) for q in queries]
 
-    def _resolve_mondo(self, con: sqlite3.Connection, source: str, value: str) -> str | None:
+    def _resolve_mondo(
+        self, con: sqlite3.Connection, source: str, value: str
+    ) -> tuple[str | None, list[dict]]:
         if source == "NAME":
-            row = con.execute(
-                "SELECT mondo_id FROM name WHERE norm = ? ORDER BY priority LIMIT 1",
+            rows = con.execute(
+                "SELECT DISTINCT mondo_id, priority FROM name WHERE norm = ? ORDER BY priority, mondo_id",
                 (normalize_name(value),),
-            ).fetchone()
-            return row[0] if row else None
-        row = con.execute(
-            "SELECT mondo_id FROM xref WHERE source = ? AND xref_id = ? "
-            "ORDER BY is_equivalent DESC LIMIT 1",
-            (source, value),
-        ).fetchone()
-        return row[0] if row else None
+            ).fetchall()
+            evidence = [
+                {"mondo_id": row[0], "relation": "label" if row[1] == 0 else "exact_synonym"}
+                for row in rows
+            ]
+            identities = sorted({row[0] for row in rows})
+        else:
+            rows = con.execute(
+                "SELECT mondo_id, relation, evidence FROM xref WHERE source = ? AND xref_id = ? "
+                "ORDER BY mondo_id, relation, evidence",
+                (source, value),
+            ).fetchall()
+            evidence = [
+                {
+                    "mondo_id": row[0],
+                    "relation": row[1],
+                    "source": source,
+                    "xref_id": value,
+                    "evidence": row[2],
+                }
+                for row in rows
+            ]
+            identities = sorted({row[0] for row in rows if row[1] == "equivalent"})
+            for identifier in identities:
+                relations = {row[1] for row in rows if row[0] == identifier}
+                if relations != {"equivalent"}:
+                    raise _IdentityReview(
+                        "Contradictory MONDO mapping relations require review: "
+                        + json.dumps(evidence, sort_keys=True)
+                    )
+        if not evidence:
+            return None, []
+        if len(identities) != 1:
+            raise _IdentityReview(
+                "MONDO mapping requires review: " + json.dumps(evidence, sort_keys=True)
+            )
+        return identities[0], evidence
 
     def _lookup_one(
         self, con: sqlite3.Connection, query: dict[str, Any], consumed: str, source: str
@@ -121,7 +157,10 @@ class MondoLocalBackend(BackendBase):
         xref_id = _coerce_id(query.get(consumed))
         if xref_id is None:
             return LookupRecord(query=query, found=False)
-        mondo_id = self._resolve_mondo(con, source, xref_id)
+        try:
+            mondo_id, evidence = self._resolve_mondo(con, source, xref_id)
+        except _IdentityReview as exc:
+            return LookupRecord(query=query, error=str(exc))
         if mondo_id is None:
             return LookupRecord(query=query, found=False)
 
@@ -144,6 +183,7 @@ class MondoLocalBackend(BackendBase):
             found=True,
             values={
                 MONDO_ID: mondo_id,
+                "disease.ontology.mapping.records": evidence,
                 NAME: name_row[0] if name_row else None,
                 PARENTS: parents,
                 DEPTH: depth,

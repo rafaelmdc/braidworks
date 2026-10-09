@@ -22,3 +22,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #282, #283, #287. SPARQL envelopes and bindings are validated before accumulation. Query/service HTTP 400/404 is an error, never evidence of taxon absence; it is not retried. Taxon absence is a valid empty bindings list. Query literals escape quotes, backslashes and control characters. Each chunk has at most four attempts within a 90-second elapsed budget (including request time and waits); Retry-After seconds/HTTP dates are honored when they fit, otherwise the chunk fails without retrying early. Errors retain the final reason. expected_rank remains a homonym disambiguator: it chooses a uniquely matching rank only among multiple items and does not reject a single item with another rank.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## SH-08 identity implementation
+
+Primary shared identity findings are implemented under #155; see
+[SH-08 implementation and validation](SH-08.implementation.md). Source-specific
+work packages with additional feature proposals remain tracked by their own groups.

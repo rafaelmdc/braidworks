@@ -9,7 +9,7 @@ db_name = "bacdive"
 weaver_id = "bacdive"
 kind = "lookup"
 title = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
-version = "0.1.9"
+version = "0.1.10"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab961"
 attribution = "BacDive (DSMZ)"
@@ -68,6 +68,10 @@ max_batch_size = 50
   [[capability.group]]
   id = "growth"
   outputs = ["microbe.trait.optimum_temp", "microbe.trait.optimum_ph"]
+
+  [[capability.group]]
+  id = "evidence"
+  outputs = ["microbe.trait.records"]
 
 # Golden runs against the deterministic fixture (bacdive_weaver.fixture, an
 # httpx.MockTransport serving canned taxon + fetch responses for the type strain

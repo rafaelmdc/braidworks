@@ -20,7 +20,14 @@ async def fetch(handler):
             return httpx.Response(
                 200,
                 json={
-                    "results": {"1": {"Name and taxonomic classification": {"type strain": "yes"}}}
+                    "results": {
+                        "1": {
+                            "Name and taxonomic classification": {
+                                "type strain": "yes",
+                                "species": "Good species",
+                            }
+                        }
+                    }
                 },
             )
         return handler(request)

@@ -11,20 +11,20 @@ scores and per-evidence-channel subscores.
 
 | Capability | Consumes | Produces |
 |---|---|---|
-| `list_interactions` | `protein.uniprot.accession` | **`protein.query`** (⤜ fan: each partner name), `protein.interaction.partners`, `protein.interaction.count`, `protein.interaction.records` (full edges: partner, combined score, per-channel subscores) |
+| `list_interactions` | `protein.uniprot.accession` | **`string.id`** (⤜ fan: each taxon-scoped partner ID), `protein.interaction.partners`, `protein.interaction.count`, `protein.interaction.records` (full edges: partner, combined score, per-channel subscores) |
 
 STRING maps the accession to its protein + species itself, so this is single-input and
-reachable directly off the hub. It emits each partner name as **`protein.query`** (a set
+reachable directly off the hub. It emits each partner ID as **`string.id`** (a set
 output) — the same key `uniprot_weaver` consumes — so fanning out re-resolves each partner
 back through UniProt: `protein → partners → fan → each partner's UniProt entry`.
 
 ## Deterministic ordering
 
 STRING returns partners ranked by confidence, but ties are not ordered stably. The backend
-imposes a fixed total order — **combined score descending, then partner name ascending** —
+imposes a fixed total order — **combined score descending, then stable STRING partner/source IDs** —
 within the upstream retrieval `limit` (default 25). This limit bounds fetched
 partners, not only the display. `protein.interaction.count` counts observed edges;
-`protein.query` fans out only over retrieved partner names. Neither claims to cover
+`string.id` fans out only over retrieved partner IDs. Neither claims to cover
 the complete interaction network. Request `protein.interaction.coverage` for the
 limit, observed edge/partner counts, count/fan scope and unknown completeness. Every
 successful result also carries a scope warning, including scalar-only requests. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
@@ -93,3 +93,17 @@ a custom/unversioned endpoint is not automatically labelled 12.5. Endpoint
 credentials are not emitted. Retrieval coverage remains explicitly bounded, as
 explained above; pinning a release does not turn a capped partner list into a full
 network. Existing cache entries have different fingerprints and will not be reused.
+
+### Stable partner identities
+
+Fan-out now uses `string.id`, consumed by UniProt `map_to_accession` using its
+STRING mapping source. Replace routes through partner-name `protein.query` with
+this identity bridge. Display names remain in `protein.interaction.partners`;
+distinct IDs sharing a name remain separate. Records include source/partner IDs,
+taxon, score/channel projection and all distinct observed edge evidence. Duplicate
+source/target pairs count once; highest score and canonical evidence choose the
+display row, with score/ID ordering. Conflicting accession-to-STRING mappings or
+taxon identities return an error instead of choosing the first.
+
+Provider input support observed at
+[UniProt mapping configuration](https://rest.uniprot.org/configure/idmapping/fields).

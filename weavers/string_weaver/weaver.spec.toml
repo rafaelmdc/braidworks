@@ -3,15 +3,14 @@
 # A protein's UniProt accession -> its interaction partners with confidence scores.
 # STRING resolves a bare accession to its protein + species itself, so this is a
 # single-input weaver keyed on `protein.uniprot.accession` (produced by uniprot_weaver),
-# making it reachable directly off the protein hub. A terminal weaver: it emits
-# descriptive interaction leaves (partner names, count, full scored edges), not new
-# join keys. Over the free, keyless STRING REST API (string-db.org/api).
+# making it reachable directly off the protein hub. It emits stable STRING partner IDs for
+# downstream mapping, plus descriptive names/count/full scored edges. Over the free, keyless STRING REST API (string-db.org/api).
 [weaver]
 db_name = "string"
 weaver_id = "string"
 kind = "lookup"
 title = "STRING protein-protein interactions (accession -> partners + scores)"
-version = "0.1.9"
+version = "0.1.10"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1000"
 attribution = "STRING (Szklarczyk et al.)"
@@ -41,15 +40,12 @@ source_sample = """
 id = "list_interactions"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
-# protein.query is one→many: each partner's name is a query you can fan out (ExpandPolicy)
-# one child per partner. uniprot.resolve_protein consumes protein.query, so this chains
-# "protein -> retrieved interaction partners -> each resolved protein" end-to-end. The
-# interaction.partners/count/records stay the descriptive edge list + scores.
-set_outputs = ["protein.query"]
+# Fan out stable taxon-scoped STRING IDs; UniProt ID-mapping consumes this bridge.
+set_outputs = ["string.id"]
 
   [[capability.group]]
   id = "summary"
-  outputs = ["protein.query", "protein.interaction.partners", "protein.interaction.count", "protein.interaction.coverage"]
+  outputs = ["string.id", "protein.interaction.partners", "protein.interaction.count", "protein.interaction.coverage"]
 
   [[capability.group]]
   id = "full"
