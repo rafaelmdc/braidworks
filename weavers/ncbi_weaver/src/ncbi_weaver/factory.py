@@ -78,6 +78,7 @@ def build_ncbi_weaver(
     api_key: str | None = None,
     api_client: httpx.AsyncClient | None = None,
     allow_fuzzy: bool = True,
+    api_max_concurrency: int = 4,
 ) -> NCBITaxonWeaver:
     """Build an NCBITaxonWeaver, wiring the local and/or API backends from config.
 
@@ -100,6 +101,7 @@ def build_ncbi_weaver(
             api_key=api_key,
             client=api_client,
             allow_fuzzy=allow_fuzzy,
+            max_concurrency=api_max_concurrency,
         )
     if not backends:
         # No backend selected → the zero-config **introspection** form: wire every
@@ -109,7 +111,7 @@ def build_ncbi_weaver(
         # `weaverkit verify` and entry-point discovery call as `build_ncbi_weaver()`),
         # while an unconfigured backend simply skips at run/golden time.
         backends["local"] = LocalTaxonomyBackend(default_db_path())
-        backends["api"] = DatasetsV2Backend()
+        backends["api"] = DatasetsV2Backend(max_concurrency=api_max_concurrency)
     return NCBITaxonWeaver(backends)
 
 

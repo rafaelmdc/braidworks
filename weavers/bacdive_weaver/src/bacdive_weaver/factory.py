@@ -24,7 +24,11 @@ from bacdive_weaver.weaver import BacdiveWeaver
 
 
 def build_bacdive_weaver(
-    *, client: httpx.AsyncClient | None = None, max_strains_scanned: int = 1000, **_config: Any
+    *,
+    client: httpx.AsyncClient | None = None,
+    max_strains_scanned: int = 1000,
+    max_concurrency: int = 4,
+    **_config: Any,
 ) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
@@ -33,16 +37,32 @@ def build_bacdive_weaver(
     tune it (see ``build_bacdive_weaver_configured``).
     """
     return BacdiveWeaver(
-        {"api": BacdiveApiBackend(client=client, max_strains_scanned=max_strains_scanned)}
+        {
+            "api": BacdiveApiBackend(
+                client=client,
+                max_strains_scanned=max_strains_scanned,
+                max_concurrency=max_concurrency,
+            )
+        }
     )
 
 
 def build_bacdive_weaver_configured(
-    *, client: httpx.AsyncClient | None = None, max_strains_scanned: int = 1000, **_config: Any
+    *,
+    client: httpx.AsyncClient | None = None,
+    max_strains_scanned: int = 1000,
+    max_concurrency: int = 4,
+    **_config: Any,
 ) -> BaseWeaver:
     """Configured builder: inject an HTTP client and/or cap the type-strain scan."""
     return BacdiveWeaver(
-        {"api": BacdiveApiBackend(client=client, max_strains_scanned=max_strains_scanned)}
+        {
+            "api": BacdiveApiBackend(
+                client=client,
+                max_strains_scanned=max_strains_scanned,
+                max_concurrency=max_concurrency,
+            )
+        }
     )
 
 

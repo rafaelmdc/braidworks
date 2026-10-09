@@ -22,3 +22,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 The #151 findings are implemented and verified in
 [SH-04 implementation and migration evidence](SH-04.implementation.md).
 Other work packages in this source plan remain separately tracked.
+
+## Shared batching/acquisition work implemented
+
+The #153 findings are implemented and verified in
+[SH-06 implementation and configuration evidence](SH-06.implementation.md).
+Other work packages/findings in this source plan remain separately tracked.

@@ -30,24 +30,26 @@ import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
+from gmrepo_weaver.acquisition import AcquisitionPolicy, _AcquisitionClient, _map_workers
+
 API_BASE = "https://gmrepo.humangut.info/api"
 NAMESPACE = "gmrepo"
 DB_FILENAME = "gmrepo.sqlite"
 _FETCH_TIMEOUT = 180  # seconds
-_FETCH_WORKERS = 8  # concurrent per-taxon requests (network-bound; polite to the API)
+_FETCH_WORKERS = 4  # bounded tasks; request spacing is enforced separately
 # GMrepo sits behind Cloudflare; send a UA so the POST is not 403'd (cf. agora_weaver).
 _USER_AGENT = "braidworks/gmrepo_weaver (+https://github.com/rafaelmdc/braidworks)"
 
 _CONSENT_MESSAGE = (
     "gmrepo_weaver's local DB is not built yet ({path}).\n"
     "It is small (a few MB fetched from the keyless GMrepo API; the build walks every gut "
-    "taxon so it takes ~10-20 minutes), but acquisition is opt-in. To build it:\n"
+    "taxon using thousands of requests; duration depends on the acquisition policy), "
+    "but acquisition is opt-in. To build it:\n"
     "  - call build_gmrepo_weaver_configured(auto_setup=True), or\n"
     "  - set BRAIDWORKS_AUTO_DOWNLOAD=1, or\n"
     "  - call gmrepo_weaver.setup.ensure_gmrepo_db(auto=True).\n"
@@ -450,6 +452,8 @@ def _fetch_profiles(
     max_runs: int,
     progress: ProgressCallback | None = None,
     coverage: dict[str, Any] | None = None,
+    *,
+    workers: int = _FETCH_WORKERS,
 ) -> list[dict]:
     """Fetch per-run species/genus profiles for the given phenotypes (bounded by ``max_runs``).
 
@@ -457,6 +461,7 @@ def _fetch_profiles(
     (network-bound). Expected failures are recorded separately from empty profiles.
     """
     profiles: list[dict] = []
+    fetched_runs: dict[str, tuple[list[dict], dict[str, Any]]] = {}
     for mesh_id in dict.fromkeys(mesh_ids):
         scope: dict[str, Any] = {
             "requested": True,
@@ -480,6 +485,9 @@ def _fetch_profiles(
         scope["requested_runs"] = len(run_ids)
 
         def _one(run_id: str, mesh_id: str = mesh_id):
+            if run_id in fetched_runs:
+                rows, outcome = fetched_runs[run_id]
+                return [{**row, "mesh_id": mesh_id} for row in rows], dict(outcome)
             try:
                 rows = _run_profile_rows(
                     mesh_id, run_id, post(_PROFILE_ENDPOINT, {"run_id": run_id})
@@ -488,14 +496,14 @@ def _fetch_profiles(
             except _EXPECTED_FAILURES as exc:
                 return [], {"status": "failed", "error": str(exc)}
 
-        with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
-            futures = {pool.submit(_one, rid): rid for rid in run_ids}
-            for done, future in enumerate(as_completed(futures), start=1):
-                if progress:
-                    progress(done, len(run_ids), f"{mesh_id} run {futures[future]}")
-                rows, outcome = future.result()
-                scope["runs"][futures[future]] = outcome
-                profiles.extend(rows)
+        for done, (run_id, (rows, outcome)) in enumerate(
+            _map_workers(run_ids, _one, workers=workers), start=1
+        ):
+            if progress:
+                progress(done, len(run_ids), f"{mesh_id} run {run_id}")
+            fetched_runs[run_id] = (rows, outcome)
+            scope["runs"][run_id] = outcome
+            profiles.extend(rows)
         statuses = [outcome["status"] for outcome in scope["runs"].values()]
         scope.update(
             {
@@ -513,6 +521,8 @@ def _fetch_tables(
     post: Callable[[str, dict[str, Any]], Any],
     progress: ProgressCallback | None = None,
     coverage: dict[str, Any] | None = None,
+    *,
+    workers: int = _FETCH_WORKERS,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """Fetch (overview, associations, phenotypes) from GMrepo via ``post`` (injectable).
 
@@ -547,16 +557,16 @@ def _fetch_tables(
             return [], {"status": "failed", "complete": False, "error": str(exc)}
 
     associations: list[dict] = []
-    total = len(overview)
-    with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
-        futures = {pool.submit(_one, t["ncbi_taxon_id"]): t["ncbi_taxon_id"] for t in overview}
-        for done, future in enumerate(as_completed(futures), start=1):
-            if progress:
-                progress(done, total, f"taxon {futures[future]}")
-            rows, outcome = future.result()
-            if coverage is not None:
-                coverage[str(futures[future])] = outcome
-            associations.extend(rows)
+    distinct = list(dict.fromkeys(t["ncbi_taxon_id"] for t in overview))
+    total = len(distinct)
+    for done, (taxid, (rows, outcome)) in enumerate(
+        _map_workers(distinct, _one, workers=workers), start=1
+    ):
+        if progress:
+            progress(done, total, f"taxon {taxid}")
+        if coverage is not None:
+            coverage[str(taxid)] = outcome
+        associations.extend(rows)
     return overview, associations, phenotypes
 
 
@@ -567,17 +577,27 @@ def _build(
     progress: ProgressCallback | None = None,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    acquisition_policy: AcquisitionPolicy | None = None,
 ) -> None:
     """Fetch the GMrepo tables and write the SQLite at ``target`` (``post`` injectable).
 
     If ``profile_phenotypes`` (mesh ids) are given, also crawl up to ``profile_max_runs``
     per-run profiles for each — the per-sample substrate for the co-occurrence layer.
     """
+    policy = acquisition_policy or AcquisitionPolicy()
+    client = _AcquisitionClient(post, policy)
     acquisition: dict[str, Any] = {"scope": "gmrepo-api", "taxa": {}, "profiles": {}}
-    overview, associations, phenotypes = _fetch_tables(post, progress, acquisition["taxa"])
+    overview, associations, phenotypes = _fetch_tables(
+        client, progress, acquisition["taxa"], workers=policy.workers
+    )
     sample_profiles = (
         _fetch_profiles(
-            post, profile_phenotypes, profile_max_runs, progress, acquisition["profiles"]
+            client,
+            profile_phenotypes,
+            profile_max_runs,
+            progress,
+            acquisition["profiles"],
+            workers=policy.workers,
         )
         if profile_phenotypes
         else []
@@ -587,6 +607,7 @@ def _build(
             acquisition["profiles"][phenotype["mesh_id"]]["cohort_total_runs"] = phenotype[
                 "valid_runs"
             ]
+    acquisition["requests"] = client.coverage()
     write_db(
         target,
         overview=overview,
@@ -605,6 +626,7 @@ def ensure_gmrepo_db(
     progress: ProgressCallback | None = None,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    acquisition_policy: AcquisitionPolicy | None = None,
 ) -> Path:
     """Ensure a valid local GMrepo SQLite exists, building it if consented.
 
@@ -624,6 +646,7 @@ def ensure_gmrepo_db(
             progress=progress,
             profile_phenotypes=profile_phenotypes,
             profile_max_runs=profile_max_runs,
+            acquisition_policy=acquisition_policy,
         )
 
     return ensure_local_db(

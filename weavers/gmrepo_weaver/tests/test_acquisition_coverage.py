@@ -6,6 +6,9 @@ import urllib.error
 
 import pytest
 from gmrepo_weaver import setup
+from gmrepo_weaver.acquisition import AcquisitionPolicy
+
+FAST_POLICY = AcquisitionPolicy(requests_per_second=100000, max_attempts=1)
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
 
 
@@ -44,7 +47,7 @@ async def fetch(backend, capability, query):
 
 async def test_failed_taxon_does_not_become_zero_associations(tmp_path):
     path = tmp_path / "source.sqlite"
-    setup._build(path, post=post)
+    setup._build(path, post=post, acquisition_policy=FAST_POLICY)
     backend = GmrepoLocalBackend(path)
     failed = await fetch(backend, "gmrepo.list_abundances", {"ncbi.taxon.id": 1})
     assert failed.error and not failed.found
@@ -61,7 +64,13 @@ async def test_failed_taxon_does_not_become_zero_associations(tmp_path):
 
 async def test_profiles_report_selected_empty_failed_and_real_denominators(tmp_path):
     path = tmp_path / "source.sqlite"
-    setup._build(path, post=post, profile_phenotypes=["M"], profile_max_runs=3)
+    setup._build(
+        path,
+        post=post,
+        profile_phenotypes=["M"],
+        profile_max_runs=3,
+        acquisition_policy=FAST_POLICY,
+    )
     record = await fetch(
         GmrepoLocalBackend(path), "gmrepo.sample_profiles", {"disease.mesh.id": "M"}
     )
@@ -86,7 +95,13 @@ async def test_successful_empty_profile_is_known_empty(tmp_path):
         return post(endpoint, body)
 
     path = tmp_path / "source.sqlite"
-    setup._build(path, post=empty_post, profile_phenotypes=["M"], profile_max_runs=3)
+    setup._build(
+        path,
+        post=empty_post,
+        profile_phenotypes=["M"],
+        profile_max_runs=3,
+        acquisition_policy=FAST_POLICY,
+    )
     record = await fetch(
         GmrepoLocalBackend(path), "gmrepo.sample_profiles", {"disease.mesh.id": "M"}
     )

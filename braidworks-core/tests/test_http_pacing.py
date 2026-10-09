@@ -142,3 +142,56 @@ def test_local_budget_survives_separate_event_loops(monkeypatch):
     for _ in range(3):
         asyncio.run(query())
     assert arrivals == [0, 0.5, 1]
+
+
+@pytest.mark.parametrize(
+    "configured,expected", [(None, [0, 0.5, 1]), ("fixture=4", [0, 0.25, 0.5])]
+)
+async def test_source_default_rate_and_explicit_environment_override(
+    monkeypatch, configured, expected
+):
+    from braidworks.core import http_pacing
+
+    clock = [0.0]
+    monkeypatch.setattr(http_pacing, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(http_pacing, "_local", {})
+    monkeypatch.delenv("BRAIDWORKS_RATE_LIMITS", raising=False)
+    if configured:
+        monkeypatch.setenv("BRAIDWORKS_RATE_LIMITS", configured)
+
+    async def advance(seconds):
+        clock[0] += seconds
+
+    monkeypatch.setattr(http_pacing.asyncio, "sleep", advance)
+    arrivals = []
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: arrivals.append(clock[0]) or httpx.Response(200))
+    ) as client:
+        paced = PacedHTTPClient(client, "fixture", default_rate=2)
+        for _ in range(3):
+            await paced.get("https://source/page")
+    assert arrivals == expected
+
+
+async def test_executor_budget_takes_precedence_over_source_default(monkeypatch):
+    monkeypatch.delenv("BRAIDWORKS_RATE_LIMITS", raising=False)
+    charges = []
+
+    async def charge(*target):
+        charges.append(target)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200))
+    ) as client:
+        with request_budget(charge):
+            for _ in range(3):
+                await PacedHTTPClient(client, "fixture", default_rate=0.001).get(
+                    "https://source/page"
+                )
+    assert charges == [("fixture", "api")] * 3
+
+
+@pytest.mark.parametrize("rate", [True, 0, -1, float("nan"), float("inf")])
+def test_invalid_source_default_rate_is_rejected(rate):
+    with pytest.raises(ValueError, match="default request rate"):
+        PacedHTTPClient(None, "fixture", default_rate=rate)

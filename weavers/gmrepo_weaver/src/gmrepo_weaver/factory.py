@@ -17,6 +17,7 @@ from typing import Any
 
 from braidworks.core import BaseWeaver
 
+from gmrepo_weaver.acquisition import AcquisitionPolicy
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
 from gmrepo_weaver.setup import ensure_gmrepo_db
 from gmrepo_weaver.weaver import GmrepoWeaver
@@ -39,6 +40,7 @@ def build_gmrepo_weaver_configured(
     refresh: bool = False,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    acquisition_policy: AcquisitionPolicy | None = None,
     **_config: Any,
 ) -> BaseWeaver:
     """Configured builder for real use: ensures the local DB, then wires the backend.
@@ -57,6 +59,7 @@ def build_gmrepo_weaver_configured(
         refresh=refresh,
         profile_phenotypes=profile_phenotypes,
         profile_max_runs=profile_max_runs,
+        acquisition_policy=acquisition_policy,
     )
     return GmrepoWeaver({"local": GmrepoLocalBackend(path)})
 

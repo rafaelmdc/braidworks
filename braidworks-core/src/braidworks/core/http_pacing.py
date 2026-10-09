@@ -16,7 +16,9 @@ from braidworks.core.exceptions import BackendConfigurationError
 
 RequestBudget = Callable[[str, str], Awaitable[None]]
 _budget: ContextVar[RequestBudget | None] = ContextVar("braidworks_request_budget", default=None)
-_target: ContextVar[tuple[str, str] | None] = ContextVar("braidworks_http_target", default=None)
+_target: ContextVar[tuple[str, str, float | None] | None] = ContextVar(
+    "braidworks_http_target", default=None
+)
 
 
 def parse_rate_limits(spec: str | None) -> dict[str, float]:
@@ -94,17 +96,19 @@ async def _pace_request(request: Any) -> None:
         return
     budget = _budget.get()
     if budget is not None:
-        await budget(*target)
+        await budget(*target[:2])
         return
     try:
         limits = parse_rate_limits(os.environ.get("BRAIDWORKS_RATE_LIMITS"))
     except ValueError as exc:
         raise BackendConfigurationError(str(exc)) from exc
-    rate = rate_for(limits, *target)
+    rate = rate_for(limits, *target[:2])
+    if rate is None:
+        rate = target[2]
     if rate is None:
         return
     with _local_lock:
-        bucket = _local.setdefault(target, _LocalBucket(rate, monotonic()))
+        bucket = _local.setdefault(target[:2], _LocalBucket(rate, monotonic()))
     await bucket.acquire(rate)
 
 
@@ -113,12 +117,28 @@ class PacedHTTPClient:
 
     Redirects and authentication round trips invoke the client's request hook again.
     Connections, existing hooks, transports and ownership remain with the original
-    client. Reusing one injected client across different weavers does not double-charge.
+    client. ``default_rate`` applies when no executor budget or environment rate is
+    configured; those explicit policies take precedence. Reusing one injected client
+    across different weavers does not double-charge.
     """
 
-    def __init__(self, client: Any, weaver_id: str, backend: str = "api"):
+    def __init__(
+        self,
+        client: Any,
+        weaver_id: str,
+        backend: str = "api",
+        *,
+        default_rate: float | None = None,
+    ):
+        if default_rate is not None and (
+            isinstance(default_rate, bool)
+            or not isinstance(default_rate, (int, float))
+            or not math.isfinite(default_rate)
+            or default_rate <= 0
+        ):
+            raise ValueError("default request rate must be finite and positive")
         self._client = client
-        self._target = (weaver_id, backend)
+        self._target = (weaver_id, backend, default_rate)
         hooks = client.event_hooks.setdefault("request", [])
         if _pace_request not in hooks:
             hooks.append(_pace_request)

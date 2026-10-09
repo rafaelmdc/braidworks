@@ -22,14 +22,15 @@ The HTTP client is injectable (``client=``) so tests drive it with an
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 import httpx
-from braidworks.core import LookupRecord, format_exc, is_not_found_status
+from braidworks.core import LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
 from rapidfuzz import fuzz
 
@@ -151,7 +152,10 @@ def _report_payload(resp: httpx.Response, kind: str) -> dict[str, Any]:
 
 
 async def _enrich(
-    fetcher: Callable[[str], Awaitable[list[dict[str, Any]]]], identifiers: list[str]
+    fetcher: Callable[[str], Awaitable[list[dict[str, Any]]]],
+    identifiers: list[str],
+    *,
+    limit: int = 4,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
     """Isolate expected enrichment failures; propagate cancellation and coding faults."""
 
@@ -161,7 +165,7 @@ async def _enrich(
         except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
             return identifier, None, format_exc(exc)
 
-    fetched = await asyncio.gather(*(one(identifier) for identifier in identifiers))
+    fetched = await map_bounded(list(dict.fromkeys(identifiers)), one, limit=limit)
     return (
         {key: value for key, value, error in fetched if error is None},
         {key: error for key, value, error in fetched if error is not None},
@@ -240,6 +244,7 @@ class DatasetsV2Backend:
         client: httpx.AsyncClient | None = None,
         allow_fuzzy: bool = True,
         max_report_pages: int = 1000,
+        max_concurrency: int = 4,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
@@ -253,6 +258,13 @@ class DatasetsV2Backend:
         ):
             raise ValueError("max_report_pages must be a positive integer")
         self._max_report_pages = max_report_pages
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency < 1
+        ):
+            raise ValueError("max_concurrency must be a positive integer")
+        self._max_concurrency = max_concurrency
 
     def is_configured(self) -> bool:
         """The API backend is always usable; it needs no local data."""
@@ -269,7 +281,7 @@ class DatasetsV2Backend:
         if self._client is None:
             headers = {"api-key": self._api_key} if self._api_key else {}
             self._client = httpx.AsyncClient(base_url=self._base_url, headers=headers, timeout=30.0)
-        return PacedHTTPClient(self._client, "ncbi")
+        return PacedHTTPClient(self._client, "ncbi", default_rate=5.0)
 
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
@@ -285,6 +297,7 @@ class DatasetsV2Backend:
             self._base_url,
         )
         matches: dict[str, TaxonMatch] = {}
+        fuzzy_queries: list[str] = []
         distinct = sorted({query for query in queries if query.strip()})
         for q in queries:
             if not q.strip():
@@ -326,34 +339,40 @@ class DatasetsV2Backend:
                 if node is not None:
                     matches[q] = self._node_match(q, node, match_type="exact")
                 elif capability_id == vocab.RESOLVE_NAME and self._allow_fuzzy:
-                    try:
-                        matches[q] = await self._fuzzy_match(q)
-                    except httpx.HTTPStatusError as exc:
-                        status = (
-                            TaxonMatchStatus.NO_MATCH
-                            if is_not_found_status(exc.response.status_code)
-                            else TaxonMatchStatus.ERROR
-                        )
-                        matches[q] = TaxonMatch(
-                            query=q,
-                            status=status,
-                            error=None
-                            if status is TaxonMatchStatus.NO_MATCH
-                            else f"NCBI suggestion error: {format_exc(exc)}",
-                        )
-                    except (
-                        httpx.HTTPError,
-                        json.JSONDecodeError,
-                        UnicodeDecodeError,
-                        _InvalidResponse,
-                    ) as exc:
-                        matches[q] = TaxonMatch(
-                            query=q,
-                            status=TaxonMatchStatus.ERROR,
-                            error=f"NCBI suggestion error: {format_exc(exc)}",
-                        )
+                    fuzzy_queries.append(q)
                 else:
                     matches[q] = TaxonMatch(query=q, status=TaxonMatchStatus.NO_MATCH)
+
+        async def fuzzy_one(q):
+            try:
+                return await self._fuzzy_match(q)
+            except httpx.HTTPStatusError as exc:
+                status = (
+                    TaxonMatchStatus.NO_MATCH
+                    if is_not_found_status(exc.response.status_code)
+                    else TaxonMatchStatus.ERROR
+                )
+                return TaxonMatch(
+                    query=q,
+                    status=status,
+                    error=None
+                    if status is TaxonMatchStatus.NO_MATCH
+                    else f"NCBI suggestion error: {format_exc(exc)}",
+                )
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                return TaxonMatch(
+                    query=q,
+                    status=TaxonMatchStatus.ERROR,
+                    error=f"NCBI suggestion error: {format_exc(exc)}",
+                )
+
+        fuzzy_matches = await map_bounded(fuzzy_queries, fuzzy_one, limit=self._max_concurrency)
+        matches.update(zip(fuzzy_queries, fuzzy_matches))
 
         if need_lineage:
             await self._attach_lineage(matches)
@@ -361,28 +380,44 @@ class DatasetsV2Backend:
         # Preserve input order (queries may contain duplicates → reuse the match).
         return [matches[q] for q in queries]
 
+    async def _distinct_queries(
+        self,
+        queries: list[dict[str, Any]],
+        key: str,
+        operation: Callable[[dict[str, Any]], Awaitable[LookupRecord]],
+    ) -> list[LookupRecord]:
+        """Share source work by normalized identifier; preserve each caller's query."""
+        keys = [str(q.get(key, "") or "").strip() for q in queries]
+        representatives = dict(zip(keys, queries))
+        distinct = list(representatives)
+
+        async def one(identifier):
+            return await operation(representatives[identifier])
+
+        records = await map_bounded(distinct, one, limit=self._max_concurrency)
+        by_key = dict(zip(distinct, records))
+        return [
+            replace(by_key[key], query=q, values=deepcopy(by_key[key].values))
+            for key, q in zip(keys, queries)
+        ]
+
     async def list_children(
         self, queries: list[dict[str, Any]], *, rank: str
     ) -> list[LookupRecord]:
         """One taxid -> its descendant taxids of ``rank`` (walks the subtree)."""
         rank_norm = (rank or "species").strip().lower()
-        records: list[LookupRecord] = []
-        for q in queries:
+
+        async def one(q):
             taxid = str(q.get(vocab.TAXON_ID, "") or "").strip()
             if not taxid:
-                records.append(LookupRecord(query=q, found=False))
-                continue
+                return LookupRecord(query=q, found=False)
             try:
                 children = await self._fetch_children(taxid, rank_norm)
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
+                    return LookupRecord(query=q, found=False)
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
-                )
-                continue
+                return LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
             except (
                 httpx.HTTPError,
                 json.JSONDecodeError,
@@ -390,27 +425,21 @@ class DatasetsV2Backend:
                 _InvalidResponse,
             ) as exc:
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
-                )
-                continue
+                return LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
             if not children:
-                records.append(LookupRecord(query=q, found=False))
-                continue
+                return LookupRecord(query=q, found=False)
             ids = [c["taxid"] for c in children]
-            records.append(
-                LookupRecord(
-                    query=q,
-                    found=True,
-                    values={
-                        # The fan dimension: every distinct descendant taxid (uncapped).
-                        vocab.TAXON_ID: ids,
-                        vocab.CHILDREN_COUNT: len(ids),
-                        vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
-                    },
-                )
+            return LookupRecord(
+                query=q,
+                found=True,
+                values={
+                    vocab.TAXON_ID: ids,
+                    vocab.CHILDREN_COUNT: len(ids),
+                    vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
+                },
             )
-        return records
+
+        return await self._distinct_queries(queries, vocab.TAXON_ID, one)
 
     async def _fetch_children(self, taxid: str, rank: str) -> list[dict[str, Any]]:
         """Walk dataset_report?children=true, keep distinct descendants of ``rank``."""
@@ -462,49 +491,37 @@ class DatasetsV2Backend:
             params["filters.has_annotation"] = "true"
         if assembly_level:
             params["filters.assembly_level"] = assembly_level
-        records: list[LookupRecord] = []
-        for q in queries:
+
+        async def one(q):
             taxid = str(q.get(vocab.TAXON_ID, "") or "").strip()
             if not taxid:
-                records.append(LookupRecord(query=q, found=False))
-                continue
+                return LookupRecord(query=q, found=False)
             try:
                 assemblies = await self._fetch_genomes(taxid, params)
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
-                )
-                continue
+                    return LookupRecord(query=q, found=False)
+                return LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
             except (
                 httpx.HTTPError,
                 json.JSONDecodeError,
                 UnicodeDecodeError,
                 _InvalidResponse,
             ) as exc:
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
-                )
-                continue
+                return LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
             if not assemblies:
-                records.append(LookupRecord(query=q, found=False))
-                continue
-            records.append(
-                LookupRecord(
-                    query=q,
-                    found=True,
-                    values={
-                        vocab.GENOME_ACCESSION: [
-                            a["accession"] for a in assemblies
-                        ],  # the fan dimension
-                        vocab.ASSEMBLY_COUNT: len(assemblies),
-                        vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
-                    },
-                )
+                return LookupRecord(query=q, found=False)
+            return LookupRecord(
+                query=q,
+                found=True,
+                values={
+                    vocab.GENOME_ACCESSION: [a["accession"] for a in assemblies],
+                    vocab.ASSEMBLY_COUNT: len(assemblies),
+                    vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
+                },
             )
-        return records
+
+        return await self._distinct_queries(queries, vocab.TAXON_ID, one)
 
     async def _fetch_genomes(self, taxid: str, base_params: dict) -> list[dict[str, Any]]:
         """Paginate genome/taxon/{taxid}/dataset_report into compact assembly rows."""
@@ -575,7 +592,9 @@ class DatasetsV2Backend:
         enrichment_errors: dict[str, str] = {}
         if want_sequences:
             found = [a for a in distinct if a in reports]
-            sequences, enrichment_errors = await _enrich(self._fetch_sequences, found)
+            sequences, enrichment_errors = await _enrich(
+                self._fetch_sequences, found, limit=self._max_concurrency
+            )
 
         records: list[LookupRecord] = []
         for q, acc in zip(queries, accs):
@@ -829,7 +848,9 @@ class DatasetsV2Backend:
         enrichment_errors: dict[str, str] = {}
         if want_products:
             found = [g for g in distinct if g in summaries]
-            products, enrichment_errors = await _enrich(self._fetch_gene_products, found)
+            products, enrichment_errors = await _enrich(
+                self._fetch_gene_products, found, limit=self._max_concurrency
+            )
 
         records: list[LookupRecord] = []
         for q, gid in zip(queries, gids):
@@ -925,47 +946,37 @@ class DatasetsV2Backend:
         self, queries: list[dict[str, Any]], *, taxon_filter: str | None = None
     ) -> list[LookupRecord]:
         """One gene id -> its ortholog gene ids across taxa (excludes the query gene)."""
-        records: list[LookupRecord] = []
-        for q in queries:
+
+        async def one(q):
             gid = str(q.get(vocab.GENE_ID, "") or "").strip()
             if not gid:
-                records.append(LookupRecord(query=q, found=False))
-                continue
+                return LookupRecord(query=q, found=False)
             try:
                 orthologs = await self._fetch_orthologs(gid, taxon_filter)
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
-                    records.append(LookupRecord(query=q, found=False))
-                    continue
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
-                )
-                continue
+                    return LookupRecord(query=q, found=False)
+                return LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
             except (
                 httpx.HTTPError,
                 json.JSONDecodeError,
                 UnicodeDecodeError,
                 _InvalidResponse,
             ) as exc:
-                records.append(
-                    LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
-                )
-                continue
+                return LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
             if not orthologs:
-                records.append(LookupRecord(query=q, found=False))
-                continue
-            records.append(
-                LookupRecord(
-                    query=q,
-                    found=True,
-                    values={
-                        vocab.GENE_ID: [o["gene_id"] for o in orthologs],  # the fan dimension
-                        vocab.ORTHOLOG_COUNT: len(orthologs),
-                        vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
-                    },
-                )
+                return LookupRecord(query=q, found=False)
+            return LookupRecord(
+                query=q,
+                found=True,
+                values={
+                    vocab.GENE_ID: [o["gene_id"] for o in orthologs],
+                    vocab.ORTHOLOG_COUNT: len(orthologs),
+                    vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
+                },
             )
-        return records
+
+        return await self._distinct_queries(queries, vocab.GENE_ID, one)
 
     async def _fetch_orthologs(self, gid: str, taxon_filter: str | None) -> list[dict[str, Any]]:
         """Paginate gene/id/{id}/orthologs, excluding the query gene; distinct + ordered."""

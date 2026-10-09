@@ -82,3 +82,17 @@ Missing strain records and broken continuation pages also return errors. The
 backend fetches only the remaining budget, and its fingerprint includes the
 source URL and budget so differently scoped scans cannot share cache entries.
 Traits describe the selected type strain, not all strains of the species.
+
+## Bounded API batches
+
+Distinct scientific-name inputs share one scan per name within each batch. Up to
+four independent taxonomy/pagination chains run concurrently, while each chain
+retains the chunked `/fetch` endpoint (at most 100 strain IDs per request) and its
+scan budget. Results preserve each original query and position, including duplicate
+inputs; cancellation joins the workers before returning.
+
+Both builders accept `max_concurrency=2` to select a different positive integer
+worker limit. The HTTP hook uses a conservative project default of two requests
+per second across local BacDive clients; this is not a claimed provider quota.
+An executor request budget or `BRAIDWORKS_RATE_LIMITS=bacdive:api=...` overrides
+that default. Concurrency and request pacing are separate controls.

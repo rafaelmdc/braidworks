@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import json
 import logging
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("bacdive_weaver.api")
@@ -161,6 +163,7 @@ class BacdiveApiBackend(BackendBase):
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
         max_strains_scanned: int = 1000,
+        max_concurrency: int = 4,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
@@ -171,6 +174,13 @@ class BacdiveApiBackend(BackendBase):
         ):
             raise ValueError("max_strains_scanned must be a positive integer")
         self._max_strains_scanned = max_strains_scanned
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency < 1
+        ):
+            raise ValueError("max_concurrency must be a positive integer")
+        self._max_concurrency = max_concurrency
 
     def is_configured(self) -> bool:
         """The BacDive v2 API needs no key or local data, so it's always usable."""
@@ -185,7 +195,7 @@ class BacdiveApiBackend(BackendBase):
     def _http(self) -> PacedHTTPClient:
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return PacedHTTPClient(self._client, "bacdive")
+        return PacedHTTPClient(self._client, "bacdive", default_rate=2.0)
 
     async def fetch(
         self,
@@ -198,11 +208,19 @@ class BacdiveApiBackend(BackendBase):
     ) -> list[LookupRecord]:
         # The whole record arrives in one fetch, so we compute every trait and let
         # the shared mapper filter to requested_outputs; no per-group gating needed.
-        records: list[LookupRecord] = []
-        for query in queries:
-            name = str(query.get("organism.scientific_name", "")).strip()
-            records.append(await self._resolve_one(query, name))
-        return records
+        names = [str(q.get("organism.scientific_name", "")).strip() for q in queries]
+        representatives = dict(zip(names, queries))
+        distinct = list(representatives)
+
+        async def one(name):
+            return await self._resolve_one(representatives[name], name)
+
+        records = await map_bounded(distinct, one, limit=self._max_concurrency)
+        by_name = dict(zip(distinct, records))
+        return [
+            replace(by_name[name], query=q, values=deepcopy(by_name[name].values))
+            for name, q in zip(names, queries)
+        ]
 
     async def _resolve_one(self, query: dict[str, Any], name: str) -> LookupRecord:
         genus, species = _split_name(name)

@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.8"
+version = "0.1.9"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.1"
+version = "0.21.2"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -342,7 +342,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -587,7 +587,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.2.7"
+version = "0.2.8"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },

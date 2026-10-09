@@ -90,3 +90,43 @@ coverage; an unrequested phenotype returns an availability error.
 Caller-supplied tables without an acquisition manifest expose unknown coverage
 for retained rows, rather than asserting a complete cohort. Existing schema 1
 databases must be rebuilt. Programming exceptions in acquisition workers propagate.
+
+## Polite acquisition policy
+
+Summary acquisition and optional profile acquisition are separate stages with
+separate coverage sections. They share one request policy for the complete build:
+
+```python
+from gmrepo_weaver.acquisition import AcquisitionPolicy
+from gmrepo_weaver.setup import ensure_gmrepo_db
+
+ensure_gmrepo_db(
+    auto=True,
+    profile_phenotypes=["D003924"],
+    profile_max_runs=20,
+    acquisition_policy=AcquisitionPolicy(
+        workers=4, requests_per_second=2.0,
+        max_attempts=3, max_calls=10000,
+        retry_backoff=1.0, max_retry_delay=60.0,
+    ),
+)
+```
+
+The configured builder accepts the same `acquisition_policy`. These defaults are
+project policy, not a published GMrepo quota. At most `workers` jobs are queued;
+all catalog, summary, listing, profile and retry calls share the rate gate and
+`max_calls` budget. Only transport/time-out failures and HTTP 429/500/502/503/504
+are retried, with exponential backoff. `Retry-After` is respected; a provider delay
+beyond `max_retry_delay` returns a failed acquisition rather than retrying early.
+Individual HTTP attempts still have the existing 180-second timeout.
+
+Duplicate taxon IDs, requested phenotypes and profiles shared between phenotypes
+reuse source work during this build. `meta.acquisition.requests` records policy,
+actual attempt count, retry count and budget exhaustion. Failed per-resource work
+retains incomplete coverage. Failure to acquire a required catalog aborts the
+staged build and preserves an existing database.
+
+The stages remain stored together in one atomically replaced SQLite database.
+Adding profiles still requires a complete `refresh=True` rebuild; incremental
+extension, persistent acquisition checkpoints and resume remain deferred. Existing
+schema 2 databases remain readable; refresh to obtain the request-policy metadata.

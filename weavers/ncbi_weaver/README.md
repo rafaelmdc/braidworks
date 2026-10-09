@@ -136,3 +136,20 @@ product and sequence records no longer silently stop at 200. Their `.coverage`
 outputs report the returned/observed record counts and successful report completion.
 List capabilities retain their 200-row display cap with uncapped identifier sets
 and true distinct counts, after every source page has been acquired.
+
+## Bounded API batches
+
+Exact taxonomy, gene-symbol and entity-summary lookups retain their chunked bulk
+requests. Children, genome lists, ortholog lists, fuzzy fallbacks and requested
+sequence/product enrichment use at most four workers per batch by default.
+Duplicate identifiers share source work within the batch, and returned records
+retain their original input positions and queries. Cancellation joins the workers
+before returning; expected upstream failures remain per-input error values.
+
+Configure `build_ncbi_weaver(enable_api=True, api_max_concurrency=2)` or
+`DatasetsV2Backend(max_concurrency=2)` to change the positive integer worker limit.
+Pagination remains sequential within each identifier and is bounded separately by
+`max_report_pages`. All requests pass through the pacing hook: its default is five
+requests per second, following the [NCBI Datasets default limit](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
+An executor request budget or `BRAIDWORKS_RATE_LIMITS=ncbi:api=...` overrides that
+default. Concurrency is not a requests-per-second limit.

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
+from gmrepo_weaver.acquisition import AcquisitionPolicy, _AcquisitionClient
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
 from gmrepo_weaver.setup import (
     _fetch_profiles,
@@ -36,12 +37,13 @@ _BACTEROIDES = 816  # a genus present in every gut-metagenome phenotype set
 
 
 async def test_live_minibuild_and_resolve(tmp_path: Path):
-    overview = _overview_rows(_post("get_all_gut_microbes", {}))
+    post = _AcquisitionClient(_post, AcquisitionPolicy(max_calls=12))
+    overview = _overview_rows(post("get_all_gut_microbes", {}))
     assert len(overview) > 100, "expected a large gut-microbe universe"
     assert any(r["ncbi_taxon_id"] == _BACTEROIDES for r in overview)
 
     picked = [r for r in overview if r["ncbi_taxon_id"] == _BACTEROIDES]
-    payload = _post(
+    payload = post(
         "getPhenotypesAndAbundanceSummaryOfAAssociatedTaxon",
         {"ncbi_taxon_id": _BACTEROIDES},
     )
@@ -75,6 +77,8 @@ async def test_live_minibuild_and_resolve(tmp_path: Path):
         row.get("abundance_median") is not None for row in sm["microbe.abundance.associations"]
     )
 
+    assert 2 <= post.calls <= 12 and not post.budget_exhausted
+
     # a taxid GMrepo does not track resolves to NO_MATCH, not an error
     miss = await weaver.execute_batch(
         "gmrepo.list_abundances",
@@ -89,11 +93,13 @@ async def test_live_minibuild_and_resolve(tmp_path: Path):
 async def test_live_sample_profiles_minibuild(tmp_path: Path):
     """The per-run sample-profile path: list runs for a phenotype + fetch a few profiles."""
     mesh_id = "D003924"  # Crohn Disease — a well-sampled phenotype
-    run_ids = _fetch_run_ids(_post, mesh_id, max_runs=3)
+    post = _AcquisitionClient(_post, AcquisitionPolicy(max_calls=12))
+    run_ids = _fetch_run_ids(post, mesh_id, max_runs=3)
     assert run_ids, "expected the *Limit run-listing route to return run ids"
 
-    profiles = _fetch_profiles(_post, [mesh_id], max_runs=3)
+    profiles = _fetch_profiles(post, [mesh_id], max_runs=3)
     assert profiles, "expected per-run taxonomic profiles with relative abundances"
+    assert 3 <= post.calls <= 12 and not post.budget_exhausted
     assert all(0.0 <= p["relative_abundance"] <= 100.0 for p in profiles)
     assert len({p["run_id"] for p in profiles}) >= 1
 
