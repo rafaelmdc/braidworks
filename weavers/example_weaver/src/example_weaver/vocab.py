@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "example"
-WEAVER_VERSION = "1.0.5"
+WEAVER_VERSION = "1.0.6"
 WEAVER_TITLE = "Example reference weaver (taxid -> traits, from a tiny CSV)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

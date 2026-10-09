@@ -57,7 +57,11 @@ separate input identities. Request `microbe.trait.optimum_temp` for the growth g
 Temperatures are string values in degrees Celsius. These five illustrative rows
 are teaching data, not a strain-specific, experimentally validated trait database.
 
-The backend privately caches the bundled CSV, maps columns to output keys, and
+The backend loads and privately caches the bundled CSV; a private pure parser
+validates exactly three unique headers, row width and unique positive taxids
+(normalized to decimal IDs). Column order is flexible; blank trait cells mean
+absent values. A malformed source yields per-input errors rather than false misses.
+The backend maps columns to output keys and
 copies each row into the result so callers cannot mutate cached data. Neither
 group requires expensive work, so it computes both fields and lets the core mapper
 filter requested outputs. Change `DATA_VERSION` whenever the bundled data changes.

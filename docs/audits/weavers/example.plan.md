@@ -34,4 +34,5 @@ Source-specific remaining proposals and capabilities stay separately tracked.
 
 Source work packages WP-EXAMPLE-01 (remaining usage documentation), 03 and 04 are
 implemented; see [source implementation evidence](SRC-EXAMPLE.implementation.md).
-WP-EXAMPLE-05 remains an optional scope decision under #179.
+WP-EXAMPLE-05 was explicitly approved and implemented under #179; the private
+parser defines malformed-schema and duplicate-identity rules without public API growth.
