@@ -12,27 +12,55 @@ from braidworks.core import Strand, StrandSet, WeaveStatus
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 GENES = {
-    ("TP53", "9606"): {"gene_id": 7157, "symbol": "TP53", "description": "tumor protein p53",
-                       "type": "PROTEIN_CODING", "taxname": "Homo sapiens", "chromosomes": ["17"],
-                       "transcript_count": 26, "protein_count": 18},
-    ("Trp53", "10090"): {"gene_id": 22059, "symbol": "Trp53",
-                         "description": "transformation related protein 53",
-                         "type": "PROTEIN_CODING", "taxname": "Mus musculus"},
-    ("Tp53", "10116"): {"gene_id": 24842, "symbol": "Tp53", "description": "tumor protein p53",
-                        "type": "PROTEIN_CODING", "taxname": "Rattus norvegicus"},
+    ("TP53", "9606"): {
+        "gene_id": 7157,
+        "symbol": "TP53",
+        "description": "tumor protein p53",
+        "type": "PROTEIN_CODING",
+        "taxname": "Homo sapiens",
+        "chromosomes": ["17"],
+        "transcript_count": 26,
+        "protein_count": 18,
+    },
+    ("Trp53", "10090"): {
+        "gene_id": 22059,
+        "symbol": "Trp53",
+        "description": "transformation related protein 53",
+        "type": "PROTEIN_CODING",
+        "taxname": "Mus musculus",
+    },
+    ("Tp53", "10116"): {
+        "gene_id": 24842,
+        "symbol": "Tp53",
+        "description": "tumor protein p53",
+        "type": "PROTEIN_CODING",
+        "taxname": "Rattus norvegicus",
+    },
 }
 ORTHOLOGS = {
     "7157": [
-        {"gene_id": 7157, "symbol": "TP53", "taxname": "Homo sapiens"},   # the query gene itself
+        {"gene_id": 7157, "symbol": "TP53", "taxname": "Homo sapiens"},  # the query gene itself
         {"gene_id": 22059, "symbol": "Trp53", "taxname": "Mus musculus"},
         {"gene_id": 24842, "symbol": "Tp53", "taxname": "Rattus norvegicus"},
     ],
 }
 PRODUCTS = {
-    "7157": [{"product": {"transcripts": [
-        {"accession_version": "NM_000546.6", "name": "variant 1",
-         "protein": {"accession_version": "NP_000537.3", "name": "cellular tumor antigen p53"}},
-    ]}}],
+    "7157": [
+        {
+            "product": {
+                "transcripts": [
+                    {
+                        "accession_version": "NM_000546.6",
+                        "name": "variant 1",
+                        "protein": {
+                            "accession_version": "NP_000537.3",
+                            "name": "cellular tumor antigen p53",
+                        },
+                    },
+                ]
+            }
+        }
+    ],
 }
 
 
@@ -44,16 +72,16 @@ def _handler(calls):
             rest = path.split("/gene/symbol/", 1)[1]
             symbols = rest.split("/")[0].split(",")
             taxon = rest.split("/taxon/")[1].split("/")[0]
-            reports = [{"gene": g, "query": [sym]}
-                       for sym in symbols if (g := GENES.get((sym, taxon)))]
+            reports = [
+                {"gene": g, "query": [sym]} for sym in symbols if (g := GENES.get((sym, taxon)))
+            ]
             return httpx.Response(200, json={"reports": reports})
         if "/gene/id/" in path and path.endswith("/dataset_report"):
             ids = path.split("/gene/id/", 1)[1].split("/")[0].split(",")
             reports = [
                 {"gene": g}
                 for gid in ids
-                if (g := next((v for (s, t), v in GENES.items()
-                               if str(v["gene_id"]) == gid), None))
+                if (g := next((v for (s, t), v in GENES.items() if str(v["gene_id"]) == gid), None))
             ]
             return httpx.Response(200, json={"reports": reports})
         if "/gene/id/" in path and path.endswith("/orthologs"):
@@ -67,6 +95,7 @@ def _handler(calls):
             gid = path.split("/gene/id/", 1)[1].split("/")[0]
             return httpx.Response(200, json={"reports": PRODUCTS.get(gid, [])})
         return httpx.Response(404, json={})
+
     return handler
 
 
@@ -80,8 +109,11 @@ def _weaver(calls):
 async def _run(cap, type_id, value, outputs, *, params=None, calls=None):
     calls = calls if calls is not None else []
     out = await _weaver(calls).execute_batch(
-        cap, [StrandSet.from_strands("e", [Strand(type_id, value)])],
-        requested_outputs=frozenset(outputs), backend="api", params=params,
+        cap,
+        [StrandSet.from_strands("e", [Strand(type_id, value)])],
+        requested_outputs=frozenset(outputs),
+        backend="api",
+        params=params,
     )
     return out[0], calls
 
@@ -99,8 +131,11 @@ async def test_resolve_gene_batches_many_into_one_request():
     calls: list[str] = []
     sets = [StrandSet.from_strands(s, [Strand(vocab.PROTEIN_QUERY, s)]) for s in ("TP53", "NOPE")]
     out = await _weaver(calls).execute_batch(
-        vocab.RESOLVE_GENE, sets, requested_outputs=frozenset(vocab.RESOLVE_GENE_OUTPUTS),
-        backend="api", params={"taxon": "9606"},
+        vocab.RESOLVE_GENE,
+        sets,
+        requested_outputs=frozenset(vocab.RESOLVE_GENE_OUTPUTS),
+        backend="api",
+        params={"taxon": "9606"},
     )
     assert out[0].status is WeaveStatus.OK and out[1].status is WeaveStatus.NO_MATCH
     assert {s.type_id: s.value for s in out[0].strands}[vocab.GENE_ID] == 7157
@@ -123,8 +158,9 @@ async def test_describe_gene_summary_skips_products_call():
 
 
 async def test_describe_gene_products_group_fetches_products():
-    r, calls = await _run(vocab.DESCRIBE_GENE, vocab.GENE_ID, "7157",
-                          frozenset({vocab.GENE_PRODUCTS}))
+    r, calls = await _run(
+        vocab.DESCRIBE_GENE, vocab.GENE_ID, "7157", frozenset({vocab.GENE_PRODUCTS})
+    )
     sm = {s.type_id: s.value for s in r.strands}
     assert sm[vocab.GENE_PRODUCTS][0]["protein"] == "NP_000537.3"
     assert any(p.endswith("/product_report") for p in calls)
@@ -133,11 +169,14 @@ async def test_describe_gene_products_group_fetches_products():
 async def test_describe_gene_batches_many_into_one_request():
     """N gene ids -> a single multi-id dataset_report request, not one per gene."""
     calls: list[str] = []
-    sets = [StrandSet.from_strands(str(g), [Strand(vocab.GENE_ID, g)])
-            for g in (7157, 22059, 24842)]
+    sets = [
+        StrandSet.from_strands(str(g), [Strand(vocab.GENE_ID, g)]) for g in (7157, 22059, 24842)
+    ]
     out = await _weaver(calls).execute_batch(
-        vocab.DESCRIBE_GENE, sets,
-        requested_outputs=frozenset(vocab.GENE_SUMMARY_GROUP), backend="api",
+        vocab.DESCRIBE_GENE,
+        sets,
+        requested_outputs=frozenset(vocab.GENE_SUMMARY_GROUP),
+        backend="api",
     )
     assert [r.status for r in out] == [WeaveStatus.OK] * 3
     names = [{s.type_id: s.value for s in r.strands}[vocab.GENE_NAME] for r in out]
@@ -155,8 +194,13 @@ async def test_list_orthologs_excludes_query_gene():
 
 
 async def test_list_orthologs_taxon_filter():
-    r, _ = await _run(vocab.LIST_ORTHOLOGS, vocab.GENE_ID, "7157", vocab.ORTHOLOG_OUTPUTS,
-                      params={"taxon_filter": "10090"})
+    r, _ = await _run(
+        vocab.LIST_ORTHOLOGS,
+        vocab.GENE_ID,
+        "7157",
+        vocab.ORTHOLOG_OUTPUTS,
+        params={"taxon_filter": "10090"},
+    )
     sm = {s.type_id: s.value for s in r.strands}
     assert sm[vocab.GENE_ID] == [22059]  # mouse only
 
@@ -177,3 +221,26 @@ async def test_orthologs_fan_out_each_drillable():
     assert len(result.resolved) == 2
     assert {ss.get(vocab.GENE_ID).value for ss in result.resolved} == {22059, 24842}
     assert all(ss.parent_id == "tp53" for ss in result.resolved)
+
+
+async def test_multiple_echoed_gene_ids_require_review_independently_of_order():
+    from ncbi_weaver.backends.datasets_v2 import DatasetsV2Backend
+
+    genes = [{"gene_id": gid, "symbol": "alias"} for gid in [20, 10]]
+    errors = []
+    queries = [{vocab.PROTEIN_QUERY: "alias"}] * 2
+    for rows in (genes, list(reversed(genes)), genes + [genes[0]]):
+        async with httpx.AsyncClient(
+            base_url="https://api.test",
+            transport=httpx.MockTransport(
+                lambda request, rows=rows: httpx.Response(
+                    200, json={"reports": [{"gene": gene, "query": ["alias"]} for gene in rows]}
+                )
+            ),
+        ) as client:
+            records = await DatasetsV2Backend(client=client).resolve_gene(queries, taxon="9606")
+        assert [record.query for record in records] == queries
+        assert all(record.error and not record.found for record in records)
+        errors.append(records[0].error)
+    assert errors[0] == errors[1] == errors[2]
+    assert '"gene_id": 10' in errors[0] and '"gene_id": 20' in errors[0]

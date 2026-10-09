@@ -64,16 +64,21 @@ async def test_single_match_is_unaffected_by_rank():
 
 # --- transient-failure resilience (WDQS flakiness) ------------------------------------
 
+
 def _good_for(name: str) -> dict:
     """A minimal valid SPARQL-results payload resolving `name` to one English item."""
     return {
         "head": {"vars": ["sname", "item", "article", "vn"]},
-        "results": {"bindings": [{
-            "sname": {"type": "literal", "value": name},
-            "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q1"},
-            "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Some_title"},
-            "vn": {"xml:lang": "en", "type": "literal", "value": "some name"},
-        }]},
+        "results": {
+            "bindings": [
+                {
+                    "sname": {"type": "literal", "value": name},
+                    "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q1"},
+                    "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Some_title"},
+                    "vn": {"xml:lang": "en", "type": "literal", "value": "some name"},
+                }
+            ]
+        },
     }
 
 
@@ -102,8 +107,11 @@ async def test_retries_recover_from_a_bad_json_response(monkeypatch):
     def handler(request):
         calls["n"] += 1
         if calls["n"] <= 2:
-            return httpx.Response(200, content=b'{"results": {"bindings": [ {',
-                                  headers={"content-type": "application/sparql-results+json"})
+            return httpx.Response(
+                200,
+                content=b'{"results": {"bindings": [ {',
+                headers={"content-type": "application/sparql-results+json"},
+            )
         return httpx.Response(200, json=_good_for("Ursus arctos"))
 
     recs = await _fetch(_backend(handler), "Ursus arctos")
@@ -137,3 +145,35 @@ async def test_chunk_failure_is_scoped_to_its_own_names(monkeypatch):
 
 async def _noop():
     return None
+
+
+async def test_aliases_are_distinct_sorted_and_duplicate_queries_preserved():
+    base = _good_for("Species")["results"]["bindings"][0]
+    bindings = [{**base, "vn": {"value": name}} for name in ["zebra", "ant", "zebra"]]
+    results = []
+    for rows in (bindings, list(reversed(bindings))):
+        backend = _backend(
+            lambda request, rows=rows: httpx.Response(200, json={"results": {"bindings": rows}})
+        )
+        records = await _fetch(backend, "Species", "Species")
+        assert [record.query for record in records] == [{"organism.scientific_name": "Species"}] * 2
+        assert records[0].values == records[1].values
+        results.append(records[0].values)
+    assert results[0] == results[1]
+    assert results[0]["organism.vernacular_names"] == ["ant", "zebra"]
+
+
+async def test_conflicting_scalar_bindings_fail_independently_of_order():
+    base = _good_for("Species")["results"]["bindings"][0]
+    bindings = [base, {**base, "article": {"value": "https://en.wikipedia.org/wiki/Other_title"}}]
+    errors = []
+    for rows in (bindings, list(reversed(bindings))):
+        backend = _backend(
+            lambda request, rows=rows: httpx.Response(200, json={"results": {"bindings": rows}})
+        )
+        record = (await _fetch(backend, "Species"))[0]
+        assert record.status is MatchStatus.ERROR
+        assert not record.values
+        errors.append(record.error)
+    assert errors[0] == errors[1]
+    assert "Other_title" in errors[0] and "Some_title" in errors[0]

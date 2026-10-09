@@ -352,9 +352,9 @@ class UniprotApiBackend(BackendBase):
             if from_db in errors:
                 records.append(LookupRecord(query=q, error=errors[from_db]))
                 continue
-            rev = reviewed[from_db].get(src, [])
+            rev = sorted(set(reviewed[from_db].get(src, [])))
             rev_set = set(rev)
-            ordered = rev + [a for a in resolved[from_db].get(src, []) if a not in rev_set]
+            ordered = rev + sorted(set(resolved[from_db].get(src, [])) - rev_set)
             records.append(_mapping_record(q, mapping.ACCESSION, ordered, reviewed_set=rev_set))
         return records
 
@@ -405,7 +405,7 @@ class UniprotApiBackend(BackendBase):
         """Run one ID-mapping job (``from_db`` -> ``to_db``); return source id -> target ids.
 
         Submit the whole batch, poll until the job finishes, then page the results,
-        preserving the API's order so per-source target order is stable.
+        deduplicating and sorting targets across every result page.
         """
         if not ids:
             return {}
@@ -459,7 +459,7 @@ class UniprotApiBackend(BackendBase):
                 out.setdefault(src, []).append(target)
             url = _next_link(resp)  # follow paginated results; absolute URL, no params
             req_params = None
-        return out
+        return {src: sorted(set(targets)) for src, targets in out.items()}
 
     async def _await_job(self, http: httpx.AsyncClient, job: str) -> None:
         """Poll ``/idmapping/status/{job}`` until the job finishes (or raise on failure)."""
@@ -501,13 +501,27 @@ class UniprotApiBackend(BackendBase):
         return LookupRecord(query=query, found=True, values=_extract(entry))
 
     async def _best_hit(self, term: str, organism: str | None = None) -> dict[str, Any] | None:
-        """Deterministic hit: prefer reviewed, escalate accession -> gene -> free text.
+        """Preserve explicit accessions; otherwise prefer reviewed gene/text hits.
 
-        The first variant that returns any results wins; ``_pick`` then chooses the
-        representative from that page by a fixed total order (so the result is stable).
-        ``organism`` (an NCBI taxid) constrains the species — without it a bare gene
-        symbol resolves to whichever species UniProt ranks first (e.g. TP53 -> hamster).
+        Non-accession queries retain their representative policy. ``organism``
+        constrains the species, including when an explicit accession was supplied.
         """
+        accession = term.upper()
+        if _ACCESSION.fullmatch(accession):
+            # An explicit identity must never fall through to a different gene or
+            # free-text hit, even when it is unreviewed or absent in this species.
+            results = await self._search(
+                f"accession:{accession}", reviewed=False, organism=organism
+            )
+            exact = [
+                row
+                for row in results
+                if row["primaryAccession"].upper() == accession
+                and (
+                    not organism or str((row.get("organism") or {}).get("taxonId")) == str(organism)
+                )
+            ]
+            return _pick(exact) if exact else None
         for reviewed in (True, False):
             for base in _query_variants(term):
                 results = await self._search(base, reviewed=reviewed, organism=organism)

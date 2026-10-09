@@ -342,7 +342,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -587,7 +587,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.2.8"
+version = "0.2.9"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -633,7 +633,7 @@ wheels = [
 
 [[package]]
 name = "pdbe-weaver"
-version = "0.1.10"
+version = "0.1.11"
 source = { editable = "weavers/pdbe_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -814,7 +814,7 @@ wheels = [
 
 [[package]]
 name = "quickgo-weaver"
-version = "0.1.10"
+version = "0.1.11"
 source = { editable = "weavers/quickgo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1015,7 +1015,7 @@ wheels = [
 
 [[package]]
 name = "uniprot-weaver"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "weavers/uniprot_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1084,7 +1084,7 @@ provides-extras = ["test", "serve"]
 
 [[package]]
 name = "wikidata-weaver"
-version = "0.1.6"
+version = "0.1.7"
 source = { editable = "weavers/wikidata_weaver" }
 dependencies = [
     { name = "braidworks-core" },

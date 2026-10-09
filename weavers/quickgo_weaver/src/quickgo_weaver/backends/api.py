@@ -374,9 +374,7 @@ class QuickgoApiBackend(BackendBase):
             expected = set(accession.upper().split(","))
             for row in page_rows:
                 echo = row.get("geneProductId")
-                if (echo is not None and echo.rsplit(":", 1)[-1].upper() not in expected) or (
-                    len(expected) > 1 and not echo
-                ):
+                if not echo or echo.rsplit(":", 1)[-1].upper() not in expected:
                     raise _InvalidResponse(
                         "QuickGO response cannot be correlated to requested accession"
                     )

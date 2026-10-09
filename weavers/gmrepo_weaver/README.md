@@ -73,7 +73,7 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 ## Acquisition coverage and sample denominators
 
-Database schema 2 stores a JSON acquisition manifest in `meta.acquisition`. Each
+Database schema 3 stores a JSON acquisition manifest in `meta.acquisition`. Each
 taxon records a successful, empty or failed association request, including error
 details. A failed taxon lookup returns `ERROR`; it cannot masquerade as zero
 associations. `microbe.abundance.coverage` and the full record expose this scope.
@@ -129,4 +129,12 @@ staged build and preserves an existing database.
 The stages remain stored together in one atomically replaced SQLite database.
 Adding profiles still requires a complete `refresh=True` rebuild; incremental
 extension, persistent acquisition checkpoints and resume remain deferred. Existing
-schema 2 databases remain readable; refresh to obtain the request-policy metadata.
+schema 1/2 databases require a refresh to obtain enforced logical identities and request-policy metadata.
+
+### Logical row identities
+
+Schema 3 keys overview rows by taxon/rank, associations by taxon/rank/phenotype,
+and sample profiles by phenotype/run/taxon/rank. Repeated identical rows collapse
+before storage and content hashing. Contradictory rows for the same key abort the
+build, preserving an existing database during staged acquisition. Rebuild older
+databases with `refresh=True`; rank completes all relevant lookup ordering.

@@ -135,3 +135,8 @@ fetches all 12 supported target databases, even when combined with one target.
 The count is the number of returned mappings across those targets, not the number
 of distinct biological entities. A successful empty summary emits count `0` and
 records `[]`; a failed target job makes the summary an error.
+
+Explicit accession-shaped queries only accept that accession, including unreviewed
+entries; absent accessions and organism mismatches do not fall back to gene or text
+search. ID-mapping outputs are distinct sorted sets across pages; mappings into
+UniProt place reviewed IDs first, then sort within each review class.

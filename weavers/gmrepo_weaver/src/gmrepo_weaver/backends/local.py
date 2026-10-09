@@ -126,7 +126,7 @@ class GmrepoLocalBackend(BackendBase):
             }
             for r in con.execute(
                 "SELECT run_id, ncbi_taxon_id, rank, relative_abundance "
-                "FROM sample_profile WHERE mesh_id = ? ORDER BY run_id, ncbi_taxon_id",
+                "FROM sample_profile WHERE mesh_id = ? ORDER BY run_id, ncbi_taxon_id, rank",
                 (mesh_id,),
             ).fetchall()
         ]
@@ -189,7 +189,7 @@ class GmrepoLocalBackend(BackendBase):
             for r in con.execute(
                 "SELECT rank, mesh_id, phenotype_name, samples, phenotype_valid_runs, "
                 "prevalence_percentage, abundance_mean, abundance_median, abundance_sd "
-                "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id",
+                "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id, rank",
                 (taxid,),
             ).fetchall()
         ]

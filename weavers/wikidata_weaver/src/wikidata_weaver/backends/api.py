@@ -275,6 +275,23 @@ class WikidataApiBackend(BackendBase):
                 )
                 continue
             items = rows_by_name.get(name, {})
+            conflicts = {
+                qid: fields["conflicts"]
+                for qid, fields in sorted(items.items())
+                if fields.get("conflicts")
+            }
+            if conflicts:
+                records.append(
+                    ResolverRecord(
+                        query=query,
+                        status=MatchStatus.ERROR,
+                        values={},
+                        candidates=[],
+                        error="Conflicting Wikidata bindings: "
+                        + json.dumps(conflicts, sort_keys=True),
+                    )
+                )
+                continue
             # Homonym across nomenclature codes ("Pholidota" = orchid genus + pangolin
             # order): if the caller told us the expected rank and exactly one candidate
             # has it, collapse to that one — a single RESOLVED instead of AMBIGUOUS.
@@ -319,29 +336,35 @@ class WikidataApiBackend(BackendBase):
 def _accumulate(
     payload: dict[str, Any], rows_by_name: dict[str, dict[str, dict[str, Any]]]
 ) -> None:
-    """Fold SPARQL bindings into name -> qid -> {title, sitelinks, vernaculars, rank}."""
+    """Collect all observed values before projecting a scalar; never choose first."""
     for binding in payload.get("results", {}).get("bindings", []):
-        sname = binding.get("sname", {}).get("value")
-        item = binding.get("item", {}).get("value")
-        if not sname or not item or sname not in rows_by_name:
-            continue
-        qid = _qid(item)
+        sname = binding["sname"]["value"]
+        qid = _qid(binding["item"]["value"])
         fields = rows_by_name[sname].setdefault(
-            qid, {"title": None, "sitelinks": None, "vernaculars": [], "rank": None}
+            qid,
+            {
+                "title": None,
+                "sitelinks": None,
+                "vernaculars": [],
+                "rank": None,
+                "observed": {},
+                "conflicts": {},
+            },
         )
-        if "article" in binding and fields["title"] is None:
-            fields["title"] = _title(binding["article"]["value"])
-        if "sitelinks" in binding and fields["sitelinks"] is None:
-            try:
-                fields["sitelinks"] = int(binding["sitelinks"]["value"])
-            except (ValueError, KeyError):
-                pass
-        if "rankLabel" in binding and fields["rank"] is None:
-            fields["rank"] = binding["rankLabel"]["value"]
+        for source, target, transform in (
+            ("article", "title", _title),
+            ("sitelinks", "sitelinks", int),
+            ("rankLabel", "rank", str),
+        ):
+            if source in binding:
+                observed = fields["observed"].setdefault(target, set())
+                observed.add(transform(binding[source]["value"]))
+                ordered = sorted(observed)
+                fields[target] = ordered[0] if len(ordered) == 1 else None
+                if len(ordered) > 1:
+                    fields["conflicts"][target] = ordered
         if "vn" in binding:
-            vn = binding["vn"]["value"]
-            if vn not in fields["vernaculars"]:
-                fields["vernaculars"].append(vn)
+            fields["vernaculars"] = sorted(set(fields["vernaculars"]) | {binding["vn"]["value"]})
 
 
 def _values(qid: str, fields: dict[str, Any]) -> dict[str, Any]:

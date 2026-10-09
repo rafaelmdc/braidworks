@@ -97,3 +97,8 @@ hash the effective endpoint (an injected client's base URL takes precedence) and
 limit, so changing either cannot reuse an incompatible cached display. Endpoint
 credentials are not printed. This identifies configuration; an unversioned live
 service is not a frozen data snapshot.
+
+Equal coverage/resolution ties choose the smallest chain ID, then canonical source
+evidence. Each `structure.pdb.records` entry includes the selected `chain_id`, its
+original `source` row, and distinct sorted `chains` records. This preserves observed
+methods and sequence ranges without adding a new capability or output group.

@@ -153,3 +153,8 @@ Pagination remains sequential within each identifier and is bounded separately b
 requests per second, following the [NCBI Datasets default limit](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
 An executor request budget or `BRAIDWORKS_RATE_LIMITS=ncbi:api=...` overrides that
 default. Concurrency is not a requests-per-second limit.
+
+When one gene symbol echoes multiple distinct gene reports, the API returns an
+error with sorted candidate evidence for review instead of selecting the first.
+Fuzzy taxonomy suggestions are deduplicated by taxon ID and ordered by score,
+then taxon ID/name/rank; ambiguous suggestions retain their review requirement.

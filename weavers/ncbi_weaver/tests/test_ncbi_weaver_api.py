@@ -146,3 +146,23 @@ async def test_api_batch_preserves_order():
 
 def test_api_fingerprint():
     assert _weaver().backend_fingerprint("api") == "datasets-v2:pages=1000"
+
+
+async def test_fuzzy_taxon_ties_and_duplicate_suggestions_are_deterministic():
+    from ncbi_weaver.backends.datasets_v2 import DatasetsV2Backend
+
+    suggestions = [
+        {"tax_id": taxid, "sci_name": "Same name", "rank": "species"} for taxid in [20, 10]
+    ]
+    results = []
+    for rows in (suggestions, list(reversed(suggestions)), suggestions + [suggestions[0]]):
+        async with httpx.AsyncClient(
+            base_url="https://api.test",
+            transport=httpx.MockTransport(
+                lambda request, rows=rows: httpx.Response(200, json={"sci_name_and_ids": rows})
+            ),
+        ) as client:
+            result = await DatasetsV2Backend(client=client)._fuzzy_match("Same name")
+        assert result.requires_review
+        results.append([candidate.taxid for candidate in result.candidates])
+    assert results == [[10, 20]] * 3

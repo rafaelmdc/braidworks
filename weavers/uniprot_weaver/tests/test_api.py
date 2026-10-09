@@ -327,3 +327,79 @@ async def test_lookup_batch_is_bounded_concurrent_and_keeps_query_order():
             assert record.error and not record.found
         else:
             assert record.found and record.values["protein.uniprot.accession"] == accession
+
+
+async def test_explicit_unreviewed_accession_never_falls_through_to_reviewed_gene():
+    calls = []
+    exact = {
+        **_TP53,
+        "primaryAccession": "A0A087WT22",
+        "entryType": "UniProtKB unreviewed (TrEMBL)",
+    }
+    record = await _one(_backend(reviewed=_TP53, unreviewed=exact, calls=calls), "a0a087wt22")
+    assert record.values[ACC] == "A0A087WT22"
+    assert len(calls) == 1
+    assert "gene_exact" not in calls[0]
+
+
+async def test_explicit_accession_rejects_wrong_identity_and_species():
+    backend = _backend(unreviewed=_TP53)
+    assert not (await _one(backend, "Q99999")).found
+    records = await backend.fetch(
+        CAP,
+        [{"protein.query": "P04637"}],
+        requested_outputs=ALL_OUTPUTS,
+        groups_to_compute=frozenset(),
+        params={"organism": "10090"},
+    )
+    assert not records[0].found
+    assert (await _one(backend, "P04637")).values[ACC] == "P04637"
+
+
+async def test_mapping_sets_are_distinct_sorted_with_reviewed_first():
+    for targets in (
+        ["Q99999", "A0A087WT22", "Q99999", "P04637"],
+        ["P04637", "Q99999", "A0A087WT22", "Q99999"],
+    ):
+        backend = _idmap_backend(
+            {
+                ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["Q99999", "P04637", "P04637"]},
+                ("GeneID", "UniProtKB"): {"7157": targets},
+            }
+        )
+        record = (
+            await backend.fetch(
+                "map_to_accession",
+                [{"gene.ncbi.id": "7157"}],
+                requested_outputs=frozenset({ACC}),
+                groups_to_compute=frozenset(),
+            )
+        )[0]
+        assert record.values[ACC] == ["P04637", "Q99999", "A0A087WT22"]
+        assert record.values[COUNT] == 3
+        assert [r["reviewed"] for r in record.values[RECORDS]] == [True, True, False]
+
+
+async def test_idmapping_deduplicates_across_result_pages():
+    def handler(request):
+        if request.url.path.endswith("/run"):
+            return httpx.Response(200, json={"jobId": "job"})
+        if "/status/" in request.url.path:
+            return httpx.Response(200, json={"jobStatus": "FINISHED"})
+        targets = (
+            ["Q99999", "P04637"] if request.url.path.endswith("/job") else ["P04637", "A0A087WT22"]
+        )
+        headers = (
+            {"Link": '<https://u/page2>; rel="next"'} if request.url.path.endswith("/job") else {}
+        )
+        return httpx.Response(
+            200,
+            headers=headers,
+            json={"results": [{"from": "7157", "to": target} for target in targets]},
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://u", transport=httpx.MockTransport(handler)
+    ) as client:
+        result = await UniprotApiBackend(client=client)._idmap("GeneID", "UniProtKB", ["7157"])
+    assert result == {"7157": ["A0A087WT22", "P04637", "Q99999"]}

@@ -125,6 +125,27 @@ def _content_hash(*collections: Any) -> str:
     return digest.hexdigest()
 
 
+def _distinct_rows(rows: list[dict], identity: tuple[str, ...]) -> list[dict]:
+    """Collapse exact duplicate identities, rejecting contradictory measurements."""
+    distinct: dict[tuple, dict] = {}
+    for source in rows:
+        row = dict(source)
+        if "rank" in identity:
+            row["rank"] = str(row.get("rank") or "")
+        if "ncbi_taxon_id" in identity:
+            row["ncbi_taxon_id"] = int(row["ncbi_taxon_id"])
+        key = tuple(row.get(field) for field in identity)
+        if any(
+            value is None or (value == "" and field != "rank")
+            for field, value in zip(identity, key)
+        ):
+            raise ValueError(f"GMrepo row lacks logical identity {identity}")
+        if key in distinct and distinct[key] != row:
+            raise ValueError(f"Conflicting GMrepo rows for {identity}: {key}")
+        distinct[key] = row
+    return [distinct[key] for key in sorted(distinct)]
+
+
 def write_db(
     target: Path,
     *,
@@ -146,7 +167,12 @@ def write_db(
     that feeds the co-occurrence layer. Empty by default so the taxon-abundance build stays
     the fast few-MB crawl; populated only when a caller asks for specific phenotypes' runs.
     """
-    sample_profiles = sample_profiles or []
+    overview = _distinct_rows(overview, ("ncbi_taxon_id", "rank"))
+    associations = _distinct_rows(associations, ("ncbi_taxon_id", "rank", "mesh_id"))
+    phenotypes = _distinct_rows(phenotypes, ("mesh_id",))
+    sample_profiles = _distinct_rows(
+        sample_profiles or [], ("mesh_id", "run_id", "ncbi_taxon_id", "rank")
+    )
     acquisition = acquisition or {"scope": "caller-supplied", "taxa": {}, "profiles": {}}
     content = _content_hash(
         acquisition,
@@ -171,14 +197,16 @@ def write_db(
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
         con.execute(
             "CREATE TABLE overview ("
-            "ncbi_taxon_id INTEGER, rank TEXT, name TEXT, "
-            "pct_of_all_samples REAL, nr_phenotypes INTEGER, presented_samples INTEGER)"
+            "ncbi_taxon_id INTEGER NOT NULL, rank TEXT NOT NULL, name TEXT, "
+            "pct_of_all_samples REAL, nr_phenotypes INTEGER, presented_samples INTEGER, "
+            "PRIMARY KEY (ncbi_taxon_id, rank))"
         )
         con.execute(
             "CREATE TABLE association ("
-            "ncbi_taxon_id INTEGER, rank TEXT, mesh_id TEXT, phenotype_name TEXT, "
+            "ncbi_taxon_id INTEGER NOT NULL, rank TEXT NOT NULL, mesh_id TEXT NOT NULL, phenotype_name TEXT, "
             "samples INTEGER, phenotype_valid_runs INTEGER, prevalence_percentage REAL, "
-            "abundance_mean REAL, abundance_median REAL, abundance_sd REAL)"
+            "abundance_mean REAL, abundance_median REAL, abundance_sd REAL, "
+            "PRIMARY KEY (ncbi_taxon_id, rank, mesh_id))"
         )
         con.executemany(
             "INSERT INTO overview VALUES (?, ?, ?, ?, ?, ?)",
@@ -214,7 +242,9 @@ def write_db(
         )
         con.execute(
             "CREATE TABLE sample_profile ("
-            "mesh_id TEXT, run_id TEXT, ncbi_taxon_id INTEGER, rank TEXT, relative_abundance REAL)"
+            "mesh_id TEXT NOT NULL, run_id TEXT NOT NULL, ncbi_taxon_id INTEGER NOT NULL, "
+            "rank TEXT NOT NULL, relative_abundance REAL, "
+            "PRIMARY KEY (mesh_id, run_id, ncbi_taxon_id, rank))"
         )
         con.executemany(
             "INSERT INTO sample_profile VALUES (?, ?, ?, ?, ?)",
@@ -235,7 +265,7 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "2"),
+                ("schema_version", "3"),
                 ("acquisition", json.dumps(acquisition, sort_keys=True)),
                 ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
@@ -260,6 +290,20 @@ def db_is_valid(path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
+        schema = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+        if schema != ("3",):
+            return False
+        for table, expected in (
+            ("overview", ["ncbi_taxon_id", "rank"]),
+            ("association", ["ncbi_taxon_id", "rank", "mesh_id"]),
+            ("sample_profile", ["mesh_id", "run_id", "ncbi_taxon_id", "rank"]),
+        ):
+            columns = con.execute(f"PRAGMA table_info({table})").fetchall()
+            primary = [
+                column[1] for column in sorted(columns, key=lambda column: column[5]) if column[5]
+            ]
+            if primary != expected:
+                return False
         has_hash = con.execute("SELECT value FROM meta WHERE key = 'content_sha256'").fetchone()
         assoc = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]
         # A profiles-only build (associations empty) is still usable for the sample_profiles
@@ -678,7 +722,7 @@ def iter_abundances(
         cursor = con.execute(
             "SELECT ncbi_taxon_id, rank, mesh_id, phenotype_name, samples, "
             "prevalence_percentage, abundance_median FROM association "
-            "ORDER BY ncbi_taxon_id, mesh_id"
+            "ORDER BY ncbi_taxon_id, mesh_id, rank"
         )
         for taxid, rank, mesh_id, phenotype_name, samples, prevalence, median in cursor:
             yield {

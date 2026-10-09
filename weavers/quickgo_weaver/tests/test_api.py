@@ -26,7 +26,12 @@ ALL = frozenset(
 
 
 def _ann(go_id, aspect, name=None):
-    return {"goId": go_id, "goAspect": aspect, "goName": name or go_id}
+    return {
+        "goId": go_id,
+        "goAspect": aspect,
+        "goName": name or go_id,
+        "geneProductId": "UniProtKB:P04637",
+    }
 
 
 def _backend(pages, *, total=None, status=200, calls=None, max_pages=10):
@@ -386,7 +391,9 @@ async def test_incomplete_bulk_does_not_turn_unseen_accession_into_no_match():
 
 
 async def test_bulk_without_echoed_gene_product_ids_is_an_error():
-    backend = _backend({1: [_ann("GO:0000001", "biological_process")]})
+    row = _ann("GO:0000001", "biological_process")
+    row.pop("geneProductId")
+    backend = _backend({1: [row]})
     records = await backend.fetch(
         CAP,
         [{"protein.uniprot.accession": acc} for acc in ("P1", "P2")],

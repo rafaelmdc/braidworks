@@ -82,12 +82,9 @@ def _record(raw: dict[str, Any]) -> dict[str, Any]:
         "method": raw.get("experimental_method"),
         "resolution": raw.get("resolution"),
         "coverage": raw.get("coverage"),
+        "chain_id": raw.get("chain_id"),
+        "source": dict(raw),
     }
-
-
-def _rank(rec: dict[str, Any]) -> tuple[float, float]:
-    """Higher is better: most coverage, then best (lowest) resolution."""
-    return (rec.get("coverage") or 0.0, -(rec.get("resolution") or _WORST_RESOLUTION))
 
 
 def _sort_key(rec: dict[str, Any]) -> tuple[float, float, str]:
@@ -101,14 +98,27 @@ def _sort_key(rec: dict[str, Any]) -> tuple[float, float, str]:
 
 def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     """Dedup PDBe (structure, chain) rows to distinct best structures, ordered."""
-    by_id: dict[str, dict[str, Any]] = {}
+    chains: dict[str, dict[str, dict[str, Any]]] = {}
     for raw in rows:
-        rec = _record(raw)
-        pid = rec["pdb_id"]
-        if not pid:
-            continue
-        if pid not in by_id or _rank(rec) > _rank(by_id[pid]):
-            by_id[pid] = rec
+        pid = raw.get("pdb_id")
+        if pid:
+            serialized = json.dumps(raw, sort_keys=True, separators=(",", ":"))
+            chains.setdefault(pid, {})[serialized] = _record(raw)
+    by_id: dict[str, dict[str, Any]] = {}
+    for pid, evidence in chains.items():
+        # Scientific ranking is unchanged; chain ID and complete source evidence
+        # break equal-rank ties independently of upstream row order.
+        ordered_chains = sorted(
+            evidence.values(),
+            key=lambda rec: (
+                *_sort_key(rec),
+                str(rec.get("chain_id") or ""),
+                json.dumps(rec["source"], sort_keys=True, separators=(",", ":")),
+            ),
+        )
+        representative = dict(ordered_chains[0])
+        representative["chains"] = ordered_chains
+        by_id[pid] = representative
     ordered = sorted(by_id.values(), key=_sort_key)
     top = ordered[:limit]
     return {

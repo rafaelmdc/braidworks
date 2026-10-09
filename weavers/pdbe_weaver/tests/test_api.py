@@ -253,3 +253,19 @@ async def test_list_structures_bulk_does_not_assign_another_accessions_rows():
     )
     assert records[0].found
     assert not records[1].found
+
+
+async def test_equal_rank_chain_selection_and_evidence_are_order_independent():
+    rows = [
+        {**_row("1tup", 0.8, 2.0, chain="B", method="NMR"), "unp_start": 3},
+        {**_row("1tup", 0.8, 2.0, chain="A"), "unp_start": 1},
+    ]
+    results = []
+    for permuted in (rows, list(reversed(rows)), rows + [rows[0]]):
+        results.append((await _one(_backend({"P04637": permuted}), "P04637")).values)
+    assert results[0] == results[1] == results[2]
+    record = results[0]["structure.pdb.records"][0]
+    assert record["chain_id"] == "A"
+    assert record["method"] == "X-ray diffraction"
+    assert [chain["chain_id"] for chain in record["chains"]] == ["A", "B"]
+    assert [chain["source"]["unp_start"] for chain in record["chains"]] == [1, 3]

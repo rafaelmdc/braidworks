@@ -40,7 +40,7 @@ async def test_malformed_source_is_error(cap, key, body):
     ],
 )
 async def test_invalid_page_metadata_is_error(extra):
-    payload = {"results": [{"goId": "GO:1"}], **extra}
+    payload = {"results": [{"goId": "GO:1", "geneProductId": "UniProtKB:P1"}], **extra}
     async with httpx.AsyncClient(
         base_url="https://source",
         transport=httpx.MockTransport(lambda r: httpx.Response(200, json=payload)),
@@ -131,3 +131,25 @@ async def test_live_empty_zero_page_convention_is_no_match():
             groups_to_compute=frozenset(),
         )
     assert not records[0].found and not records[0].error
+
+
+@pytest.mark.parametrize("echo", [None, "", "UniProtKB:OTHER"])
+@pytest.mark.parametrize("accessions", [["P1"], ["P1", "P2", "P1"]])
+async def test_annotation_identity_required_for_singleton_and_batch(echo, accessions):
+    row = {"goId": "GO:1"}
+    if echo is not None:
+        row["geneProductId"] = echo
+    payload = {"results": [row], "pageInfo": {"total": 1}}
+    queries = [{"protein.uniprot.accession": accession} for accession in accessions]
+    async with httpx.AsyncClient(
+        base_url="https://source",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)),
+    ) as client:
+        records = await QuickgoApiBackend(client=client).fetch(
+            "list_go_terms",
+            queries,
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset(),
+        )
+    assert [record.query for record in records] == queries
+    assert all(record.error and not record.found for record in records)

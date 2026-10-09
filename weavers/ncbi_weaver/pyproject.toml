@@ -1,6 +1,6 @@
 [project]
 name = "ncbi_weaver"
-version = "0.2.8"
+version = "0.2.9"
 description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets v2 API backends)."
 readme = "README.md"
 license = "MIT"

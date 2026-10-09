@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.10"
+WEAVER_VERSION = "0.1.11"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

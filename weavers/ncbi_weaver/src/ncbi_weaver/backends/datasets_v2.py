@@ -755,7 +755,7 @@ class DatasetsV2Backend:
         tx = (taxon or "9606").strip()
         symbols = [str(q.get(vocab.PROTEIN_QUERY, "") or "").strip() for q in queries]
         distinct = sorted({s for s in symbols if s})
-        by_symbol: dict[str, dict[str, Any]] = {}
+        by_symbol: dict[str, dict[str, dict[str, Any]]] = {}
         errors: dict[str, str] = {}
         for start in range(0, len(distinct), _SYMBOL_CHUNK):
             chunk = distinct[start : start + _SYMBOL_CHUNK]
@@ -778,7 +778,9 @@ class DatasetsV2Backend:
                             "NCBI gene report cannot be correlated to requested symbol"
                         )
                     for echoed in echoed_queries:
-                        by_symbol.setdefault(echoed, gene)
+                        by_symbol.setdefault(echoed, {})[
+                            json.dumps(gene, sort_keys=True, separators=(",", ":"))
+                        ] = gene
             except httpx.HTTPStatusError as exc:
                 if not is_not_found_status(exc.response.status_code):
                     errors.update(dict.fromkeys(chunk, f"NCBI gene error: {format_exc(exc)}"))
@@ -795,7 +797,20 @@ class DatasetsV2Backend:
             if symbol in errors:
                 records.append(LookupRecord(query=q, error=errors[symbol]))
                 continue
-            gene = by_symbol.get(symbol) if symbol else None
+            matches = list(by_symbol.get(symbol, {}).values()) if symbol else []
+            if len(matches) > 1:
+                candidates = sorted(
+                    matches, key=lambda g: (int(g["gene_id"]), json.dumps(g, sort_keys=True))
+                )
+                records.append(
+                    LookupRecord(
+                        query=q,
+                        error="Ambiguous NCBI gene symbol; review candidates: "
+                        + json.dumps(candidates, sort_keys=True),
+                    )
+                )
+                continue
+            gene = matches[0] if matches else None
             if gene is None:
                 records.append(LookupRecord(query=q, found=False))
                 continue
@@ -1077,6 +1092,20 @@ class DatasetsV2Backend:
             for s in suggestions
             if s.get("tax_id")
         ]
+        # Ranking is source-local. Taxon identity, name and rank form a total
+        # tie-break; duplicate suggestions must not create false ambiguity.
+        candidates.sort(
+            key=lambda candidate: (
+                -(candidate.score or 0.0),
+                candidate.taxid,
+                candidate.name,
+                candidate.rank,
+            )
+        )
+        distinct_candidates: dict[int, CandidateMatch] = {}
+        for candidate in candidates:
+            distinct_candidates.setdefault(candidate.taxid, candidate)
+        candidates = list(distinct_candidates.values())
         if not candidates:
             return TaxonMatch(query=query, status=TaxonMatchStatus.NO_MATCH)
         if len(candidates) == 1:
