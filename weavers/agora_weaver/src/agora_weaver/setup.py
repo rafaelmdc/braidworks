@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -65,10 +67,62 @@ def default_sbml_cache_dir() -> Path:
     return default_db_path().parent / _SBML_CACHE_DIRNAME
 
 
+class InvalidSBML(ValueError):
+    """A model artifact is malformed or is not an SBML model."""
+
+
+def _validate_model_id(reconstruction_id: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", reconstruction_id):
+        raise ValueError("reconstruction_id must be a safe model identifier")
+
+
+def validate_model_sbml(path: Path) -> str:
+    """Stream-validate complete XML with an SBML root and one identified model.
+
+    This is structural validation, not complete SBML schema/biochemical validation.
+    """
+    root_seen = False
+    model_id = None
+    depth = 0
+    try:
+        for event, element in ET.iterparse(path, events=("start", "end")):
+            tag = element.tag.rsplit("}", 1)[-1]
+            if event == "start":
+                if not root_seen:
+                    if tag != "sbml" or (
+                        element.tag.startswith("{")
+                        and not element.tag.startswith("{http://www.sbml.org/sbml/")
+                    ):
+                        raise InvalidSBML("model artifact must have an SBML root")
+                    root_seen = True
+                elif depth == 1 and tag == "model":
+                    if model_id is not None or not element.get("id"):
+                        raise InvalidSBML("SBML must contain one model with a nonempty id")
+                    model_id = element.get("id")
+                depth += 1
+            else:
+                depth -= 1
+                element.clear()
+    except ET.ParseError as exc:
+        raise InvalidSBML(f"invalid SBML XML: {exc}") from exc
+    if model_id is None:
+        raise InvalidSBML("SBML artifact contains no identified model")
+    return model_id
+
+
+def model_sbml_is_valid(path: Path) -> bool:
+    try:
+        validate_model_sbml(path)
+        return True
+    except (OSError, InvalidSBML):
+        return False
+
+
 def individual_sbml_url(
     reconstruction_id: str, *, base_url: str = DEFAULT_INDIVIDUAL_SBML_BASE
 ) -> str:
     """VMH URL for a single AGORA2 model's SBML file."""
+    _validate_model_id(reconstruction_id)
     return f"{base_url}{reconstruction_id}.xml"
 
 
@@ -81,23 +135,33 @@ def ensure_model_sbml(
 ) -> Path | None:
     """Ensure a single model's SBML is cached locally; return its path (or None).
 
-    Cached files are returned instantly. A missing model is downloaded only if consented
-    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (the caller omits the
-    output, mirroring how ``reactions`` is skipped when its DB is absent). ~8 MB per model.
+    Cached files are structurally validated before return. A missing model is downloaded only if consented
+    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (a requested unavailable model becomes a backend error record). ~8 MB per model.
     """
+    _validate_model_id(reconstruction_id)
     directory = Path(cache_dir) if cache_dir is not None else default_sbml_cache_dir()
     target = directory / f"{reconstruction_id}.xml"
-    if target.exists() and target.stat().st_size > 0:
+    if model_sbml_is_valid(target):
         return target
     if not auto_consented(auto):
         return None
-    directory.mkdir(parents=True, exist_ok=True)
-    _download(
-        individual_sbml_url(reconstruction_id, base_url=base_url),
+
+    def build(staged: Path) -> None:
+        _download(
+            individual_sbml_url(reconstruction_id, base_url=base_url),
+            staged,
+            label=f"AGORA2 model {reconstruction_id}",
+        )
+        validate_model_sbml(staged)
+
+    return ensure_local_db(
         target,
-        label=f"AGORA2 model {reconstruction_id}",
+        is_valid=model_sbml_is_valid,
+        build=build,
+        consent_message=f"AGORA2 SBML for {reconstruction_id} requires download consent",
+        auto=auto,
+        min_free_bytes=32 * 1024**2,
     )
-    return target if target.exists() and target.stat().st_size > 0 else None
 
 
 def default_db_path() -> Path:

@@ -12,6 +12,8 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import sqlite3
 from contextlib import nullcontext
 from pathlib import Path
@@ -23,6 +25,7 @@ from braidworks.core.exceptions import BackendConfigurationError
 from braidworks.core.source_identity import SourceBinding, artifact_stamp
 
 from agora_weaver import dataset
+from agora_weaver.setup import InvalidSBML, validate_model_sbml
 
 
 class _ResourceUnavailable(ValueError):
@@ -65,7 +68,20 @@ class AgoraLocalBackend(BackendBase):
     def fingerprint(self) -> str:
         self._check_generation()
         rxn = self._source.fingerprint() if self._reaction_db_ready() else "no-reactions"
-        return f"agora-local-{dataset.CROSSWALK_RELEASE}-{rxn}"
+        from agora_weaver.setup import default_sbml_cache_dir
+
+        directory = (
+            self._sbml_cache_dir if self._sbml_cache_dir is not None else default_sbml_cache_dir()
+        )
+        state = {
+            "directory": str(directory.resolve()),
+            "auto_download": self._auto_download_models,
+            "artifacts": [
+                (path.name, artifact_stamp(path)) for path in sorted(directory.glob("*.xml"))
+            ],
+        }
+        model_state = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+        return f"agora-local-{dataset.CROSSWALK_RELEASE}-{rxn}-models-{model_state}"
 
     def _check_generation(self) -> None:
         stamp = artifact_stamp(self._reaction_db_path) if self._reaction_db_ready() else None
@@ -117,6 +133,7 @@ class AgoraLocalBackend(BackendBase):
                     dataset.IncompleteModelCoverage,
                     httpx.HTTPError,
                     OSError,
+                    InvalidSBML,
                 ) as exc:
                     records.append(LookupRecord(query=query, error=f"AGORA resource error: {exc}"))
                     continue
@@ -143,6 +160,9 @@ class AgoraLocalBackend(BackendBase):
                         "reconstruction_id": recon_id,
                         "path": str(path),
                         "source_url": individual_sbml_url(recon_id),
+                        "release": dataset.CROSSWALK_RELEASE,
+                        "model_id": validate_model_sbml(path),
+                        "sha256": _sha256(path),
                     }
                 )
         return out
@@ -153,3 +173,11 @@ def _default_db_path() -> Path:
     from agora_weaver.setup import default_db_path
 
     return default_db_path()
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()

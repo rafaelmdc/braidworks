@@ -50,3 +50,7 @@ work packages remain separately tracked.
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source audit pack acceptance
+
+Issues #249, #254 are implemented; see [AGORA implementation, migrations and evidence](SRC-AGORA.implementation.md). Other conditional work remains separately tracked.

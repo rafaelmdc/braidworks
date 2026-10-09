@@ -119,3 +119,24 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Individual model artifact safety
+
+Cached and downloaded model files must parse completely as SBML with an identified
+model. This is structural validation, not a full biochemical/schema check. Acquisition
+uses a per-target process lock and staged atomic publication; malformed XML or HTML
+responses cannot become valid cached models. Download consent remains required.
+
+SBML records include local `path`, portable `source_url`, AGORA `release`, observed
+`model_id` and content `sha256`. Use the URL and hash when transferring results to
+another machine; the path only applies to this machine. Backend fingerprints include
+model-cache directory, download policy and artifact stat identity, as well as reaction
+source identity. Artifact acquisition/replacement changes that identity.
+
+`CC-BY-NC-4.0` is now a recognized **restricted** source license; recognition does not
+relax the noncommercial terms. References retain attribution and noncommercial notices.
+The license meaning is described by [Creative Commons](https://creativecommons.org/licenses/by-nc/4.0/).
+
+Live validation on 2026-10-09 found the configured individual VMH model URL returning
+HTML instead of SBML. Model requests report a resource error and publish no artifact;
+this limitation remains tracked as an upstream acquisition follow-up.

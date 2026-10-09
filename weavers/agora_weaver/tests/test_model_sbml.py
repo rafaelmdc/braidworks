@@ -32,7 +32,7 @@ async def _resolve(weaver: AgoraWeaver, taxid: str):
 
 async def test_model_group_returns_cached_sbml_path(tmp_path: Path):
     # Seed the cache so no download is attempted (auto_download_models stays False).
-    (tmp_path / f"{_RECON}.xml").write_text("<sbml>fake</sbml>")
+    (tmp_path / f"{_RECON}.xml").write_text(f'<sbml><model id="{_RECON}"/></sbml>')
     weaver = AgoraWeaver({"local": AgoraLocalBackend(sbml_cache_dir=tmp_path)})
     r = await _resolve(weaver, _TAXID)
     assert r.status is WeaveStatus.OK
