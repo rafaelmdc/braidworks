@@ -41,3 +41,7 @@ Related work packages/findings remain separately tracked.
 Primary shared identity findings are implemented under #155; see
 [SH-08 implementation and validation](SH-08.implementation.md). Source-specific
 work packages with additional feature proposals remain tracked by their own groups.
+
+## Source audit pack acceptance
+
+Issues #221 are implemented; see [STRING implementation, migrations and evidence](SRC-STRING.implementation.md). Other conditional work remains separately tracked.

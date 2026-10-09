@@ -66,6 +66,11 @@ See [README.md](README.md) and `weaver.spec.toml` for the current output keys an
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.
+- Mapping and partner requests support bulk identifiers; preserve distinct-ID chunking,
+  explicit `echo_query=1`, validated query-index fallback and chunk-local error records.
+- Keep `caller_identity=braidworks` and the provider's one-request-per-second default;
+  source pacing uses the shared request hook and respects explicit caller budgets.
+- The pinned 12.5 endpoint currently exposes functional associations. Score/network/species
+  query parameters (#219) require observed schema and declared deterministic defaults.
+- Retrieval limit bounds upstream partners; retain coverage warnings and taxon-scoped IDs.
+  Updating the source release requires checking known-truth live examples and evidence fields.

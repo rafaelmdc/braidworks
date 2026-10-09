@@ -115,3 +115,37 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Bulk requests and source pacing
+
+The backend resolves distinct accessions in chunks of 100, then retrieves distinct
+STRING proteins' partners in chunks of 100. Mapping requests explicitly set
+`echo_query=1`; responses are correlated by echoed identifier or a validated query index,
+never by response order. Every request identifies this client as `braidworks`.
+
+STRING [recommends one second between calls](https://en.string-db.org/help/api/).
+Direct calls default to one request per second, sharing the source/backend budget
+within the process. Executor request budgets and `BRAIDWORKS_RATE_LIMITS` take precedence.
+This covers requests to both endpoints; it is not a distributed cross-process limiter.
+
+The current endpoint returns **functional associations**, which can include indirect
+relationships and predictions; an edge is not proof of physical binding. Network/score
+parameters remain separately tracked in #219.
+
+```python
+import asyncio
+from braidworks.core import Strand, StrandSet
+from string_weaver import build_string_weaver
+
+async def main():
+    async with build_string_weaver(limit=10) as weaver:
+        result = (await weaver.execute_batch(
+            "list_interactions",
+            [StrandSet.from_strands("tp53", [Strand("protein.uniprot.accession", "P04637")])],
+            requested_outputs=frozenset({"protein.interaction.records", "protein.interaction.coverage"}),
+            backend="api",
+        ))[0]
+        print(result.to_json())
+
+asyncio.run(main())
+```

@@ -178,7 +178,7 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return PacedHTTPClient(self._client, "string")
+        return PacedHTTPClient(self._client, "string", default_rate=1.0)
 
     async def fetch(
         self,
@@ -259,7 +259,7 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
             if not chunk:
                 continue
             try:
-                rows = await self._get("/json/get_string_ids", "\r".join(chunk))
+                rows = await self._get("/json/get_string_ids", "\r".join(chunk), echo_query="1")
             except (
                 httpx.HTTPError,
                 json.JSONDecodeError,
