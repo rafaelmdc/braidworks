@@ -54,3 +54,11 @@ configuration work remains owned by its existing issues.
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source-group implementation progress
+
+WP-UNIPROT-03 and remaining adverse verification for requirement 010 are implemented
+under #186/#189; see [source evidence and design](SRC-UNIPROT.implementation.md).
+The composed private job adapter preserves public capabilities and source-local
+selection. WP-UNIPROT-06/#188 remains pending a feature scope decision; sequence,
+annotation evidence and proteome enumeration have not been added by this refactor.

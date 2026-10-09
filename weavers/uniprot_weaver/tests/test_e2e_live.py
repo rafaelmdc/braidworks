@@ -162,3 +162,24 @@ async def test_live_map_to_accession_from_taxon_scoped_string_id():
     assert "P04637" in next(
         strand.value for strand in result.strands if strand.type_id == "protein.uniprot.accession"
     )
+
+
+async def test_live_explicit_unreviewed_accession_preserves_identity():
+    """Observed TrEMBL accession remains exact instead of preferring another reviewed entry."""
+    async with build_uniprot_weaver() as weaver:
+        result = await weaver.execute(
+            "resolve_protein",
+            StrandSet.from_strands("unreviewed", [Strand("protein.query", "A0A087WT22")]),
+            requested_outputs=frozenset(
+                {"protein.uniprot.accession", "protein.reviewed", "ncbi.taxon.id"}
+            ),
+            backend="api",
+            params={"organism": "9606"},
+        )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    values = {strand.type_id: strand.value for strand in result.strands}
+    # resolve_protein always emits its declared identity group too.
+    assert values["protein.uniprot.accession"] == "A0A087WT22"
+    assert values["protein.reviewed"] == "unreviewed"
+    assert values["ncbi.taxon.id"] == 9606

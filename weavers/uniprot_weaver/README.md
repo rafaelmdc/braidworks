@@ -86,7 +86,7 @@ From Python:
 ```python
 from uniprot_weaver import build_uniprot_weaver
 
-weaver = build_uniprot_weaver()        # zero-config
+weaver = build_uniprot_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `uniprot_weaver.register(factory)` adds it as a provider.
 ```
 
@@ -161,15 +161,19 @@ from braidworks.core import Strand, StrandSet
 from uniprot_weaver.backends.api import UniprotApiBackend
 from uniprot_weaver.weaver import UniprotWeaver
 
+
 async def main():
     async with httpx.AsyncClient(base_url="https://rest.uniprot.org", timeout=30) as client:
         weaver = UniprotWeaver({"api": UniprotApiBackend(client=client)})
         inputs = [StrandSet.from_strands("human-p53", [Strand("protein.query", "P04637")])]
         results = await weaver.execute_batch(
-            "resolve_protein", inputs, backend="api",
+            "resolve_protein",
+            inputs,
+            backend="api",
             requested_outputs=frozenset({"protein.uniprot.accession"}),
         )
         print(results[0].to_json())
+
 
 asyncio.run(main())
 ```
@@ -188,3 +192,20 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Mapping-job boundaries (0.2.9)
+
+The API backend composes a private mapping-job client for submission, polling and
+paginated retrieval. Page normalization is pure: it checks requested-ID correlation
+and returns distinct sorted mappings without mutating the response. Source-database
+job failures affect their input group; separate target requests remain independent.
+A request spanning several targets is atomic: a failed required target returns an
+error rather than a partial successful result or incomplete summary count.
+
+Polling is bounded by 60 attempts, with a one-second delay while pending; HTTP and
+pacing time are additional, so this is not a 60-second wall-clock deadline. Result
+pagination is bounded by 1,000 pages and rejects repeated or malformed next links.
+Failures discard partial mappings. Paired reviewed/full jobs cancel and drain their
+sibling on failure or cancellation before returning. Client ownership remains with
+the backend or injecting caller as documented above. No public capability or
+configuration changes are required.

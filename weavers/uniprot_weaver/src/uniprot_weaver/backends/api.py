@@ -33,6 +33,8 @@ from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
 from uniprot_weaver import mapping
+from uniprot_weaver.backends.jobs import MappingJobClient
+from uniprot_weaver.backends.validation import _InvalidResponse, _object, _rows
 
 logger = logging.getLogger("uniprot_weaver.api")
 
@@ -40,9 +42,8 @@ logger = logging.getLogger("uniprot_weaver.api")
 # The ID-mapping endpoint is async (submit a job, poll, fetch) AND a batch endpoint
 # (many ids per job), so a whole batch resolves in one or two jobs. into-hub mapping
 # runs two jobs (reviewed Swiss-Prot + full UniProtKB) and orders reviewed-first.
-_IDMAP_RESULT_PAGE = 500  # max page size the results endpoint allows
 _IDMAP_POLL_DELAY = 1.0  # seconds between status polls
-_IDMAP_POLL_TRIES = 60  # ~60s ceiling before giving up on a job
+_IDMAP_POLL_TRIES = 60  # finite poll budget; HTTP/pacing time is additional
 
 DEFAULT_BASE_URL = "https://rest.uniprot.org"
 # Compact projection — the fields the mapper reads, plus annotation_score (the
@@ -56,22 +57,6 @@ _FIELDS = (
 _PAGE = 25
 # Official UniProtKB accession syntax (so "P04637" routes to an exact lookup).
 _ACCESSION = re.compile(r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}")
-
-
-class _InvalidResponse(ValueError):
-    """An invalid UniProt search or mapping-job source response."""
-
-
-def _object(value: Any, label: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise _InvalidResponse(f"UniProt {label} must be an object")
-    return value
-
-
-def _rows(value: Any, label: str) -> list[dict[str, Any]]:
-    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
-        raise _InvalidResponse(f"UniProt {label} must be an object list")
-    return value
 
 
 def _validate_entry(entry: dict[str, Any]) -> None:
@@ -124,19 +109,6 @@ def _validate_entry(entry: dict[str, Any]) -> None:
                 for text in _rows(comment["texts"], "texts"):
                     if text.get("value") is not None and not isinstance(text["value"], str):
                         raise _InvalidResponse("UniProt comment text must be a string")
-
-
-def _next_link(resp: httpx.Response) -> str | None:
-    """The ``rel="next"`` URL from a paginated UniProt response's ``Link`` header, if any."""
-    link = resp.headers.get("link")
-    if not link:
-        return None
-    for part in link.split(","):
-        if 'rel="next"' in part:
-            start, end = part.find("<"), part.find(">")
-            if 0 <= start < end:
-                return part[start + 1 : end]
-    return None
 
 
 def _mapping_record(
@@ -331,10 +303,19 @@ class UniprotApiBackend(HTTPClientLifecycle, BackendBase):
         errors: dict[str, str] = {}
         for from_db, ids in by_db.items():
             try:
-                rev, allm = await asyncio.gather(
-                    self._idmap(from_db, mapping.UNIPROT_TO_REVIEWED, sorted(ids)),
-                    self._idmap(from_db, mapping.UNIPROT_TO, sorted(ids)),
-                )
+                jobs = [
+                    asyncio.create_task(self._idmap(from_db, target, sorted(ids)))
+                    for target in (mapping.UNIPROT_TO_REVIEWED, mapping.UNIPROT_TO)
+                ]
+                try:
+                    rev, allm = await asyncio.gather(*jobs)
+                finally:
+                    # A failed pair must not leave its other HTTP job running after
+                    # returning an error or propagating cancellation/programming faults.
+                    for job in jobs:
+                        if not job.done():
+                            job.cancel()
+                    await asyncio.gather(*jobs, return_exceptions=True)
                 reviewed[from_db] = rev
                 resolved[from_db] = allm
             except (
@@ -404,83 +385,12 @@ class UniprotApiBackend(HTTPClientLifecycle, BackendBase):
         return records
 
     async def _idmap(self, from_db: str, to_db: str, ids: list[str]) -> dict[str, list[str]]:
-        """Run one ID-mapping job (``from_db`` -> ``to_db``); return source id -> target ids.
-
-        Submit the whole batch, poll until the job finishes, then page the results,
-        deduplicating and sorting targets across every result page.
-        """
+        """Delegate source-local mapping transport without transferring client ownership."""
         if not ids:
             return {}
-        http = self._http()
-        run = await http.post(
-            "/idmapping/run", data={"from": from_db, "to": to_db, "ids": ",".join(ids)}
-        )
-        run.raise_for_status()
-        job = _object(run.json(), "job submission").get("jobId")
-        if not isinstance(job, str) or not job:
-            raise _InvalidResponse("UniProt job submission must contain jobId")
-        await self._await_job(http, job)
-
-        out: dict[str, list[str]] = {}
-        url: str | None = f"/idmapping/results/{job}"
-        req_params: dict[str, Any] | None = {"format": "json", "size": _IDMAP_RESULT_PAGE}
-        visited: set[str] = set()
-        while url:
-            if url in visited or len(visited) >= 1000:
-                raise _InvalidResponse(
-                    "UniProt mapping result pagination repeats or exceeds budget"
-                )
-            visited.add(url)
-            resp = await http.get(url, params=req_params)
-            resp.raise_for_status()
-            body = _object(resp.json(), "mapping results")
-            if "results" not in body and "failedIds" not in body:
-                raise _InvalidResponse("UniProt mapping page must contain results or failedIds")
-            failed = body.get("failedIds", [])
-            if not isinstance(failed, list) or any(
-                not isinstance(src, str) or src not in ids for src in failed
-            ):
-                raise _InvalidResponse("UniProt failedIds must identify requested inputs")
-            for row in _rows(body.get("results", []), "mapping results"):
-                to_val = row.get("to")
-                target = (
-                    to_val
-                    if isinstance(to_val, str)
-                    else _object(to_val, "mapping target").get("primaryAccession")
-                )
-                src = row.get("from")
-                if (
-                    not isinstance(src, str)
-                    or src not in ids
-                    or not isinstance(target, str)
-                    or not target
-                ):
-                    raise _InvalidResponse(
-                        "UniProt mapping row cannot be correlated to requested identifier"
-                    )
-                out.setdefault(src, []).append(target)
-            url = _next_link(resp)  # follow paginated results; absolute URL, no params
-            req_params = None
-        return {src: sorted(set(targets)) for src, targets in out.items()}
-
-    async def _await_job(self, http: httpx.AsyncClient, job: str) -> None:
-        """Poll ``/idmapping/status/{job}`` until the job finishes (or raise on failure)."""
-        for _ in range(_IDMAP_POLL_TRIES):
-            resp = await http.get(f"/idmapping/status/{job}")
-            resp.raise_for_status()
-            body = _object(resp.json(), "job status")
-            status = body.get("jobStatus")
-            if status is None:
-                if "results" not in body and "failedIds" not in body:
-                    raise _InvalidResponse("UniProt job status has no state or result evidence")
-                _rows(body.get("results", []), "job status results")
-            if status is None or status == "FINISHED":  # absent => results inline / ready
-                return
-            if status in ("RUNNING", "NEW", "QUEUED"):
-                await asyncio.sleep(_IDMAP_POLL_DELAY)
-                continue
-            raise httpx.HTTPError(f"ID-mapping job {job} failed with status {status!r}")
-        raise httpx.HTTPError(f"ID-mapping job {job} did not finish in time")
+        return await MappingJobClient(
+            self._http(), poll_tries=_IDMAP_POLL_TRIES, poll_delay=_IDMAP_POLL_DELAY
+        ).run(from_db, to_db, ids)
 
     async def _resolve_one(
         self, query: dict[str, Any], term: str, organism: str | None = None

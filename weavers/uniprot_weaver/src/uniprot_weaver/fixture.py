@@ -2,7 +2,8 @@
 
 The api backend is *always configured* (UniProtKB REST needs no key), so golden
 would otherwise hit the live service — flaky and non-reproducible. This module
-serves a canned ``/uniprotkb/search`` response for one query ("TP53") whose top hit
+serves canned ``/uniprotkb/search`` responses for five real accessions and
+"TP53", whose top hit
 is human p53 (P04637), carrying every field the mapper reads. The shape mirrors a
 real reviewed entry (nested proteinDescription, genes, organism.taxonId, a FUNCTION
 comment, sequence.length) so the mapping path is exercised exactly as in production.
@@ -12,6 +13,7 @@ comment, sequence.length) so the mapping path is exercised exactly as in product
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import parse_qs
 
 import httpx
@@ -44,13 +46,43 @@ _TP53 = {
     "sequence": {"length": 393},
 }
 
+# Minimal actual REST projections observed 2026-10-09; offline identity/order fixtures.
+_ENTRIES = {
+    "A0A087WT22": {
+        "primaryAccession": "A0A087WT22",
+        "entryType": "UniProtKB unreviewed (TrEMBL)",
+        "organism": {"scientificName": "Homo sapiens", "taxonId": 9606},
+        "sequence": {"length": 187},
+    },
+    "P02340": {
+        "primaryAccession": "P02340",
+        "entryType": "UniProtKB reviewed (Swiss-Prot)",
+        "organism": {"scientificName": "Mus musculus", "taxonId": 10090},
+        "sequence": {"length": 390},
+    },
+    "P38398": {
+        "primaryAccession": "P38398",
+        "entryType": "UniProtKB reviewed (Swiss-Prot)",
+        "organism": {"scientificName": "Homo sapiens", "taxonId": 9606},
+        "sequence": {"length": 1863},
+    },
+    "Q00987": {
+        "primaryAccession": "Q00987",
+        "entryType": "UniProtKB reviewed (Swiss-Prot)",
+        "organism": {"scientificName": "Homo sapiens", "taxonId": 9606},
+        "sequence": {"length": 491},
+    },
+}
+_ENTRIES["P04637"] = _TP53
+
 
 def _handler(request: httpx.Request) -> httpx.Response:
     path = request.url.path
     if path.endswith("/uniprotkb/search"):
         query = request.url.params.get("query", "")
-        # Only "TP53" resolves; anything else is a clean empty result (NO_MATCH).
-        results = [_TP53] if "TP53" in query else []
+        accession = re.search(r"accession:([A-Z0-9]+)", query)
+        entry = _ENTRIES.get(accession[1]) if accession else (_TP53 if "TP53" in query else None)
+        results = [entry] if entry else []
         return httpx.Response(200, content=json.dumps({"results": results}))
     # ID-mapping (map_* capabilities): submit -> poll -> results. The job id echoes the
     # target db; GeneID 7157 -> P04637 (both reviewed and full jobs), so the golden is a

@@ -39,13 +39,13 @@ class TestApiOrder(WeaverOrderContractTests):
         return weaver
 
     def sample_strand_sets(self):
-        # TODO: replace with >=5 real, distinct inputs from the source.
+        # Five observed successful identities strengthen the unchanged order contract.
         samples = [
-            {"protein.query": "TP53"},
-            {"protein.query": "sample-0"},
-            {"protein.query": "sample-1"},
-            {"protein.query": "sample-2"},
-            {"protein.query": "sample-3"},
+            {"protein.query": "P04637"},
+            {"protein.query": "A0A087WT22"},
+            {"protein.query": "P02340"},
+            {"protein.query": "P38398"},
+            {"protein.query": "Q00987"},
         ]
         return [
             StrandSet.from_strands(f"e{i}", [Strand(t, v) for t, v in values.items()])

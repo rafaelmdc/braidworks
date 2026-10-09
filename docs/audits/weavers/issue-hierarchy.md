@@ -57,7 +57,7 @@ to pass tests, authorize publishing, or reopen deferred cache/resume implementat
 | Weaver | Group issue | Primary findings |
 |---|---|---|
 | [example](example.audit.md) | [#157](https://github.com/rafaelmdc/braidworks/issues/157) | 4 complete ([evidence](SRC-EXAMPLE.implementation.md)) |
-| [uniprot](uniprot.audit.md) | [#158](https://github.com/rafaelmdc/braidworks/issues/158) | 3 |
+| [uniprot](uniprot.audit.md) | [#158](https://github.com/rafaelmdc/braidworks/issues/158) | 3 total; 2 implemented, feature #188 pending ([evidence](SRC-UNIPROT.implementation.md)) |
 | [pdbe](pdbe.audit.md) | [#159](https://github.com/rafaelmdc/braidworks/issues/159) | 2 |
 | [alphafold](alphafold.audit.md) | [#160](https://github.com/rafaelmdc/braidworks/issues/160) | 3 |
 | [quickgo](quickgo.audit.md) | [#161](https://github.com/rafaelmdc/braidworks/issues/161) | 2 |
