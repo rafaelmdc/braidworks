@@ -8,6 +8,9 @@ shared ``weaverkit`` once a second weaver proves the abstraction.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from braidworks.core import (
     BackendUnavailable,
     BaseWeaver,
@@ -58,8 +61,11 @@ class BackendDispatchWeaver(BaseWeaver):
         self, capability_id, strand_set, *, requested_outputs, backend, params=None
     ) -> WeaveResult:
         results = await self.execute_batch(
-            capability_id, [strand_set], requested_outputs=requested_outputs,
-            backend=backend, params=params,
+            capability_id,
+            [strand_set],
+            requested_outputs=requested_outputs,
+            backend=backend,
+            params=params,
         )
         return results[0]
 
@@ -80,8 +86,12 @@ class BackendDispatchWeaver(BaseWeaver):
         # doesn't fit the TaxonMatch resolver mapper, so they use core's
         # LookupRecord/map_lookup path. Each builds queries, calls a backend method, maps.
         if capability_id in (
-            vocab.LIST_CHILDREN, vocab.LIST_GENOMES, vocab.DESCRIBE_GENOME,
-            vocab.RESOLVE_GENE, vocab.DESCRIBE_GENE, vocab.LIST_ORTHOLOGS,
+            vocab.LIST_CHILDREN,
+            vocab.LIST_GENOMES,
+            vocab.DESCRIBE_GENOME,
+            vocab.RESOLVE_GENE,
+            vocab.DESCRIBE_GENE,
+            vocab.LIST_ORTHOLOGS,
         ):
             records = await self._lookup_records(
                 capability_id, cap, strand_sets, backend, requested_outputs, params
@@ -122,26 +132,37 @@ class BackendDispatchWeaver(BaseWeaver):
         queries = [{input_type: self._value(ss, input_type)} for ss in strand_sets]
         effective = cap.resolve_params(params)
         if capability_id == vocab.LIST_CHILDREN:
-            return await strategy.list_children(queries, rank=effective.get("rank"))
+            return await self._operation(strategy, "list_children")(
+                queries, rank=effective.get("rank")
+            )
         if capability_id == vocab.LIST_GENOMES:
-            return await strategy.list_genomes(
+            return await self._operation(strategy, "list_genomes")(
                 queries,
                 reference_only=bool(effective.get("reference_only", False)),
                 annotated_only=bool(effective.get("annotated_only", False)),
                 assembly_level=effective.get("assembly_level"),
             )
         if capability_id == vocab.RESOLVE_GENE:
-            return await strategy.resolve_gene(queries, taxon=effective.get("taxon", "9606"))
+            return await self._operation(strategy, "resolve_gene")(
+                queries, taxon=effective.get("taxon", "9606")
+            )
         if capability_id == vocab.LIST_ORTHOLOGS:
-            return await strategy.list_orthologs(
+            return await self._operation(strategy, "list_orthologs")(
                 queries, taxon_filter=effective.get("taxon_filter")
             )
         # describe_genome / describe_gene: pass the triggered groups so the extra
         # endpoint (sequences / products) is fetched only when its group is requested.
         groups = cap.triggered_groups(requested_outputs)
         if capability_id == vocab.DESCRIBE_GENE:
-            return await strategy.describe_gene(queries, groups=groups)
-        return await strategy.describe_genome(queries, groups=groups)
+            return await self._operation(strategy, "describe_gene")(queries, groups=groups)
+        return await self._operation(strategy, "describe_genome")(queries, groups=groups)
+
+    @staticmethod
+    def _operation(strategy: ResolutionBackend, name: str) -> Callable[..., Any]:
+        operation = getattr(strategy, name, None)
+        if not callable(operation):
+            raise UnsupportedCapability(f"{type(strategy).__name__} does not support {name}")
+        return operation
 
     @staticmethod
     def _value(strand_set, type_id: str):

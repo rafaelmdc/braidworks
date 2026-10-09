@@ -1,35 +1,32 @@
 """ResolutionBackend — the taxon-domain backend interface.
 
 Implements core's generic ``BackendStrategy`` (``name`` / ``is_configured`` /
-``fingerprint``) and adds the one domain operation: resolve a batch of consumed
+``fingerprint``) and describes structural source-local responsibilities: resolve a batch of consumed
 values into ``TaxonMatch`` objects, in input order. The dispatch weaver calls
 this; core never does.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
-from braidworks.core import LookupRecord, UnsupportedCapability
+from braidworks.core import LookupRecord
 
 from ..intermediate import TaxonMatch
 
 
-class ResolutionBackend(ABC):
+@runtime_checkable
+class ResolutionBackend(Protocol):
     """Taxon-domain backend: a `BackendStrategy` plus a batch `resolve` operation."""
 
     name: str
 
-    @abstractmethod
     def is_configured(self) -> bool:
         """Whether this backend is usable in this instance (else BackendUnavailable)."""
 
-    @abstractmethod
     def fingerprint(self) -> str:
         """Per-backend data-state fingerprint for the cache key. Never ``"unknown"``."""
 
-    @abstractmethod
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
     ) -> list[TaxonMatch]:
@@ -37,6 +34,11 @@ class ResolutionBackend(ABC):
 
         Returns exactly one ``TaxonMatch`` per input, in input order.
         """
+
+
+@runtime_checkable
+class TaxonomyChildrenBackend(Protocol):
+    """Optional descendant listing, separate from taxonomy resolution."""
 
     async def list_children(
         self, queries: list[dict[str, Any]], *, rank: str
@@ -46,9 +48,12 @@ class ResolutionBackend(ABC):
         Only the API backend implements this (it walks the live taxonomy subtree); the
         capability is declared API-only, so a non-API backend is never asked.
         """
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support list_children"
-        )
+        ...
+
+
+@runtime_checkable
+class GenomeBackend(Protocol):
+    """Genome listing/detail operations supplied by Datasets."""
 
     async def list_genomes(
         self,
@@ -62,9 +67,7 @@ class ResolutionBackend(ABC):
 
         API-only (live NCBI Datasets search); a non-API backend is never asked.
         """
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support list_genomes"
-        )
+        ...
 
     async def describe_genome(
         self, queries: list[dict[str, Any]], *, groups: frozenset[str]
@@ -73,30 +76,27 @@ class ResolutionBackend(ABC):
 
         API-only; a non-API backend is never asked.
         """
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support describe_genome"
-        )
+        ...
+
+
+@runtime_checkable
+class GeneBackend(Protocol):
+    """Gene resolution/detail/ortholog operations supplied by Datasets."""
 
     async def resolve_gene(
         self, queries: list[dict[str, Any]], *, taxon: str
     ) -> list[LookupRecord]:
         """Resolve each input gene symbol (in ``taxon``) to its NCBI gene id. API-only."""
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support resolve_gene"
-        )
+        ...
 
     async def describe_gene(
         self, queries: list[dict[str, Any]], *, groups: frozenset[str]
     ) -> list[LookupRecord]:
         """Describe each input gene id (summary; products if that group is asked). API-only."""
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support describe_gene"
-        )
+        ...
 
     async def list_orthologs(
         self, queries: list[dict[str, Any]], *, taxon_filter: str | None = None
     ) -> list[LookupRecord]:
         """List each input gene id's ortholog gene ids across taxa. API-only."""
-        raise UnsupportedCapability(
-            f"{type(self).__name__} does not support list_orthologs"
-        )
+        ...

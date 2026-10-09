@@ -166,3 +166,17 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Backend responsibilities and JSON intermediates
+
+`TaxonMatch`, `CandidateMatch` and `LineageEntry` in `ncbi_weaver.intermediate` each
+support `to_json()` / `from_json()` with nested lineages/candidates and enum statuses.
+Use `json.dumps(match.to_json())` for wire JSON; reconstruction produces detached records.
+
+Backend interfaces are structural protocols, not a base class that every backend must
+inherit. `ResolutionBackend` describes taxonomy resolution plus configuration/fingerprint;
+`TaxonomyChildrenBackend`, `GenomeBackend` and `GeneBackend` describe their separate
+operations. The local backend supplies taxonomy resolution; Datasets supplies all four.
+Dispatch raises `UnsupportedCapability` when an optional operation is absent. Custom
+backends should implement only their supported interfaces; existing duck-typed backends
+continue to work. The previous ABC's inherited unsupported methods have been removed.

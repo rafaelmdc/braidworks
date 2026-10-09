@@ -61,3 +61,7 @@ work packages with additional feature proposals remain tracked by their own grou
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source audit pack acceptance
+
+Issues #230 are implemented; see [NCBI implementation, migrations and evidence](SRC-NCBI.implementation.md). Other conditional work remains separately tracked.
