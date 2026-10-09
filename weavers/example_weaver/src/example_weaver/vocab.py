@@ -15,12 +15,12 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "example"
-WEAVER_VERSION = "1.0.4"
+WEAVER_VERSION = "1.0.5"
 WEAVER_TITLE = "Example reference weaver (taxid -> traits, from a tiny CSV)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url="https://github.com/rafaelcorreia/braidworks (bundled sample data)",
+    source_url="https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/src/example_weaver/data/example_traits.csv",
     license="CC0-1.0",
     citation="",
     attribution="Braidworks bundled sample data",

@@ -260,7 +260,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "example-weaver"
-version = "1.0.4"
+version = "1.0.5"
 source = { editable = "weavers/example_weaver" }
 dependencies = [
     { name = "braidworks-core" },

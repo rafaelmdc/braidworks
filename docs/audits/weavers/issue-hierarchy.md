@@ -52,11 +52,11 @@ to pass tests, authorize publishing, or reopen deferred cache/resume implementat
 | SH-08: Stable identity, deterministic selection and distinct collections | [#155](https://github.com/rafaelmdc/braidworks/issues/155) | 15 | Complete ([implementation](SH-08.implementation.md)) | Correlate to stable identities, deduplicate by source identity and use deterministic ID tie-breaks. Do not turn ambiguity, non-equivalence or different taxonomic granularity into confident identity. Shared invariants/testing conventions are useful; selection and scientific mapping policies are source-specific and must not become a generic universal selector. |
 | SH-09: Group-aware work and measured performance | [#156](https://github.com/rafaelmdc/braidworks/issues/156) | 6 | Complete locally ([implementation](SH-09.implementation.md)) | Avoid expensive unrequested group projection and unnecessary repeat parsing/SQL/source work. Measure bounded representative cases before adding memoization, batching or immutable projections. Keep optional P3 optimizations conditional on evidence; do not add a repository layer merely to match a pattern. |
 
-## Remaining source-specific groups
+## Source-specific groups — remaining work and progress
 
 | Weaver | Group issue | Primary findings |
 |---|---|---|
-| [example](example.audit.md) | [#157](https://github.com/rafaelmdc/braidworks/issues/157) | 4 |
+| [example](example.audit.md) | [#157](https://github.com/rafaelmdc/braidworks/issues/157) | 4 total; 3 implemented, optional #179 pending ([evidence](SRC-EXAMPLE.implementation.md)) |
 | [uniprot](uniprot.audit.md) | [#158](https://github.com/rafaelmdc/braidworks/issues/158) | 3 |
 | [pdbe](pdbe.audit.md) | [#159](https://github.com/rafaelmdc/braidworks/issues/159) | 2 |
 | [alphafold](alphafold.audit.md) | [#160](https://github.com/rafaelmdc/braidworks/issues/160) | 3 |

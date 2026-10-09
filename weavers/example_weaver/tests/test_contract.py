@@ -32,13 +32,13 @@ class TestLocalOrder(WeaverOrderContractTests):
         return weaver
 
     def sample_strand_sets(self):
-        # TODO: replace with >=5 real, distinct inputs from the source.
+        # All five bundled IDs exercise successful records under the unchanged contract.
         samples = [
             {"ncbi.taxon.id": "562"},
             {"ncbi.taxon.id": "1423"},
-            {"ncbi.taxon.id": "sample-0"},
-            {"ncbi.taxon.id": "sample-1"},
-            {"ncbi.taxon.id": "sample-2"},
+            {"ncbi.taxon.id": "1280"},
+            {"ncbi.taxon.id": "1773"},
+            {"ncbi.taxon.id": "1351"},
         ]
         return [
             StrandSet.from_strands(f"e{i}", [Strand(t, v) for t, v in values.items()])

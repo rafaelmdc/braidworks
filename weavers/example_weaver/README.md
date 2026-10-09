@@ -2,9 +2,9 @@
 
 The **minimal, fully-implemented** Braidworks weaver: `ncbi.taxon.id → microbe traits`,
 served from a ~5-row CSV bundled in the package. It is small on purpose — read it
-end-to-end in a minute, then copy the shape for your own weaver. It is literally what
-`weaverkit new` produces with the three backend `# TODO`s filled in, so it passes the full
-`--strict` bar.
+end-to-end, then use the Spec → Scaffold → Implement → Verify loop for your own
+weaver. It follows the generated lookup architecture, with a worked CSV backend
+and deliberate removal of the discovery entry point. It passes the full `--strict` bar.
 
 - **Source:** bundled sample data · **License:** CC0-1.0 · **Backend:** `local` (bundled CSV)
 - A teaching reference: it has **no `braidworks.weavers` entry point**, so it isn't
@@ -24,12 +24,46 @@ end-to-end in a minute, then copy the shape for your own weaver. It is literally
 - **The data:** [`src/example_weaver/data/example_traits.csv`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/src/example_weaver/data/example_traits.csv).
 - **Per-function contracts:** [weaverkit/docs/implementing-backends.md](https://github.com/rafaelmdc/braidworks/blob/main/weaverkit/docs/implementing-backends.md).
 
+## Complete offline batch example
+
 ```python
+import asyncio
+from braidworks.core import Strand, StrandSet
 from example_weaver import build_example_weaver
 
-weaver = build_example_weaver()        # zero-config, offline
-# In an app that wires a WeaverFactory, `example_weaver.register(factory)` adds it as a provider.
+
+async def main():
+    inputs = [
+        StrandSet.from_strands(f"sample-{i}", [Strand("ncbi.taxon.id", taxid)])
+        for i, taxid in enumerate(["562", "1423", "999999999", "562"])
+    ]
+    async with build_example_weaver() as weaver:
+        results = await weaver.execute_batch(
+            "describe_traits",
+            inputs,
+            requested_outputs=frozenset({"microbe.trait.gram_stain"}),
+            backend="local",
+        )
+        for result in results:
+            print(result.to_json())
+
+
+asyncio.run(main())
 ```
+
+This returns four results in input order: negative, positive, a `NO_MATCH`, and
+negative again. Only the requested gram-stain output is emitted; duplicates retain
+separate input identities. Request `microbe.trait.optimum_temp` for the growth group.
+Temperatures are string values in degrees Celsius. These five illustrative rows
+are teaching data, not a strain-specific, experimentally validated trait database.
+
+The backend privately caches the bundled CSV, maps columns to output keys, and
+copies each row into the result so callers cannot mutate cached data. Neither
+group requires expensive work, so it computes both fields and lets the core mapper
+filter requested outputs. Change `DATA_VERSION` whenever the bundled data changes.
+
+For explicit provider registration, call `example_weaver.register(factory)` on a
+`WeaverFactory`. This package intentionally has no CLI discovery entry point.
 
 ```bash
 make test                                              # conformance + contract + golden
