@@ -62,3 +62,9 @@ under #186/#189; see [source evidence and design](SRC-UNIPROT.implementation.md)
 The composed private job adapter preserves public capabilities and source-local
 selection. WP-UNIPROT-06/#188 remains pending a feature scope decision; sequence,
 annotation evidence and proteome enumeration have not been added by this refactor.
+
+WP-UNIPROT-06/#188 was explicitly accepted and implemented as exact primary-accession
+description with separate sequence/annotation groups. See the accepted
+[feature spec](uniprot-description.spec.md), [plan](uniprot-description.plan.md) and
+[source acceptance evidence](SRC-UNIPROT.implementation.md). Proteome enumeration
+and isoform-specific retrieval remain independent future scope.

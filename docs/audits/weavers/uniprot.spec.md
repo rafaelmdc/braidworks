@@ -1,6 +1,9 @@
 # UniProt proposed specification
 
-Status: proposed, not accepted/implemented. [Evidence](uniprot.audit.md).
+Status: shared and source-group requirements implemented. Requirement 009 was
+explicitly accepted as exact description with sequence/annotation groups; see
+[accepted feature scope](uniprot-description.spec.md). Further proteome/isoform
+capabilities remain separate scope decisions. [Evidence](uniprot.audit.md).
 
 | Requirement | Intended behavior | Acceptance |
 |---|---|---|

@@ -14,6 +14,7 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 | Capability | Consumes | Produces |
 |---|---|---|
 | `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
+| `describe_protein` | `protein.uniprot.accession` | Identity/details; optional `protein.sequence` and `protein.annotation.records` |
 | `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id`, `string.id` | `protein.uniprot.accession` (set) + mapping count/records |
 | `map_from_accession` | `protein.uniprot.accession` | **any of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `pathway.kegg.id`, `pathway.reactome.id`, `refseq.protein.id`, `orthodb.group`, `eggnog.group`, `chembl.id`, `drugbank.id`, `pdb.id`, `string.id` (each a set) + mapping count/records |
 
@@ -209,3 +210,69 @@ Failures discard partial mappings. Paired reviewed/full jobs cancel and drain th
 sibling on failure or cancellation before returning. Client ownership remains with
 the backend or injecting caller as documented above. No public capability or
 configuration changes are required.
+
+## Exact protein description (0.2.10)
+
+Use `describe_protein` to drill into an existing primary accession. It returns that
+entry, including unreviewed entries, without representative selection or species
+substitution. Input is case-insensitive. Secondary accessions and isoform suffixes
+(such as `P04637-2`) are not automatically converted to primary accessions: this
+capability returns a miss for unsupported or non-primary identifiers.
+
+| Group | Outputs | Source cost and meaning |
+|---|---|---|
+| `identity` | Existing accession, name, gene, organism, reviewed, taxid, function and length | Compact search projection; identity is computed internally on every call. Request an identity output to receive this group. |
+| `sequence` | `protein.sequence` | Canonical entry amino-acid string. Adds the sequence field, without downloading annotation arrays. This is not an isoform collection. |
+| `annotations` | `protein.annotation.records` | Full entry retrieval; preserves comments, features, references, nested evidence, entryAudit/proteinExistence where present, and observed release headers. No hidden list cap. |
+
+The structured record retains source feature coordinates/modifiers and evidence
+codes/references as supplied. The existing `protein.function` remains a compact
+display summary; use annotation records when evidence matters. Valid absent
+annotation categories are empty lists; unavailable optional identity fields are
+omitted. Missing/invalid requested sequences produce an error. Release metadata
+identifies the observed response, not a frozen content snapshot.
+
+Annotation calls may download large responses. The full response includes sequence
+bytes even if only annotations are selected, but the sequence output is emitted
+only when requested. The CLI's default is all outputs; use `--want` to control cost.
+Each distinct chunk of up to 25 accessions shares one bulk OR-accession search.
+Pagination is capped at ten pages and rejects repeated/malformed continuations;
+a failed page discards the chunk's partial data. Other chunks remain independent.
+Input positions and duplicates are preserved.
+
+```bash
+braidworks run uniprot describe_protein --have protein.uniprot.accession=P04637 --want protein.sequence,protein.length
+braidworks weave --have gene.ncbi.id=7157 --want protein.sequence --only uniprot
+```
+
+Complete offline Python example (the fixture's annotation arrays are explicitly
+truncated observed samples; production returns the full provider entry):
+
+```python
+import asyncio
+from braidworks.core import Strand, StrandSet
+from uniprot_weaver.factory import build_uniprot_weaver_fixture
+
+
+async def main():
+    inputs = [
+        StrandSet.from_strands(f"protein-{i}", [Strand("protein.uniprot.accession", accession)])
+        for i, accession in enumerate(["P04637", "A0A087WT22", "Q99999"])
+    ]
+    async with build_uniprot_weaver_fixture() as weaver:
+        results = await weaver.execute_batch(
+            "describe_protein",
+            inputs,
+            backend="api",
+            requested_outputs=frozenset({"protein.sequence", "protein.length"}),
+        )
+        for result in results:
+            print(result.to_json())
+
+
+asyncio.run(main())
+```
+
+Use `build_uniprot_weaver()` for the live service. Proteome enumeration and
+isoform-specific retrieval remain separate future capabilities. The request/entry
+model follows [UniProt's API documentation paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC12230682/).

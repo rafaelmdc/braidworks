@@ -25,7 +25,7 @@ def _next_link(resp: httpx.Response) -> str | None:
     for part in link.split(","):
         if 'rel="next"' in part:
             start, end = part.find("<"), part.find(">")
-            if 0 <= start < end:
+            if 0 <= start < end and part[start + 1 : end].strip():
                 return part[start + 1 : end]
             raise _InvalidResponse("UniProt next-page link is malformed")
     return None

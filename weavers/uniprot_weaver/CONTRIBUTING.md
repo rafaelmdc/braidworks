@@ -66,6 +66,12 @@ See [README.md](README.md) and `weaver.spec.toml` for the current output keys an
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.
+- `describe_protein` consumes exact primary accessions; keep secondary/isoform alias
+  resolution separate so it cannot silently substitute identity.
+- Description normalization and bulk acquisition live in `backends/description.py`;
+  keep sequence projection separate from evidence-bearing full entry retrieval.
+- Annotation records retain provider coordinates, modifiers, nested evidence and
+  references. Do not strip evidence or quietly cap these arrays.
+- Proteome/taxon enumeration needs a separate `list_*` capability with explicit
+  scope, pagination/completeness, stable accession outputs and cancellation rules.
+  It is not implemented by description or representative resolution.

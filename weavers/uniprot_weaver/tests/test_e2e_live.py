@@ -183,3 +183,48 @@ async def test_live_explicit_unreviewed_accession_preserves_identity():
     assert values["protein.uniprot.accession"] == "A0A087WT22"
     assert values["protein.reviewed"] == "unreviewed"
     assert values["ncbi.taxon.id"] == 9606
+
+
+async def test_live_describe_exact_reviewed_and_unreviewed_sequences():
+    async with build_uniprot_weaver() as weaver:
+        results = await weaver.execute_batch(
+            "describe_protein",
+            [
+                StrandSet.from_strands(f"p{i}", [Strand("protein.uniprot.accession", acc)])
+                for i, acc in enumerate(["P04637", "A0A087WT22"])
+            ],
+            requested_outputs=frozenset({"protein.sequence", "protein.length", "protein.reviewed"}),
+            backend="api",
+        )
+    for result, accession, reviewed in zip(
+        results, ["P04637", "A0A087WT22"], ["reviewed", "unreviewed"], strict=True
+    ):
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {strand.type_id: strand.value for strand in result.strands}
+        assert values["protein.uniprot.accession"] == accession
+        assert values["protein.reviewed"] == reviewed
+        assert len(values["protein.sequence"]) == values["protein.length"]
+    assert len(next(s.value for s in results[0].strands if s.type_id == "protein.sequence")) == 393
+
+
+async def test_live_describe_preserves_annotations_and_release():
+    async with build_uniprot_weaver() as weaver:
+        result = await weaver.execute(
+            "describe_protein",
+            StrandSet.from_strands("p53", [Strand("protein.uniprot.accession", "P04637")]),
+            requested_outputs=frozenset({"protein.annotation.records"}),
+            backend="api",
+        )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    records = next(s.value for s in result.strands if s.type_id == "protein.annotation.records")
+    assert (
+        records["features"] and records["references"] and records["entryAudit"]["entryVersion"] > 0
+    )
+    assert records["release"]["version"]
+    assert any(
+        text.get("evidences")
+        for comment in records["comments"]
+        for text in comment.get("texts", [])
+    )

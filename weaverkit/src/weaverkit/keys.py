@@ -156,6 +156,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.gene": "The gene that codes for this protein.",
     "protein.organism": "The organism this protein comes from.",
     "protein.function": "What this protein does — UniProt's curated summary.",
+    "protein.sequence": "Canonical UniProtKB entry amino-acid sequence; produced by describe_protein.",
+    "protein.annotation.records": "Structured UniProtKB comments/features/references and observed evidence/release metadata.",
     "protein.length": "This protein's length in amino acids.",
     "protein.reviewed": "Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL).",
     # UniProt ID-mapping outputs (uniprot_weaver map_to/from_accession)

@@ -16,8 +16,8 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.9"
-WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
+WEAVER_VERSION = "0.2.10"
+WEAVER_TITLE = "UniProt protein identity, exact sequence/annotation description and ID mapping"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
@@ -81,6 +81,48 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         description="NCBI taxid to constrain the species (e.g. 9606 human, 10090 mouse). A bare gene symbol like TP53 otherwise resolves to whichever species ranks first; unset = any.",
                     ),
                 ),
+            ),
+            Capability(
+                id="describe_protein",
+                consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {
+                        "ncbi.taxon.id",
+                        "protein.annotation.records",
+                        "protein.function",
+                        "protein.gene",
+                        "protein.length",
+                        "protein.name",
+                        "protein.organism",
+                        "protein.reviewed",
+                        "protein.sequence",
+                        "protein.uniprot.accession",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="identity",
+                        outputs=frozenset(
+                            {
+                                "ncbi.taxon.id",
+                                "protein.function",
+                                "protein.gene",
+                                "protein.length",
+                                "protein.name",
+                                "protein.organism",
+                                "protein.reviewed",
+                                "protein.uniprot.accession",
+                            }
+                        ),
+                    ),
+                    OutputGroup(id="sequence", outputs=frozenset({"protein.sequence"})),
+                    OutputGroup(
+                        id="annotations", outputs=frozenset({"protein.annotation.records"})
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=25,
+                always_computed_groups=frozenset({"identity"}),
             ),
             Capability(
                 id="map_to_accession",

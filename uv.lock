@@ -1015,7 +1015,7 @@ wheels = [
 
 [[package]]
 name = "uniprot-weaver"
-version = "0.2.9"
+version = "0.2.10"
 source = { editable = "weavers/uniprot_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.7"
+version = "0.6.8"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

@@ -33,6 +33,7 @@ from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
 from uniprot_weaver import mapping
+from uniprot_weaver.backends.description import ANNOTATIONS, SEQUENCE, describe_batch
 from uniprot_weaver.backends.jobs import MappingJobClient
 from uniprot_weaver.backends.validation import _InvalidResponse, _object, _rows
 
@@ -261,6 +262,21 @@ class UniprotApiBackend(HTTPClientLifecycle, BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "describe_protein":
+            groups = groups_to_compute | {"identity"}
+            if SEQUENCE in requested_outputs:
+                groups |= {"sequence"}
+            if ANNOTATIONS in requested_outputs:
+                groups |= {"annotations"}
+            return await describe_batch(
+                self._http(),
+                queries,
+                groups=frozenset(groups),
+                fields=_FIELDS,
+                accession_pattern=_ACCESSION,
+                validate_entry=_validate_entry,
+                extract_identity=_extract,
+            )
         if capability_id == mapping.TO_ACCESSION:
             return await self._map_to_accession(queries)
         if capability_id == mapping.FROM_ACCESSION:

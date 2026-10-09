@@ -32,7 +32,7 @@ Registered bridge keys — what links weavers together.
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
-| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein` | `agora:describe_metabolic_reconstruction`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
+| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
@@ -44,7 +44,7 @@ Registered bridge keys — what links weavers together.
 | `protein.ensembl.id` | Ensembl protein id for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `protein.interpro.id` | An InterPro entry id. | — | — |
 | `protein.pfam.id` | A Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:map_from_accession` |
+| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `string.id` | Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping. | `string:list_interactions`, `uniprot:map_from_accession` | `uniprot:map_to_accession` |
@@ -132,16 +132,18 @@ Descriptive payload fields; nothing joins on them.
 | `pathway.reactome.names` | The Reactome pathways this protein takes part in. | `reactome:list_pathways` | — |
 | `pathway.reactome.records` | This protein's Reactome pathways — stable id, name, in-disease flag. | `reactome:list_pathways` | — |
 | `pathway.reactome.species` | The species of one Reactome pathway. | `reactome:describe_pathway` | — |
-| `protein.function` | What this protein does — UniProt's curated summary. | `uniprot:resolve_protein` | — |
-| `protein.gene` | The gene that codes for this protein. | `uniprot:resolve_protein` | — |
+| `protein.annotation.records` | Structured UniProtKB comments/features/references and observed evidence/release metadata. | `uniprot:describe_protein` | — |
+| `protein.function` | What this protein does — UniProt's curated summary. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
+| `protein.gene` | The gene that codes for this protein. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.interaction.count` | Number of edges observed within the configured STRING retrieval limit. | `string:list_interactions` | — |
 | `protein.interaction.coverage` | STRING retrieval limit, observed edge/partner counts and unknown network completeness. | `string:list_interactions` | — |
 | `protein.interaction.partners` | The proteins this protein interacts with. | `string:list_interactions` | — |
 | `protein.interaction.records` | This protein's interactions — partner, combined score, per-channel subscores. | `string:list_interactions` | — |
-| `protein.length` | This protein's length in amino acids. | `uniprot:resolve_protein` | — |
-| `protein.name` | This protein's recommended name. | `uniprot:resolve_protein` | — |
-| `protein.organism` | The organism this protein comes from. | `uniprot:resolve_protein` | — |
-| `protein.reviewed` | Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL). | `uniprot:resolve_protein` | — |
+| `protein.length` | This protein's length in amino acids. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
+| `protein.name` | This protein's recommended name. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
+| `protein.organism` | The organism this protein comes from. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
+| `protein.reviewed` | Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL). | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
+| `protein.sequence` | Canonical UniProtKB entry amino-acid sequence; produced by describe_protein. | `uniprot:describe_protein` | — |
 | `protein.uniprot.mapping.count` | How many ids this protein mapped to. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `protein.uniprot.mapping.records` | The ids this protein mapped to — id plus reviewed/db. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model` | — |
