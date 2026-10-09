@@ -22,3 +22,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #210, #211. Pathway-list and detail responses must be lists of objects with stable identifiers. Malformed data becomes an error; a genuine empty pathway list remains a miss. Detail-request failures affect only that request chunk, and later chunks are still attempted.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared source identity work implemented
+
+The #154 findings are implemented and verified in
+[SH-07 implementation and migration evidence](SH-07.implementation.md).
+Related work packages/findings remain separately tracked.

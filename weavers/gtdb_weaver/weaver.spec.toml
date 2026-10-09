@@ -10,12 +10,12 @@ db_name = "gtdb"
 weaver_id = "gtdb"
 kind = "lookup"
 title = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
-version = "0.2.4"
+version = "0.2.5"
 license = "CC-BY-SA-4.0"
 citation = "https://doi.org/10.1093/nar/gkab776"
 attribution = "GTDB (Genome Taxonomy Database), Parks et al."
 source_url = "https://gtdb.ecogenomic.org"
-fingerprint_source = "GTDB release tag recorded at DB build (e.g. R226); api: GTDB API contract"
+fingerprint_source = "verified pinned release bundle, original resource hashes and bound local generation"
 backends = ["local", "api"]
 # Real excerpts. (1) GTDB metadata TSV (selected columns of bac120_metadata.tsv) —
 # the local crosswalk source; gtdb_taxonomy is a ';'-joined rank-prefixed lineage, and

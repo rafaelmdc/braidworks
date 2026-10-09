@@ -16,20 +16,27 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from braidworks.core import BaseWeaver
 
-from pdbe_weaver.backends.api import PdbeApiBackend
+from pdbe_weaver.backends.api import DEFAULT_BASE_URL, PdbeApiBackend
 from pdbe_weaver.weaver import PdbeWeaver
 
 
-def build_pdbe_weaver(**_config: Any) -> BaseWeaver:
+def build_pdbe_weaver(
+    *,
+    base_url: str = DEFAULT_BASE_URL,
+    client: httpx.AsyncClient | None = None,
+    limit: int = 25,
+    **_config: Any,
+) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
-    Wires every declared backend present-but-possibly-unconfigured. For real use,
-    add a configured builder (see the module docstring / the commented skeletons).
+    With no arguments, wires the keyless API for introspection. Explicit endpoint,
+    client and source-policy arguments configure the same backend for real queries.
     """
     backends = {
-        "api": PdbeApiBackend(),
+        "api": PdbeApiBackend(base_url=base_url, client=client, limit=limit),
     }
     return PdbeWeaver(backends)
 

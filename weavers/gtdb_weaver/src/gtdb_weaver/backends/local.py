@@ -19,13 +19,15 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, BackendConfigurationError, LookupRecord
 from braidworks.core.source_identity import SourceBinding
 
 from gtdb_weaver import taxonomy, tree
+from gtdb_weaver.releases import file_hash
 
 _TREE_PLACEMENT = "describe_gtdb_tree_placement"
 
@@ -56,9 +58,25 @@ class GtdbLocalBackend(BackendBase):
     def fingerprint(self) -> str:
         return self._source.fingerprint() if self.is_configured() else "gtdb-local-none"
 
-    def _reference_rootpaths(self) -> dict[str, tree.RootPath]:
+    def _reference_rootpaths(self, con: Any) -> dict[str, tree.RootPath]:
         """Leaf-accession → root path for the wired reference tree(s); {} if none present."""
         if self._rootpaths is None:
+            row = con.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
+            if row:
+                bundle = json.loads(row[0])
+                if bundle.get("kind") == "official-release":
+                    expected = {
+                        r["md5"]
+                        for label, r in bundle["resources"].items()
+                        if label.endswith("_tree")
+                    }
+                    if any(
+                        not path.exists() or file_hash(path, "md5") not in expected
+                        for path in self._tree_paths
+                    ):
+                        raise BackendConfigurationError(
+                            "GTDB trees do not match the crosswalk release/checksum bundle"
+                        )
             texts = [p.read_text(encoding="utf-8") for p in self._tree_paths if p.exists()]
             self._rootpaths = tree.load_rootpaths(texts) if texts else {}
         return self._rootpaths
@@ -98,7 +116,7 @@ class GtdbLocalBackend(BackendBase):
         return records
 
     def _fetch_tree_placement(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        rootpaths = self._reference_rootpaths()
+        rootpaths = self._reference_rootpaths(con)
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             accession = taxonomy.rep_accession(con, query)

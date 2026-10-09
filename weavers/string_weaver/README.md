@@ -78,3 +78,18 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Mapping/edge response shapes and echoed identifiers are validated. Malformed or uncorrelatable rows now produce an error for their request chunk, including nameless edges without a query identifier that were previously silently skipped. Successful mapping/partner chunks remain available. Empty lists and identifier HTTP 400/404 remain misses. This changes one existing non-contract unit test to assert the stronger failure semantics; conformance tests are preserved.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Pinned service identity
+
+The default API endpoint is now `https://version-12-5.string-db.org/api`, whose
+version endpoint was probed and reported 12.5. STRING recommends a
+[version-specific address for production](https://version5.string-db.org/help/api/).
+This replaces the mutable `string-db.org/api` default previously labelled v12.
+
+`build_string_weaver(base_url=..., client=..., limit=25)` exposes the existing
+positive retrieval limit. Fingerprints hash the effective endpoint, limit and an
+honest release descriptor. An injected client's base URL is the effective source;
+a custom/unversioned endpoint is not automatically labelled 12.5. Endpoint
+credentials are not emitted. Retrieval coverage remains explicitly bounded, as
+explained above; pinning a release does not turn a capped partner list into a full
+network. Existing cache entries have different fingerprints and will not be reused.

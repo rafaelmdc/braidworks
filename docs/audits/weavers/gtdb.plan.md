@@ -31,3 +31,9 @@ passed. Regression tests cover stale taxon/species removal, incomplete query
 schema rejection and iterator/empty-input/release/publication failures with and
 without existing targets. Release bundle coherence and ingestion memory work
 (WV-GTDB-004/007) remain open. No API backend changes.
+
+## Shared source identity work implemented
+
+The #154 findings are implemented and verified in
+[SH-07 implementation and migration evidence](SH-07.implementation.md).
+Related work packages/findings remain separately tracked.

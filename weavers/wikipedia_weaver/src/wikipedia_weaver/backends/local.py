@@ -13,6 +13,7 @@ never raises — ``is_configured()`` reports whether the DB is present and built
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,9 @@ class WikipediaLocalBackend(BackendBase):
             dump_month = con.execute(
                 "SELECT value FROM metadata WHERE key='dump_month'"
             ).fetchone()[0]
+            parser_complete = json.loads(
+                con.execute("SELECT value FROM metadata WHERE key='parser_coverage'").fetchone()[0]
+            )["complete"]
             try:
                 months = month_window(params.get("months", 1), params.get("end_month", dump_month))
                 agent = params.get("agent", "user")
@@ -85,7 +89,15 @@ class WikipediaLocalBackend(BackendBase):
                 ).fetchone()
                 if row is None:
                     # No row for this article in the dump month → no pageview data.
-                    out.append(LookupRecord(query=query, found=False))
+                    out.append(
+                        LookupRecord(
+                            query=query,
+                            found=False,
+                            error=None
+                            if parser_complete
+                            else "incomplete dump parsing cannot establish article absence",
+                        )
+                    )
                 else:
                     out.append(
                         LookupRecord(
@@ -94,13 +106,13 @@ class WikipediaLocalBackend(BackendBase):
                             values={
                                 "wikipedia.pageviews": int(row[0]),
                                 "wikipedia.pageviews.measurement": measurement(
-                                    months, agent, 1, complete=None
+                                    months, agent, 1, complete=parser_complete
                                 ),
                             },
                             warnings=(
                                 (
                                     f"Pageviews: monthly dump {dump_month}, user, all-access; "
-                                    "dump parser completeness is not established."
+                                    f"dump parser complete={str(parser_complete).lower()}."
                                 ),
                             ),
                         )

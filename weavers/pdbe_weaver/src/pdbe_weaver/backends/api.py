@@ -26,6 +26,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("pdbe_weaver.api")
 
@@ -153,6 +154,8 @@ class PdbeApiBackend(BackendBase):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
         self._limit = limit
 
     def is_configured(self) -> bool:
@@ -160,8 +163,13 @@ class PdbeApiBackend(BackendBase):
         return True
 
     def fingerprint(self) -> str:
-        """A live service; the fingerprint pins the REST API contract."""
-        return "pdbe-api-v1"
+        """Identify the effective endpoint and result-affecting policy, not live contents."""
+        endpoint = (
+            str(self._client.base_url)
+            if self._client is not None and str(self._client.base_url)
+            else self._base_url
+        )
+        return remote_fingerprint("pdbe-api", endpoint, limit=self._limit)
 
     supports_request_pacing = True
 

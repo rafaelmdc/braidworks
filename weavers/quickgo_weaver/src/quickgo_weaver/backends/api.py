@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("quickgo_weaver.api")
 
@@ -141,8 +142,8 @@ class QuickgoApiBackend(BackendBase):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
-        if max_pages < 1:
-            raise ValueError("max_pages must be positive")
+        if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages < 1:
+            raise ValueError("max_pages must be a positive integer")
         self._max_pages = max_pages
 
     def is_configured(self) -> bool:
@@ -150,8 +151,13 @@ class QuickgoApiBackend(BackendBase):
         return True
 
     def fingerprint(self) -> str:
-        """A live service; the fingerprint pins the REST API contract."""
-        return "quickgo-api-v1"
+        """Identify the effective endpoint and result-affecting policy, not live contents."""
+        endpoint = (
+            str(self._client.base_url)
+            if self._client is not None and str(self._client.base_url)
+            else self._base_url
+        )
+        return remote_fingerprint("quickgo-api", endpoint, max_pages=self._max_pages)
 
     supports_request_pacing = True
 

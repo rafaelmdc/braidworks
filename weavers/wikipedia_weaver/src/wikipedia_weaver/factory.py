@@ -14,6 +14,7 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
 from __future__ import annotations
 
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ from braidworks.core import BackendConfigurationError, BaseWeaver
 
 from wikipedia_weaver.backends.api import WikipediaApiBackend
 from wikipedia_weaver.backends.local import WikipediaLocalBackend
-from wikipedia_weaver.setup import default_db_path, ensure_pageviews_db
+from wikipedia_weaver.setup import db_is_valid, default_db_path, ensure_pageviews_db
 from wikipedia_weaver.weaver import WikipediaWeaver
 
 _DUMP_MONTH_RE = re.compile(r"pageviews-(\d{4})(\d{2})-")
@@ -61,9 +62,29 @@ def build_wikipedia_weaver(
     """
     backends: dict[str, Any] = {}
 
-    want_local = db_path is not None or dump_path is not None or auto_setup
+    want_local = (
+        db_path is not None
+        or dump_path is not None
+        or auto_setup
+        or year is not None
+        or month is not None
+    )
     if want_local:
         y, mo = year, month
+        if (year is None) != (month is None):
+            raise BackendConfigurationError("pass both year and month")
+        if (
+            y is None
+            and mo is None
+            and dump_path is None
+            and db_path is not None
+            and db_is_valid(Path(db_path))
+        ):
+            with sqlite3.connect(f"file:{Path(db_path).absolute()}?mode=ro", uri=True) as con:
+                stamp = con.execute("SELECT value FROM metadata WHERE key='dump_month'").fetchone()[
+                    0
+                ]
+            y, mo = int(stamp[:4]), int(stamp[4:])
         if (y is None or mo is None) and dump_path is not None:
             y, mo = _month_from_dump(dump_path)
         if y is None or mo is None:

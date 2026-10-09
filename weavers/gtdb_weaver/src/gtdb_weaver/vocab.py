@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gtdb"
-WEAVER_VERSION = "0.2.4"
+WEAVER_VERSION = "0.2.5"
 WEAVER_TITLE = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

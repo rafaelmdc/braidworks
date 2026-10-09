@@ -87,3 +87,13 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Best-structure and summary responses are validated against their keyed source shape. An unexpected response identifier is an error; results are never borrowed from another identifier. Detail-request failures affect only that request chunk, and later chunks are still attempted.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Source identity and display policy
+
+`build_pdbe_weaver(base_url=..., client=..., limit=25)` exposes the existing
+backend policy. `limit` must be a positive integer and caps the displayed lists;
+full fan-out identifiers and true totals keep their existing semantics. Fingerprints
+hash the effective endpoint (an injected client's base URL takes precedence) and
+limit, so changing either cannot reuse an incompatible cached display. Endpoint
+credentials are not printed. This identifies configuration; an unversioned live
+service is not a frozen data snapshot.

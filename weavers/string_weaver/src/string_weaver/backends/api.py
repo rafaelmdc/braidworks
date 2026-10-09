@@ -29,10 +29,11 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("string_weaver.api")
 
-DEFAULT_BASE_URL = "https://string-db.org/api"
+DEFAULT_BASE_URL = "https://version-12-5.string-db.org/api"
 DEFAULT_LIMIT = 25  # max partners per protein (most confident first)
 _ID_CHUNK = 100  # identifiers per STRING request (newline-separated; keeps the URL bounded)
 # STRING evidence channels: JSON subscore key -> readable name.
@@ -142,8 +143,18 @@ class StringApiBackend(BackendBase):
         return True
 
     def fingerprint(self) -> str:
-        """A live service; the fingerprint pins the REST API/release version."""
-        return f"string-db-v12:limit={self._limit}"
+        """Identify the effective endpoint and result-affecting policy, not live contents."""
+        endpoint = (
+            str(self._client.base_url)
+            if self._client is not None and str(self._client.base_url)
+            else self._base_url
+        )
+        return remote_fingerprint(
+            "string-api",
+            endpoint,
+            limit=self._limit,
+            release="12.5" if endpoint.rstrip("/") == DEFAULT_BASE_URL else "custom-or-unversioned",
+        )
 
     supports_request_pacing = True
 

@@ -104,3 +104,12 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Annotation/term rows and pagination metadata are validated before projection. Missing pagination metadata still means unknown coverage, with the existing exported warning. The observed empty-source convention (zero hits, current=total=0) remains a clean miss. An explicitly echoed different accession/page or unrequested term is an error. Term-detail chunk failures preserve other chunks. For legacy singleton responses without geneProductId, correlation still relies on the single requested accession; present echoes are checked.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Source identity and pagination budget
+
+`build_quickgo_weaver(base_url=..., client=..., max_pages=10)` exposes the
+backend's pagination budget. `max_pages` must be a positive integer. Fingerprints
+hash the effective endpoint (including an injected client's base URL) and budget,
+so a result acquired under one budget cannot satisfy a different source policy.
+Endpoint credentials are not printed; an unversioned live service remains mutable.
+The existing annotation coverage output still reports whether acquisition completed.

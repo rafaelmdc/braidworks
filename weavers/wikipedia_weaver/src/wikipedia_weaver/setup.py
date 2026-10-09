@@ -23,8 +23,11 @@ per article title (titles are underscored, exactly as ``wikipedia.title`` emits 
 from __future__ import annotations
 
 import bz2
+import hashlib
+import json
 import logging
 import os
+import re
 import sqlite3
 import tempfile
 import uuid
@@ -33,6 +36,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import IO
 
+from braidworks.core import BackendConfigurationError
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
 from braidworks.core.localdb import ensure_local_db
@@ -68,32 +72,83 @@ def db_is_valid(path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
-        row = con.execute("SELECT value FROM metadata WHERE key='dump_month'").fetchone()
-        if not row or not row[0]:
+        meta = dict(con.execute("SELECT key, value FROM metadata"))
+        _validate_month(meta.get("dump_month", ""))
+        if meta.get("schema_version") != "2" or not re.fullmatch(
+            r"[0-9a-f]{64}", meta.get("source_sha256", "")
+        ):
+            return False
+        scope = json.loads(meta["measurement"])
+        coverage = json.loads(meta["parser_coverage"])
+        if not isinstance(coverage, dict):
+            return False
+        if scope != {
+            "project": "en.wikipedia",
+            "access": "all-access",
+            "agent": "user",
+            "granularity": "monthly",
+            "month": meta["dump_month"],
+        } or not isinstance(coverage.get("complete"), bool):
+            return False
+        if con.execute("SELECT 1 FROM pageviews WHERE views < 0 LIMIT 1").fetchone():
             return False
         return con.execute("SELECT 1 FROM pageviews LIMIT 1").fetchone() is not None
-    except sqlite3.Error:
+    except (sqlite3.Error, ValueError, KeyError, TypeError):
         return False
     finally:
         con.close()
 
 
-def _parse_lines(lines: Iterable[str]) -> Iterable[tuple[str, int]]:
-    """Yield (article_title, views) for English-Wikipedia rows of a pageview_complete dump."""
+def _parse_lines(lines: Iterable[str], coverage: dict | None = None) -> Iterable[tuple[str, int]]:
+    """Validate relevant rows; malformed counts are diagnosed, never added."""
+    stats = coverage if coverage is not None else {}
+    stats.update(total_rows=0, irrelevant_rows=0, valid_rows=0, invalid_rows=0)
     for line in lines:
-        parts = line.split(" ")
-        if len(parts) < 5 or parts[0] not in ENWIKI_DOMAINS:
+        stats["total_rows"] += 1
+        parts = line.split()
+        if parts and parts[0] not in ENWIKI_DOMAINS:
+            stats["irrelevant_rows"] += 1
             continue
-        title = parts[1]
         try:
-            views = int(parts[-2])  # last field is the hourly-distribution code
-        except ValueError:
+            if (
+                len(parts) != 6
+                or not parts[1]
+                or parts[3] not in {"desktop", "mobile-web", "mobile-app"}
+            ):
+                raise ValueError("malformed English pageview row")
+            views = int(parts[-2])
+            if views < 0:
+                raise ValueError("negative view count")
+        except (ValueError, IndexError):
+            stats["invalid_rows"] += 1
             continue
-        if title and views:
-            yield title, views
+        stats["valid_rows"] += 1
+        yield parts[1], views
+    stats["complete"] = stats["invalid_rows"] == 0
 
 
-def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month: str) -> None:
+class _HashingReader:
+    def __init__(self, source, digest):
+        self.source = source
+        self.digest = digest
+
+    def read(self, size=-1):
+        data = self.source.read(size)
+        self.digest.update(data)
+        return data
+
+    def __getattr__(self, name):
+        return getattr(self.source, name)
+
+
+def _validate_month(month: str) -> None:
+    if not re.fullmatch(r"\d{6}", month) or not 1 <= int(month[4:]) <= 12 or int(month[:4]) < 1:
+        raise ValueError("dump month must be YYYYMM with a valid month")
+
+
+def build_pageviews_db(
+    tmp_db: Path, *, source: IO[bytes] | Iterable[str], month: str, source_url: str | None = None
+) -> None:
     """Build the pageviews SQLite at ``tmp_db`` from a dump stream.
 
     ``source`` is either a binary bz2 file object (decompressed here) or an already
@@ -101,14 +156,28 @@ def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month
     across access methods are summed via UPSERT in batched transactions so peak memory
     stays flat regardless of dump size.
     """
+    _validate_month(month)
+    digest = hashlib.sha256()
+    coverage: dict = {}
+    binary = hasattr(source, "read")
     with ExitStack() as stack:
         # A binary file object is a bz2 dump to decompress+decode; tests pass text lines.
         if hasattr(source, "read"):
             text: Iterable[str] = stack.enter_context(
-                bz2.open(source, mode="rt", encoding="utf-8", errors="replace")
+                bz2.open(
+                    _HashingReader(source, digest), mode="rt", encoding="utf-8", errors="strict"
+                )
             )
         else:
-            text = source
+
+            def hashed_lines():
+                for line in source:
+                    encoded = line.encode("utf-8")
+                    digest.update(len(encoded).to_bytes(8, "big"))
+                    digest.update(encoded)
+                    yield line
+
+            text = hashed_lines()
 
         con = sqlite3.connect(tmp_db)
         try:
@@ -119,7 +188,7 @@ def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month
 
             batch: list[tuple[str, int]] = []
             n = 0
-            for title, views in _parse_lines(text):
+            for title, views in _parse_lines(text, coverage):
                 batch.append((title, views))
                 if len(batch) >= _UPSERT_BATCH:
                     _flush(con, batch)
@@ -131,7 +200,27 @@ def build_pageviews_db(tmp_db: Path, *, source: IO[bytes] | Iterable[str], month
 
             con.executemany(
                 "INSERT OR REPLACE INTO metadata VALUES (?, ?)",
-                [("schema_version", "1"), ("build_id", uuid.uuid4().hex)],
+                [
+                    ("schema_version", "2"),
+                    ("build_id", uuid.uuid4().hex),
+                    ("source_sha256", digest.hexdigest()),
+                    ("source_kind", "compressed-bz2" if binary else "decoded-lines"),
+                    ("source_url", source_url or "caller-supplied"),
+                    (
+                        "measurement",
+                        json.dumps(
+                            {
+                                "project": "en.wikipedia",
+                                "access": "all-access",
+                                "agent": "user",
+                                "granularity": "monthly",
+                                "month": month,
+                            },
+                            sort_keys=True,
+                        ),
+                    ),
+                    ("parser_coverage", json.dumps(coverage, sort_keys=True)),
+                ],
             )
             con.execute(
                 "INSERT OR REPLACE INTO metadata(key, value) VALUES ('dump_month', ?)", (month,)
@@ -166,18 +255,39 @@ def ensure_pageviews_db(
     consent gate). The heavy build happens here, never inside a lookup.
     """
     target = Path(db_path) if db_path is not None else default_db_path()
-    stamp = f"{year}{month:02d}"
+    if (
+        isinstance(year, bool)
+        or isinstance(month, bool)
+        or not isinstance(year, int)
+        or not isinstance(month, int)
+    ):
+        raise TypeError("year and month must be integers")
+    stamp = f"{year:04d}{month:02d}"
+    _validate_month(stamp)
+    if db_is_valid(target) and not refresh:
+        with sqlite3.connect(target) as con:
+            actual = con.execute("SELECT value FROM metadata WHERE key='dump_month'").fetchone()[0]
+        if actual != stamp:
+            raise BackendConfigurationError(
+                f"pageviews DB month={actual}, requested={stamp}; choose another db_path or refresh=True"
+            )
+    if dump_path is not None:
+        match = re.search(r"pageviews-(\d{6})-", Path(dump_path).name)
+        if match and match[1] != stamp:
+            raise BackendConfigurationError(f"dump filename month={match[1]}, requested={stamp}")
 
     def build(tmp_db: Path) -> None:
         if dump_path is not None:
             with open(dump_path, "rb") as fh:
-                build_pageviews_db(tmp_db, source=fh, month=stamp)
+                build_pageviews_db(
+                    tmp_db, source=fh, month=stamp, source_url=str(Path(dump_path).absolute())
+                )
             return
         url = DUMP_URL_TEMPLATE.format(year=year, month=month)
         with tempfile_named(tmp_db.parent, ".bz2") as raw:
             _download(url, raw)
             with open(raw, "rb") as fh:
-                build_pageviews_db(tmp_db, source=fh, month=stamp)
+                build_pageviews_db(tmp_db, source=fh, month=stamp, source_url=url)
 
     return ensure_local_db(
         target,

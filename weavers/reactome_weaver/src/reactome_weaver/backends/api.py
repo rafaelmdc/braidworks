@@ -25,6 +25,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("reactome_weaver.api")
 
@@ -114,6 +115,8 @@ class ReactomeApiBackend(BackendBase):
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")
         self._max_concurrency = max_concurrency
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
         self._limit = limit
 
     def is_configured(self) -> bool:
@@ -121,8 +124,13 @@ class ReactomeApiBackend(BackendBase):
         return True
 
     def fingerprint(self) -> str:
-        """A live service; the fingerprint pins the ContentService API contract."""
-        return "reactome-contentservice-v1"
+        """Identify the effective endpoint and result-affecting policy, not live contents."""
+        endpoint = (
+            str(self._client.base_url)
+            if self._client is not None and str(self._client.base_url)
+            else self._base_url
+        )
+        return remote_fingerprint("reactome-api", endpoint, limit=self._limit)
 
     supports_request_pacing = True
 

@@ -25,3 +25,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #191, #192. Best-structure and summary responses are validated against their keyed source shape. An unexpected response identifier is an error; results are never borrowed from another identifier. Detail-request failures affect only that request chunk, and later chunks are still attempted.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared source identity work implemented
+
+The #154 findings are implemented and verified in
+[SH-07 implementation and migration evidence](SH-07.implementation.md).
+Related work packages/findings remain separately tracked.

@@ -85,3 +85,12 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Pathway-list and detail responses must be lists of objects with stable identifiers. Malformed data becomes an error; a genuine empty pathway list remains a miss. Detail-request failures affect only that request chunk, and later chunks are still attempted.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Source identity and display policy
+
+`build_reactome_weaver(base_url=..., client=..., limit=30)` exposes the backend's
+positive integer display cap. Full fan-out identifiers and true totals retain their
+existing semantics. Fingerprints hash the effective endpoint (including an injected
+client's base URL) and cap. Changing either separates cached results, without
+printing endpoint credentials. Configuration identity does not freeze the contents
+of an unversioned live service.

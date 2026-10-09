@@ -60,3 +60,21 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/mondo_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Source provenance and ontology validation
+
+Schema 2 records the original OBO SHA-256, observed `data-version`, source descriptor
+and acquisition time. A missing/unknown release is represented as an explicitly
+unversioned content hash, rather than a fabricated release. Caller-supplied terms
+have a separately labelled normalized-content hash and do not claim an OBO byte hash.
+The existing `SourceBinding` ties metadata and lookups to the same local generation.
+
+`ensure_mondo_db(..., expected_version="releases/YYYY-MM-DD")` and the configured
+builder accept an expected OBO header version. A mismatch fails the staged build;
+it does not relabel a different release. This is a version check, not an archive
+selection API: the default download still acquires the current provider OBO.
+
+Builders and validators check unique term identifiers, names, parent references,
+acyclic `is_a` edges, referential coherence of name/xref tables and recorded counts.
+Invalid graphs are rejected before writing. Schema 1 databases require rebuilding
+to obtain source provenance and the stronger validation gate.

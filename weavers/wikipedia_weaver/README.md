@@ -95,3 +95,27 @@ Duplicate or unexpected API bins, mismatched articles and measurement fields are
 errors. Missing bins return an observed subtotal with incomplete coverage. The
 local parser's completeness remains unknown, rather than claiming a complete dump.
 The API interval ends at the last completed month, excluding the current partial month.
+
+## Local dump identity and month selection
+
+A requested month must match the database's recorded month. Reuse never silently
+returns a January database for a February request: select another path or explicitly
+use `refresh=True`. A prebuilt `db_path` can infer its stored month, while a supplied
+`year` and `month` select the local backend. Supply both together; an identifiable
+dump filename must agree with an explicitly requested month.
+
+Schema 2 records the original compressed dump's SHA-256, source location, month and
+measurement descriptor (`en.wikipedia`, all-access, user, monthly), plus parser
+counts for valid, invalid and irrelevant rows. Caller-supplied text lines have a
+separately labelled hash with record boundaries; they do not claim a compressed-file
+hash. Negative/malformed relevant rows are rejected from aggregation and counted;
+valid zero counts remain known zero. Invalid UTF-8 or decompression failures abort
+the staged build. Source hashes and descriptors participate in the existing local
+`SourceBinding` generation identity.
+
+Local measurement output now reports the observed parser completeness. If parsing
+was incomplete, an absent article returns an availability error rather than claiming
+source absence; retained totals carry incomplete coverage. This completeness applies
+to parsing the supplied artifact, not a guarantee about upstream traffic collection.
+Schema 1 databases require rebuilding; no dump download occurs merely to inspect
+an existing valid database.

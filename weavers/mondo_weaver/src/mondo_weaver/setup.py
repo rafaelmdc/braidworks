@@ -14,16 +14,20 @@ publish) lives in ``braidworks.core.localdb``; this module supplies the domain p
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sqlite3
 import urllib.request
 import uuid
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
-OBO_URL = "http://purl.obolibrary.org/obo/mondo.obo"
+OBO_URL = "https://purl.obolibrary.org/obo/mondo.obo"
 NAMESPACE = "mondo"
 DB_FILENAME = "mondo.sqlite"
 _FETCH_TIMEOUT = 300  # seconds; the OBO is ~53 MB
@@ -129,8 +133,51 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
     return data_version, terms
 
 
-def write_db(target: Path, *, data_version: str | None, terms: list[_Term]) -> None:
+def _validate_graph(terms: list[_Term]) -> None:
+    ids = {term.mondo_id for term in terms}
+    if (
+        len(ids) != len(terms)
+        or not ids
+        or any(not re.fullmatch(r"MONDO:\d+", identifier) for identifier in ids)
+    ):
+        raise ValueError("MONDO terms need distinct valid identifiers")
+    if any(not term.name or any(parent not in ids for parent in term.parents) for term in terms):
+        raise ValueError("MONDO graph has unnamed terms or dangling parents")
+    try:
+        TopologicalSorter({term.mondo_id: term.parents for term in terms}).prepare()
+    except CycleError as exc:
+        raise ValueError("MONDO is_a graph contains a cycle") from exc
+
+
+def write_db(
+    target: Path, *, data_version: str | None, terms: list[_Term], source: dict | None = None
+) -> None:
     """Build the SQLite at ``target`` from parsed MONDO terms (shared by build + fixture)."""
+    _validate_graph(terms)
+    if source is None:
+        normalized = [
+            {
+                "id": t.mondo_id,
+                "name": t.name,
+                "parents": sorted(t.parents),
+                "xrefs": sorted(t.xrefs),
+                "synonyms": sorted(t.synonyms),
+            }
+            for t in sorted(terms, key=lambda t: t.mondo_id)
+        ]
+        source = {
+            "kind": "caller-supplied-terms",
+            "sha256": hashlib.sha256(json.dumps(normalized, sort_keys=True).encode()).hexdigest(),
+            "url": None,
+        }
+    if not re.fullmatch(r"[0-9a-f]{64}", source.get("sha256", "")):
+        raise ValueError("MONDO source needs a SHA-256 identity")
+    known_version = bool(
+        data_version
+        and data_version.strip()
+        and data_version.strip().lower() not in {"unknown", "latest"}
+    )
+    version = data_version.strip() if known_version else "unversioned:sha256:" + source["sha256"]
     valid_ids = {t.mondo_id for t in terms}
     con = sqlite3.connect(target)
     try:
@@ -169,13 +216,16 @@ def write_db(target: Path, *, data_version: str | None, terms: list[_Term]) -> N
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "1"),
+                ("schema_version", "2"),
                 ("build_id", uuid.uuid4().hex),
-                ("data_version", data_version or "unknown"),
+                ("data_version", version),
+                ("release_known", str(known_version).lower()),
+                ("source_sha256", source["sha256"]),
+                ("source_descriptor", json.dumps(source, sort_keys=True)),
                 ("n_terms", str(len(terms))),
                 ("n_edges", str(n_edges)),
                 ("n_xref", str(n_xref)),
-                ("source", OBO_URL),
+                ("source", source.get("url") or "caller-supplied"),
             ],
         )
         con.commit()
@@ -192,12 +242,51 @@ def db_is_valid(path: Path) -> bool:
     except sqlite3.Error:
         return False
     try:
-        has_version = con.execute("SELECT value FROM meta WHERE key = 'data_version'").fetchone()
-        n_terms = con.execute("SELECT COUNT(*) FROM term").fetchone()[0]
-        n_xref = con.execute("SELECT COUNT(*) FROM xref").fetchone()[0]
-        n_name = con.execute("SELECT COUNT(*) FROM name").fetchone()[0]  # 0.2.0 name index
-        return bool(has_version) and n_terms > 0 and n_xref > 0 and n_name > 0
-    except sqlite3.Error:
+        meta = dict(con.execute("SELECT key, value FROM meta"))
+        if (
+            meta.get("schema_version") != "2"
+            or not re.fullmatch(r"[0-9a-f]{64}", meta.get("source_sha256", ""))
+            or meta.get("data_version", "").lower() in {"", "unknown", "latest"}
+        ):
+            return False
+        descriptor = json.loads(meta["source_descriptor"])
+        if not isinstance(descriptor, dict) or descriptor.get("sha256") != meta["source_sha256"]:
+            return False
+        if meta.get("release_known") not in {"true", "false"}:
+            return False
+        if (
+            meta["release_known"] == "false"
+            and meta["data_version"] != "unversioned:sha256:" + meta["source_sha256"]
+        ):
+            return False
+        terms = []
+        by_id = {}
+        for identifier, name in con.execute("SELECT mondo_id, name FROM term"):
+            term = _Term(identifier)
+            term.name = name
+            terms.append(term)
+            by_id[identifier] = term
+        for child, parent in con.execute("SELECT child, parent FROM isa"):
+            if child not in by_id or parent not in by_id:
+                return False
+            by_id[child].parents.append(parent)
+        _validate_graph(terms)
+        counts = {
+            "n_terms": len(terms),
+            "n_edges": con.execute("SELECT COUNT(*) FROM isa").fetchone()[0],
+            "n_xref": con.execute("SELECT COUNT(*) FROM xref").fetchone()[0],
+        }
+        if any(meta.get(key) != str(value) for key, value in counts.items()):
+            return False
+        for table in ("xref", "name"):
+            if con.execute(
+                f"SELECT 1 FROM {table} t LEFT JOIN term ON t.mondo_id=term.mondo_id WHERE term.mondo_id IS NULL LIMIT 1"
+            ).fetchone():
+                return False
+        return bool(con.execute("SELECT 1 FROM xref LIMIT 1").fetchone()) and bool(
+            con.execute("SELECT 1 FROM name LIMIT 1").fetchone()
+        )
+    except (sqlite3.Error, ValueError, KeyError, TypeError):
         return False
     finally:
         con.close()
@@ -222,6 +311,8 @@ def _build(
     *,
     download: Callable[[Path, ProgressCallback | None], None] = _download,
     progress: ProgressCallback | None = None,
+    expected_version: str | None = None,
+    source_url: str | None = None,
 ) -> None:
     """Download + parse mondo.obo and write the SQLite at ``target`` (``download`` injectable)."""
     obo_path = target.with_suffix(".obo.tmp")
@@ -229,7 +320,23 @@ def _build(
         download(obo_path, progress)
         with open(obo_path, encoding="utf-8") as fh:
             data_version, terms = _parse_obo(iter(fh))
-        write_db(target, data_version=data_version, terms=terms)
+        if expected_version is not None and data_version != expected_version:
+            raise ValueError(
+                f"MONDO data-version mismatch: requested {expected_version!r}, observed {data_version!r}"
+            )
+        with obo_path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        write_db(
+            target,
+            data_version=data_version,
+            terms=terms,
+            source={
+                "kind": "obo",
+                "sha256": digest,
+                "url": source_url or (OBO_URL if download is _download else None),
+                "acquired_at": datetime.now(UTC).isoformat(),
+            },
+        )
     finally:
         obo_path.unlink(missing_ok=True)
 
@@ -240,6 +347,7 @@ def ensure_mondo_db(
     auto: bool = False,
     refresh: bool = False,
     progress: ProgressCallback | None = None,
+    expected_version: str | None = None,
 ) -> Path:
     """Ensure a valid local MONDO SQLite exists, building it if consented.
 
@@ -250,11 +358,18 @@ def ensure_mondo_db(
     path = Path(db_path) if db_path else default_mondo_db_path()
 
     def _build_with_progress(target: Path) -> None:
-        _build(target, progress=progress)
+        _build(target, progress=progress, expected_version=expected_version)
+
+    def valid(target: Path) -> bool:
+        if not db_is_valid(target):
+            return False
+        with sqlite3.connect(f"file:{target}?mode=ro", uri=True) as con:
+            observed = con.execute("SELECT value FROM meta WHERE key='data_version'").fetchone()[0]
+        return expected_version is None or observed == expected_version
 
     return ensure_local_db(
         path,
-        is_valid=db_is_valid,
+        is_valid=valid,
         build=_build_with_progress,
         consent_message=_CONSENT_MESSAGE.format(path=path),
         auto=auto,

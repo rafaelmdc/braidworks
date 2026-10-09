@@ -15,12 +15,14 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
 from __future__ import annotations
 
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
 import httpx
 from braidworks.core import BackendConfigurationError, BaseWeaver
 
+from gtdb_weaver import taxonomy
 from gtdb_weaver.backends.api import BASE_URL as _API_BASE_URL
 from gtdb_weaver.backends.api import GtdbApiBackend
 from gtdb_weaver.backends.local import GtdbLocalBackend
@@ -40,6 +42,7 @@ def build_gtdb_weaver(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    release: str | None = None,
     enable_tree_placement: bool = False,
     tree_paths: list[str | Path] | None = None,
     enable_api: bool = False,
@@ -61,9 +64,14 @@ def build_gtdb_weaver(
     """
     backends: dict[str, Any] = {}
     if db_path is not None or auto_setup:
-        resolved = _ensure_local_db(db_path, auto_setup=auto_setup, refresh=refresh)
+        resolved = _ensure_local_db(
+            db_path, auto_setup=auto_setup, refresh=refresh, release=release
+        )
         trees = _resolve_tree_paths(
-            tree_paths, enable_tree_placement=enable_tree_placement, auto_setup=auto_setup
+            tree_paths,
+            enable_tree_placement=enable_tree_placement,
+            auto_setup=auto_setup,
+            db_path=resolved,
         )
         backends["local"] = GtdbLocalBackend(resolved, tree_paths=trees)
     if enable_api or api_client is not None:
@@ -85,7 +93,7 @@ def _prompt_for_setup(target: Path) -> bool:
     """Announce the one-time crosswalk build and confirm; default is No."""
     print(
         "The local GTDB backend needs a crosswalk database that is not present yet.\n"
-        "  source: GTDB bac120 + ar53 metadata (~150 MB download)\n"
+        "  source: GTDB bac120 + ar53 metadata (~283 MB for R232 download)\n"
         "  builds: a small SQLite crosswalk\n"
         f"  target: {target}",
         file=sys.stderr,
@@ -93,19 +101,29 @@ def _prompt_for_setup(target: Path) -> bool:
     return input("Build it now? [y/N] ").strip().lower() in {"y", "yes"}
 
 
-def _ensure_local_db(db_path: str | Path | None, *, auto_setup: bool, refresh: bool) -> Path:
+def _ensure_local_db(
+    db_path: str | Path | None, *, auto_setup: bool, refresh: bool, release: str | None = None
+) -> Path:
     """Resolve (and if needed acquire) the crosswalk DB path per the consent rules."""
     target = Path(db_path) if db_path is not None else default_db_path()
-    if db_is_valid(target) and not refresh:
+    if (
+        db_is_valid(target)
+        and not refresh
+        and (release is None or taxonomy.db_release(target) == "R" + release.lstrip("RrvV"))
+    ):
         return target
     consented = auto_consented(auto_setup)
     if not consented and _interactive():
         consented = _prompt_for_setup(target)
-    return ensure_gtdb_db(target, auto=consented, refresh=refresh)
+    return ensure_gtdb_db(target, auto=consented, refresh=refresh, release=release)
 
 
 def _resolve_tree_paths(
-    tree_paths: list[str | Path] | None, *, enable_tree_placement: bool, auto_setup: bool
+    tree_paths: list[str | Path] | None,
+    *,
+    enable_tree_placement: bool,
+    auto_setup: bool,
+    db_path: Path,
 ) -> list[str | Path]:
     """Reference-tree paths for the local backend, or [] when tree placement is off.
 
@@ -116,9 +134,35 @@ def _resolve_tree_paths(
     """
     if tree_paths is not None:
         return tree_paths
+    release = taxonomy.db_release(db_path)
+    if not release or not release.startswith("R"):
+        if enable_tree_placement:
+            raise BackendConfigurationError(
+                "custom/legacy GTDB crosswalk needs explicit tree_paths with matching source provenance"
+            )
+        return []
+    import json
+
+    with closing(taxonomy.open_ro(db_path)) as con:
+        row = con.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
+    if not row:
+        if enable_tree_placement:
+            raise BackendConfigurationError(
+                "GTDB crosswalk lacks a verified release bundle; rebuild before automatic tree acquisition"
+            )
+        return []
+    bundle = json.loads(row[0])
+    if bundle.get("kind") != "official-release":
+        if enable_tree_placement:
+            raise BackendConfigurationError(
+                "custom GTDB crosswalk needs explicit matching tree_paths"
+            )
+        return []
     if enable_tree_placement:
-        return list(ensure_gtdb_trees(auto=auto_consented(auto_setup)))
-    return [p for p in default_tree_paths() if p.exists()]
+        return list(
+            ensure_gtdb_trees(auto=auto_consented(auto_setup), release=release, bundle=bundle)
+        )
+    return [p for p in default_tree_paths(release) if p.exists()]
 
 
 def build_gtdb_weaver_fixture() -> BaseWeaver:

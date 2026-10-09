@@ -95,3 +95,18 @@ class SourceBinding:
         with self.session():
             assert self._expected is not None
             return self._expected.fingerprint
+
+
+def remote_fingerprint(namespace: str, endpoint: str, **settings: Any) -> str:
+    """Hash an effective endpoint and semantic settings without emitting credentials.
+
+    This identifies configuration, not the changing contents of an unversioned
+    remote service. Callers must supply an honest release/snapshot descriptor.
+    """
+    payload = json.dumps(
+        {"endpoint": endpoint.rstrip("/"), "settings": settings},
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return namespace + "-" + hashlib.sha256(payload.encode()).hexdigest()

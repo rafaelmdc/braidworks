@@ -1,6 +1,6 @@
 [project]
 name = "wikipedia_weaver"
-version = "0.1.5"
+version = "0.1.6"
 description = "Wikipedia pageviews (enwiki article title -> recent pageview count) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

@@ -72,3 +72,12 @@ async def test_live_tree_placement_distances_are_sane():
     close = cophenetic(paths["562"], paths["28901"])
     far = cophenetic(paths["562"], paths["817"])
     assert 0.0 < close < far
+
+
+def test_live_pinned_release_manifest():
+    """Probe only the small release manifests; no metadata/tree bulk download."""
+    from gtdb_weaver.releases import DEFAULT_RELEASE, release_bundle
+    bundle = release_bundle(DEFAULT_RELEASE)
+    assert bundle["release"] == DEFAULT_RELEASE
+    assert len(bundle["resources"]) == 4
+    assert all(len(resource["md5"]) == 32 and "latest" not in resource["url"] for resource in bundle["resources"].values())

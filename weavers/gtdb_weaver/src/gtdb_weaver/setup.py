@@ -14,9 +14,14 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
+import json
 import logging
-import urllib.request
+import sqlite3
+import tempfile
 from collections.abc import Iterator
+from contextlib import closing
+from itertools import chain
 from pathlib import Path
 
 from braidworks.core.localdb import auto_consented, ensure_local_db
@@ -24,22 +29,25 @@ from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
 
 from gtdb_weaver import taxonomy
+from gtdb_weaver.releases import (
+    DEFAULT_RELEASE,
+    file_hash,
+    release_bundle,
+    release_sources,
+    verify_resource,
+)
 
 logger = logging.getLogger("gtdb_weaver.setup")
 
-_BASE = "https://data.gtdb.ecogenomic.org/releases/latest"
-DEFAULT_BAC120_URL = f"{_BASE}/bac120_metadata.tsv.gz"
-DEFAULT_AR53_URL = f"{_BASE}/ar53_metadata.tsv.gz"
-# Newick reference trees — the source for tree placement (patristic distance). Leaves are
-# representative genome accessions. Filenames verified against the live release (GTDB R232)
-# by the tree backend's E2E (tests/test_e2e_live.py).
-DEFAULT_BAC120_TREE_URL = f"{_BASE}/bac120.tree"
-DEFAULT_AR53_TREE_URL = f"{_BASE}/ar53.tree"
-_VERSION_URL = f"{_BASE}/VERSION.txt"
+_SOURCES = release_sources(DEFAULT_RELEASE)
+DEFAULT_BAC120_URL = _SOURCES["bac120"]
+DEFAULT_AR53_URL = _SOURCES["ar53"]
+DEFAULT_BAC120_TREE_URL = _SOURCES["bac120_tree"]
+DEFAULT_AR53_TREE_URL = _SOURCES["ar53_tree"]
 
 _NAMESPACE = "gtdb"
 _DB_FILENAME = "gtdb_crosswalk.sqlite"
-# Two gzipped metadata TSVs (~150 MB combined) streamed, plus a small SQLite; a
+# Two gzipped metadata TSVs (~283 MB for R232 combined) streamed, plus a small SQLite; a
 # modest margin covers the temporary downloads and the build.
 _MIN_FREE_BYTES = 2 * 1024**3
 
@@ -62,40 +70,54 @@ def default_db_path() -> Path:
     return _core_default_db_path(_NAMESPACE, _DB_FILENAME)
 
 
-def default_tree_paths() -> list[Path]:
+def default_tree_paths(release: str = DEFAULT_RELEASE) -> list[Path]:
     """Per-user default reference-tree paths (bac120, ar53), beside the crosswalk DB."""
-    parent = default_db_path().parent
-    return [parent / "bac120.tree", parent / "ar53.tree"]
+    sources = release_sources(release)
+    parent = default_db_path().parent / (
+        "R" + release_sources(release)["bac120"].split("release")[-1].split("/")[0]
+    )
+    return [parent / sources[label].rsplit("/", 1)[1] for label in ("bac120_tree", "ar53_tree")]
 
 
 def ensure_gtdb_trees(
     *,
     auto: bool = False,
     refresh: bool = False,
-    urls: tuple[str, str] = (DEFAULT_BAC120_TREE_URL, DEFAULT_AR53_TREE_URL),
+    urls: tuple[str, str] | None = None,
+    release: str = DEFAULT_RELEASE,
+    bundle: dict | None = None,
 ) -> list[Path]:
-    """Ensure the local Newick reference trees exist, returning their paths.
+    """Acquire checksum-verified reference trees from the crosswalk's pinned release."""
+    descriptor = bundle or release_bundle(release)
+    expected_urls = tuple(
+        descriptor["resources"][label]["url"] for label in ("bac120_tree", "ar53_tree")
+    )
+    if urls is not None and urls != expected_urls:
+        raise ValueError(
+            "custom tree URLs require explicit local tree_paths; do not label them as an official release"
+        )
+    out = []
+    for target, label in zip(
+        default_tree_paths(descriptor["release"]), ("bac120_tree", "ar53_tree")
+    ):
+        resource = descriptor["resources"][label]
 
-    Each tree is downloaded (consent-gated, like the crosswalk) if absent. Idempotent:
-    a present, non-empty tree is returned as-is. Trees are plain files, so "valid" is
-    simply "exists and non-empty".
-    """
+        def valid(path, resource=resource):
+            return (
+                path.exists()
+                and path.stat().st_size > 0
+                and file_hash(path, "md5") == resource["md5"]
+            )
 
-    def _valid(path: Path) -> bool:
-        return path.exists() and path.stat().st_size > 0
+        def build(dest, resource=resource):
+            _download(resource["url"], dest, label="Downloading pinned GTDB tree")
+            verify_resource(dest, resource)
 
-    out: list[Path] = []
-    for target, url in zip(default_tree_paths(), urls):
         ensure_local_db(
             target,
-            is_valid=_valid,
-            build=lambda dest, u=url: _download(u, dest, label=f"Downloading GTDB tree {u}"),
-            consent_message=(
-                f"GTDB reference tree not found at {target}.\n"
-                "Tree placement (patristic distance) needs the GTDB Newick reference trees.\n"
-                "  - call: build_gtdb_weaver(auto_setup=True, enable_tree_placement=True)\n"
-                "  - or set: BRAIDWORKS_AUTO_DOWNLOAD=1"
-            ),
+            is_valid=valid,
+            build=build,
+            consent_message=f"GTDB {descriptor['release']} tree needed at {target}; enable auto_setup to acquire it",
             auto=auto,
             refresh=refresh,
             min_free_bytes=_MIN_FREE_BYTES,
@@ -113,25 +135,11 @@ def _consent_message(db_path: Path) -> str:
     return (
         f"GTDB crosswalk database not found at {db_path}.\n"
         "The local backend needs a SQLite NCBI→GTDB crosswalk (~tens of MB, built by\n"
-        "streaming the GTDB metadata TSVs, ~150 MB download). To create it:\n"
+        "streaming the GTDB metadata TSVs, ~283 MB for R232 download). To create it:\n"
         "  - call: build_gtdb_weaver(auto_setup=True)\n"
         "  - or set: BRAIDWORKS_AUTO_DOWNLOAD=1\n"
         "Or build it yourself and pass db_path= to build_gtdb_weaver()."
     )
-
-
-def _fetch_release() -> str | None:
-    """The current GTDB release tag from the published VERSION.txt (e.g. ``R226``), if reachable."""
-    try:
-        with urllib.request.urlopen(_VERSION_URL, timeout=30) as resp:
-            first = resp.read().decode("utf-8", "replace").splitlines()
-        for line in first:
-            token = line.strip()
-            if token:
-                return token.split()[0]
-    except Exception as exc:  # noqa: BLE001 - optional release metadata must not abort a build
-        logger.info("could not read GTDB VERSION.txt: %s", exc)
-    return None
 
 
 def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool, str]]:
@@ -172,21 +180,41 @@ def _iter_metadata_rows(gz_path: Path) -> Iterator[tuple[int, str, bool, str]]:
 
 
 def _build_crosswalk(tmp_db: Path, *, bac120_url: str, ar53_url: str, release: str | None) -> None:
-    """Build callback for ``ensure_local_db``: download both TSVs → the crosswalk SQLite."""
-    resolved_release = release or _fetch_release() or "latest"
-    rows: list[tuple[int, str, bool, str]] = []
-    for label, url in (("bac120", bac120_url), ("ar53", ar53_url)):
-        archive = tmp_db.parent / f"{label}_metadata.tsv.gz"
-        logger.info("acquiring GTDB %s metadata -> %s", label, archive)
-        _download(url, archive, label=f"Downloading GTDB {label} metadata")
-        rows.extend(_iter_metadata_rows(archive))
-        archive.unlink(missing_ok=True)
-    if not rows:
-        raise ValueError("no rows parsed from GTDB metadata (download corrupt?)")
-    taxonomy.build_crosswalk_db(rows, tmp_db, release=resolved_release)
-    logger.info(
-        "GTDB crosswalk built: %s (%d taxa, release %s)", tmp_db, len(rows), resolved_release
-    )
+    """Build from one official bundle, or honest custom-content provenance."""
+    official = (bac120_url, ar53_url) == (DEFAULT_BAC120_URL, DEFAULT_AR53_URL)
+    if official:
+        bundle = release_bundle(release or DEFAULT_RELEASE)
+    else:
+        if (bac120_url == DEFAULT_BAC120_URL) != (ar53_url == DEFAULT_AR53_URL):
+            raise ValueError("GTDB custom bundles must supply both metadata URLs")
+        bundle = {
+            "kind": "custom-content",
+            "declared_release": release,
+            "resources": {"bac120": {"url": bac120_url}, "ar53": {"url": ar53_url}},
+        }
+    with tempfile.TemporaryDirectory(dir=tmp_db.parent, prefix="gtdb-sources-") as directory:
+        archives = []
+        for label in ("bac120", "ar53"):
+            resource = bundle["resources"][label]
+            archive = Path(directory) / f"{label}.tsv.gz"
+            _download(resource["url"], archive, label=f"Downloading GTDB {label} metadata")
+            bundle["resources"][label] = verify_resource(archive, resource)
+            archives.append(archive)
+        if not official:
+            digest = hashlib.sha256(
+                json.dumps(bundle["resources"], sort_keys=True).encode()
+            ).hexdigest()
+            bundle["release"] = "custom-content-sha256:" + digest
+        taxonomy.build_crosswalk_db(
+            chain.from_iterable(_iter_metadata_rows(path) for path in archives),
+            tmp_db,
+            release=bundle["release"],
+        )
+        with sqlite3.connect(tmp_db) as con:
+            con.execute(
+                "INSERT OR REPLACE INTO meta VALUES ('source_bundle', ?)",
+                (json.dumps(bundle, sort_keys=True),),
+            )
 
 
 def ensure_gtdb_db(
@@ -206,9 +234,30 @@ def ensure_gtdb_db(
     are handled by ``braidworks.core.localdb.ensure_local_db``.
     """
     db_path = Path(path) if path is not None else default_db_path()
+
+    def valid(candidate: Path) -> bool:
+        if not db_is_valid(candidate):
+            return False
+        custom = (bac120_url, ar53_url) != (DEFAULT_BAC120_URL, DEFAULT_AR53_URL)
+        if custom:
+            with closing(taxonomy.open_ro(candidate)) as con:
+                row = con.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
+            if not row:
+                return False
+            bundle = json.loads(row[0])
+            return (
+                bundle.get("kind") == "custom-content"
+                and bundle.get("declared_release") == release
+                and all(
+                    bundle["resources"][label]["url"] == url
+                    for label, url in (("bac120", bac120_url), ("ar53", ar53_url))
+                )
+            )
+        return release is None or taxonomy.db_release(candidate) == ("R" + release.lstrip("RrvV"))
+
     return ensure_local_db(
         db_path,
-        is_valid=db_is_valid,
+        is_valid=valid,
         build=lambda target: _build_crosswalk(
             target, bac120_url=bac120_url, ar53_url=ar53_url, release=release
         ),

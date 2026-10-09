@@ -62,3 +62,13 @@ async def test_live_unknown_accession_is_no_match():
     result = await _interactions(weaver, "X0X0X0")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_pinned_service_reports_expected_release():
+    weaver = build_string_weaver()
+    backend = weaver._backends["api"]
+    response = await backend._http().get("/json/version")
+    response.raise_for_status()
+    assert response.json()[0]["string_version"] == "12.5"
+    assert response.json()[0]["stable_address"] == "https://version-12-5.string-db.org"
+    await backend._client.aclose()

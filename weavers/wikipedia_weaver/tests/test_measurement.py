@@ -72,6 +72,6 @@ async def test_local_exposes_scope_and_rejects_different_explicit_metric(tmp_pat
     record = await fetch({"months": 1, "end_month": "202505", "agent": "user"})
     scope = record.values["wikipedia.pageviews.measurement"]
     assert scope["start_month"] == scope["end_month"] == "202505"
-    assert scope["agent"] == "user" and scope["complete"] is None
+    assert scope["agent"] == "user" and scope["complete"] is False
     for params in [{"months": 12}, {"agent": "all-agents"}, {"end_month": "202504"}]:
         assert (await fetch(params)).error

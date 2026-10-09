@@ -29,3 +29,9 @@ See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrat
 The #151 findings are implemented and verified in
 [SH-04 implementation and migration evidence](SH-04.implementation.md).
 Other work packages in this source plan remain separately tracked.
+
+## Shared source identity work implemented
+
+The #154 findings are implemented and verified in
+[SH-07 implementation and migration evidence](SH-07.implementation.md).
+Related work packages/findings remain separately tracked.

@@ -17,7 +17,7 @@ list of `{rank, name}` from domain to species). The consumed inputs are alternat
 
 - **local** (preferred, authoritative) — a small SQLite NCBI-taxid / species-name →
   GTDB crosswalk, built by streaming the GTDB metadata TSVs (`bac120` + `ar53`) into
-  `~/.cache` via `ensure_gtdb_db` (consent-gated, ~150 MB download). Resolves by taxid
+  `~/.cache` via `ensure_gtdb_db` (consent-gated, ~283 MB for R232 download). Resolves by taxid
   (authoritative) or GTDB species name.
 - **api** (online fallback, keyless) — the live GTDB search API
   (`gtdb-api.ecogenomic.org/search/gtdb`). Name-based only; a taxid-only query is a
@@ -76,3 +76,27 @@ publication leaves the original database unchanged. Allow space for both databas
 and close writable target connections before replacement. Keep application-owned
 tables in a separate database. Explicit local builds do not enforce the large
 download disk margin used by consent-gated acquisition.
+
+## Coherent local release bundles
+
+Default acquisition is pinned to R232, under the official
+[release232/232.0 directory](https://data.gtdb.ecogenomic.org/releases/release232/232.0/),
+rather than independently reading mutable `latest` metadata and trees. The small
+VERSION and MD5 manifests are checked before acquisition. Both metadata archives
+are verified against provider checksums; their original SHA-256 hashes and the
+bundle's tree checksums are recorded in `meta.source_bundle`.
+
+`build_gtdb_weaver(..., release="R232")` or `ensure_gtdb_db(..., release="R232")`
+selects/checks an official release. Automatic tree acquisition uses the crosswalk's
+persisted bundle and release-specific paths. The bound local backend rejects trees
+whose checksums do not match that bundle. A checksum failure preserves an existing
+database and cleans temporary downloads. Existing local generation checks remain.
+
+Custom metadata URLs must be supplied together. They get a custom content identity
+and recorded hashes; a caller's declared release is retained as a declaration,
+without borrowing a separately fetched official release label. Supply explicit
+matching `tree_paths` for custom/legacy crosswalks. Old crosswalks remain usable for
+taxonomy, but must be refreshed to obtain verified automatic tree acquisition.
+Custom tree URL acquisition under an official label is rejected; prepare custom
+local tree files and pass their paths explicitly. No automatic bulk download runs
+at import or during an ordinary lookup.
