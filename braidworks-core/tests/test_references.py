@@ -23,7 +23,9 @@ def _registry() -> BraidRegistry:
             WeaverManifest(
                 weaver_id="uniprot",
                 version="0.1.1",
-                capabilities=(simple_capability("c", {"protein.query"}, {"protein.uniprot.accession"}),),
+                capabilities=(
+                    simple_capability("c", {"protein.query"}, {"protein.uniprot.accession"}),
+                ),
                 provenance=Provenance(
                     source_url="https://www.uniprot.org",
                     license="CC-BY-4.0",
@@ -38,7 +40,11 @@ def _registry() -> BraidRegistry:
             WeaverManifest(
                 weaver_id="reactome",
                 version="0.1.1",
-                capabilities=(simple_capability("c", {"protein.uniprot.accession"}, {"pathway.reactome.names"}),),
+                capabilities=(
+                    simple_capability(
+                        "c", {"protein.uniprot.accession"}, {"pathway.reactome.names"}
+                    ),
+                ),
                 provenance=Provenance(
                     source_url="https://reactome.org",
                     license="CC0-1.0",
@@ -137,3 +143,13 @@ def test_format_references_bullets_and_empty():
 def test_reference_json_round_trip():
     [ref] = references_for(["uniprot"], _registry())
     assert Reference.from_json(ref.to_json()) == ref
+
+
+def test_known_noncommercial_reference_retains_restriction_and_attribution():
+    ref = Reference(
+        "agora", "https://source", "CC-BY-NC-4.0", "doi:example", "Provider", "restricted"
+    )
+    text = ref.render()
+    assert "attribution required" in text and "noncommercial reuse only" in text
+    assert "reuse terms unverified" not in text
+    assert ref.requirement == "restricted"

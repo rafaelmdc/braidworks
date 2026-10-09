@@ -28,3 +28,8 @@ def test_unknown_license_is_restricted():
 def test_known_license():
     assert is_known_license("CC-BY-4.0")
     assert is_known_license("CC0-1.0")
+
+
+def test_known_noncommercial_license_remains_restricted():
+    assert is_known_license("CC-BY-NC-4.0")
+    assert citation_requirement("CC-BY-NC-4.0") == RESTRICTED
