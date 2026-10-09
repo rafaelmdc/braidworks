@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sqlite3
 import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Callable, Iterator
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -73,20 +75,60 @@ def _coerce_taxid(value: Any) -> int | None:
     return None
 
 
-def _num(value: Any) -> float | None:
-    """Coerce an abundance/prevalence field to float, tolerating strings and None."""
-    if value is None or isinstance(value, bool):
+def _num(value: Any, *, field: str = "measurement", maximum: float | None = None) -> float | None:
+    """Missing stays None; malformed/non-finite/out-of-range measurements fail explicitly."""
+    if value is None:
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        if isinstance(value, bool):
+            raise TypeError("boolean measurement")
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise _InvalidResponse(f"GMrepo {field} has invalid numeric value {value!r}") from exc
+    if not math.isfinite(number) or number < 0 or (maximum is not None and number > maximum):
+        raise _InvalidResponse(f"GMrepo {field} has out-of-range numeric value {value!r}")
+    return number
+
+
+def _int(value: Any, *, field: str = "count") -> int | None:
+    """Exact, nonnegative SQLite integer counts; never truncate a fractional measurement."""
+    if value is None:
         return None
+    try:
+        if isinstance(value, bool):
+            raise TypeError("boolean count")
+        number = Decimal(str(value))
+        if (
+            not number.is_finite()
+            or number < 0
+            or number != number.to_integral_value()
+            or number > 2**63 - 1
+        ):
+            raise ValueError("invalid count")
+        return int(number)
+    except (TypeError, ValueError, InvalidOperation) as exc:
+        raise _InvalidResponse(f"GMrepo {field} has invalid integer value {value!r}") from exc
 
 
-def _int(value: Any) -> int | None:
-    """Coerce a count field to int, tolerating strings and None."""
-    num = _num(value)
-    return None if num is None else int(num)
+def _measurement_rows(
+    rows: list[dict], *, counts: tuple[str, ...], percentages: tuple[str, ...]
+) -> list[dict]:
+    """Source-local numeric validation shared by acquisition and caller-supplied builds."""
+    normalized = []
+    for source in rows:
+        row = dict(source)
+        for field in counts:
+            row[field] = _int(row.get(field), field=field)
+        for field in percentages:
+            row[field] = _num(row.get(field), field=field, maximum=100)
+        if "samples" in counts:
+            samples, runs = row["samples"], row["phenotype_valid_runs"]
+            if samples is not None and runs is not None and samples > runs:
+                raise _InvalidResponse(
+                    f"GMrepo samples {samples!r} exceeds phenotype_valid_runs {runs!r}"
+                )
+        normalized.append(row)
+    return normalized
 
 
 class _InvalidResponse(ValueError):
@@ -172,6 +214,17 @@ def write_db(
     phenotypes = _distinct_rows(phenotypes, ("mesh_id",))
     sample_profiles = _distinct_rows(
         sample_profiles or [], ("mesh_id", "run_id", "ncbi_taxon_id", "rank")
+    )
+    overview = _measurement_rows(
+        overview, counts=("nr_phenotypes", "presented_samples"), percentages=("pct_of_all_samples",)
+    )
+    associations = _measurement_rows(
+        associations,
+        counts=("samples", "phenotype_valid_runs"),
+        percentages=("prevalence_percentage", "abundance_mean", "abundance_median", "abundance_sd"),
+    )
+    sample_profiles = _measurement_rows(
+        sample_profiles or [], counts=(), percentages=("relative_abundance",)
     )
     acquisition = acquisition or {"scope": "caller-supplied", "taxa": {}, "profiles": {}}
     content = _content_hash(
@@ -375,7 +428,9 @@ def _overview_rows(gut_microbes: Any) -> list[dict]:
 
 def _prevalence(samples: Any, valid_runs: Any) -> float | None:
     """Percent of a phenotype's valid runs in which this taxon is present."""
-    s, v = _int(samples), _int(valid_runs)
+    s, v = _int(samples, field="samples"), _int(valid_runs, field="valid_runs")
+    if s is not None and v is not None and s > v:
+        raise _InvalidResponse(f"GMrepo samples {samples!r} exceeds valid_runs {valid_runs!r}")
     if s is None or not v:
         return None
     return round(100.0 * s / v, 4)
@@ -408,7 +463,11 @@ def _taxon_associations(taxid: int, payload: Any) -> list[dict]:
                 "abundance_sd": row.get("abus_sd"),
             }
         )
-    return out
+    return _measurement_rows(
+        out,
+        counts=("samples", "phenotype_valid_runs"),
+        percentages=("prevalence_percentage", "abundance_mean", "abundance_median", "abundance_sd"),
+    )
 
 
 def _fetch_run_ids(
@@ -475,7 +534,7 @@ def _run_profile_rows(mesh_id: str, run_id: str, payload: Any) -> list[dict]:
             if not isinstance(row, dict):
                 raise _InvalidResponse("run profile row must be an object")
             taxid = _coerce_taxid(row.get("ncbi_taxon_id"))
-            abundance = _num(row.get("relative_abundance"))
+            abundance = _num(row.get("relative_abundance"), field="relative_abundance", maximum=100)
             if taxid is None or abundance is None:
                 raise _InvalidResponse("run profile row lacks taxon/abundance")
             out.append(

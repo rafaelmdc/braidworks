@@ -185,3 +185,7 @@ Direct backend callers passing an empty group set retain the legacy full view.
 The live build uses the taxon-centric summary endpoint with trailing slashes;
 source_sample records current observed envelopes. Source setup still exposes
 explicit acquisition budgets and optional profile scope.
+
+### Source validation
+
+Measurements use percentages in [0,100]; counts must be exact nonnegative SQLite integers. Invalid values report the field and original value. Missing measurements remain absent, and prevalence is undefined when there are no valid runs. Caller-supplied builds apply the same validation before creating a database.

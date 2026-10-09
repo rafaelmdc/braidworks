@@ -342,7 +342,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
