@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("quickgo_weaver.api")
@@ -128,7 +129,7 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return values
 
 
-class QuickgoApiBackend(BackendBase):
+class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
     """QuickGO REST backend. Always configured — the API is free, no key."""
 
     name = "api"
@@ -140,8 +141,7 @@ class QuickgoApiBackend(BackendBase):
         client: httpx.AsyncClient | None = None,
         max_pages: int = _MAX_PAGES,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages < 1:
             raise ValueError("max_pages must be a positive integer")
         self._max_pages = max_pages
@@ -162,6 +162,7 @@ class QuickgoApiBackend(BackendBase):
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url, timeout=30.0, headers={"Accept": "application/json"}

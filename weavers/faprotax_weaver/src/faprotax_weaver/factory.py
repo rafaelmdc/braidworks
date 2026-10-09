@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from faprotax_weaver.backends.local import FaprotaxLocalBackend
 from faprotax_weaver.weaver import FaprotaxWeaver
@@ -28,6 +29,7 @@ def build_faprotax_weaver(**_config: Any) -> BaseWeaver:
     Wires every declared backend present-but-possibly-unconfigured. For real use,
     add a configured builder (see the module docstring / the commented skeletons).
     """
+    reject_unknown_options(_config)
     backends = {
         "local": FaprotaxLocalBackend(),
     }

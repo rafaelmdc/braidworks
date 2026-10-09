@@ -25,6 +25,11 @@ substrate for metabolic complementarity/competition analysis. Consumes only `ncb
   hub). Needs the reaction DB built by `ensure_agora_db` from the AGORA2 SBML archive
   (~2.17 GB, consent-gated); absent it, `core` still answers.
 
+- **`model`** → `microbe.metabolism.sbml`: reconstruction ID, cached SBML path
+  and source URL per model. Use `sbml_cache_dir` and explicitly enable
+  `auto_download_models` to permit missing-model acquisition. Requested uncached
+  models without consent are errors; they are not silently omitted.
+
 ```python
 import agora_weaver
 
@@ -103,3 +108,14 @@ The bundled crosswalk is retained as immutable tuples; public lookups return
 detached dictionaries and lists. Reaction lookup deduplicates model IDs and uses
 two SQL queries per chunk of at most 250 models. Processed empty models remain
 valid empty repertoires; skipped or missing coverage remains an error.
+
+The configured wrapper preserves `auto_setup=False`; its name does not grant
+download consent. Existing databases can be supplied without enabling downloads.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

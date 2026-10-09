@@ -125,3 +125,11 @@ root-path helpers. Public paths are detached from the retained index.
 
 See [the measured-work report](../../docs/audits/weavers/SH-09.implementation.md)
 for fixture measurements and the separate real-release measurement target.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

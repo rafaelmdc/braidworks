@@ -16,6 +16,7 @@ from braidworks.core import (
     map_lookup,
 )
 from braidworks.core.http_pacing import validate_request_pacing
+from braidworks.core.lifecycle import close_backends
 
 from . import vocab
 from .backends.base import ResolutionBackend
@@ -27,6 +28,9 @@ class BackendDispatchWeaver(BaseWeaver):
 
     def __init__(self, backends: dict[str, ResolutionBackend]) -> None:
         self._backends = dict(backends)
+
+    async def aclose(self) -> None:
+        await close_backends(self._backends.values())
 
     def _strategy(self, backend: str) -> ResolutionBackend:
         strat = self._backends.get(backend)

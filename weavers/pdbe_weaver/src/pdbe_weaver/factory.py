@@ -18,27 +18,22 @@ from typing import Any
 
 import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
-from pdbe_weaver.backends.api import DEFAULT_BASE_URL, PdbeApiBackend
+from pdbe_weaver.backends.api import PdbeApiBackend
 from pdbe_weaver.weaver import PdbeWeaver
 
 
 def build_pdbe_weaver(
     *,
-    base_url: str = DEFAULT_BASE_URL,
+    base_url: str = "https://www.ebi.ac.uk/pdbe/api",
     client: httpx.AsyncClient | None = None,
     limit: int = 25,
     **_config: Any,
 ) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    With no arguments, wires the keyless API for introspection. Explicit endpoint,
-    client and source-policy arguments configure the same backend for real queries.
-    """
-    backends = {
-        "api": PdbeApiBackend(base_url=base_url, client=client, limit=limit),
-    }
-    return PdbeWeaver(backends)
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return PdbeWeaver({"api": PdbeApiBackend(base_url=base_url, client=client, limit=limit)})
 
 
 def build_pdbe_weaver_fixture() -> BaseWeaver:

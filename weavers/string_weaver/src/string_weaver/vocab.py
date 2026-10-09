@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.1.10"
+WEAVER_VERSION = "0.1.11"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

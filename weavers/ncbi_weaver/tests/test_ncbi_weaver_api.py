@@ -145,7 +145,19 @@ async def test_api_batch_preserves_order():
 
 
 def test_api_fingerprint():
-    assert _weaver().backend_fingerprint("api") == "datasets-v2:pages=1000"
+    from ncbi_weaver.backends.datasets_v2 import DatasetsV2Backend
+
+    # Source identity now includes effective endpoint and fuzzy policy; the old
+    # global literal permitted different sources to collide.
+    baseline = _weaver().backend_fingerprint("api")
+    endpoint = "https://api.test/datasets/v2"
+    assert baseline == _weaver().backend_fingerprint("api")
+    assert baseline == DatasetsV2Backend(base_url=endpoint).fingerprint()
+    assert baseline != DatasetsV2Backend(base_url="https://other.test").fingerprint()
+    assert baseline != DatasetsV2Backend(base_url=endpoint, allow_fuzzy=False).fingerprint()
+    assert baseline != DatasetsV2Backend(base_url=endpoint, max_report_pages=2).fingerprint()
+    assert baseline == DatasetsV2Backend(base_url=endpoint, api_key="secret").fingerprint()
+    assert "secret" not in baseline
 
 
 async def test_fuzzy_taxon_ties_and_duplicate_suggestions_are_deterministic():

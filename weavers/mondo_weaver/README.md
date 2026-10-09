@@ -104,3 +104,58 @@ reused for the same resolved term within a batch. Result projections are detache
 Migration: clients selecting groups explicitly should include `identity` for
 identity fields previously in `term`. Output-key requests need no change. This
 change uses the existing schema-3 database and does not require rebuilding it.
+
+## Coverage measurement
+
+No fixed resolution percentage is promised. Measure a declared source ID/name
+cohort against a recorded MONDO data version, report the denominator, unique
+equivalent matches, ambiguous/non-equivalent review cases and misses separately.
+Name lookup uses normalized exact labels/synonyms; it does not establish that a
+clinical term is equivalent just because a label matches.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Capabilities and output groups
+
+| Capability | Input | Outputs by group |
+|---|---|---|
+| `mondo.lookup_by_mesh` | `disease.mesh.id` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
+| `mondo.lookup_by_meddra` | `disease.meddra.id` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
+| `mondo.lookup_by_name` | `disease.name` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
+
+## Complete offline Python example
+
+```python
+import asyncio
+from braidworks.core import Strand, StrandSet
+from mondo_weaver.factory import build_mondo_weaver_fixture
+
+async def main():
+    async with build_mondo_weaver_fixture() as weaver:
+        result = (await weaver.execute_batch(
+            'mondo.lookup_by_mesh',
+            [StrandSet.from_strands("example", [Strand('disease.mesh.id', 'D003093')])],
+            requested_outputs=frozenset({'disease.mondo.id'}), backend="local",
+        ))[0]
+        print(result.to_json())
+        result = (await weaver.execute_batch(
+            'mondo.lookup_by_meddra',
+            [StrandSet.from_strands("example", [Strand('disease.meddra.id', '10045365')])],
+            requested_outputs=frozenset({'disease.mondo.id'}), backend="local",
+        ))[0]
+        print(result.to_json())
+        result = (await weaver.execute_batch(
+            'mondo.lookup_by_name',
+            [StrandSet.from_strands("example", [Strand('disease.name', 'ulcerative colitis')])],
+            requested_outputs=frozenset({'disease.ontology.ancestors'}), backend="local",
+        ))[0]
+        print(result.to_json())
+
+asyncio.run(main())
+```

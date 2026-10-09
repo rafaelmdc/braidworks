@@ -13,20 +13,24 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
-import asyncio
 import json
+from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 from braidworks.core import BackendBase, LookupRecord, is_not_found_status
+from braidworks.core.concurrency import map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 from wikipedia_weaver.measurement import InvalidScope, measurement, month_window
 
 BASE_URL = "https://wikimedia.org/api/rest_v1/"
-_USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gmail.com)"
+_USER_AGENT = "Braidworks (https://github.com/rafaelmdc/braidworks)"
 _WINDOW_MONTHS = 12
 
 
@@ -73,7 +77,7 @@ def _pageviews(body: Any, *, months: list[str], title: str, agent: str) -> tuple
     return total, len(seen)
 
 
-class WikipediaApiBackend(BackendBase):
+class WikipediaApiBackend(HTTPClientLifecycle, BackendBase):
     """api backend — calls the keyless Wikimedia pageviews API."""
 
     name = "api"
@@ -86,9 +90,16 @@ class WikipediaApiBackend(BackendBase):
         months: int = 12,
         end_month: str | None = None,
         agent: str = "all-agents",
+        max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency < 1
+        ):
+            raise ValueError("max_concurrency must be a positive integer")
+        self._max_concurrency = max_concurrency
         month_window(months, end_month)
         if agent not in {"all-agents", "user", "spider", "automated"}:
             raise ValueError("unsupported pageviews agent")
@@ -101,14 +112,19 @@ class WikipediaApiBackend(BackendBase):
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return PacedHTTPClient(self._client, "wikipedia")
+        return PacedHTTPClient(self._client, "wikipedia", default_rate=5.0)
 
     def fingerprint(self) -> str:
         # Pageviews accrue monthly; bucket the cache by the window-end month.
         months = month_window(self._months, self._end_month)
-        return f"enwiki-pageviews-{months[0]}-{months[-1]}-{self._agent}"
+        return remote_fingerprint(
+            "wikipedia_weaver-api",
+            self._base_url,
+            contract=f"enwiki-pageviews-{months[0]}-{months[-1]}-{self._agent}",
+        )
 
     async def fetch(
         self,
@@ -181,4 +197,14 @@ class WikipediaApiBackend(BackendBase):
             )
 
         # Per-article endpoint: issue the batch concurrently, preserve input order.
-        return list(await asyncio.gather(*(one(q, t) for q, t in zip(queries, titles))))
+        distinct = sorted(set(titles))
+
+        async def resolve(title: str) -> LookupRecord:
+            return await one({"wikipedia.title": title}, title)
+
+        fetched = await map_bounded(distinct, resolve, limit=self._max_concurrency)
+        by_title = dict(zip(distinct, fetched))
+        return [
+            replace(by_title[title], query=query, values=deepcopy(by_title[title].values))
+            for query, title in zip(queries, titles)
+        ]

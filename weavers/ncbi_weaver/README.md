@@ -158,3 +158,11 @@ When one gene symbol echoes multiple distinct gene reports, the API returns an
 error with sorted candidate evidence for review instead of selecting the first.
 Fuzzy taxonomy suggestions are deduplicated by taxon ID and ordered by score,
 then taxon ID/name/rank; ambiguous suggestions retain their review requirement.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

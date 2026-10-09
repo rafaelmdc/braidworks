@@ -16,22 +16,23 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from wikidata_weaver.backends.api import WikidataApiBackend
 from wikidata_weaver.weaver import WikidataWeaver
 
 
-def build_wikidata_weaver(**_config: Any) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    Wires every declared backend present-but-possibly-unconfigured. For real use,
-    add a configured builder (see the module docstring / the commented skeletons).
-    """
-    backends = {
-        "api": WikidataApiBackend(),
-    }
-    return WikidataWeaver(backends)
+def build_wikidata_weaver(
+    *,
+    base_url: str = "https://query.wikidata.org",
+    client: httpx.AsyncClient | None = None,
+    **_config: Any,
+) -> BaseWeaver:
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return WikidataWeaver({"api": WikidataApiBackend(base_url=base_url, client=client)})
 
 
 def build_wikidata_weaver_fixture() -> BaseWeaver:

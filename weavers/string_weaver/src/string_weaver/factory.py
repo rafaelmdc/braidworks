@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from string_weaver.backends.api import DEFAULT_BASE_URL, StringApiBackend
 from string_weaver.weaver import StringWeaver
@@ -35,6 +36,7 @@ def build_string_weaver(
     With no arguments, wires the keyless API for introspection. Explicit endpoint,
     client and source-policy arguments configure the same backend for real queries.
     """
+    reject_unknown_options(_config)
     backends = {
         "api": StringApiBackend(base_url=base_url, client=client, limit=limit),
     }

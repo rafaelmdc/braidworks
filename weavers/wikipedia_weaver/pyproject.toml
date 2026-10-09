@@ -1,12 +1,12 @@
 [project]
 name = "wikipedia_weaver"
-version = "0.1.6"
+version = "0.1.7"
 description = "Wikipedia pageviews (enwiki article title -> recent pageview count) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.21.1", "httpx>=0.27"]
+dependencies = ["braidworks-core>=0.21.5", "httpx>=0.27"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

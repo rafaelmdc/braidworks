@@ -32,6 +32,8 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("bacdive_weaver.api")
 
@@ -185,7 +187,7 @@ def _split_name(name: str) -> tuple[str, str | None]:
     return genus, species
 
 
-class BacdiveApiBackend(BackendBase):
+class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
     """BacDive v2 REST backend. Always configured — the v2 API is free, no key."""
 
     name = "api"
@@ -198,8 +200,7 @@ class BacdiveApiBackend(BackendBase):
         max_strains_scanned: int = 1000,
         max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         if (
             isinstance(max_strains_scanned, bool)
             or not isinstance(max_strains_scanned, int)
@@ -221,11 +222,16 @@ class BacdiveApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """BacDive v2 is a live service; the fingerprint pins the API contract version."""
-        return f"bacdive-api-v2:source={self._base_url}:scan={self._max_strains_scanned}"
+        return remote_fingerprint(
+            "bacdive_weaver-api",
+            self._base_url,
+            contract=f"bacdive-api-v2:source={self._base_url}:scan={self._max_strains_scanned}",
+        )
 
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
         return PacedHTTPClient(self._client, "bacdive", default_rate=2.0)

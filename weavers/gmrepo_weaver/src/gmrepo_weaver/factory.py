@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from gmrepo_weaver.acquisition import AcquisitionPolicy
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
@@ -23,13 +24,15 @@ from gmrepo_weaver.setup import ensure_gmrepo_db
 from gmrepo_weaver.weaver import GmrepoWeaver
 
 
-def build_gmrepo_weaver(**_config: Any) -> BaseWeaver:
+def build_gmrepo_weaver(**config: Any) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
     Wires the local backend present-but-possibly-unconfigured (it reports
     ``is_configured() == False`` until the DB is built). For real use call
     ``build_gmrepo_weaver_configured``.
     """
+    if config:
+        return build_gmrepo_weaver_configured(**config)
     return GmrepoWeaver({"local": GmrepoLocalBackend()})
 
 
@@ -53,6 +56,7 @@ def build_gmrepo_weaver_configured(
     sample profiles for each — the ``gmrepo.sample_profiles`` substrate for the co-occurrence
     layer. Since the build is idempotent, adding profiles to an existing DB needs ``refresh=True``.
     """
+    reject_unknown_options(_config)
     path = ensure_gmrepo_db(
         db_path,
         auto=auto_setup,

@@ -1,12 +1,12 @@
 [project]
 name = "wikidata_weaver"
-version = "0.1.7"
+version = "0.1.8"
 description = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.13.0", "httpx>=0.27"]
+dependencies = ["braidworks-core>=0.21.5", "httpx>=0.27"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

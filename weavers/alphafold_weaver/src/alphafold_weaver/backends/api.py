@@ -25,6 +25,8 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("alphafold_weaver.api")
 
@@ -100,7 +102,7 @@ def _extract(entry: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in candidates.items() if v is not None}
 
 
-class AlphafoldApiBackend(BackendBase):
+class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
     """AlphaFold DB REST backend. Always configured — the API is free, no key."""
 
     name = "api"
@@ -112,8 +114,7 @@ class AlphafoldApiBackend(BackendBase):
         client: httpx.AsyncClient | None = None,
         max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")
         self._max_concurrency = max_concurrency
@@ -124,11 +125,14 @@ class AlphafoldApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """A live service; the fingerprint pins the REST API contract."""
-        return "alphafold-api-v1"
+        return remote_fingerprint(
+            "alphafold_weaver-api", self._base_url, contract="alphafold-api-v1"
+        )
 
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
         return PacedHTTPClient(self._client, "alphafold")

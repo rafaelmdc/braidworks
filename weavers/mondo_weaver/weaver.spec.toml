@@ -17,7 +17,7 @@ db_name = "mondo"
 weaver_id = "mondo"
 kind = "lookup"
 title = "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
-version = "0.2.5"
+version = "0.2.6"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1101/2022.04.13.22273750"
 attribution = "Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)"
@@ -75,8 +75,8 @@ always_computed_groups = ["identity"]
   outputs = ["disease.ontology.ancestors"]
 
 # Free-text disease name -> MONDO via the label/exact-synonym index. MONDO's MeSH/MedDRA
-# xref coverage is uneven, so name matching is the fallback that lifts a MedDRA-coded source
-# like Disbiome from ~14% to ~60% resolution (case/whitespace-normalized).
+# Cross-reference coverage varies by source and ontology release. Name lookup uses
+# normalized exact labels/synonyms; equivalence and ambiguity still require review.
 [[capability]]
 id = "mondo.lookup_by_name"
 consumes = ["disease.name"]

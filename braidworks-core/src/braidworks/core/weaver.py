@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable
-from typing import Any, ClassVar, Protocol, TypeVar, runtime_checkable
+from typing import Any, ClassVar, Protocol, Self, TypeVar, runtime_checkable
 
 from braidworks.core.capability import WeaverManifest
 from braidworks.core.http_pacing import validate_request_pacing
@@ -43,6 +43,15 @@ class BaseWeaver(ABC):
     """
 
     MANIFEST: ClassVar[WeaverManifest]
+
+    async def aclose(self) -> None:
+        """Release owned resources; resource-free weavers need no override."""
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        await self.aclose()
 
     def supports_request_pacing(self, backend: str) -> bool:
         """Whether every HTTP request on this backend uses the pacing seam."""

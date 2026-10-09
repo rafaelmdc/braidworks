@@ -29,6 +29,8 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 from uniprot_weaver import mapping
 
@@ -241,7 +243,7 @@ def _extract(entry: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in candidates.items() if v is not None}
 
 
-class UniprotApiBackend(BackendBase):
+class UniprotApiBackend(HTTPClientLifecycle, BackendBase):
     """UniProtKB REST backend. Always configured — the API is free, no key."""
 
     name = "api"
@@ -253,8 +255,7 @@ class UniprotApiBackend(BackendBase):
         client: httpx.AsyncClient | None = None,
         max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")
         self._max_concurrency = max_concurrency
@@ -265,11 +266,12 @@ class UniprotApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """A live service; the fingerprint pins the REST API/JSON contract version."""
-        return "uniprot-rest-v1"
+        return remote_fingerprint("uniprot_weaver-api", self._base_url, contract="uniprot-rest-v1")
 
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             # follow_redirects: the ID-mapping results endpoint 303-redirects to its
             # stream variant when a job finishes.

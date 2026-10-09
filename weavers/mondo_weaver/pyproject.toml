@@ -1,12 +1,12 @@
 [project]
 name = "mondo_weaver"
-version = "0.2.5"
+version = "0.2.6"
 description = "MONDO disease ontology (MeSH/MedDRA disease id -> unified MONDO id + is-a ancestors) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.13.3"]
+dependencies = ["braidworks-core>=0.21.5"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

@@ -150,9 +150,9 @@ STRING source; it never converts that identity into a free-text protein name.
 
 ## Configured Python usage
 
-The current zero-config builder ignores keyword configuration; supported factory
-configuration and client ownership are tracked separately in #185. For explicit
-HTTP configuration now, inject an application-owned client into the API backend:
+The public builder forwards `client`, `base_url` and `max_concurrency`. Inject an
+application-owned client, or use `async with build_uniprot_weaver():` to close a
+lazily created owned client. Direct backend composition is also supported:
 
 ```python
 import asyncio
@@ -180,3 +180,11 @@ Direct mapping examples (network access required):
 braidworks run uniprot map_to_accession --have gene.ncbi.id=7157 --want protein.uniprot.accession
 braidworks run uniprot map_from_accession --have protein.uniprot.accession=P04637 --want pdb.id
 ```
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

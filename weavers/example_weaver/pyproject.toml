@@ -1,12 +1,12 @@
 [project]
 name = "example_weaver"
-version = "1.0.3"
+version = "1.0.4"
 description = "Example reference weaver (taxid -> traits, from a tiny CSV) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.1.8"]
+dependencies = ["braidworks-core>=0.21.5"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

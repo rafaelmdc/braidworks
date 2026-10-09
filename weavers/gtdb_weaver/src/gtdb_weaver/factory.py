@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 from braidworks.core import BackendConfigurationError, BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from gtdb_weaver import taxonomy
 from gtdb_weaver.backends.api import BASE_URL as _API_BASE_URL
@@ -48,6 +49,7 @@ def build_gtdb_weaver(
     enable_api: bool = False,
     api_base_url: str | None = None,
     api_client: httpx.AsyncClient | None = None,
+    api_max_concurrency: int = 4,
     **_config: Any,
 ) -> BaseWeaver:
     """Build a GtdbWeaver, wiring the local and/or api backends from config.
@@ -62,8 +64,16 @@ def build_gtdb_weaver(
     unconfigured (its default DB path, not built) — which is what ``weaverkit verify`` and
     entry-point discovery call as ``build_gtdb_weaver()``.
     """
+    reject_unknown_options(_config)
     backends: dict[str, Any] = {}
-    if db_path is not None or auto_setup:
+    if (
+        db_path is not None
+        or auto_setup
+        or refresh
+        or release is not None
+        or enable_tree_placement
+        or tree_paths is not None
+    ):
         resolved = _ensure_local_db(
             db_path, auto_setup=auto_setup, refresh=refresh, release=release
         )
@@ -74,8 +84,12 @@ def build_gtdb_weaver(
             db_path=resolved,
         )
         backends["local"] = GtdbLocalBackend(resolved, tree_paths=trees)
-    if enable_api or api_client is not None:
-        backends["api"] = GtdbApiBackend(base_url=api_base_url or _API_BASE_URL, client=api_client)
+    if enable_api or api_client is not None or api_base_url is not None or api_max_concurrency != 4:
+        backends["api"] = GtdbApiBackend(
+            base_url=api_base_url or _API_BASE_URL,
+            client=api_client,
+            max_concurrency=api_max_concurrency,
+        )
     if not backends:
         # Zero-config introspection form: every declared backend present-but-possibly-
         # unconfigured (local at its default path without building; the api needs no data).
@@ -184,8 +198,34 @@ def build_gtdb_weaver_fixture() -> BaseWeaver:
 
 def build_gtdb_weaver_configured(**config: Any) -> BaseWeaver:
     """Configured builder — wires backends from real config; raises if none is usable."""
+    if (
+        not any(
+            config.get(key) is not None and config.get(key) is not False
+            for key in ("db_path", "release", "tree_paths", "api_base_url", "api_client")
+        )
+        and config.get("api_max_concurrency", 4) == 4
+        and not any(
+            config.get(key)
+            for key in ("auto_setup", "refresh", "enable_tree_placement", "enable_api")
+        )
+    ):
+        reject_unknown_options(
+            {
+                key: value
+                for key, value in config.items()
+                if key
+                not in {
+                    "auto_setup",
+                    "refresh",
+                    "enable_tree_placement",
+                    "enable_api",
+                    "api_max_concurrency",
+                }
+            }
+        )
+        raise BackendConfigurationError("Configured GTDB builder requires explicit source settings")
     weaver = build_gtdb_weaver(**config)
-    if not weaver._backends:
+    if not any(backend.is_configured() for backend in weaver._backends.values()):
         raise BackendConfigurationError(
             "configure at least one backend (db_path/auto_setup/enable_api)"
         )

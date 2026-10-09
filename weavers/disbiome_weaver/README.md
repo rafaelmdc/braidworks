@@ -38,8 +38,9 @@ Build the DB once, then it chains straight off `ncbi_weaver`
 ```python
 from disbiome_weaver import build_disbiome_weaver_configured
 
-# Builds the ~7 MB DB on first use (prompts on a TTY; set BRAIDWORKS_AUTO_DOWNLOAD=1
-# or pass auto_setup=True non-interactively). Override location with db_path=.
+# Builds the ~7 MB DB on first use with explicit auto_setup consent (or
+# BRAIDWORKS_AUTO_DOWNLOAD=1); no terminal prompt is implemented.
+# Override the database location with db_path=.
 weaver = build_disbiome_weaver_configured(auto_setup=True)
 # In an app that wires a WeaverFactory, `disbiome_weaver.register(factory)` adds it as a provider.
 ```
@@ -88,3 +89,11 @@ species IDs share SQL/parsing within a single batch, with detached results.
 Schema-1 databases must be rebuilt using
 `build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
 The input is `ncbi.taxon.species_id`; resolve species-level identity before chaining.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

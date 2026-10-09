@@ -20,3 +20,7 @@ SH-09 update: measured group projection and batch-local SQL reuse are implemente
 under #263/#267; see [implementation evidence](SH-09.implementation.md). Optional
 evidence filter decisions from finding 006 remain open as #296 under #169,
 coordinated with #264/WP-DISBIOME-03. Other source work packages remain pending.
+
+Shared configuration/lifecycle findings in #149 are implemented; see
+[SH-02 acceptance, verification and migrations](SH-02.implementation.md).
+Source-specific remaining proposals and capabilities stay separately tracked.

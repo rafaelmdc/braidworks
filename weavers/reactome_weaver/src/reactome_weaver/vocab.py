@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.10"
+WEAVER_VERSION = "0.1.11"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

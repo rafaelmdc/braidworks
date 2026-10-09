@@ -55,3 +55,11 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/example_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

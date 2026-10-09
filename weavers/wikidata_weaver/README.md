@@ -65,3 +65,11 @@ Aliases are distinct and lexically sorted. Conflicting English article titles,
 taxon ranks, or sitelink counts for the same QID produce an error containing all
 observed alternatives, rather than choosing the first binding. Homonyms retain
 the existing candidate/review behavior.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

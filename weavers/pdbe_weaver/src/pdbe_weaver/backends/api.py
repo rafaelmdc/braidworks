@@ -26,6 +26,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
 logger = logging.getLogger("pdbe_weaver.api")
@@ -150,7 +151,7 @@ def _describe(pdb_id: str, obj: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-class PdbeApiBackend(BackendBase):
+class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
     """PDBe REST backend. Always configured — the API is free, no key."""
 
     name = "api"
@@ -162,8 +163,7 @@ class PdbeApiBackend(BackendBase):
         client: httpx.AsyncClient | None = None,
         limit: int = DEFAULT_LIMIT,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
         self._limit = limit
@@ -184,6 +184,7 @@ class PdbeApiBackend(BackendBase):
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
         return PacedHTTPClient(self._client, "pdbe")

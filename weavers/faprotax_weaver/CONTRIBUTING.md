@@ -68,4 +68,9 @@ See [README.md](README.md) and `weaver.spec.toml` for the current output keys an
 
 <!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
      data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- TODO: record this weaver's specific expansion ideas and known limitations here.
+- Update the bundled source verbatim, its embedded license and DATA_VERSION together.
+  Validate ordered pattern tokens and add_group references with known matching and
+  nonmatching lineages. Unknown lineage names and unmatched rules are misses.
+- Current inference is putative clade affiliation, not a measured phenotype or
+  proof of function in every strain. Group composition/cycle semantics remain
+  tracked in the source-specific audit.

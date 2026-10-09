@@ -18,27 +18,29 @@ from typing import Any
 
 import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
-from reactome_weaver.backends.api import DEFAULT_BASE_URL, ReactomeApiBackend
+from reactome_weaver.backends.api import ReactomeApiBackend
 from reactome_weaver.weaver import ReactomeWeaver
 
 
 def build_reactome_weaver(
     *,
-    base_url: str = DEFAULT_BASE_URL,
+    base_url: str = "https://reactome.org/ContentService",
     client: httpx.AsyncClient | None = None,
     limit: int = 30,
+    max_concurrency: int = 4,
     **_config: Any,
 ) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    With no arguments, wires the keyless API for introspection. Explicit endpoint,
-    client and source-policy arguments configure the same backend for real queries.
-    """
-    backends = {
-        "api": ReactomeApiBackend(base_url=base_url, client=client, limit=limit),
-    }
-    return ReactomeWeaver(backends)
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return ReactomeWeaver(
+        {
+            "api": ReactomeApiBackend(
+                base_url=base_url, client=client, limit=limit, max_concurrency=max_concurrency
+            )
+        }
+    )
 
 
 def build_reactome_weaver_fixture() -> BaseWeaver:

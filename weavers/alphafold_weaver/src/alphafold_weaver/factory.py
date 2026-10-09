@@ -16,22 +16,30 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from alphafold_weaver.backends.api import AlphafoldApiBackend
 from alphafold_weaver.weaver import AlphafoldWeaver
 
 
-def build_alphafold_weaver(**_config: Any) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    Wires every declared backend present-but-possibly-unconfigured. For real use,
-    add a configured builder (see the module docstring / the commented skeletons).
-    """
-    backends = {
-        "api": AlphafoldApiBackend(),
-    }
-    return AlphafoldWeaver(backends)
+def build_alphafold_weaver(
+    *,
+    base_url: str = "https://alphafold.ebi.ac.uk",
+    client: httpx.AsyncClient | None = None,
+    max_concurrency: int = 4,
+    **_config: Any,
+) -> BaseWeaver:
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return AlphafoldWeaver(
+        {
+            "api": AlphafoldApiBackend(
+                base_url=base_url, client=client, max_concurrency=max_concurrency
+            )
+        }
+    )
 
 
 def build_alphafold_weaver_fixture() -> BaseWeaver:

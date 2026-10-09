@@ -486,3 +486,14 @@ delegates to it. You implement only two domain pieces in `setup.py`:
 
 `weavers/ncbi_weaver/src/ncbi_weaver/setup.py` is the worked example (delegates to
 `ensure_local_db`, keeping only taxdump specifics).
+
+## HTTP ownership and configuration
+
+Use core HTTPClientLifecycle for adapters that lazily own or borrow an injected
+httpx client. Initialize ownership with _configure_client and call _ensure_open
+before request access. Keep request and biological policies in the source adapter.
+Expose existing source options explicitly through the public builder; reject
+unknown names with reject_unknown_options. New scaffolds do this for their empty
+configuration contract. Raise the core floor to 0.21.5 when using this API.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for closing
+weavers, injected clients and effective endpoint identity.

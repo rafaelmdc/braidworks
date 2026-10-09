@@ -110,3 +110,11 @@ taxonomy, explicit type-strain scope, complete source fields/references/units an
 conflicting observations. Scalars are emitted only when observations agree;
 conflicting traits are omitted with a warning and retained evidence. These are
 type-strain observations, not an assertion of species-wide consensus.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

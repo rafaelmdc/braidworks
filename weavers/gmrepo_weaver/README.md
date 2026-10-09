@@ -138,3 +138,50 @@ and sample profiles by phenotype/run/taxon/rank. Repeated identical rows collaps
 before storage and content hashing. Contradictory rows for the same key abort the
 build, preserving an existing database during staged acquisition. Rebuild older
 databases with `refresh=True`; rank completes all relevant lookup ordering.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Capabilities and output groups
+
+| Capability | Input | Outputs by group |
+|---|---|---|
+| `gmrepo.list_abundances` | `ncbi.taxon.id` | **summary**: `microbe.abundance.count`, `microbe.abundance.coverage`, `microbe.abundance.overview`, `microbe.abundance.phenotype_names`; **associations**: `microbe.abundance.associations`; **full**: `microbe.abundance.records` |
+| `gmrepo.sample_profiles` | `disease.mesh.id` | **profiles**: `microbe.abundance.sample_profiles` |
+
+## Complete offline Python example
+
+```python
+import asyncio
+from braidworks.core import Strand, StrandSet
+from gmrepo_weaver.factory import build_gmrepo_weaver_fixture
+
+async def main():
+    async with build_gmrepo_weaver_fixture() as weaver:
+        result = (await weaver.execute_batch(
+            'gmrepo.list_abundances',
+            [StrandSet.from_strands("example", [Strand('ncbi.taxon.id', 816)])],
+            requested_outputs=frozenset({'microbe.abundance.phenotype_names'}), backend="local",
+        ))[0]
+        print(result.to_json())
+        result = (await weaver.execute_batch(
+            'gmrepo.sample_profiles',
+            [StrandSet.from_strands("example", [Strand('disease.mesh.id', 'D003093')])],
+            requested_outputs=frozenset({'microbe.abundance.sample_profiles'}), backend="local",
+        ))[0]
+        print(result.to_json())
+
+asyncio.run(main())
+```
+
+Summary queries project overview, names, count and acquisition scope; they do not
+project association measurements. Full records and profiles require their groups.
+Direct backend callers passing an empty group set retain the legacy full view.
+The live build uses the taxon-centric summary endpoint with trailing slashes;
+source_sample records current observed envelopes. Source setup still exposes
+explicit acquisition budgets and optional profile scope.

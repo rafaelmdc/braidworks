@@ -279,7 +279,8 @@ def test_bulk_pyproject_wires_core_and_script(tmp_path):
     _spec, dest = _generate_bulk(tmp_path)
     pyproject = (dest / "pyproject.toml").read_text()
     # Local-DB plumbing (and platformdirs) come from braidworks-core now.
-    assert "braidworks-core>=0.13.0" in pyproject
+    # Generated factories now use the explicit configuration/lifecycle API.
+    assert "braidworks-core>=0.21.5" in pyproject
     assert "bulkdemo_weaver-ensure" in pyproject
     assert "uv run bulkdemo_weaver-ensure" in (dest / "Makefile").read_text()
 

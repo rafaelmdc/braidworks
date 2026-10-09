@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from example_weaver.backends.local import ExampleLocalBackend
 from example_weaver.weaver import ExampleWeaver
@@ -12,6 +13,7 @@ from example_weaver.weaver import ExampleWeaver
 
 def build_example_weaver(**config: Any) -> BaseWeaver:
     """Construct a configured ExampleWeaver with every declared backend wired in."""
+    reject_unknown_options(config)
     backends = {
         "local": ExampleLocalBackend(),
     }

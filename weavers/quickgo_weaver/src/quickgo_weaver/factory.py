@@ -18,27 +18,24 @@ from typing import Any
 
 import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
-from quickgo_weaver.backends.api import DEFAULT_BASE_URL, QuickgoApiBackend
+from quickgo_weaver.backends.api import QuickgoApiBackend
 from quickgo_weaver.weaver import QuickgoWeaver
 
 
 def build_quickgo_weaver(
     *,
-    base_url: str = DEFAULT_BASE_URL,
+    base_url: str = "https://www.ebi.ac.uk/QuickGO/services",
     client: httpx.AsyncClient | None = None,
     max_pages: int = 10,
     **_config: Any,
 ) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    With no arguments, wires the keyless API for introspection. Explicit endpoint,
-    client and source-policy arguments configure the same backend for real queries.
-    """
-    backends = {
-        "api": QuickgoApiBackend(base_url=base_url, client=client, max_pages=max_pages),
-    }
-    return QuickgoWeaver(backends)
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return QuickgoWeaver(
+        {"api": QuickgoApiBackend(base_url=base_url, client=client, max_pages=max_pages)}
+    )
 
 
 def build_quickgo_weaver_fixture() -> BaseWeaver:

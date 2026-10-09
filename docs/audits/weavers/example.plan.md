@@ -27,3 +27,7 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Shared documentation findings in #148 are implemented; see
 [SH-01 evidence and scope](SH-01.implementation.md). Other source capability and
 configuration work remains owned by its existing issues.
+
+Shared configuration/lifecycle findings in #149 are implemented; see
+[SH-02 acceptance, verification and migrations](SH-02.implementation.md).
+Source-specific remaining proposals and capabilities stay separately tracked.

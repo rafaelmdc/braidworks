@@ -224,14 +224,29 @@ def ensure_disbiome_db(
 
     Idempotent: a valid DB is returned instantly. Otherwise acquisition needs
     consent (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); without it, an actionable
-    ``BackendConfigurationError`` is raised. ``progress`` is accepted for API
-    symmetry with ncbi_weaver (the build is fast and currently silent).
+    ``BackendConfigurationError`` is raised. ``progress`` emits table-fetch and database-write events; byte totals are unknown.
     """
     path = Path(db_path) if db_path else default_disbiome_db_path()
+
+    def build(target: Path) -> None:
+        def fetch_table(endpoint: str) -> list[dict]:
+            if progress:
+                progress("fetch", endpoint, 0, None, False)
+            records = _fetch(endpoint)
+            if progress:
+                progress("fetch", endpoint, 0, None, True)
+            return records
+
+        if progress:
+            progress("build", "Disbiome database", 0, None, False)
+        _build(target, fetch=fetch_table)
+        if progress:
+            progress("build", "Disbiome database", 0, None, True)
+
     return ensure_local_db(
         path,
         is_valid=db_is_valid,
-        build=_build,
+        build=build,
         consent_message=_CONSENT_MESSAGE.format(path=path),
         auto=auto,
         refresh=refresh,

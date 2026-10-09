@@ -31,7 +31,10 @@ from typing import Any
 
 import httpx
 from braidworks.core import LookupRecord, format_exc, is_not_found_status, map_bounded
+from braidworks.core.exceptions import BackendConfigurationError
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 from rapidfuzz import fuzz
 
 from .. import vocab
@@ -231,7 +234,7 @@ def _rescore(query: str, name: str | None) -> float:
     return float(fuzz.token_set_ratio(query.lower(), name.lower()))
 
 
-class DatasetsV2Backend:
+class DatasetsV2Backend(HTTPClientLifecycle):
     """Resolution backend backed by the NCBI Datasets v2 REST API."""
 
     name = "api"
@@ -246,10 +249,10 @@ class DatasetsV2Backend:
         max_report_pages: int = 1000,
         max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
+        self._configure_client(client, base_url)
+        if client is not None and api_key is not None and client.headers.get("api-key") != api_key:
+            raise BackendConfigurationError("Set api-key on the injected client or omit api_key")
         self._api_key = api_key
-        self._client = client
-        self._owns_client = client is None
         self._allow_fuzzy = allow_fuzzy
         if (
             isinstance(max_report_pages, bool)
@@ -272,12 +275,18 @@ class DatasetsV2Backend:
 
     def fingerprint(self) -> str:
         """Datasets v2 is a live service, so the fingerprint is a fixed identifier."""
-        return f"datasets-v2:pages={self._max_report_pages}"
+        return remote_fingerprint(
+            "ncbi_weaver-api",
+            self._base_url,
+            contract=f"datasets-v2:pages={self._max_report_pages}",
+            allow_fuzzy=self._allow_fuzzy,
+        )
 
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
         """Return the HTTP client, lazily creating one if none was injected."""
+        self._ensure_open()
         if self._client is None:
             headers = {"api-key": self._api_key} if self._api_key else {}
             self._client = httpx.AsyncClient(base_url=self._base_url, headers=headers, timeout=30.0)

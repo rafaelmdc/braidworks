@@ -90,3 +90,6 @@ Ambiguous resolver results pause for review by default. Explicit automatic selec
 retains requires_review; positive confidence floors still apply. See
 [migrating-to-0.12.md](migrating-to-0.12.md) for the policy controls,
 [usage.md](usage.md) for exports, and [fanout-roadmap.md](fanout-roadmap.md) for bounds.
+
+- [Weaver construction and HTTP lifetime](weaver-configuration.md): validated
+  builder/provider options, source selection, ownership and resource cleanup.

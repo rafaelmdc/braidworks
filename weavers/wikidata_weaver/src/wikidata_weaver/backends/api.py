@@ -31,10 +31,12 @@ from braidworks.core import (
     ResolverRecord,
 )
 from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 # The Wikidata Query Service SPARQL endpoint (distinct from the www. content host).
 BASE_URL = "https://query.wikidata.org"
-_USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gmail.com)"
+_USER_AGENT = "Braidworks (https://github.com/rafaelmdc/braidworks)"
 
 # Resolve P225 (taxon name) -> item, optional enwiki sitelink, and every English
 # name we can use for the alias index, UNIONed into ?vn (no label×alias cross-product):
@@ -149,7 +151,7 @@ class _ChunkFailed(Exception):
     """A chunk that exhausted its retries — its names are marked ERROR, others are unaffected."""
 
 
-class WikidataApiBackend(BackendBase):
+class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
     """api backend — calls the keyless Wikidata Query Service."""
 
     name = "api"
@@ -157,8 +159,7 @@ class WikidataApiBackend(BackendBase):
     def __init__(
         self, *, base_url: str = BASE_URL, client: httpx.AsyncClient | None = None
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
         self._configured = True  # keyless service — always usable
 
     def is_configured(self) -> bool:
@@ -167,6 +168,7 @@ class WikidataApiBackend(BackendBase):
     supports_request_pacing = True
 
     def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=60.0)
         return PacedHTTPClient(self._client, "wikidata")
@@ -174,7 +176,11 @@ class WikidataApiBackend(BackendBase):
     def fingerprint(self) -> str:
         # Wikidata is continuously edited; bucket the cache by query month so results
         # refresh monthly (matches the spec's "query-month" source of truth).
-        return "wikidata-api-" + datetime.now(UTC).strftime("%Y-%m")
+        return remote_fingerprint(
+            "wikidata_weaver-api",
+            self._base_url,
+            contract="wikidata-api-" + datetime.now(UTC).strftime("%Y-%m"),
+        )
 
     async def _post_chunk(self, query: str) -> dict[str, Any]:
         """POST one chunk and return the parsed SPARQL JSON, retrying transient failures.

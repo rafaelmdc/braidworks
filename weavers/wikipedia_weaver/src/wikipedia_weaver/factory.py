@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 from braidworks.core import BackendConfigurationError, BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from wikipedia_weaver.backends.api import WikipediaApiBackend
 from wikipedia_weaver.backends.local import WikipediaLocalBackend
@@ -50,6 +51,11 @@ def build_wikipedia_weaver(
     refresh: bool = False,
     enable_api: bool = False,
     api_client: httpx.AsyncClient | None = None,
+    api_base_url: str | None = None,
+    api_months: int = 12,
+    api_end_month: str | None = None,
+    api_agent: str = "all-agents",
+    api_max_concurrency: int = 4,
     **_ignore: Any,
 ) -> BaseWeaver:
     """Assemble the weaver from config.
@@ -60,6 +66,7 @@ def build_wikipedia_weaver(
     passed. With **no** backend-selecting argument, returns the zero-config introspection
     weaver (both backends declared; local unconfigured, api keyless).
     """
+    reject_unknown_options(_ignore)
     backends: dict[str, Any] = {}
 
     want_local = (
@@ -102,8 +109,23 @@ def build_wikipedia_weaver(
         )
         backends["local"] = WikipediaLocalBackend(resolved)
 
-    if enable_api or api_client is not None:
-        backends["api"] = WikipediaApiBackend(client=api_client)
+    if (
+        enable_api
+        or api_client is not None
+        or api_base_url is not None
+        or api_months != 12
+        or api_end_month is not None
+        or api_agent != "all-agents"
+        or api_max_concurrency != 4
+    ):
+        backends["api"] = WikipediaApiBackend(
+            **({"base_url": api_base_url} if api_base_url is not None else {}),
+            client=api_client,
+            months=api_months,
+            end_month=api_end_month,
+            agent=api_agent,
+            max_concurrency=api_max_concurrency,
+        )
 
     if not backends:
         # Zero-config introspection: wire both present-but-possibly-unconfigured (local

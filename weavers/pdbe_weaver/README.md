@@ -102,3 +102,11 @@ Equal coverage/resolution ties choose the smallest chain ID, then canonical sour
 evidence. Each `structure.pdb.records` entry includes the selected `chain_id`, its
 original `source` row, and distinct sorted `chains` records. This preserves observed
 methods and sequence ranges without adding a new capability or output group.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

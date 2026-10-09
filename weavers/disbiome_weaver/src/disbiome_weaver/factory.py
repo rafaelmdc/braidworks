@@ -18,19 +18,23 @@ from pathlib import Path
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
+from braidworks.core.localdb import ProgressCallback
 
 from disbiome_weaver.backends.local import DisbiomeLocalBackend
 from disbiome_weaver.setup import ensure_disbiome_db
 from disbiome_weaver.weaver import DisbiomeWeaver
 
 
-def build_disbiome_weaver(**_config: Any) -> BaseWeaver:
+def build_disbiome_weaver(**config: Any) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
     Wires the local backend present-but-possibly-unconfigured (it reports
     ``is_configured() == False`` until the DB is built). For real use call
     ``build_disbiome_weaver_configured``.
     """
+    if config:
+        return build_disbiome_weaver_configured(**config)
     return DisbiomeWeaver({"local": DisbiomeLocalBackend()})
 
 
@@ -39,6 +43,7 @@ def build_disbiome_weaver_configured(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    progress: ProgressCallback | None = None,
     **_config: Any,
 ) -> BaseWeaver:
     """Configured builder for real use: ensures the local DB, then wires the backend.
@@ -48,7 +53,8 @@ def build_disbiome_weaver_configured(
     already point at a built DB, or an actionable error is raised. ``refresh=True``
     rebuilds from the current API.
     """
-    path = ensure_disbiome_db(db_path, auto=auto_setup, refresh=refresh)
+    reject_unknown_options(_config)
+    path = ensure_disbiome_db(db_path, auto=auto_setup, refresh=refresh, progress=progress)
     return DisbiomeWeaver({"local": DisbiomeLocalBackend(path)})
 
 

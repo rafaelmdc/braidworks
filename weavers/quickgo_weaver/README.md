@@ -72,7 +72,7 @@ BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live QuickGO API (schema-drift
 
 Extend it: [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/quickgo_weaver/CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
 
-## In## Batch execution
+## Batch execution
 
 Annotation queries accept up to ten distinct accessions per HTTP query and correlate
 rows by the echoed geneProductId. Paging is shared, with a budget scaled by the
@@ -83,7 +83,7 @@ total_annotations is that accession's count when the complete combined response
 establishes it. An unseen accession in an incomplete batch is an error rather
 than a claimed biological absence. Missing/unexpected echoed IDs are errors.
 
-stallation and documentation
+## Installation and documentation
 
 Install this package together with a compatible core in a virtual environment.
 See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
@@ -113,3 +113,11 @@ hash the effective endpoint (including an injected client's base URL) and budget
 so a result acquired under one budget cannot satisfy a different source policy.
 Endpoint credentials are not printed; an unversioned live service remains mutable.
 The existing annotation coverage output still reports whether acquisition completed.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

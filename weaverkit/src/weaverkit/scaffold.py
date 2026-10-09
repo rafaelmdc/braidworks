@@ -1137,6 +1137,7 @@ from __future__ import annotations
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 {{BACKEND_IMPORTS}}
 from {{DBWEAVER}}.weaver import {{CLASS}}Weaver
@@ -1148,6 +1149,7 @@ def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
     Wires every declared backend present-but-possibly-unconfigured. For real use,
     add a configured builder (see the module docstring / the commented skeletons).
     """
+    reject_unknown_options(_config)
     backends = {
 {{BACKEND_WIRING}}
     }
@@ -1319,7 +1321,7 @@ def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
     # making every api-weaver author add it by hand.
     has_api = "api" in spec.backends
     # New scaffolds target the runtime verified with this toolkit release.
-    deps = ['"braidworks-core>=0.13.0"']
+    deps = ['"braidworks-core>=0.21.5"']
     if has_api:
         deps.append('"httpx>=0.27"')
     tokens["DEPS"] = ", ".join(deps)

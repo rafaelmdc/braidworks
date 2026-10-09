@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from braidworks.core.lifecycle import reject_unknown_options
 
 from .backends.datasets_v2 import DEFAULT_BASE_URL, DatasetsV2Backend
 from .backends.local import LocalTaxonomyBackend
@@ -79,6 +80,8 @@ def build_ncbi_weaver(
     api_client: httpx.AsyncClient | None = None,
     allow_fuzzy: bool = True,
     api_max_concurrency: int = 4,
+    api_max_report_pages: int = 1000,
+    **_config: Any,
 ) -> NCBITaxonWeaver:
     """Build an NCBITaxonWeaver, wiring the local and/or API backends from config.
 
@@ -90,18 +93,28 @@ def build_ncbi_weaver(
     present-but-unconfigured — which is what ``weaverkit verify`` and entry-point
     discovery call as ``build_ncbi_weaver()``.
     """
+    reject_unknown_options(_config)
     backends = {}
-    want_local = db_path is not None or auto_setup
+    want_local = db_path is not None or auto_setup or refresh or cache_db_path is not None
     if want_local:
         resolved_db = _ensure_local_db(db_path, auto_setup=auto_setup, refresh=refresh)
         backends["local"] = LocalTaxonomyBackend(resolved_db, cache_db_path=cache_db_path)
-    if enable_api or api_client is not None:
+    if (
+        enable_api
+        or api_client is not None
+        or api_key is not None
+        or api_base_url != DEFAULT_BASE_URL
+        or not allow_fuzzy
+        or api_max_concurrency != 4
+        or api_max_report_pages != 1000
+    ):
         backends["api"] = DatasetsV2Backend(
             base_url=api_base_url,
             api_key=api_key,
             client=api_client,
             allow_fuzzy=allow_fuzzy,
             max_concurrency=api_max_concurrency,
+            max_report_pages=api_max_report_pages,
         )
     if not backends:
         # No backend selected → the zero-config **introspection** form: wire every
@@ -126,6 +139,7 @@ def build_ncbi_weaver_fixture(**_config: Any) -> NCBITaxonWeaver:
     resolutions reproducibly. The local backend is configured against a ~6-species
     *Faecalibacterium* SQLite built from inline dumps (see :mod:`ncbi_weaver.fixture`).
     """
+    reject_unknown_options(_config)
     global _FIXTURE_DB
     from .fixture import build_fixture_db
 

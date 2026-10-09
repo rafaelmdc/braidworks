@@ -1,13 +1,13 @@
 [project]
 name = "ncbi_weaver"
-version = "0.2.9"
+version = "0.2.10"
 description = "NCBI weaver for Braidworks (taxonomy, via local SQLite + Datasets v2 API backends)."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
-  "braidworks-core>=0.21.2",
+  "braidworks-core>=0.21.5",
   "rapidfuzz>=3.0,<4.0",
   "httpx>=0.27",
   "platformdirs>=4.0",

@@ -119,3 +119,11 @@ source absence; retained totals carry incomplete coverage. This completeness app
 to parsing the supplied artifact, not a guarantee about upstream traffic collection.
 Schema 1 databases require rebuilding; no dump download occurs merely to inspect
 an existing valid database.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

@@ -94,3 +94,11 @@ existing semantics. Fingerprints hash the effective endpoint (including an injec
 client's base URL) and cap. Changing either separates cached results, without
 printing endpoint credentials. Configuration identity does not freeze the contents
 of an unversioned live service.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.

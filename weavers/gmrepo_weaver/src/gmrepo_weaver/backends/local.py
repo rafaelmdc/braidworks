@@ -52,19 +52,6 @@ def _association_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _values(overview: dict[str, Any] | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Fill every produced output from a taxid's overview + association rows."""
-    names = sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
-    associations = [_association_row(r) for r in rows]
-    return {
-        OVERVIEW: overview,
-        NAMES: names,
-        COUNT: len(rows),
-        ASSOCIATIONS: associations,
-        RECORDS: {"overview": overview, "associations": rows},
-    }
-
-
 def _acquisition(con: sqlite3.Connection) -> dict[str, Any]:
     row = con.execute("SELECT value FROM meta WHERE key = 'acquisition'").fetchone()
     return json.loads(row[0]) if row else {"scope": "unknown", "taxa": {}, "profiles": {}}
@@ -102,11 +89,15 @@ class GmrepoLocalBackend(BackendBase):
     ) -> list[LookupRecord]:
         if capability_id == _PROFILES_CAPABILITY:
             return await asyncio.to_thread(self._profiles_all, queries)
-        return await asyncio.to_thread(self._lookup_all, queries)
+        return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
-    def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _lookup_all(
+        self, queries: list[dict[str, Any]], groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        # Legacy direct-backend callers use an empty group set for the full view.
+        groups = groups or frozenset({"summary", "associations", "full"})
         with self._source.session() as con:
-            return [self._lookup_one(con, q) for q in queries]
+            return [self._lookup_one(con, q, groups) for q in queries]
 
     def _profiles_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         with self._source.session() as con:
@@ -175,7 +166,9 @@ class GmrepoLocalBackend(BackendBase):
             ),
         )
 
-    def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
+    def _lookup_one(
+        self, con: sqlite3.Connection, query: dict[str, Any], groups: frozenset[str]
+    ) -> LookupRecord:
         taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
         if taxid is None:
             return LookupRecord(query=query, found=False)
@@ -184,27 +177,54 @@ class GmrepoLocalBackend(BackendBase):
             return LookupRecord(
                 query=query, error=f"GMrepo taxon acquisition failed: {coverage.get('error')}"
             )
-        rows = [
-            dict(r)
-            for r in con.execute(
-                "SELECT rank, mesh_id, phenotype_name, samples, phenotype_valid_runs, "
-                "prevalence_percentage, abundance_mean, abundance_median, abundance_sd "
-                "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id, rank",
+        want_rows = bool(groups & {"full", "associations"})
+        rows = []
+        summary_rows = []
+        if want_rows:
+            rows = [
+                dict(r)
+                for r in con.execute(
+                    "SELECT rank, mesh_id, phenotype_name, samples, phenotype_valid_runs, "
+                    "prevalence_percentage, abundance_mean, abundance_median, abundance_sd "
+                    "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id, rank",
+                    (taxid,),
+                ).fetchall()
+            ]
+        else:
+            summary_rows = con.execute(
+                "SELECT phenotype_name, COUNT(*) FROM association "
+                "WHERE ncbi_taxon_id = ? GROUP BY phenotype_name",
                 (taxid,),
             ).fetchall()
-        ]
         overview_row = con.execute(
             "SELECT rank, name, pct_of_all_samples, nr_phenotypes, presented_samples "
             "FROM overview WHERE ncbi_taxon_id = ? ORDER BY rank LIMIT 1",
             (taxid,),
         ).fetchone()
         overview = dict(overview_row) if overview_row is not None else None
-        if not rows and overview is None:
+        count = len(rows) if want_rows else sum(row[1] for row in summary_rows)
+        if not count and overview is None:
             return LookupRecord(query=query, found=False)
-        values = _values(overview, rows)
-        scope = coverage or {"scope": "caller-supplied", "complete": None, "rows": len(rows)}
-        values["microbe.abundance.coverage"] = scope
-        values[RECORDS]["coverage"] = scope
+        values = {}
+        if "summary" in groups:
+            values.update(
+                {
+                    OVERVIEW: overview,
+                    NAMES: sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
+                    if want_rows
+                    else sorted(row[0] for row in summary_rows if row[0]),
+                    COUNT: count,
+                }
+            )
+        if "associations" in groups:
+            values[ASSOCIATIONS] = [_association_row(row) for row in rows]
+        if "full" in groups:
+            values[RECORDS] = {"overview": overview, "associations": rows}
+        scope = coverage or {"scope": "caller-supplied", "complete": None, "rows": count}
+        if "summary" in groups:
+            values["microbe.abundance.coverage"] = scope
+        if "full" in groups:
+            values[RECORDS]["coverage"] = scope
         return LookupRecord(
             query=query,
             found=True,

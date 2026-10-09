@@ -74,3 +74,23 @@ Parsed bundled rules are immutable. Matching runs in a worker thread and scans
 once per distinct case-insensitive lineage within a batch. Each result receives
 a separate list; query results are not cached across batches. This preserves the
 ordered-subsequence matching rules and miss semantics.
+
+## Construction and resource lifetime
+
+Supported builder options are explicit; unknown options raise
+`BackendConfigurationError`. Empty construction remains safe for discovery.
+See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+configuration, source selection and owned/borrowed HTTP clients. Use
+`async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## CLI example through NCBI lineage
+
+```bash
+braidworks weave --have organism.name=Methylococcus --want microbe.ecology.functional_groups --policy api_first
+```
+
+This routes through NCBI to obtain the structured lineage (network access
+required), then matches bundled FAPROTAX rules locally. The CLI’s table/scalar
+input format does not directly represent a lineage list; use Python for direct
+structured lineage calls. Affiliation is a putative taxonomy-based inference,
+not proof of function in each strain.
