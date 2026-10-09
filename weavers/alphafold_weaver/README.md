@@ -14,13 +14,24 @@ answer when no experimental structure exists.
 |---|---|---|
 | `describe_model` | `protein.uniprot.accession` | `structure.alphafold.entry_id`, `structure.alphafold.mean_plddt` (0–100 confidence), `structure.alphafold.model_url`, `structure.alphafold.pae_image_url`, `structure.alphafold.version`, `structure.alphafold.records` |
 
-## Canonical-model pick + determinism
+## Representative model and coverage
 
-The endpoint returns the canonical model (`AF-{accession}-F1`) plus, for some proteins,
-alternative-isoform models. The backend picks the **canonical** model (fallback: lowest
-entry id), so the same accession always yields the same model. AlphaFold's coverage is
-near-universal, so a *well-formed* accession almost always has a model; a malformed/
-unmappable accession (HTTP 400/404) is a clean `NO_MATCH`.
+For the returned response, the backend prefers entry ID `AF-{accession}-F1`;
+otherwise it selects the lexicographically lowest entry ID. This is a representative
+selection rule, not a guarantee of full-sequence coverage or canonical isoform
+identity. The records group describes only the selected entry (URLs, version and
+confidence breakdown). It does not expose all returned alternatives or source
+sequence ranges; full fragment/isoform coverage remains tracked in #197.
+
+A valid UniProt accession can lack a model. Coverage depends on the provider’s
+datasets and sequence exclusions; isoforms and fragments need separate inspection.
+See the [AlphaFold DB FAQ](https://www.alphafold.ebi.ac.uk/faq) for current coverage.
+HTTP 400/404 and a valid empty response produce `NO_MATCH`.
+
+The API returns the current model version (`latestVersion`), which is exposed as
+`structure.alphafold.version`. The same accession can yield different versions,
+coordinates, confidence or available entries after a provider update. Selection is
+deterministic for a fixed response, not a historical model-version pin.
 
 ## Use it
 

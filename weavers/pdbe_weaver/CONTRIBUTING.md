@@ -1,6 +1,6 @@
 # Contributing to pdbe_weaver
 
-PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0 (wwPDB / EBI PDBe; cite https://doi.org/10.1093/nar/gkz990)). Kind: `lookup`. Capabilities: `list_structures`, `describe_structure`.
+PDB experimental structures via PDBe (accession -> structures). Source: https://www.ebi.ac.uk/pdbe (CC0-1.0). Kind: `lookup`. Capabilities: `list_structures`, `describe_structure`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -20,17 +20,39 @@ weaverkit verify --spec weaver.spec.toml --package pdbe_weaver --strict
    (or add a new group).
 2. If it's a new *leaf* output, catalog it in `weaverkit.keys.OUTPUT_KEYS`; if it's a
    genuine *join key* others will consume, add it to `SHARED_KEYS` instead.
-3. Regenerate vocab: `weaverkit new --spec weaver.spec.toml --dest . --force`
-   (this only re-stamps generated files; your backend code is yours to edit).
+3. Follow the scratch-generation workflow below; selectively copy the generated vocab.
 4. Map it in each backend's `fetch` (`record.values[<type_id>] = ...`).
 5. Add/adjust a `[[golden]]` example so the new output is verified.
 
 ## Add a capability or a backend
 
 - **Capability:** add a `[[capability]]` block (consume a registered shared key),
-  regenerate, and handle it in `fetch` (branch on `capability_id` if needed).
-- **Backend:** add its name to `[weaver].backends`, regenerate, and implement the
+  generate in scratch, review the diff, and handle it in `fetch` (branch on `capability_id` if needed).
+- **Backend:** add its name to `[weaver].backends`, generate in scratch, and selectively add the
   new `src/pdbe_weaver/backends/<name>.py` (`is_configured` / `fingerprint` / `fetch`).
+
+## Safe regeneration of an implemented package
+
+Run from this package directory after editing the spec:
+
+```bash
+scratch_dir=$(mktemp -d)
+weaverkit new --spec weaver.spec.toml --dest "$scratch_dir/package"
+diff -ru --exclude=.git --exclude=__pycache__ --exclude=.pytest_cache . "$scratch_dir/package"
+# diff exits 1 when differences exist; review them before the next command.
+cp "$scratch_dir/package/src/pdbe_weaver/vocab.py" src/pdbe_weaver/vocab.py
+```
+
+Copy only the reviewed generated vocab. Merge capability/backend additions
+selectively into the existing implementation, factories, tests and metadata;
+do not copy placeholder backends over working code. Preserve your configuration
+builders, source-specific policies and contributor notes. Inspect `git diff`,
+run package tests and strict verification, then remove the scratch directory.
+
+`weaverkit new --force` overwrites generated paths, including implemented
+backends, factories and tests. It does not merge or preserve your edits.
+Never run it against an implemented package. The handwritten NCBI reference
+is exempt: edit its custom vocab manually instead of copying scaffold vocab.
 
 ## Keep the fixture & golden honest
 
@@ -40,7 +62,7 @@ weaverkit verify --spec weaver.spec.toml --package pdbe_weaver --strict
 
 ## Current outputs
 
-See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
+See [README.md](README.md) and `weaver.spec.toml` for the current output keys and groups.
 
 ## Expansion notes
 

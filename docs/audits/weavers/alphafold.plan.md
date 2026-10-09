@@ -24,3 +24,7 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #198. Prediction responses must be lists of model objects with an entry identifier and correctly typed projected fields. An empty list remains a miss. A malformed response affects only its accession; null/blank inputs do not issue requests.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+Shared documentation findings in #148 are implemented; see
+[SH-01 evidence and scope](SH-01.implementation.md). Other source capability and
+configuration work remains owned by its existing issues.

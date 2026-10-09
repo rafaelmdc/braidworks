@@ -14,7 +14,7 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 | Capability | Consumes | Produces |
 |---|---|---|
 | `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
-| `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id` | `protein.uniprot.accession` (set) + mapping count/records |
+| `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id`, `string.id` | `protein.uniprot.accession` (set) + mapping count/records |
 | `map_from_accession` | `protein.uniprot.accession` | **any of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `pathway.kegg.id`, `pathway.reactome.id`, `refseq.protein.id`, `orthodb.group`, `eggnog.group`, `chembl.id`, `drugbank.id`, `pdb.id`, `string.id` (each a set) + mapping count/records |
 
 ## ID mapping (`map_to_accession` / `map_from_accession`)
@@ -26,7 +26,11 @@ Two directional capabilities over the async, batched UniProt **ID-mapping** serv
 - `map_to_accession` uses **alternative inputs** (`consumes_any`): supply *any one* of the
   supported ids and the backend picks the UniProt `from` db. It runs two jobs (reviewed
   Swiss-Prot + full UniProtKB) and orders accessions **reviewed-first**, so
-  `ExpandPolicy.top()` takes the canonical entry while `ALL` fans every isoform.
+  `ExpandPolicy.top()` takes the first returned accession in that order. `ALL`
+  expands the distinct accessions returned by those mapping jobs; neither policy
+  guarantees a canonical sequence or an exhaustive set of isoforms. Reviewed status
+  describes an entry’s curation, not canonical isoform identity. See
+  [UniProt’s canonical/isoform guidance](https://www.uniprot.org/help/canonical_and_isoforms).
 - `map_from_accession` picks the `to` db from **whichever output is requested**, so one
   capability serves every target — the planner routes `accession → pathway.kegg.id`,
   `accession → gene.ncbi.id` (reverse bridge), etc.
@@ -143,3 +147,36 @@ UniProt place reviewed IDs first, then sort within each review class.
 
 `map_to_accession` also accepts taxon-scoped `string.id` through the provider's
 STRING source; it never converts that identity into a free-text protein name.
+
+## Configured Python usage
+
+The current zero-config builder ignores keyword configuration; supported factory
+configuration and client ownership are tracked separately in #185. For explicit
+HTTP configuration now, inject an application-owned client into the API backend:
+
+```python
+import asyncio
+import httpx
+from braidworks.core import Strand, StrandSet
+from uniprot_weaver.backends.api import UniprotApiBackend
+from uniprot_weaver.weaver import UniprotWeaver
+
+async def main():
+    async with httpx.AsyncClient(base_url="https://rest.uniprot.org", timeout=30) as client:
+        weaver = UniprotWeaver({"api": UniprotApiBackend(client=client)})
+        inputs = [StrandSet.from_strands("human-p53", [Strand("protein.query", "P04637")])]
+        results = await weaver.execute_batch(
+            "resolve_protein", inputs, backend="api",
+            requested_outputs=frozenset({"protein.uniprot.accession"}),
+        )
+        print(results[0].to_json())
+
+asyncio.run(main())
+```
+
+Direct mapping examples (network access required):
+
+```bash
+braidworks run uniprot map_to_accession --have gene.ncbi.id=7157 --want protein.uniprot.accession
+braidworks run uniprot map_from_accession --have protein.uniprot.accession=P04637 --want pdb.id
+```

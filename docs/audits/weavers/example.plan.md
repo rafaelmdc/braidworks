@@ -23,3 +23,7 @@ and outcomes on accepted implementation issues; do not push or close delivery tr
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+Shared documentation findings in #148 are implemented; see
+[SH-01 evidence and scope](SH-01.implementation.md). Other source capability and
+configuration work remains owned by its existing issues.

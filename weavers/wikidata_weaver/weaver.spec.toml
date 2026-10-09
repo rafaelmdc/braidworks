@@ -13,16 +13,54 @@ citation = "Wikidata, the free knowledge base. https://www.wikidata.org/"
 attribution = "Wikidata contributors (CC0)"
 fingerprint_source = "query-month"
 backends = ["api"]
-# Real SPARQL JSON bindings for ?item wdt:P225 "Ursus arctos" (taxon name),
-# OPTIONAL enwiki sitelink, OPTIONAL sitelink count (fame fallback) + vernacular (P1843).
+# Observed 2026-10-09 from the runtime SPARQL query for Ursus arctos, LIMIT 1.
+# Echoed sname correlates rows to inputs; optional counts/names change over time.
 source_sample = """
-{ "head": { "vars": ["item", "article", "sitelinks", "vn"] },
-  "results": { "bindings": [
-    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q36341" },
-      "article": { "type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear" },
-      "sitelinks": { "type": "literal", "datatype": "http://www.w3.org/2001/XMLSchema#integer", "value": "142" },
-      "vn": { "xml:lang": "en", "type": "literal", "value": "Brown Bear" } }
-  ] } }
+{
+  "head": {
+    "vars": [
+      "sname",
+      "item",
+      "article",
+      "sitelinks",
+      "vn",
+      "rankLabel"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "sname": {
+          "type": "literal",
+          "value": "Ursus arctos"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q36341"
+        },
+        "article": {
+          "type": "uri",
+          "value": "https://en.wikipedia.org/wiki/Brown_bear"
+        },
+        "sitelinks": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "138"
+        },
+        "rankLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "species"
+        },
+        "vn": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "grizzly bear"
+        }
+      }
+    ]
+  }
+}
 """
 
 [[capability]]

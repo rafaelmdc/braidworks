@@ -170,7 +170,9 @@ and the existing `scaffold` facade are exported by `weaverkit`.
 mapping and preflights every destination path before writing UTF-8 files. It rejects
 traversal, symlinks and file/directory conflicts. Without force, any nonempty destination
 is refused. Force overwrites generated files **including implemented backends**, while
-retaining unrelated files: back up and review before regeneration. Formatting is optional
+retaining unrelated files. For implemented packages, generate into a scratch directory,
+review the diff, and selectively copy vocab/merge additions as described in
+[the extension guide](docs/safe-regeneration.md). Never force-regenerate in place. Formatting is optional
 and best effort, after successful writes.
 
 Validation and preflight failures leave the destination untouched. The subsequent

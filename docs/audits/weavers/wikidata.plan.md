@@ -28,3 +28,7 @@ See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrat
 Primary shared identity findings are implemented under #155; see
 [SH-08 implementation and validation](SH-08.implementation.md). Source-specific
 work packages with additional feature proposals remain tracked by their own groups.
+
+Shared documentation findings in #148 are implemented; see
+[SH-01 evidence and scope](SH-01.implementation.md). Other source capability and
+configuration work remains owned by its existing issues.
