@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.2.2"
+WEAVER_VERSION = "0.2.3"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -42,6 +42,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     {
                         "microbe.abundance.associations",
                         "microbe.abundance.count",
+                        "microbe.abundance.coverage",
                         "microbe.abundance.overview",
                         "microbe.abundance.phenotype_names",
                         "microbe.abundance.records",
@@ -53,6 +54,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         outputs=frozenset(
                             {
                                 "microbe.abundance.count",
+                                "microbe.abundance.coverage",
                                 "microbe.abundance.overview",
                                 "microbe.abundance.phenotype_names",
                             }

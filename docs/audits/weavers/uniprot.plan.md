@@ -34,3 +34,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #183, #184. Search pages and projected nested fields are validated. Search HTTP 400/404 is a miss; mapping-job HTTP 400/404 remains a job failure. Submission, polling and result envelopes must contain meaningful job/result evidence and correlated input identifiers. A failed into-hub source-database job group preserves other groups. Mapping pagination repeats/excessive pages fail rather than looping forever. Broader mapping ordering/configuration/polling-budget work remains separately tracked.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared coverage work implemented
+
+The #151 findings are implemented and verified in
+[SH-04 implementation and migration evidence](SH-04.implementation.md).
+Other work packages in this source plan remain separately tracked.

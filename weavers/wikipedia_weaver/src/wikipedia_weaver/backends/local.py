@@ -19,6 +19,7 @@ from typing import Any
 from braidworks.core import BackendBase, LookupRecord
 from braidworks.core.source_identity import SourceBinding
 
+from ..measurement import InvalidScope, measurement, month_window
 from ..setup import db_is_valid
 
 
@@ -57,10 +58,22 @@ class WikipediaLocalBackend(BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         titles = [str(q.get("wikipedia.title", "")).strip() for q in queries]
-        return await asyncio.to_thread(self._lookup, titles)
+        return await asyncio.to_thread(self._lookup, titles, params or {})
 
-    def _lookup(self, titles: list[str]) -> list[LookupRecord]:
+    def _lookup(self, titles: list[str], params: dict[str, Any]) -> list[LookupRecord]:
         with self._source.session() as con:
+            dump_month = con.execute(
+                "SELECT value FROM metadata WHERE key='dump_month'"
+            ).fetchone()[0]
+            try:
+                months = month_window(params.get("months", 1), params.get("end_month", dump_month))
+                agent = params.get("agent", "user")
+                if months != [dump_month] or agent != "user":
+                    raise InvalidScope(
+                        f"local supports only month={dump_month}, months=1, agent=user"
+                    )
+            except InvalidScope as exc:
+                return [LookupRecord(query={"wikipedia.title": t}, error=str(exc)) for t in titles]
             out: list[LookupRecord] = []
             for title in titles:
                 query = {"wikipedia.title": title}
@@ -76,7 +89,20 @@ class WikipediaLocalBackend(BackendBase):
                 else:
                     out.append(
                         LookupRecord(
-                            query=query, found=True, values={"wikipedia.pageviews": int(row[0])}
+                            query=query,
+                            found=True,
+                            values={
+                                "wikipedia.pageviews": int(row[0]),
+                                "wikipedia.pageviews.measurement": measurement(
+                                    months, agent, 1, complete=None
+                                ),
+                            },
+                            warnings=(
+                                (
+                                    f"Pageviews: monthly dump {dump_month}, user, all-access; "
+                                    "dump parser completeness is not established."
+                                ),
+                            ),
                         )
                     )
             return out

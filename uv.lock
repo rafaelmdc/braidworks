@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.2.3"
+version = "0.2.4"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.7"
+version = "0.1.8"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.0"
+version = "0.21.1"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -342,7 +342,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -587,7 +587,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -968,7 +968,7 @@ wheels = [
 
 [[package]]
 name = "string-weaver"
-version = "0.1.7"
+version = "0.1.8"
 source = { editable = "weavers/string_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1015,7 +1015,7 @@ wheels = [
 
 [[package]]
 name = "uniprot-weaver"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "weavers/uniprot_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.3"
+version = "0.6.4"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1110,7 +1110,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "wikipedia-weaver"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "weavers/wikipedia_weaver" }
 dependencies = [
     { name = "braidworks-core" },

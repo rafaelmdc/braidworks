@@ -71,3 +71,14 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Taxon-search HTTP 400/404 is a miss. A failed /fetch request for identifiers already returned by the source is an error, including 404. Taxon IDs, page envelope and returned strain records are validated; missing phenotype measurements remain legitimate sparse data. The first-type-strain and scan-cap policies are unchanged and remain separate coverage/selection work.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Scan coverage
+
+Both production builders default to a positive scan budget of 1,000 strains and
+honor an explicitly supplied `max_strains_scanned`. Only complete exhaustion of
+the taxon catalog establishes `NO_MATCH`. Reaching the budget with unexamined
+strains returns `ERROR`, including the scanned count, limit and incomplete scope.
+Missing strain records and broken continuation pages also return errors. The
+backend fetches only the remaining budget, and its fingerprint includes the
+source URL and budget so differently scoped scans cannot share cache entries.
+Traits describe the selected type strain, not all strains of the species.

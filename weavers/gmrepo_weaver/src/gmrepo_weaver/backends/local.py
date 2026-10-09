@@ -18,6 +18,7 @@ blocks the event loop, with one read-only connection per thread.
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,11 @@ def _values(overview: dict[str, Any] | None, rows: list[dict[str, Any]]) -> dict
         ASSOCIATIONS: associations,
         RECORDS: {"overview": overview, "associations": rows},
     }
+
+
+def _acquisition(con: sqlite3.Connection) -> dict[str, Any]:
+    row = con.execute("SELECT value FROM meta WHERE key = 'acquisition'").fetchone()
+    return json.loads(row[0]) if row else {"scope": "unknown", "taxa": {}, "profiles": {}}
 
 
 class GmrepoLocalBackend(BackendBase):
@@ -124,19 +130,60 @@ class GmrepoLocalBackend(BackendBase):
                 (mesh_id,),
             ).fetchall()
         ]
-        if not rows:
-            return LookupRecord(query=query, found=False)
+        coverage = _acquisition(con).get("profiles", {}).get(mesh_id)
+        if coverage is None:
+            if not rows:
+                return LookupRecord(
+                    query=query, error=f"GMrepo profiles not acquired for {mesh_id}"
+                )
+            coverage = {
+                "requested": None,
+                "selected_runs": None,
+                "fetched_runs": None,
+                "empty_runs": None,
+                "failed_runs": None,
+                "complete": None,
+                "scope": "caller-supplied",
+                "cohort_total_runs": None,
+            }
+        if coverage.get("status") == "failed" or (coverage.get("failed_runs", 0) and not rows):
+            return LookupRecord(
+                query=query, error=f"GMrepo profile acquisition incomplete: {coverage}"
+            )
         n_runs = len({r["run_id"] for r in rows})
         return LookupRecord(
             query=query,
             found=True,
-            values={SAMPLE_PROFILES: {"mesh_id": mesh_id, "n_runs": n_runs, "profiles": rows}},
+            values={
+                SAMPLE_PROFILES: {
+                    "mesh_id": mesh_id,
+                    "n_runs": n_runs,
+                    "n_runs_with_rows": n_runs,
+                    "profiles": rows,
+                    "coverage": coverage,
+                    "denominator": {
+                        "fetched_runs": coverage.get("fetched_runs"),
+                        "cohort_total_runs": coverage.get("cohort_total_runs"),
+                    },
+                }
+            },
+            warnings=(
+                (
+                    "GMrepo n_runs counts runs with retained rows; use coverage and "
+                    "denominator to assess empty, failed and capped acquisition."
+                ),
+            ),
         )
 
     def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
         taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
         if taxid is None:
             return LookupRecord(query=query, found=False)
+        coverage = _acquisition(con).get("taxa", {}).get(str(taxid))
+        if coverage and coverage.get("status") == "failed":
+            return LookupRecord(
+                query=query, error=f"GMrepo taxon acquisition failed: {coverage.get('error')}"
+            )
         rows = [
             dict(r)
             for r in con.execute(
@@ -154,4 +201,17 @@ class GmrepoLocalBackend(BackendBase):
         overview = dict(overview_row) if overview_row is not None else None
         if not rows and overview is None:
             return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_values(overview, rows))
+        values = _values(overview, rows)
+        scope = coverage or {"scope": "caller-supplied", "complete": None, "rows": len(rows)}
+        values["microbe.abundance.coverage"] = scope
+        values[RECORDS]["coverage"] = scope
+        return LookupRecord(
+            query=query,
+            found=True,
+            values=values,
+            warnings=()
+            if scope.get("complete")
+            else (
+                "GMrepo association counts describe retained rows; full acquisition is not established.",
+            ),
+        )

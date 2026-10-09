@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Callable, Iterator
@@ -86,6 +87,19 @@ def _int(value: Any) -> int | None:
     return None if num is None else int(num)
 
 
+class _InvalidResponse(ValueError):
+    """A source response cannot establish acquisition coverage."""
+
+
+_EXPECTED_FAILURES = (
+    urllib.error.URLError,
+    OSError,
+    json.JSONDecodeError,
+    UnicodeDecodeError,
+    _InvalidResponse,
+)
+
+
 def _rows_of(payload: Any, *keys: str) -> list[dict]:
     """Normalize an endpoint payload to a list of row dicts.
 
@@ -116,6 +130,7 @@ def write_db(
     associations: list[dict],
     phenotypes: list[dict],
     sample_profiles: list[dict] | None = None,
+    acquisition: dict[str, Any] | None = None,
 ) -> None:
     """Build the SQLite at ``target`` from already-fetched (or canned) tables.
 
@@ -130,7 +145,9 @@ def write_db(
     the fast few-MB crawl; populated only when a caller asks for specific phenotypes' runs.
     """
     sample_profiles = sample_profiles or []
+    acquisition = acquisition or {"scope": "caller-supplied", "taxa": {}, "profiles": {}}
     content = _content_hash(
+        acquisition,
         sorted(overview, key=lambda r: (int(r["ncbi_taxon_id"]), r.get("rank", ""))),
         sorted(
             associations,
@@ -216,7 +233,8 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "1"),
+                ("schema_version", "2"),
+                ("acquisition", json.dumps(acquisition, sort_keys=True)),
                 ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
                 ("n_overview", str(len(overview))),
@@ -232,7 +250,7 @@ def write_db(
 
 
 def db_is_valid(path: Path) -> bool:
-    """A usable, fully-built GMrepo DB: has the meta hash and non-empty associations."""
+    """A built GMrepo resource with source identity, query tables and acquisition outcomes."""
     if not path.exists():
         return False
     try:
@@ -245,8 +263,18 @@ def db_is_valid(path: Path) -> bool:
         # A profiles-only build (associations empty) is still usable for the sample_profiles
         # capability, so accept either populated table.
         profiles = con.execute("SELECT COUNT(*) FROM sample_profile").fetchone()[0]
-        return bool(has_hash) and (assoc > 0 or profiles > 0)
-    except sqlite3.Error:
+        manifest = con.execute("SELECT value FROM meta WHERE key = 'acquisition'").fetchone()
+        return bool(
+            has_hash
+            and manifest
+            and (
+                assoc > 0
+                or profiles > 0
+                or con.execute("SELECT 1 FROM overview LIMIT 1").fetchone()
+                or json.loads(manifest[0]).get("profiles")
+            )
+        )
+    except (sqlite3.Error, json.JSONDecodeError, TypeError):
         return False
     finally:
         con.close()
@@ -309,7 +337,13 @@ def _prevalence(samples: Any, valid_runs: Any) -> float | None:
 
 def _taxon_associations(taxid: int, payload: Any) -> list[dict]:
     """Rows of ``getPhenotypesAndAbundanceSummaryOfAAssociatedTaxon`` → association dicts."""
-    rows = payload.get("phenotypes_associated_with_taxon", []) if isinstance(payload, dict) else []
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("phenotypes_associated_with_taxon"), list)
+        or any(not isinstance(row, dict) for row in payload["phenotypes_associated_with_taxon"])
+    ):
+        raise _InvalidResponse("taxon associations must contain a valid row list")
+    rows = payload["phenotypes_associated_with_taxon"]
     out: list[dict] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -332,40 +366,72 @@ def _taxon_associations(taxid: int, payload: Any) -> list[dict]:
 
 
 def _fetch_run_ids(
-    post: Callable[[str, dict[str, Any]], Any], mesh_id: str, max_runs: int
+    post: Callable[[str, dict[str, Any]], Any],
+    mesh_id: str,
+    max_runs: int,
+    coverage: dict[str, Any] | None = None,
 ) -> list[str]:
     """List up to ``max_runs`` run ids for a phenotype (paginated over the live *Limit route)."""
+    if isinstance(max_runs, bool) or not isinstance(max_runs, int) or max_runs < 1:
+        raise ValueError("max_runs must be a positive integer")
     run_ids: list[str] = []
+    seen: set[str] = set()
+    exhausted = False
     skip = 0
     while len(run_ids) < max_runs:
         want = min(_RUNS_PAGE, max_runs - len(run_ids))
         batch = post(_RUNS_ENDPOINT, {"mesh_id": mesh_id, "skip": skip, "limit": want})
-        rows = batch if isinstance(batch, list) else _rows_of(batch, "runs")
+        rows = (
+            batch
+            if isinstance(batch, list)
+            else batch.get("runs")
+            if isinstance(batch, dict)
+            else None
+        )
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise _InvalidResponse("run listing must contain a row list")
         if not rows:
+            exhausted = True
             break
         for r in rows:
             rid = r.get("run_id") if isinstance(r, dict) else None
-            if rid:
-                run_ids.append(str(rid))
+            if not rid or str(rid) in seen:
+                raise _InvalidResponse("run listing contains a missing/repeated run id")
+            seen.add(str(rid))
+            run_ids.append(str(rid))
         skip += len(rows)
         if len(rows) < want:
+            exhausted = True
             break
+    if coverage is not None:
+        coverage.update(
+            {
+                "selected_runs": len(run_ids[:max_runs]),
+                "cap": max_runs,
+                "listing_exhausted": exhausted,
+                "capped": not exhausted,
+            }
+        )
     return run_ids[:max_runs]
 
 
 def _run_profile_rows(mesh_id: str, run_id: str, payload: Any) -> list[dict]:
     """Rows of ``getFullTaxonomicProfileByRunID`` → per-(run, taxon) relative-abundance dicts."""
-    if not isinstance(payload, dict):
-        return []
+    if (
+        not isinstance(payload, dict)
+        or not any(key in payload for key in ("species", "genus"))
+        or any(not isinstance(payload.get(key, []), list) for key in ("species", "genus"))
+    ):
+        raise _InvalidResponse("run profile must contain species/genus row lists")
     out: list[dict] = []
     for rank_key in ("species", "genus"):
         for row in payload.get(rank_key, []) or []:
             if not isinstance(row, dict):
-                continue
+                raise _InvalidResponse("run profile row must be an object")
             taxid = _coerce_taxid(row.get("ncbi_taxon_id"))
             abundance = _num(row.get("relative_abundance"))
             if taxid is None or abundance is None:
-                continue
+                raise _InvalidResponse("run profile row lacks taxon/abundance")
             out.append(
                 {
                     "mesh_id": mesh_id,
@@ -383,36 +449,70 @@ def _fetch_profiles(
     mesh_ids: list[str],
     max_runs: int,
     progress: ProgressCallback | None = None,
+    coverage: dict[str, Any] | None = None,
 ) -> list[dict]:
     """Fetch per-run species/genus profiles for the given phenotypes (bounded by ``max_runs``).
 
     One run-listing walk per phenotype, then the per-run profiles over the thread pool
-    (network-bound). A flaky run is skipped so it can't sink the crawl.
+    (network-bound). Expected failures are recorded separately from empty profiles.
     """
     profiles: list[dict] = []
-    for mesh_id in mesh_ids:
-        run_ids = _fetch_run_ids(post, mesh_id, max_runs)
+    for mesh_id in dict.fromkeys(mesh_ids):
+        scope: dict[str, Any] = {
+            "requested": True,
+            "cap": max_runs,
+            "runs": {},
+            "selected_runs": 0,
+            "requested_runs": 0,
+            "fetched_runs": 0,
+            "empty_runs": 0,
+            "failed_runs": 0,
+            "cohort_total_runs": None,
+        }
+        if coverage is not None:
+            coverage[mesh_id] = scope
+        try:
+            run_ids = _fetch_run_ids(post, mesh_id, max_runs, scope)
+        except _EXPECTED_FAILURES as exc:
+            scope.update({"status": "failed", "complete": False, "error": str(exc)})
+            continue
 
-        def _one(run_id: str, mesh_id: str = mesh_id) -> list[dict]:
+        scope["requested_runs"] = len(run_ids)
+
+        def _one(run_id: str, mesh_id: str = mesh_id):
             try:
-                return _run_profile_rows(
+                rows = _run_profile_rows(
                     mesh_id, run_id, post(_PROFILE_ENDPOINT, {"run_id": run_id})
                 )
-            except Exception:  # noqa: BLE001 — one flaky run must not sink the crawl
-                return []
+                return rows, {"status": "fetched" if rows else "empty", "rows": len(rows)}
+            except _EXPECTED_FAILURES as exc:
+                return [], {"status": "failed", "error": str(exc)}
 
         with ThreadPoolExecutor(max_workers=_FETCH_WORKERS) as pool:
             futures = {pool.submit(_one, rid): rid for rid in run_ids}
             for done, future in enumerate(as_completed(futures), start=1):
                 if progress:
                     progress(done, len(run_ids), f"{mesh_id} run {futures[future]}")
-                profiles.extend(future.result())
+                rows, outcome = future.result()
+                scope["runs"][futures[future]] = outcome
+                profiles.extend(rows)
+        statuses = [outcome["status"] for outcome in scope["runs"].values()]
+        scope.update(
+            {
+                "status": "acquired",
+                "fetched_runs": len(statuses) - statuses.count("failed"),
+                "empty_runs": statuses.count("empty"),
+                "failed_runs": statuses.count("failed"),
+                "complete": scope["listing_exhausted"] and "failed" not in statuses,
+            }
+        )
     return profiles
 
 
 def _fetch_tables(
     post: Callable[[str, dict[str, Any]], Any],
     progress: ProgressCallback | None = None,
+    coverage: dict[str, Any] | None = None,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """Fetch (overview, associations, phenotypes) from GMrepo via ``post`` (injectable).
 
@@ -420,8 +520,8 @@ def _fetch_tables(
     catalog (``get_all_phenotypes``), then one call per overview taxon for its
     per-phenotype abundance rows — those ~3000 calls are pure network wait, so they run
     over a small thread pool (``_FETCH_WORKERS``) to keep the one-time build to minutes
-    rather than hours. A per-taxon fetch that errors is skipped (a partial taxon must not
-    abort the build); the taxon still keeps its overview row.
+    rather than hours. Expected per-taxon failures retain their acquisition outcome
+    alongside the overview row; programming faults propagate.
     """
     overview = _overview_rows(post("get_all_gut_microbes", {}))
 
@@ -437,9 +537,14 @@ def _fetch_tables(
 
     def _one(taxid: int) -> list[dict]:
         try:
-            return _taxon_associations(taxid, post(_TAXON_ENDPOINT, {"ncbi_taxon_id": taxid}))
-        except Exception:  # noqa: BLE001 — a single flaky taxon must not sink the build
-            return []
+            rows = _taxon_associations(taxid, post(_TAXON_ENDPOINT, {"ncbi_taxon_id": taxid}))
+            return rows, {
+                "status": "fetched" if rows else "empty",
+                "complete": True,
+                "rows": len(rows),
+            }
+        except _EXPECTED_FAILURES as exc:
+            return [], {"status": "failed", "complete": False, "error": str(exc)}
 
     associations: list[dict] = []
     total = len(overview)
@@ -448,7 +553,10 @@ def _fetch_tables(
         for done, future in enumerate(as_completed(futures), start=1):
             if progress:
                 progress(done, total, f"taxon {futures[future]}")
-            associations.extend(future.result())
+            rows, outcome = future.result()
+            if coverage is not None:
+                coverage[str(futures[future])] = outcome
+            associations.extend(rows)
     return overview, associations, phenotypes
 
 
@@ -465,18 +573,27 @@ def _build(
     If ``profile_phenotypes`` (mesh ids) are given, also crawl up to ``profile_max_runs``
     per-run profiles for each — the per-sample substrate for the co-occurrence layer.
     """
-    overview, associations, phenotypes = _fetch_tables(post, progress)
+    acquisition: dict[str, Any] = {"scope": "gmrepo-api", "taxa": {}, "profiles": {}}
+    overview, associations, phenotypes = _fetch_tables(post, progress, acquisition["taxa"])
     sample_profiles = (
-        _fetch_profiles(post, profile_phenotypes, profile_max_runs, progress)
+        _fetch_profiles(
+            post, profile_phenotypes, profile_max_runs, progress, acquisition["profiles"]
+        )
         if profile_phenotypes
         else []
     )
+    for phenotype in phenotypes:
+        if phenotype["mesh_id"] in acquisition["profiles"]:
+            acquisition["profiles"][phenotype["mesh_id"]]["cohort_total_runs"] = phenotype[
+                "valid_runs"
+            ]
     write_db(
         target,
         overview=overview,
         associations=associations,
         phenotypes=phenotypes,
         sample_profiles=sample_profiles,
+        acquisition=acquisition,
     )
 
 

@@ -72,8 +72,12 @@ def build_wikipedia_weaver(
                 "(or a dump_path= named pageviews-YYYYMM-user.bz2)"
             )
         resolved = ensure_pageviews_db(
-            db_path, year=y, month=mo, dump_path=dump_path,
-            auto=auto_setup, refresh=refresh,
+            db_path,
+            year=y,
+            month=mo,
+            dump_path=dump_path,
+            auto=auto_setup,
+            refresh=refresh,
         )
         backends["local"] = WikipediaLocalBackend(resolved)
 
@@ -93,7 +97,9 @@ def build_wikipedia_weaver_fixture() -> BaseWeaver:
     """Fixture-backed weaver for ``verify --strict`` golden — canned api, no network."""
     from wikipedia_weaver.fixture import mock_client
 
-    return WikipediaWeaver({"api": WikipediaApiBackend(client=mock_client())})
+    return WikipediaWeaver(
+        {"api": WikipediaApiBackend(client=mock_client(), months=2, end_month="202502")}
+    )
 
 
 def build_wikipedia_weaver_local_fixture(db_path: str | Path) -> BaseWeaver:

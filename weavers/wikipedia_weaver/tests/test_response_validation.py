@@ -11,7 +11,22 @@ from wikipedia_weaver.backends.api import WikipediaApiBackend
 async def test_bad_shape_does_not_abort_siblings(body):
     def handler(request):
         return (
-            httpx.Response(200, json={"items": [{"views": 0}, {"views": 42}]})
+            httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "views": 42,
+                            "timestamp": "2025020100",
+                            "project": "en.wikipedia",
+                            "article": "GOOD",
+                            "granularity": "monthly",
+                            "access": "all-access",
+                            "agent": "all-agents",
+                        }
+                    ]
+                },
+            )
             if "/GOOD/" in request.url.path or request.url.path.endswith("/GOOD")
             else httpx.Response(200, content=body)
         )
@@ -25,7 +40,7 @@ async def test_bad_shape_does_not_abort_siblings(body):
     async with httpx.AsyncClient(
         base_url="https://source", transport=httpx.MockTransport(handler)
     ) as client:
-        records = await WikipediaApiBackend(client=client).fetch(
+        records = await WikipediaApiBackend(client=client, months=1, end_month="202502").fetch(
             "describe_pageviews",
             queries,
             requested_outputs=frozenset(),
@@ -44,7 +59,7 @@ async def test_invalid_field_is_error():
             lambda request: httpx.Response(200, json={"items": [{"views": -1}]})
         ),
     ) as client:
-        records = await WikipediaApiBackend(client=client).fetch(
+        records = await WikipediaApiBackend(client=client, months=1, end_month="202502").fetch(
             "describe_pageviews",
             [{"wikipedia.title": "BAD"}],
             requested_outputs=frozenset(),
@@ -62,7 +77,7 @@ async def test_control_and_programming_faults_propagate(failure):
         base_url="https://source", transport=httpx.MockTransport(handler)
     ) as client:
         with pytest.raises(failure):
-            await WikipediaApiBackend(client=client).fetch(
+            await WikipediaApiBackend(client=client, months=1, end_month="202502").fetch(
                 "describe_pageviews",
                 [{"wikipedia.title": "BAD"}],
                 requested_outputs=frozenset(),

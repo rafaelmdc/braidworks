@@ -6,7 +6,7 @@ db_name = "wikipedia"
 weaver_id = "wikipedia"
 kind = "lookup"
 title = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
-version = "0.1.4"
+version = "0.1.5"
 license = "CC0-1.0"
 source_url = "https://wikimedia.org/api/rest_v1/"
 citation = "Wikimedia REST API — pageviews. https://wikimedia.org/api/rest_v1/"
@@ -41,7 +41,23 @@ backends = ["api", "local"]
 
   [[capability.group]]
   id = "core"
-  outputs = ["wikipedia.pageviews"]
+  outputs = ["wikipedia.pageviews", "wikipedia.pageviews.measurement"]
+
+  [[capability.parameter]]
+  name = "months"
+  type = "int"
+  description = "Completed monthly bins (API default 12; local supports only 1)"
+
+  [[capability.parameter]]
+  name = "end_month"
+  type = "string"
+  description = "Final completed month YYYYMM (API default previous month; local dump month)"
+
+  [[capability.parameter]]
+  name = "agent"
+  type = "string"
+  enum = ["all-agents", "user", "spider", "automated"]
+  description = "Agent scope (API default all-agents; local supports only user)"
 
 [[golden]]
 capability = "describe_pageviews"

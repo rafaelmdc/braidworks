@@ -39,3 +39,9 @@ Package suite: 137 passed, 11 live tests skipped. API backends unchanged.
 Completed the #150 response-validation/failure-isolation scope for #226. Taxonomy, genome, gene and requested enrichment responses are validated at source-local seams. Taxonomy, assembly/gene-detail and symbol request chunks preserve unrelated successes. Taxonomy HTTP 400/404 and explicitly reported invalid-identifier absence remain misses; network/service/malformed data failures are errors. The observed empty taxonomy-suggest response {} remains a miss. Failed requested lineage, sequence or product enrichment now makes the affected query an error instead of returning apparent success with silently missing requested fields. Cancellation and unrelated programming faults propagate through enrichment. API-only live checks select test_live tests; the unrestricted test-live target also acquires the large local taxonomy database.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared coverage work implemented
+
+The #151 findings are implemented and verified in
+[SH-04 implementation and migration evidence](SH-04.implementation.md).
+Other work packages in this source plan remain separately tracked.

@@ -23,18 +23,22 @@ from bacdive_weaver.backends.api import BacdiveApiBackend
 from bacdive_weaver.weaver import BacdiveWeaver
 
 
-def build_bacdive_weaver(**_config: Any) -> BaseWeaver:
+def build_bacdive_weaver(
+    *, client: httpx.AsyncClient | None = None, max_strains_scanned: int = 1000, **_config: Any
+) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
     The BacDive v2 API needs no key, so the api backend is usable as-is and this is
     also the real production builder. Pass ``client=`` / ``max_strains_scanned=`` to
     tune it (see ``build_bacdive_weaver_configured``).
     """
-    return BacdiveWeaver({"api": BacdiveApiBackend()})
+    return BacdiveWeaver(
+        {"api": BacdiveApiBackend(client=client, max_strains_scanned=max_strains_scanned)}
+    )
 
 
 def build_bacdive_weaver_configured(
-    *, client: httpx.AsyncClient | None = None, max_strains_scanned: int = 200, **_config: Any
+    *, client: httpx.AsyncClient | None = None, max_strains_scanned: int = 1000, **_config: Any
 ) -> BaseWeaver:
     """Configured builder: inject an HTTP client and/or cap the type-strain scan."""
     return BacdiveWeaver(

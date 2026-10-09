@@ -197,6 +197,29 @@ def _node_rank(node: dict[str, Any]) -> str | None:
     return rank.lower() if isinstance(rank, str) else rank
 
 
+class _PageGuard:
+    """Bound one report traversal; interrupted acquisition must not become absence."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.seen: set[str | None] = set()
+
+    def check(self, token: str | None) -> None:
+        if token in self.seen or len(self.seen) >= self.limit:
+            raise _InvalidResponse(
+                f"incomplete report acquisition: pages={len(self.seen)}, "
+                f"limit={self.limit}, complete=false; repeated token or page budget"
+            )
+        self.seen.add(token)
+
+    def check_response(self, response: httpx.Response) -> None:
+        if len(self.seen) > 1 and is_not_found_status(response.status_code):
+            raise _InvalidResponse(
+                "incomplete report acquisition: continuation page unavailable; complete=false"
+            )
+        response.raise_for_status()
+
+
 def _rescore(query: str, name: str | None) -> float:
     """RapidFuzz token-set ratio on the 0..100 scale, matching the local fuzzy scale."""
     if not name:
@@ -216,12 +239,20 @@ class DatasetsV2Backend:
         api_key: str | None = None,
         client: httpx.AsyncClient | None = None,
         allow_fuzzy: bool = True,
+        max_report_pages: int = 1000,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._client = client
         self._owns_client = client is None
         self._allow_fuzzy = allow_fuzzy
+        if (
+            isinstance(max_report_pages, bool)
+            or not isinstance(max_report_pages, int)
+            or max_report_pages < 1
+        ):
+            raise ValueError("max_report_pages must be a positive integer")
+        self._max_report_pages = max_report_pages
 
     def is_configured(self) -> bool:
         """The API backend is always usable; it needs no local data."""
@@ -229,7 +260,7 @@ class DatasetsV2Backend:
 
     def fingerprint(self) -> str:
         """Datasets v2 is a live service, so the fingerprint is a fixed identifier."""
-        return "datasets-v2"
+        return f"datasets-v2:pages={self._max_report_pages}"
 
     supports_request_pacing = True
 
@@ -385,12 +416,14 @@ class DatasetsV2Backend:
         """Walk dataset_report?children=true, keep distinct descendants of ``rank``."""
         out: dict[int, dict[str, Any]] = {}
         page_token: str | None = None
+        guard = _PageGuard(self._max_report_pages)
         while True:
+            guard.check(page_token)
             params: dict[str, Any] = {"children": "true", "page_size": 1000}
             if page_token:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/taxonomy/taxon/{taxid}/dataset_report", params=params)
-            resp.raise_for_status()
+            guard.check_response(resp)
             body = _report_payload(resp, "taxonomy")
             for entry in body.get("reports") or []:
                 node = entry.get("taxonomy") or {}
@@ -477,12 +510,14 @@ class DatasetsV2Backend:
         """Paginate genome/taxon/{taxid}/dataset_report into compact assembly rows."""
         out: dict[str, dict[str, Any]] = {}
         page_token: str | None = None
+        guard = _PageGuard(self._max_report_pages)
         while True:
+            guard.check(page_token)
             params = dict(base_params)
             if page_token:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/genome/taxon/{taxid}/dataset_report", params=params)
-            resp.raise_for_status()
+            guard.check_response(resp)
             body = _report_payload(resp, "genome")
             for a in body.get("reports") or []:
                 acc = a.get("accession")
@@ -559,6 +594,12 @@ class DatasetsV2Backend:
             values = self._genome_values(report)
             if want_sequences and acc in sequences:
                 values[vocab.SEQUENCE_RECORDS] = sequences[acc]
+                values[vocab.SEQUENCE_COVERAGE] = {
+                    "complete": True,
+                    "observed_records": len(sequences[acc]),
+                    "returned_records": len(sequences[acc]),
+                    "scope": "sequence_reports",
+                }
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
 
@@ -575,14 +616,16 @@ class DatasetsV2Backend:
             if not chunk:
                 continue
             page_token: str | None = None
+            guard = _PageGuard(self._max_report_pages)
             while True:
+                guard.check(page_token)
                 params: dict[str, Any] = {"page_size": _PAGE_LIMIT}
                 if page_token:
                     params["page_token"] = page_token
                 resp = await self._http().get(
                     f"/genome/accession/{','.join(chunk)}/dataset_report", params=params
                 )
-                resp.raise_for_status()
+                guard.check_response(resp)
                 body = _report_payload(resp, "genome")
                 for a in body.get("reports") or []:
                     acc = a.get("accession")
@@ -628,14 +671,16 @@ class DatasetsV2Backend:
         """Per-sequence reports for an assembly (chromosomes/plasmids/contigs)."""
         out: list[dict[str, Any]] = []
         page_token: str | None = None
+        guard = _PageGuard(self._max_report_pages)
         while True:
+            guard.check(page_token)
             params: dict[str, Any] = {"page_size": 1000}
             if page_token:
                 params["page_token"] = page_token
             resp = await self._http().get(
                 f"/genome/accession/{acc}/sequence_reports", params=params
             )
-            resp.raise_for_status()
+            guard.check_response(resp)
             body = _report_payload(resp, "sequence")
             for s in body.get("reports") or []:
                 out.append(
@@ -650,7 +695,7 @@ class DatasetsV2Backend:
             page_token = body.get("next_page_token")
             if not page_token:
                 break
-        return out[:_CHILDREN_LIMIT]
+        return out
 
     # --- gene capabilities --------------------------------------------------
 
@@ -803,6 +848,12 @@ class DatasetsV2Backend:
             values = self._gene_summary(gene)
             if want_products and gid in products:
                 values[vocab.GENE_PRODUCTS] = products[gid]
+                values[vocab.GENE_PRODUCT_COVERAGE] = {
+                    "complete": True,
+                    "observed_records": len(products[gid]),
+                    "returned_records": len(products[gid]),
+                    "scope": "product_report_transcripts",
+                }
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
 
@@ -820,14 +871,16 @@ class DatasetsV2Backend:
             if not chunk:
                 continue
             page_token: str | None = None
+            guard = _PageGuard(self._max_report_pages)
             while True:
+                guard.check(page_token)
                 params: dict[str, Any] = {"page_size": _PAGE_LIMIT}
                 if page_token:
                     params["page_token"] = page_token
                 resp = await self._http().get(
                     f"/gene/id/{','.join(chunk)}/dataset_report", params=params
                 )
-                resp.raise_for_status()
+                guard.check_response(resp)
                 body = _report_payload(resp, "gene")
                 for r in body.get("reports") or []:
                     gene = r.get("gene")
@@ -841,22 +894,32 @@ class DatasetsV2Backend:
 
     async def _fetch_gene_products(self, gid: str) -> list[dict[str, Any]]:
         """Transcript + protein products of a gene (compact rows)."""
-        resp = await self._http().get(f"/gene/id/{gid}/product_report", params={"page_size": 1000})
-        resp.raise_for_status()
         out: list[dict[str, Any]] = []
-        for r in _report_payload(resp, "product").get("reports") or []:
-            product = r.get("product") or {}
-            for t in product.get("transcripts") or []:
-                prot = t.get("protein") or {}
-                out.append(
-                    {
-                        "transcript": t.get("accession_version"),
-                        "name": t.get("name"),
-                        "protein": prot.get("accession_version"),
-                        "protein_name": prot.get("name"),
-                    }
-                )
-        return out[:_CHILDREN_LIMIT]
+        token: str | None = None
+        guard = _PageGuard(self._max_report_pages)
+        while True:
+            guard.check(token)
+            params: dict[str, Any] = {"page_size": 1000}
+            if token:
+                params["page_token"] = token
+            resp = await self._http().get(f"/gene/id/{gid}/product_report", params=params)
+            guard.check_response(resp)
+            body = _report_payload(resp, "product")
+            for report in body["reports"]:
+                product = report.get("product") or {}
+                for transcript in product.get("transcripts") or []:
+                    protein = transcript.get("protein") or {}
+                    out.append(
+                        {
+                            "transcript": transcript.get("accession_version"),
+                            "name": transcript.get("name"),
+                            "protein": protein.get("accession_version"),
+                            "protein_name": protein.get("name"),
+                        }
+                    )
+            token = body.get("next_page_token")
+            if not token:
+                return out
 
     async def list_orthologs(
         self, queries: list[dict[str, Any]], *, taxon_filter: str | None = None
@@ -908,14 +971,16 @@ class DatasetsV2Backend:
         """Paginate gene/id/{id}/orthologs, excluding the query gene; distinct + ordered."""
         out: dict[int, dict[str, Any]] = {}
         page_token: str | None = None
+        guard = _PageGuard(self._max_report_pages)
         while True:
+            guard.check(page_token)
             params: dict[str, Any] = {"page_size": 1000}
             if taxon_filter:
                 params["taxon_filter"] = taxon_filter
             if page_token:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/gene/id/{gid}/orthologs", params=params)
-            resp.raise_for_status()
+            guard.check_response(resp)
             body = _report_payload(resp, "gene")
             for r in body.get("reports") or []:
                 g = r.get("gene") or {}

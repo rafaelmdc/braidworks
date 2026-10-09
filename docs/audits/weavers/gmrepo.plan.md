@@ -16,3 +16,9 @@ profile extension, cache/resume and downstream statistics require separate revie
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+## Shared coverage work implemented
+
+The #151 findings are implemented and verified in
+[SH-04 implementation and migration evidence](SH-04.implementation.md).
+Other work packages in this source plan remain separately tracked.

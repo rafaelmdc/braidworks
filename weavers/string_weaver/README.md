@@ -22,8 +22,12 @@ back through UniProt: `protein → partners → fan → each partner's UniProt e
 
 STRING returns partners ranked by confidence, but ties are not ordered stably. The backend
 imposes a fixed total order — **combined score descending, then partner name ascending** —
-and caps the display at `limit` (default 25). So the same accession always yields the same
-partner list. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
+within the upstream retrieval `limit` (default 25). This limit bounds fetched
+partners, not only the display. `protein.interaction.count` counts observed edges;
+`protein.query` fans out only over retrieved partner names. Neither claims to cover
+the complete interaction network. Request `protein.interaction.coverage` for the
+limit, observed edge/partner counts, count/fan scope and unknown completeness. Every
+successful result also carries a scope warning, including scalar-only requests. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
 
 ## Use it
 

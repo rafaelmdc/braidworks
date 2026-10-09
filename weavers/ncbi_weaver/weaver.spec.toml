@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.2.6"
+version = "0.2.7"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -174,7 +174,7 @@ max_batch_size = 1000
 
   [[capability.group]]
   id = "sequences"
-  outputs = ["genome.sequence.records"]
+  outputs = ["genome.sequence.records", "genome.sequence.coverage"]
 
 # ncbi.resolve_gene: a gene symbol (+ taxon) -> its NCBI gene id. Consumes protein.query
 # (a gene symbol is a valid molecular query) → shares the molecular entry point and gives
@@ -209,7 +209,7 @@ max_batch_size = 1000
 
   [[capability.group]]
   id = "products"
-  outputs = ["gene.product.records"]
+  outputs = ["gene.product.records", "gene.product.coverage"]
 
 # ncbi.list_orthologs: one NCBI gene id -> its ortholog gene ids across taxa. gene.ncbi.id
 # is a set output (the fan dimension): "this gene -> its ortholog in every species". API-only.

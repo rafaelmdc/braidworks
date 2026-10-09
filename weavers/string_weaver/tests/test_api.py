@@ -14,8 +14,12 @@ from string_weaver.backends.api import StringApiBackend
 
 CAP = "list_interactions"
 ALL = frozenset(
-    {"protein.query", "protein.interaction.partners", "protein.interaction.count",
-     "protein.interaction.records"}
+    {
+        "protein.query",
+        "protein.interaction.partners",
+        "protein.interaction.count",
+        "protein.interaction.records",
+    }
 )
 
 
@@ -23,8 +27,14 @@ STRING_ID = "9606.ENSP_TP53"  # the resolved STRING id partners are grouped unde
 
 
 def _edge(name, score, **channels):
-    return {"preferredName_A": "TP53", "preferredName_B": name, "stringId_A": STRING_ID,
-            "stringId_B": f"id_{name}", "score": score, **channels}
+    return {
+        "preferredName_A": "TP53",
+        "preferredName_B": name,
+        "stringId_A": STRING_ID,
+        "stringId_B": f"id_{name}",
+        "score": score,
+        **channels,
+    }
 
 
 def _backend(payload, *, status=200, calls=None, idmap=None):
@@ -47,7 +57,9 @@ def _backend(payload, *, status=200, calls=None, idmap=None):
 
 async def _one(backend, accession):
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": accession}], requested_outputs=ALL,
+        CAP,
+        [{"protein.uniprot.accession": accession}],
+        requested_outputs=ALL,
         groups_to_compute=frozenset(),
     )
     assert len(records) == 1
@@ -107,15 +119,23 @@ async def test_resolves_batch_in_two_bulk_calls():
     partner edges grouped back to each query by stringId_A."""
     payload = [
         _edge("MDM2", 0.99),  # stringId_A = STRING_ID (P04637/TP53)
-        {"preferredName_A": "BRCA1", "preferredName_B": "BARD1",
-         "stringId_A": "9606.ENSP_BRCA1", "stringId_B": "id_BARD1", "score": 0.9},
+        {
+            "preferredName_A": "BRCA1",
+            "preferredName_B": "BARD1",
+            "stringId_A": "9606.ENSP_BRCA1",
+            "stringId_B": "id_BARD1",
+            "score": 0.9,
+        },
     ]
     calls: list[str] = []
-    backend = _backend(payload, calls=calls,
-                       idmap={"P04637": STRING_ID, "P38398": "9606.ENSP_BRCA1"})
+    backend = _backend(
+        payload, calls=calls, idmap={"P04637": STRING_ID, "P38398": "9606.ENSP_BRCA1"}
+    )
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": "P04637"}, {"protein.uniprot.accession": "P38398"}],
-        requested_outputs=ALL, groups_to_compute=frozenset(),
+        CAP,
+        [{"protein.uniprot.accession": "P04637"}, {"protein.uniprot.accession": "P38398"}],
+        requested_outputs=ALL,
+        groups_to_compute=frozenset(),
     )
     assert [r.found for r in records] == [True, True]
     assert records[0].values["protein.interaction.partners"] == ["MDM2"]
@@ -126,3 +146,17 @@ async def test_resolves_batch_in_two_bulk_calls():
 def test_fingerprint_is_stable_and_real():
     fp = StringApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_short_response_does_not_claim_complete_network():
+    record = await _one(_backend([_edge("MDM2", 0.9)]), "P04637")
+    coverage = record.values["protein.interaction.coverage"]
+    assert coverage["request_limit"] == 25
+    assert coverage["observed_edges"] == coverage["observed_partners"] == 1
+    assert coverage["complete"] is None
+    assert coverage["fan_scope"] == "retrieved_partners"
+    assert record.warnings
+
+
+def test_retrieval_limit_changes_fingerprint():
+    assert StringApiBackend(limit=1).fingerprint() != StringApiBackend(limit=25).fingerprint()

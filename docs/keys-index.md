@@ -68,6 +68,7 @@ Descriptive payload fields; nothing joins on them.
 | `gene.organism` | The source organism of this gene. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | — |
 | `gene.ortholog.count` | How many orthologs this gene has across organisms. | `ncbi:ncbi.list_orthologs` | — |
 | `gene.ortholog.records` | This gene's orthologs — gene id, symbol, organism. | `ncbi:ncbi.list_orthologs` | — |
+| `gene.product.coverage` | Completion and observed/returned transcript counts for NCBI product reports. | `ncbi:ncbi.describe_gene` | — |
 | `gene.product.records` | The transcripts and proteins this gene makes — accessions and names. | `ncbi:ncbi.describe_gene` | — |
 | `gene.type` | What kind of gene this is — protein_coding, ncRNA, pseudo, … | `ncbi:ncbi.describe_gene` | — |
 | `genome.assembly.count` | How many genome assemblies exist for this organism. | `ncbi:ncbi.list_genomes` | — |
@@ -76,6 +77,7 @@ Descriptive payload fields; nothing joins on them.
 | `genome.assembly.organism` | The source organism of one genome assembly. | `ncbi:ncbi.describe_genome` | — |
 | `genome.assembly.records` | Genome assemblies for this organism — accession, organism, level, RefSeq category. | `ncbi:ncbi.list_genomes` | — |
 | `genome.assembly.title` | The name of one genome assembly. | `ncbi:ncbi.describe_genome` | — |
+| `genome.sequence.coverage` | Completion and observed/returned record counts for NCBI sequence reports. | `ncbi:ncbi.describe_genome` | — |
 | `genome.sequence.records` | The sequences in one genome — name, role, length, RefSeq/GenBank accession. | `ncbi:ncbi.describe_genome` | — |
 | `go.annotation.coverage` | Pagination coverage, source counts and page-cap completeness. | `quickgo:list_go_terms` | — |
 | `go.annotation.records` | Source annotation rows, retaining evidence, qualifiers and references. | `quickgo:list_go_terms` | — |
@@ -92,6 +94,7 @@ Descriptive payload fields; nothing joins on them.
 | `gtdb.tree.rootpath` | This organism's path from the root of the GTDB reference tree to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic). | `gtdb:describe_gtdb_tree_placement` | — |
 | `microbe.abundance.associations` | This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.count` | How many phenotypes this microbe has a GMrepo abundance record for. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.coverage` | GMrepo taxon association acquisition outcome and completeness. | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.overview` | This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.phenotype_names` | The gut-metagenome phenotypes (diseases/health) this microbe is reported prevalent in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.records` | Full GMrepo abundance rows for this microbe — the global overview plus every per-phenotype prevalence/abundance record. | `gmrepo:gmrepo.list_abundances` | — |
@@ -128,7 +131,8 @@ Descriptive payload fields; nothing joins on them.
 | `pathway.reactome.species` | The species of one Reactome pathway. | `reactome:describe_pathway` | — |
 | `protein.function` | What this protein does — UniProt's curated summary. | `uniprot:resolve_protein` | — |
 | `protein.gene` | The gene that codes for this protein. | `uniprot:resolve_protein` | — |
-| `protein.interaction.count` | How many interaction partners this protein has. | `string:list_interactions` | — |
+| `protein.interaction.count` | Number of edges observed within the configured STRING retrieval limit. | `string:list_interactions` | — |
+| `protein.interaction.coverage` | STRING retrieval limit, observed edge/partner counts and unknown network completeness. | `string:list_interactions` | — |
 | `protein.interaction.partners` | The proteins this protein interacts with. | `string:list_interactions` | — |
 | `protein.interaction.records` | This protein's interactions — partner, combined score, per-channel subscores. | `string:list_interactions` | — |
 | `protein.length` | This protein's length in amino acids. | `uniprot:resolve_protein` | — |
@@ -152,4 +156,5 @@ Descriptive payload fields; nothing joins on them.
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
 | `wikidata.sitelinks` | Language/site links associated with a Wikidata taxon item. | `wikidata:resolve_taxon` | — |
-| `wikipedia.pageviews` | Recent English-Wikipedia pageview count for one article — a popularity proxy. | `wikipedia:describe_pageviews` | — |
+| `wikipedia.pageviews` | English-Wikipedia pageview subtotal; compare only matching measurement scopes. | `wikipedia:describe_pageviews` | — |
+| `wikipedia.pageviews.measurement` | Pageview period, project, access, agent and observed/requested monthly-bin coverage. | `wikipedia:describe_pageviews` | — |

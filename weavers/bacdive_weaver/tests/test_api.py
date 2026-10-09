@@ -138,7 +138,8 @@ async def test_scan_cap_stops_searching():
     taxon = {"/taxon/Many/strains": {"results": [1, 2, 3], "next": None}}
     records = {1: _typed("no"), 2: _typed("no"), 3: _typed("yes")}
     record = await _one(_backend(taxon, records, max_strains_scanned=2), "Many strains")
-    assert record.found is False  # capped before reaching strain 3
+    assert not record.found and record.error
+    assert "complete=false" in record.error  # incomplete is not a biological miss
 
 
 async def test_paginates_via_next():
@@ -167,3 +168,39 @@ async def test_blank_name_is_a_miss_without_calling_api():
 def test_fingerprint_is_stable_and_real():
     fp = BacdiveApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_scan_fetch_does_not_exceed_remaining_budget():
+    calls = []
+    backend = _backend(
+        {"/taxon/Many/strains": {"results": [1, 2, 3], "next": None}},
+        {1: _typed("no"), 2: _typed("no"), 3: _typed("yes")},
+        max_strains_scanned=2,
+        calls=calls,
+    )
+    assert (await _one(backend, "Many strains")).error
+    assert [call for call in calls if "/fetch/" in call] == ["/v2/fetch/1;2"]
+
+
+async def test_exhausted_catalog_at_exact_budget_is_definitive_miss():
+    backend = _backend(
+        {"/taxon/Many/strains": {"results": [1, 2], "next": None}},
+        {1: _typed("no"), 2: _typed("no")},
+        max_strains_scanned=2,
+    )
+    result = await _one(backend, "Many strains")
+    assert not result.found and result.error is None
+
+
+def test_scan_budget_changes_source_fingerprint():
+    assert BacdiveApiBackend(max_strains_scanned=2).fingerprint() != (
+        BacdiveApiBackend(max_strains_scanned=3).fingerprint()
+    )
+
+
+def test_builders_share_default_budget_and_honor_explicit_budget():
+    from bacdive_weaver.factory import build_bacdive_weaver, build_bacdive_weaver_configured
+
+    default = build_bacdive_weaver().backend_fingerprint("api")
+    assert default == build_bacdive_weaver_configured().backend_fingerprint("api")
+    assert default != build_bacdive_weaver(max_strains_scanned=2).backend_fingerprint("api")

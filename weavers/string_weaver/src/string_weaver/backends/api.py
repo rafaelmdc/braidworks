@@ -11,8 +11,8 @@ into interaction leaves:
 
 **Determinism:** STRING returns partners ranked by confidence, but ties are not
 ordered stably, so we impose a fixed total order — combined score descending, then
-partner name ascending — and cap at ``limit``. So the same accession always yields the
-same partner list.
+partner name ascending — within the upstream retrieval limit. This is a bounded observation, not
+a complete interaction network.
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -103,7 +103,7 @@ def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
     rows.sort(key=lambda r: (-(r["score"] or 0.0), r["partner"]))
     # The fan dimension (set_outputs): each partner's name as a protein.query, so a caller
     # can fan out one child per partner. uniprot.resolve_protein consumes protein.query, so
-    # "protein -> all interaction partners -> each resolved protein" chains end-to-end.
+    # "protein -> retrieved interaction partners -> each resolved protein" chains end-to-end.
     # De-duped, order preserved (best-first).
     queries: list[str] = []
     seen: set[str] = set()
@@ -133,6 +133,8 @@ class StringApiBackend(BackendBase):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
         self._limit = limit
 
     def is_configured(self) -> bool:
@@ -141,7 +143,7 @@ class StringApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """A live service; the fingerprint pins the REST API/release version."""
-        return "string-db-v12"
+        return f"string-db-v12:limit={self._limit}"
 
     supports_request_pacing = True
 
@@ -179,9 +181,45 @@ class StringApiBackend(BackendBase):
             if error:
                 records.append(LookupRecord(query=query, error=error))
             elif not edges:
-                records.append(LookupRecord(query=query, found=False))
+                records.append(
+                    LookupRecord(
+                        query=query,
+                        found=False,
+                        warnings=(
+                            (
+                                f"No edges observed within STRING retrieval limit={self._limit}; "
+                                "network completeness is not established."
+                            ),
+                        )
+                        if string_id
+                        else (),
+                    )
+                )
             else:
-                records.append(LookupRecord(query=query, found=True, values=_extract(edges)))
+                values = _extract(edges)
+                values["protein.interaction.coverage"] = {
+                    "scope": "retrieved_interaction_partners",
+                    "request_limit": self._limit,
+                    "observed_edges": len(edges),
+                    "observed_partners": len(values["protein.query"]),
+                    "complete": None,
+                    "count_scope": "observed_edges",
+                    "fan_scope": "retrieved_partners",
+                }
+                records.append(
+                    LookupRecord(
+                        query=query,
+                        found=True,
+                        values=values,
+                        warnings=(
+                            (
+                                f"STRING retrieval is bounded by limit={self._limit}; "
+                                "counts and fan-out describe retrieved partners, "
+                                "not a proven complete network."
+                            ),
+                        ),
+                    )
+                )
         return records
 
     async def _string_ids(self, accessions: list[str]) -> tuple[dict[str, str], dict[str, str]]:

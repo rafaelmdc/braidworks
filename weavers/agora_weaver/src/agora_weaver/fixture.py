@@ -46,6 +46,10 @@ def fixture_reaction_db_path() -> Path:
             "INSERT OR IGNORE INTO reaction (reconstruction, abbreviation) VALUES (?, ?)",
             [(_FIXTURE_RECON, r[0]) for r in _FIXTURE_REACTIONS],
         )
+        con.execute(
+            "INSERT INTO model_coverage VALUES (?, ?, ?, ?, ?)",
+            (_FIXTURE_RECON, "processed", len(_FIXTURE_REACTIONS), "fixture.xml", None),
+        )
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('content_hash', 'fixture')")
         con.commit()
     finally:

@@ -36,6 +36,7 @@ ASSEMBLY_TITLE = "genome.assembly.title"
 ASSEMBLY_LEVEL = "genome.assembly.level"
 ASSEMBLY_ORGANISM = "genome.assembly.organism"
 ASSEMBLY_DETAIL = "genome.assembly.detail"
+SEQUENCE_COVERAGE = "genome.sequence.coverage"
 SEQUENCE_RECORDS = "genome.sequence.records"
 
 PROTEIN_QUERY = "protein.query"  # gene symbol input to resolve_gene (shared molecular entry)
@@ -45,6 +46,7 @@ GENE_NAME = "gene.name"
 GENE_TYPE = "gene.type"
 GENE_ORGANISM = "gene.organism"
 GENE_DETAIL = "gene.detail"
+GENE_PRODUCT_COVERAGE = "gene.product.coverage"
 GENE_PRODUCTS = "gene.product.records"
 ORTHOLOG_COUNT = "gene.ortholog.count"
 ORTHOLOG_RECORDS = "gene.ortholog.records"
@@ -63,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.6"
+WEAVER_VERSION = "0.2.7"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -150,7 +152,7 @@ def list_children_capability(*, backends: tuple[str, ...]) -> Capability:
 
 LIST_GENOMES_OUTPUTS = frozenset({GENOME_ACCESSION, ASSEMBLY_COUNT, ASSEMBLY_RECORDS})
 ASSEMBLY_GROUP = frozenset({ASSEMBLY_TITLE, ASSEMBLY_LEVEL, ASSEMBLY_ORGANISM, ASSEMBLY_DETAIL})
-SEQUENCES_GROUP = frozenset({SEQUENCE_RECORDS})
+SEQUENCES_GROUP = frozenset({SEQUENCE_RECORDS, SEQUENCE_COVERAGE})
 
 
 def list_genomes_capability(*, backends: tuple[str, ...]) -> Capability:
@@ -212,7 +214,7 @@ def describe_genome_capability(*, backends: tuple[str, ...]) -> Capability:
 
 RESOLVE_GENE_OUTPUTS = frozenset({GENE_ID, GENE_SYMBOL, GENE_NAME, GENE_ORGANISM})
 GENE_SUMMARY_GROUP = frozenset({GENE_SYMBOL, GENE_NAME, GENE_TYPE, GENE_ORGANISM, GENE_DETAIL})
-GENE_PRODUCTS_GROUP = frozenset({GENE_PRODUCTS})
+GENE_PRODUCTS_GROUP = frozenset({GENE_PRODUCTS, GENE_PRODUCT_COVERAGE})
 ORTHOLOG_OUTPUTS = frozenset({GENE_ID, ORTHOLOG_COUNT, ORTHOLOG_RECORDS})
 
 

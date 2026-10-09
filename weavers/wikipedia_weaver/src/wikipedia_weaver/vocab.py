@@ -10,12 +10,13 @@ from __future__ import annotations
 from braidworks.core import (
     Capability,
     OutputGroup,
+    Parameter,
     Provenance,
     WeaverManifest,
 )
 
 WEAVER_ID = "wikipedia"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.5"
 WEAVER_TITLE = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,8 +39,15 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_pageviews",
                 consumes=frozenset({"wikipedia.title"}),
-                produces=frozenset({"wikipedia.pageviews"}),
-                output_groups=(OutputGroup(id="core", outputs=frozenset({"wikipedia.pageviews"})),),
+                produces=frozenset({"wikipedia.pageviews", "wikipedia.pageviews.measurement"}),
+                output_groups=(
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikipedia.pageviews", "wikipedia.pageviews.measurement"}
+                        ),
+                    ),
+                ),
                 backends=tuple(
                     b
                     for b in (
@@ -47,6 +55,34 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "local",
                     )
                     if b in backends
+                ),
+                parameters=(
+                    Parameter(
+                        name="months",
+                        type="int",
+                        enum=(),
+                        default=None,
+                        description="Completed monthly bins (API default 12; local supports only 1)",
+                    ),
+                    Parameter(
+                        name="end_month",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="Final completed month YYYYMM (API default previous month; local dump month)",
+                    ),
+                    Parameter(
+                        name="agent",
+                        type="string",
+                        enum=(
+                            "all-agents",
+                            "user",
+                            "spider",
+                            "automated",
+                        ),
+                        default=None,
+                        description="Agent scope (API default all-agents; local supports only user)",
+                    ),
                 ),
             ),
         ),

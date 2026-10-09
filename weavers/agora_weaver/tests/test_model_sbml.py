@@ -43,11 +43,12 @@ async def test_model_group_returns_cached_sbml_path(tmp_path: Path):
     assert models[0]["source_url"] == individual_sbml_url(_RECON)
 
 
-async def test_model_group_omitted_when_uncached_and_no_download(tmp_path: Path):
-    # Empty cache + downloads disabled -> the model output is simply absent (core still fine).
+async def test_model_group_errors_when_uncached_and_no_download(tmp_path: Path):
+    # Missing requested data must not claim a successfully computed model group.
     weaver = AgoraWeaver({"local": AgoraLocalBackend(sbml_cache_dir=tmp_path)})
     r = await _resolve(weaver, _TAXID)
-    assert r.status is WeaveStatus.OK
+    assert r.status is WeaveStatus.ERROR
+    assert not r.computed_groups
     assert _SBML not in {s.type_id for s in r.strands}
 
 

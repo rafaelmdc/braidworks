@@ -164,6 +164,12 @@ class BacdiveApiBackend(BackendBase):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        if (
+            isinstance(max_strains_scanned, bool)
+            or not isinstance(max_strains_scanned, int)
+            or max_strains_scanned < 1
+        ):
+            raise ValueError("max_strains_scanned must be a positive integer")
         self._max_strains_scanned = max_strains_scanned
 
     def is_configured(self) -> bool:
@@ -172,7 +178,7 @@ class BacdiveApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """BacDive v2 is a live service; the fingerprint pins the API contract version."""
-        return "bacdive-api-v2"
+        return f"bacdive-api-v2:source={self._base_url}:scan={self._max_strains_scanned}"
 
     supports_request_pacing = True
 
@@ -221,10 +227,19 @@ class BacdiveApiBackend(BackendBase):
         """Page the taxon ID list, batch-fetch records, return the first type strain."""
         path = f"/taxon/{genus}/{species}" if species else f"/taxon/{genus}"
         scanned = 0
+        seen_pages: set[str] = set()
         while path:
+            if path in seen_pages or len(seen_pages) >= self._max_strains_scanned:
+                raise _InvalidResponse(
+                    f"incomplete strain scan: pagination cycle/budget; scanned={scanned}, "
+                    f"limit={self._max_strains_scanned}, complete=false"
+                )
+            seen_pages.add(path)
             resp = await self._http().get(path)
             if is_not_found_status(resp.status_code):
-                return None  # taxon search absence; /fetch failures remain errors
+                if scanned or len(seen_pages) > 1:
+                    raise _InvalidResponse("incomplete strain scan: continuation page unavailable")
+                return None
             resp.raise_for_status()
             page = resp.json()
             if not isinstance(page, dict) or not isinstance(page.get("results"), list):
@@ -233,22 +248,25 @@ class BacdiveApiBackend(BackendBase):
                 raise _InvalidResponse("BacDive next page must be a URL string or null")
             ids = [_strain_id(i) for i in page["results"]]
             for start in range(0, len(ids), _FETCH_BATCH):
-                chunk = ids[start : start + _FETCH_BATCH]
+                remaining = self._max_strains_scanned - scanned
+                chunk = ids[start : start + min(_FETCH_BATCH, remaining)]
                 records = await self._fetch_records(chunk)
-                for strain_id in chunk:  # preserve the taxon list's (id) order
+                for strain_id in chunk:
                     record = records.get(strain_id)
+                    if record is None:
+                        raise _InvalidResponse("incomplete strain scan: requested strain missing")
                     scanned += 1
-                    if record is not None and _is_type_strain(record):
+                    if _is_type_strain(record):
                         return record
-                    if scanned >= self._max_strains_scanned:
-                        logger.info(
-                            "scanned %d strains for %s %s without a type strain (cap reached)",
-                            scanned,
-                            genus,
-                            species or "",
-                        )
-                        return None
-            path = page.get("next")  # absolute URL or None; httpx handles absolute
+                if scanned >= self._max_strains_scanned and (
+                    start + len(chunk) < len(ids) or page.get("next")
+                ):
+                    raise _InvalidResponse(
+                        f"incomplete strain scan: scanned={scanned}, "
+                        f"limit={self._max_strains_scanned}, complete=false; "
+                        "type-strain absence is not established"
+                    )
+            path = page.get("next")
         return None
 
     async def _fetch_records(self, strain_ids: list[int]) -> dict[int, dict[str, Any]]:

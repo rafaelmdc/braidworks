@@ -72,3 +72,26 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Pageviews responses must contain an items list with non-negative integer view counts. A returned monthly row with zero views is valid data; an empty items list is a miss. A missing/malformed items envelope is an error rather than a fabricated zero. Records retain the original query, including extra fields and whitespace.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Measurement scope
+
+`wikipedia.pageviews.measurement` describes project, access, agent, monthly
+granularity, start/end month and observed/requested bins. Scalar-only results
+also carry a scope warning. The API default is exactly 12 completed months of
+`all-agents` views; the local backend default is the stored dump month of `user`
+views. Those defaults measure different scopes and should not be compared directly.
+
+Declare the same `months`, `end_month` (YYYYMM) and `agent` parameters to request
+a comparable metric. The API supports completed monthly windows; local supports
+only `months=1`, its stored month and `agent=user`. An unsupported explicit scope
+returns `ERROR` rather than silently substituting another metric. For example:
+
+```bash
+braidworks run wikipedia describe_pageviews --have wikipedia.title=Brown_bear \
+  --param months=1 --param end_month=202505 --param agent=user
+```
+
+Duplicate or unexpected API bins, mismatched articles and measurement fields are
+errors. Missing bins return an observed subtotal with incomplete coverage. The
+local parser's completeness remains unknown, rather than claiming a complete dump.
+The API interval ends at the last completed month, excluding the current partial month.

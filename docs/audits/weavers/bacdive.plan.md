@@ -23,3 +23,9 @@ breaking changes are permitted; document affected interfaces, migrations and ver
 Completed the #150 response-validation/failure-isolation scope for #243. Taxon-search HTTP 400/404 is a miss. A failed /fetch request for identifiers already returned by the source is an error, including 404. Taxon IDs, page envelope and returned strain records are validated; missing phenotype measurements remain legitimate sparse data. The first-type-strain and scan-cap policies are unchanged and remain separate coverage/selection work.
 
 See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared coverage work implemented
+
+The #151 findings are implemented and verified in
+[SH-04 implementation and migration evidence](SH-04.implementation.md).
+Other work packages in this source plan remain separately tracked.

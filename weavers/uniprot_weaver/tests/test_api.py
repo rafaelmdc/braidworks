@@ -249,17 +249,17 @@ async def test_map_from_accession_picks_to_db_from_requested_output():
     assert run_calls == [("UniProtKB_AC-ID", "KEGG")]  # single job, only the requested target
 
 
-async def test_map_from_accession_unrequested_target_is_no_match():
+async def test_map_from_accession_summary_only_reports_observed_zero():
     backend = _idmap_backend({})
     rec = (
         await backend.fetch(
             "map_from_accession",
             [{ACC: "P04637"}],
-            requested_outputs=frozenset({COUNT}),  # nothing routable
+            requested_outputs=frozenset({COUNT}),  # full supported-target summary
             groups_to_compute=frozenset(),
         )
     )[0]
-    assert rec.found is False
+    assert rec.found and rec.values[COUNT] == 0 and rec.values[RECORDS] == []
 
 
 async def test_map_to_accession_miss_and_blank():

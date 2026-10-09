@@ -3,8 +3,8 @@
 ``core`` (the reconstruction id + source genome) is served entirely from the bundled
 ``agora2_crosswalk.tsv`` — offline, all 7,302 strains. ``reactions`` (the repertoire)
 needs the SQLite that ``setup.ensure_agora_db`` builds from the AGORA2 SBML archive;
-when that DB isn't present the backend still answers ``core`` and simply omits the
-(un-buildable) reaction repertoire.
+when that DB is absent, core-only requests work and requested reactions return
+an explicit resource error.
 
 Guide: weaverkit/docs/implementing-backends.md
 """
@@ -12,15 +12,21 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+import httpx
 from braidworks.core import BackendBase, LookupRecord
 from braidworks.core.exceptions import BackendConfigurationError
 from braidworks.core.source_identity import SourceBinding, artifact_stamp
 
 from agora_weaver import dataset
+
+
+class _ResourceUnavailable(ValueError):
+    """A requested local resource is absent."""
 
 
 class AgoraLocalBackend(BackendBase):
@@ -83,7 +89,12 @@ class AgoraLocalBackend(BackendBase):
         self, queries: list[dict[str, Any]], groups_to_compute: frozenset[str]
     ) -> list[LookupRecord]:
         self._check_generation()
-        want_reactions = "reactions" in groups_to_compute and self._reaction_db_ready()
+        want_reactions = "reactions" in groups_to_compute
+        if want_reactions and not self._reaction_db_ready():
+            return [
+                LookupRecord(query=query, error="AGORA reaction database unavailable")
+                for query in queries
+            ]
         want_models = "model" in groups_to_compute
         with self._source.session() if want_reactions else nullcontext(None) as con:
             records: list[LookupRecord] = []
@@ -94,13 +105,21 @@ class AgoraLocalBackend(BackendBase):
                     records.append(LookupRecord(query=query, found=False))  # a miss is normal
                     continue
                 values: dict[str, Any] = {"microbe.metabolism.reconstruction": recs}
-                if con is not None:
-                    ids = [r["reconstruction_id"] for r in recs]
-                    values["microbe.metabolism.reactions"] = dataset.reactions_for(con, ids)
-                if want_models:
-                    models = self._models_for(recs)
-                    if models:
-                        values["microbe.metabolism.sbml"] = models
+                try:
+                    if con is not None:
+                        ids = [r["reconstruction_id"] for r in recs]
+                        values["microbe.metabolism.reactions"] = dataset.reactions_for(con, ids)
+                    if want_models:
+                        values["microbe.metabolism.sbml"] = self._models_for(recs)
+                except (
+                    sqlite3.Error,
+                    _ResourceUnavailable,
+                    dataset.IncompleteModelCoverage,
+                    httpx.HTTPError,
+                    OSError,
+                ) as exc:
+                    records.append(LookupRecord(query=query, error=f"AGORA resource error: {exc}"))
+                    continue
                 records.append(LookupRecord(query=query, found=True, values=values))
             return records
 
@@ -116,6 +135,8 @@ class AgoraLocalBackend(BackendBase):
                 cache_dir=self._sbml_cache_dir,
                 auto=self._auto_download_models,
             )
+            if path is None:
+                raise _ResourceUnavailable(f"SBML unavailable for {recon_id}; download not enabled")
             if path is not None:
                 out.append(
                     {

@@ -85,6 +85,7 @@ def test_lookup_error_is_error():
         LookupRecord(query={}, error="boom"), **_map_args(frozenset({"ncbi.taxon.id"}))
     )
     assert res.status is WeaveStatus.ERROR and res.errors == ("boom",)
+    assert res.computed_groups == frozenset()
 
 
 def test_always_computed_group_in_computed_groups():
@@ -302,3 +303,12 @@ def test_lookup_source_warnings_survive_mapping_and_json(found, error):
     result = map_lookup(restored, **_map_args(frozenset({"ncbi.taxon.id"})))
     assert result.warnings == record.warnings
     assert type(result).from_json(result.to_json()).warnings == record.warnings
+
+
+def test_resolver_error_does_not_claim_requested_or_always_computed_groups():
+    result = map_resolver(
+        ResolverRecord(query={}, status=MatchStatus.ERROR, error="unavailable"),
+        **_map_args(frozenset({"ncbi.taxon.rank"})),
+    )
+    assert result.status is WeaveStatus.ERROR
+    assert result.computed_groups == frozenset()

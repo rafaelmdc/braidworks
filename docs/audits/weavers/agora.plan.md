@@ -36,3 +36,9 @@ on this laptop. See [measurement script](../reproductions/weaver_sbml_memory.py)
 This measures the parser, not whole-archive/native memory; reaction rows remain
 materialized per model to preserve existing malformed-model behavior. Model coverage
 tracking (WV-AGORA-003) and individual-model publication (WV-AGORA-002) remain open.
+
+## Shared coverage work implemented
+
+The #151 findings are implemented and verified in
+[SH-04 implementation and migration evidence](SH-04.implementation.md).
+Other work packages in this source plan remain separately tracked.

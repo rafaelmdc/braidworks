@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS reaction (reconstruction TEXT NOT NULL, abbreviation 
     PRIMARY KEY (reconstruction, abbreviation));
 CREATE TABLE IF NOT EXISTS rxn_info (abbreviation TEXT PRIMARY KEY, subsystem TEXT,
     ec TEXT, kegg TEXT, rhea TEXT);
+CREATE TABLE IF NOT EXISTS model_coverage (reconstruction TEXT PRIMARY KEY,
+    status TEXT NOT NULL, reaction_count INTEGER NOT NULL, source_member TEXT NOT NULL,
+    error TEXT);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -99,6 +102,10 @@ def db_content_hash(db_path: str | Path) -> str | None:
         con.close()
 
 
+class IncompleteModelCoverage(ValueError):
+    """The acquisition manifest cannot establish a model repertoire."""
+
+
 def reactions_for(
     con: sqlite3.Connection, reconstruction_ids: Iterable[str]
 ) -> list[dict[str, Any]]:
@@ -110,6 +117,12 @@ def reactions_for(
     """
     out: list[dict[str, Any]] = []
     for rid in reconstruction_ids:
+        coverage = con.execute(
+            "SELECT status, error FROM model_coverage WHERE reconstruction = ?", (rid,)
+        ).fetchone()
+        if coverage is None or coverage[0] != "processed":
+            reason = coverage[1] if coverage else "model not acquired"
+            raise IncompleteModelCoverage(f"reaction repertoire unavailable for {rid}: {reason}")
         rows = con.execute(
             """
             SELECT r.abbreviation, i.subsystem, i.ec, i.kegg, i.rhea
@@ -148,8 +161,13 @@ def iter_sbml_reactions(sbml_bytes_or_stream: Any) -> Iterator[str]:
     materialises. Tolerant of namespaced or bare ``<reaction>`` tags.
     """
     parents: list[ET.Element] = []
+    has_model = False
     for event, elem in ET.iterparse(sbml_bytes_or_stream, events=("start", "end")):
         if event == "start":
+            local_tag = elem.tag.rsplit("}", 1)[-1]
+            if not parents and local_tag != "sbml":
+                raise ET.ParseError("expected SBML root element")
+            has_model = has_model or local_tag == "model"
             parents.append(elem)
             continue
         tag = elem.tag
@@ -161,6 +179,8 @@ def iter_sbml_reactions(sbml_bytes_or_stream: Any) -> Iterator[str]:
         if parents:
             parents[-1].remove(elem)
         elem.clear()
+    if not has_model:
+        raise ET.ParseError("SBML model element missing")
 
 
 def _build_reaction_db(
@@ -203,6 +223,7 @@ def _build_reaction_db(
         )
         written = 0
         skipped = 0
+        processed = 0
         with zipfile.ZipFile(sbml_zip) as zf:
             for name in zf.namelist():
                 if not name.endswith(".xml"):
@@ -216,7 +237,16 @@ def _build_reaction_db(
                 except ET.ParseError as exc:
                     logger.warning("skipping malformed SBML model %s: %s", name, exc)
                     skipped += 1
+                    con.execute(
+                        "INSERT INTO model_coverage VALUES (?, ?, ?, ?, ?)",
+                        (reconstruction, "skipped", 0, name, str(exc)),
+                    )
                     continue
+                processed += 1
+                con.execute(
+                    "INSERT INTO model_coverage VALUES (?, ?, ?, ?, ?)",
+                    (reconstruction, "processed", len(set(rows)), name, None),
+                )
                 cur = con.executemany(
                     "INSERT OR IGNORE INTO reaction (reconstruction, abbreviation) VALUES (?, ?)",
                     rows,
@@ -237,7 +267,9 @@ def _build_reaction_db(
         con.executemany(
             "INSERT OR REPLACE INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "1"),
+                ("schema_version", "2"),
+                ("models_processed", str(processed)),
+                ("models_skipped", str(skipped)),
                 ("build_id", uuid.uuid4().hex),
                 ("annotation_sha256", annotation_digest.hexdigest()),
                 ("annotation_rows", str(annotation_count)),
@@ -261,6 +293,10 @@ def reaction_db_is_valid(path: Path) -> bool:
     try:
         con.execute("SELECT reconstruction, abbreviation FROM reaction LIMIT 0")
         con.execute("SELECT abbreviation, subsystem, ec, kegg, rhea FROM rxn_info LIMIT 0")
+        con.execute(
+            "SELECT reconstruction, status, reaction_count, source_member, error "
+            "FROM model_coverage LIMIT 0"
+        )
         metadata = dict(con.execute("SELECT key, value FROM meta"))
         return (
             bool(metadata.get("content_hash"))

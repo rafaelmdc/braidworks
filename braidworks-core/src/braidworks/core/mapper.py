@@ -4,7 +4,8 @@ Every backend of a weaver feeds its records through one of these, so all backend
 emit identical strand shapes. They emit exactly the externally-requested outputs
 (``capability.outputs_to_compute``) and report ``computed_groups`` as the triggered
 groups unioned with the capability's ``always_computed_groups`` (so the cache key
-isn't under-reported when a backend computes a group unconditionally).
+isn't under-reported when a backend computes a group unconditionally). Errors
+claim no completed groups; a failed attempt cannot establish output coverage.
 """
 
 from __future__ import annotations
@@ -66,7 +67,11 @@ def map_lookup(
         capability_id=capability.id,
         weaver_version=weaver_version,
         backend_used=backend,
-        computed_groups=_computed_groups(capability, requested_outputs),
+        computed_groups=(
+            frozenset()
+            if status is WeaveStatus.ERROR
+            else _computed_groups(capability, requested_outputs)
+        ),
         status=status,
         strands=tuple(strands),
         errors=errors,
@@ -122,7 +127,11 @@ def map_resolver(
         capability_id=capability.id,
         weaver_version=weaver_version,
         backend_used=backend,
-        computed_groups=_computed_groups(capability, requested_outputs),
+        computed_groups=(
+            frozenset()
+            if status is WeaveStatus.ERROR
+            else _computed_groups(capability, requested_outputs)
+        ),
         status=status,
         strands=tuple(strands),
         candidates=candidates,

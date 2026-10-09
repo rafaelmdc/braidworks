@@ -125,3 +125,14 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Taxonomy, genome, gene and requested enrichment responses are validated at source-local seams. Taxonomy, assembly/gene-detail and symbol request chunks preserve unrelated successes. Taxonomy HTTP 400/404 and explicitly reported invalid-identifier absence remain misses; network/service/malformed data failures are errors. The observed empty taxonomy-suggest response {} remains a miss. Failed requested lineage, sequence or product enrichment now makes the affected query an error instead of returning apparent success with silently missing requested fields. Cancellation and unrelated programming faults propagate through enrichment. API-only live checks select test_live tests; the unrestricted test-live target also acquires the large local taxonomy database.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Report coverage
+
+API report traversals reject repeated page tokens and stop at a positive
+`max_report_pages` budget (default 1,000 pages per traversal). An interrupted
+traversal returns `ERROR` with its observed page count and incomplete scope,
+claims no completed groups and is not cached. Products now follow pagination;
+product and sequence records no longer silently stop at 200. Their `.coverage`
+outputs report the returned/observed record counts and successful report completion.
+List capabilities retain their 200-row display cap with uncapped identifier sets
+and true distinct counts, after every source page has been acquired.

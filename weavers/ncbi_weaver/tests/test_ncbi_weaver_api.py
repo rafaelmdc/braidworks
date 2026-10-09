@@ -145,4 +145,4 @@ async def test_api_batch_preserves_order():
 
 
 def test_api_fingerprint():
-    assert _weaver().backend_fingerprint("api") == "datasets-v2"
+    assert _weaver().backend_fingerprint("api") == "datasets-v2:pages=1000"

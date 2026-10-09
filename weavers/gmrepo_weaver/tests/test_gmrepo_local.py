@@ -90,7 +90,7 @@ async def test_sample_profiles_returns_sample_by_taxon_matrix():
     assert first["relative_abundance"] == 52.4
 
 
-async def test_sample_profiles_unknown_disease_is_no_match():
+async def test_sample_profiles_unacquired_disease_is_error():
     weaver = build_gmrepo_weaver_fixture()
     out = await weaver.execute_batch(
         PROFILES_CAP,
@@ -98,4 +98,5 @@ async def test_sample_profiles_unknown_disease_is_no_match():
         requested_outputs=frozenset({SAMPLE_PROFILES}),
         backend="local",
     )
-    assert out[0].status is WeaveStatus.NO_MATCH
+    assert out[0].status is WeaveStatus.ERROR
+    assert not out[0].computed_groups

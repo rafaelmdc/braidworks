@@ -65,7 +65,8 @@ OUTPUT_KEYS: dict[str, str] = {
     # wikidata_weaver / wikipedia_weaver leaf outputs
     "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
     "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",
-    "wikipedia.pageviews": "Recent English-Wikipedia pageview count for one article — a popularity proxy.",
+    "wikipedia.pageviews": "English-Wikipedia pageview subtotal; compare only matching measurement scopes.",
+    "wikipedia.pageviews.measurement": "Pageview period, project, access, agent and observed/requested monthly-bin coverage.",
     # ncbi_weaver leaf outputs
     "ncbi.taxon.parent_id": "The parent taxon of this organism.",
     "ncbi.taxon.match_type": "How the name resolved to this taxid — exact, synonym, fuzzy, or taxid.",
@@ -86,6 +87,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "genome.assembly.organism": "The source organism of one genome assembly.",
     "genome.assembly.detail": "Full detail of one assembly — submitter, dates, length/GC/N50, gene counts.",
     "genome.sequence.records": "The sequences in one genome — name, role, length, RefSeq/GenBank accession.",
+    "genome.sequence.coverage": "Completion and observed/returned record counts for NCBI sequence reports.",
     # NCBI gene outputs (ncbi_weaver resolve_gene / describe_gene / list_orthologs)
     # (gene.symbol is a shared join key — see SHARED_KEYS — consumed by uniprot map_to_accession)
     "gene.name": "The full name of this gene.",
@@ -93,6 +95,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "gene.organism": "The source organism of this gene.",
     "gene.detail": "Full record of this gene — symbol, description, type, chromosomes, synonyms, xrefs.",
     "gene.product.records": "The transcripts and proteins this gene makes — accessions and names.",
+    "gene.product.coverage": "Completion and observed/returned transcript counts for NCBI product reports.",
     "gene.ortholog.count": "How many orthologs this gene has across organisms.",
     "gene.ortholog.records": "This gene's orthologs — gene id, symbol, organism.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
@@ -121,6 +124,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.abundance.phenotype_names": "The gut-metagenome phenotypes (diseases/health) "
     "this microbe is reported prevalent in (GMrepo).",
     "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.coverage": "GMrepo taxon association acquisition outcome and completeness.",
     "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, "
     "phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
     "microbe.abundance.records": "Full GMrepo abundance rows for this microbe — the global "
@@ -161,7 +165,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "string.id": "This protein's STRING id.",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "The proteins this protein interacts with.",
-    "protein.interaction.count": "How many interaction partners this protein has.",
+    "protein.interaction.count": "Number of edges observed within the configured STRING retrieval limit.",
+    "protein.interaction.coverage": "STRING retrieval limit, observed edge/partner counts and unknown network completeness.",
     "protein.interaction.records": "This protein's interactions — partner, combined score, "
     "per-channel subscores.",
     # Gene Ontology annotation outputs (quickgo_weaver), grouped by GO aspect

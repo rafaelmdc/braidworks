@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.4"
+WEAVER_VERSION = "0.2.5"
 WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -143,31 +143,29 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     }
                 ),
                 output_groups=(
+                    OutputGroup(id="gene_ncbi_id", outputs=frozenset({"gene.ncbi.id"})),
+                    OutputGroup(id="gene_ensembl_id", outputs=frozenset({"gene.ensembl.id"})),
+                    OutputGroup(id="protein_ensembl_id", outputs=frozenset({"protein.ensembl.id"})),
+                    OutputGroup(id="pathway_kegg_id", outputs=frozenset({"pathway.kegg.id"})),
                     OutputGroup(
-                        id="mapping",
+                        id="pathway_reactome_id", outputs=frozenset({"pathway.reactome.id"})
+                    ),
+                    OutputGroup(id="refseq_protein_id", outputs=frozenset({"refseq.protein.id"})),
+                    OutputGroup(id="orthodb_group", outputs=frozenset({"orthodb.group"})),
+                    OutputGroup(id="eggnog_group", outputs=frozenset({"eggnog.group"})),
+                    OutputGroup(id="chembl_id", outputs=frozenset({"chembl.id"})),
+                    OutputGroup(id="drugbank_id", outputs=frozenset({"drugbank.id"})),
+                    OutputGroup(id="pdb_id", outputs=frozenset({"pdb.id"})),
+                    OutputGroup(id="string_id", outputs=frozenset({"string.id"})),
+                    OutputGroup(
+                        id="summary",
                         outputs=frozenset(
-                            {
-                                "chembl.id",
-                                "drugbank.id",
-                                "eggnog.group",
-                                "gene.ensembl.id",
-                                "gene.ncbi.id",
-                                "orthodb.group",
-                                "pathway.kegg.id",
-                                "pathway.reactome.id",
-                                "pdb.id",
-                                "protein.ensembl.id",
-                                "protein.uniprot.mapping.count",
-                                "protein.uniprot.mapping.records",
-                                "refseq.protein.id",
-                                "string.id",
-                            }
+                            {"protein.uniprot.mapping.count", "protein.uniprot.mapping.records"}
                         ),
                     ),
                 ),
                 backends=backends,
                 max_batch_size=1000,
-                always_computed_groups=frozenset({"mapping"}),
                 set_outputs=frozenset(
                     {
                         "chembl.id",

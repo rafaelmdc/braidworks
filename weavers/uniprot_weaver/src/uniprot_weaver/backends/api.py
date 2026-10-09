@@ -362,8 +362,9 @@ class UniprotApiBackend(BackendBase):
         self, queries: list[dict[str, Any]], requested_outputs: frozenset[str]
     ) -> list[LookupRecord]:
         """UniProt accession -> any requested target id type(s). Picks the `to` db per output."""
-        targets = {t: mapping.TO_DB[t] for t in requested_outputs if t in mapping.TO_DB}
-        if not targets:  # nothing routable requested (e.g. only count/records)
+        summary = bool(requested_outputs & {mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS})
+        targets = {t: db for t, db in mapping.TO_DB.items() if summary or t in requested_outputs}
+        if not targets:
             return [LookupRecord(query=q, found=False) for q in queries]
 
         accs = sorted({str(q.get(mapping.ACCESSION, "") or "").strip() for q in queries} - {""})
@@ -391,11 +392,12 @@ class UniprotApiBackend(BackendBase):
                 if ids:
                     values[type_id] = ids
                     recs.extend({"id": i, "db": to_db} for i in ids)
-            if not values:
+            if not acc or (not values and not summary):
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            values[mapping.MAPPING_COUNT] = len(recs)
-            values[mapping.MAPPING_RECORDS] = recs
+            if summary:
+                values[mapping.MAPPING_COUNT] = len(recs)
+                values[mapping.MAPPING_RECORDS] = recs
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
 

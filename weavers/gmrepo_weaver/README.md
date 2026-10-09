@@ -70,3 +70,23 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/gmrepo_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+## Acquisition coverage and sample denominators
+
+Database schema 2 stores a JSON acquisition manifest in `meta.acquisition`. Each
+taxon records a successful, empty or failed association request, including error
+details. A failed taxon lookup returns `ERROR`; it cannot masquerade as zero
+associations. `microbe.abundance.coverage` and the full record expose this scope.
+
+Each requested phenotype records its run cap, selected runs, listing exhaustion,
+fetched runs, successful empty runs, failed runs and individual run outcomes.
+Sample results include this `coverage` and a `denominator` with successful fetched
+runs (including empty profiles) and the catalog cohort size when known. `n_runs`
+remains the count of runs with retained rows and is also named `n_runs_with_rows`;
+it is not the cohort denominator. Capped or partially failed acquisition is explicitly
+incomplete. Successfully acquired empty profiles return an empty result with
+coverage; an unrequested phenotype returns an availability error.
+
+Caller-supplied tables without an acquisition manifest expose unknown coverage
+for retained rows, rather than asserting a complete cohort. Existing schema 1
+databases must be rebuilt. Programming exceptions in acquisition workers propagate.

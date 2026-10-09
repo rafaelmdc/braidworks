@@ -125,3 +125,13 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Search pages and projected nested fields are validated. Search HTTP 400/404 is a miss; mapping-job HTTP 400/404 remains a job failure. Submission, polling and result envelopes must contain meaningful job/result evidence and correlated input identifiers. A failed into-hub source-database job group preserves other groups. Mapping pagination repeats/excessive pages fail rather than looping forever. Broader mapping ordering/configuration/polling-budget work remains separately tracked.
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
+
+## Outbound mapping coverage
+
+Each outbound target has its own output group. A cached GeneID lookup does not
+satisfy a PDB lookup. Target-only requests submit only the selected target jobs.
+Requesting `protein.uniprot.mapping.count` or `protein.uniprot.mapping.records`
+fetches all 12 supported target databases, even when combined with one target.
+The count is the number of returned mappings across those targets, not the number
+of distinct biological entities. A successful empty summary emits count `0` and
+records `[]`; a failed target job makes the summary an error.

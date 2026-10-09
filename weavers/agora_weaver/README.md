@@ -84,3 +84,15 @@ URLs; without them, metadata labels annotations caller-supplied and records the
 local archive path. The annotation digest covers ordered JSON rows, not raw HTTP
 bytes; it provides reproducibility evidence rather than a canonical dataset ID.
 The XML parser releases processed elements, including nonreaction data.
+
+## Resource and model coverage
+
+Core-only crosswalk queries work offline. Requesting reactions without a reaction
+database, or an unavailable SBML model without download consent, returns `ERROR`;
+failed results claim no completed output groups. Partial SBML availability also
+fails the requested model group rather than silently dropping reconstructions.
+
+Reaction database schema 2 persists every processed/skipped XML model, its source
+member, distinct reaction count and parse error. A processed model with zero
+reactions is a known empty repertoire; a skipped or unacquired model is unavailable.
+Existing databases without this manifest must be rebuilt before serving reactions.
