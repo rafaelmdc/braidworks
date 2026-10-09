@@ -32,6 +32,7 @@ this module deliberately splits the computation into two halves:
 from __future__ import annotations
 
 import itertools
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -65,7 +66,33 @@ def parse_newick(text: str) -> _Node:
     parser.skip_ws()
     if parser.pos < len(text) and text[parser.pos] == ";":
         parser.pos += 1
+    parser.skip_ws()
+    if parser.pos != len(text):
+        raise NewickError(f"unexpected trailing input at position {parser.pos}")
+    _validate_tree(root)
     return root
+
+
+def _validate_tree(root: _Node) -> None:
+    """Validate leaf identity and geometry without materializing every root path."""
+    labels: set[str] = set()
+    stack = [(root, 0.0)]
+    while stack:
+        node, parent_depth = stack.pop()
+        length = node.length or 0.0
+        if not math.isfinite(length) or length < 0:
+            raise NewickError(f"invalid branch length {node.length!r}")
+        depth = parent_depth + length
+        if not math.isfinite(depth):
+            raise NewickError("non-finite cumulative branch length")
+        if node.children:
+            stack.extend((child, depth) for child in node.children)
+        else:
+            if not node.name.strip():
+                raise NewickError("leaf label must be non-empty")
+            if node.name in labels:
+                raise NewickError(f"duplicate leaf label {node.name!r}")
+            labels.add(node.name)
 
 
 class _Parser:
@@ -152,6 +179,8 @@ def _walk(
         for child in node.children:
             _walk(child, path, counter, paths)
     elif node.name:
+        if node.name in paths:
+            raise NewickError(f"duplicate leaf label {node.name!r}")
         paths[node.name] = path
 
 
@@ -163,6 +192,7 @@ def build_rootpaths(root: _Node) -> dict[str, RootPath]:
     it — the property that lets :func:`cophenetic` align two independently-fetched paths.
     ``depth`` is the cumulative branch length from the root (the root itself is depth 0).
     """
+    _validate_tree(root)
     paths: dict[str, RootPath] = {}
     _walk(root, [], itertools.count(), paths)
     return paths
@@ -246,5 +276,7 @@ def load_rootpath_index(texts: Iterable[str]) -> _RootPathIndex:
                     for child in reversed(node.children)
                 )
             elif node.name:
+                if node.name in leaves:
+                    raise NewickError(f"duplicate leaf label {node.name!r}")
                 leaves[node.name] = index
     return _RootPathIndex(parents, depths, leaves)

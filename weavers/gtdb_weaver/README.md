@@ -133,3 +133,7 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+### Source validation
+
+Reference trees must have complete valid Newick syntax, unique nonempty leaf labels and finite nonnegative branch lengths. Downloads are validated before replacement. Missing branch lengths retain the existing zero-length interpretation.

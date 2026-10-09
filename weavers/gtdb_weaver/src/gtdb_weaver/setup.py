@@ -36,6 +36,7 @@ from gtdb_weaver.releases import (
     release_sources,
     verify_resource,
 )
+from gtdb_weaver.tree import NewickError, parse_newick
 
 logger = logging.getLogger("gtdb_weaver.setup")
 
@@ -103,15 +104,18 @@ def ensure_gtdb_trees(
         resource = descriptor["resources"][label]
 
         def valid(path, resource=resource):
-            return (
-                path.exists()
-                and path.stat().st_size > 0
-                and file_hash(path, "md5") == resource["md5"]
-            )
+            try:
+                if not path.is_file() or file_hash(path, "md5") != resource["md5"]:
+                    return False
+                parse_newick(path.read_text())
+                return True
+            except (OSError, UnicodeDecodeError, NewickError):
+                return False
 
         def build(dest, resource=resource):
             _download(resource["url"], dest, label="Downloading pinned GTDB tree")
             verify_resource(dest, resource)
+            parse_newick(dest.read_text())
 
         ensure_local_db(
             target,
