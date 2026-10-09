@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "bacdive"
-WEAVER_VERSION = "0.1.6"
+WEAVER_VERSION = "0.1.7"
 WEAVER_TITLE = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

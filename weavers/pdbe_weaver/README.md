@@ -80,3 +80,10 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/pdbe_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+
+## Source response and failure handling
+
+Best-structure and summary responses are validated against their keyed source shape. An unexpected response identifier is an error; results are never borrowed from another identifier. Detail-request failures affect only that request chunk, and later chunks are still attempted.
+
+Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.

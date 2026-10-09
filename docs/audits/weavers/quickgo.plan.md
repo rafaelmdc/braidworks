@@ -17,3 +17,10 @@ manifest changes. Do not introduce a universal page hierarchy or enrichment engi
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+
+### SH-03 implementation (2026-10-09)
+
+Completed the #150 response-validation/failure-isolation scope for #205. Annotation/term rows and pagination metadata are validated before projection. Missing pagination metadata still means unknown coverage, with the existing exported warning. The observed empty-source convention (zero hits, current=total=0) remains a clean miss. An explicitly echoed different accession/page or unrequested term is an error. Term-detail chunk failures preserve other chunks. For legacy singleton responses without geneProductId, correlation still relies on the single requested accession; present echoes are checked.
+
+See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.

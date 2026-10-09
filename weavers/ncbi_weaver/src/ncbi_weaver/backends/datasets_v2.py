@@ -23,7 +23,9 @@ The HTTP client is injectable (``client=``) so tests drive it with an
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -43,6 +45,127 @@ _PAGE_LIMIT = 1000
 _GENE_ID_CHUNK = 250  # gene ids per multi-id dataset_report URL (keeps the path bounded)
 _ACC_CHUNK = 100  # genome accessions per multi-id dataset_report URL
 _SYMBOL_CHUNK = 100  # gene symbols per multi-symbol dataset_report URL
+
+
+class _InvalidResponse(ValueError):
+    """Malformed NCBI data or response correlation, rather than a programming fault."""
+
+
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise _InvalidResponse(f"NCBI {label} must be an object")
+    return value
+
+
+def _objects(value: Any, label: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
+        raise _InvalidResponse(f"NCBI {label} must be an object list")
+    return value
+
+
+def _identifier(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or not str(value).isdigit():
+        raise _InvalidResponse("NCBI identifier must be a positive integer")
+    try:
+        result = int(value)
+    except ValueError as exc:
+        raise _InvalidResponse("NCBI identifier is too large") from exc
+    if result < 1:
+        raise _InvalidResponse("NCBI identifier must be positive")
+    return result
+
+
+def _validate_node(node: Any) -> None:
+    node = _object(node, "taxonomy node")
+    _identifier(node.get("tax_id"))
+    for field in ("rank", "organism_name"):
+        if node.get(field) is not None and not isinstance(node[field], str):
+            raise _InvalidResponse(f"NCBI {field} must be a string")
+    if node.get("current_scientific_name") is not None:
+        name = _object(node["current_scientific_name"], "scientific name").get("name")
+        if name is not None and not isinstance(name, str):
+            raise _InvalidResponse("NCBI scientific name must be a string")
+    parents = node.get("parents", node.get("lineage", []))
+    if parents is not None:
+        if not isinstance(parents, list):
+            raise _InvalidResponse("NCBI parents must be an identifier list")
+        for parent in parents:
+            _identifier(parent)
+
+
+def _report_payload(resp: httpx.Response, kind: str) -> dict[str, Any]:
+    body = _object(resp.json(), "response")
+    key = (
+        "taxonomy_nodes"
+        if kind == "taxonomy" and "reports" not in body and "taxonomy_nodes" in body
+        else "reports"
+    )
+    rows = _objects(body.get(key), key)
+    token = body.get("next_page_token")
+    if token is not None and not isinstance(token, str):
+        raise _InvalidResponse("NCBI next_page_token must be a string")
+    for row in rows:
+        if kind == "taxonomy":
+            if row.get("taxonomy") is not None:
+                _validate_node(row["taxonomy"])
+            else:
+                errors = _objects(row.get("errors"), "taxonomy errors")
+                if not errors or any(
+                    not isinstance(error.get("invalid_identifiers"), list)
+                    or not error["invalid_identifiers"]
+                    for error in errors
+                ):
+                    raise _InvalidResponse(
+                        "NCBI taxonomy report lacks node or explicit invalid-identifier absence"
+                    )
+            if row.get("query") is not None and (
+                not isinstance(row["query"], list)
+                or any(not isinstance(q, (str, int)) or isinstance(q, bool) for q in row["query"])
+            ):
+                raise _InvalidResponse("NCBI query must be an identifier list")
+        elif kind == "genome":
+            if not isinstance(row.get("accession"), str) or not row["accession"]:
+                raise _InvalidResponse("NCBI genome report must contain accession")
+            for field in ("assembly_info", "assembly_stats", "annotation_info", "organism"):
+                if row.get(field) is not None:
+                    _object(row[field], field)
+            if (row.get("annotation_info") or {}).get("stats") is not None:
+                _object(row["annotation_info"]["stats"], "annotation stats")
+        elif kind == "gene":
+            gene = _object(row.get("gene"), "gene")
+            _identifier(gene.get("gene_id"))
+            for field in ("symbol", "description", "type", "taxname"):
+                if gene.get(field) is not None and not isinstance(gene[field], str):
+                    raise _InvalidResponse(f"NCBI gene {field} must be a string")
+            if row.get("query") is not None and (
+                not isinstance(row["query"], list)
+                or any(not isinstance(q, str) for q in row["query"])
+            ):
+                raise _InvalidResponse("NCBI gene query must be a string list")
+        elif kind == "product":
+            product = _object(row.get("product"), "product")
+            for transcript in _objects(product.get("transcripts", []), "transcripts"):
+                if transcript.get("protein") is not None:
+                    _object(transcript["protein"], "protein")
+    return body
+
+
+async def _enrich(
+    fetcher: Callable[[str], Awaitable[list[dict[str, Any]]]], identifiers: list[str]
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
+    """Isolate expected enrichment failures; propagate cancellation and coding faults."""
+
+    async def one(identifier):
+        try:
+            return identifier, await fetcher(identifier), None
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
+            return identifier, None, format_exc(exc)
+
+    fetched = await asyncio.gather(*(one(identifier) for identifier in identifiers))
+    return (
+        {key: value for key, value, error in fetched if error is None},
+        {key: error for key, value, error in fetched if error is not None},
+    )
 
 
 def _node_name(node: dict[str, Any]) -> str | None:
@@ -130,21 +253,76 @@ class DatasetsV2Backend:
             "y" if len(queries) == 1 else "ies",
             self._base_url,
         )
-        nodes = await self._dataset_report(queries)
-
         matches: dict[str, TaxonMatch] = {}
-        misses: list[str] = []
+        distinct = sorted({query for query in queries if query.strip()})
         for q in queries:
-            node = nodes.get(q)
-            if node is not None:
-                matches[q] = self._node_match(q, node, match_type="exact")
-            elif capability_id == vocab.RESOLVE_NAME and self._allow_fuzzy:
-                misses.append(q)
-            else:
+            if not q.strip():
                 matches[q] = TaxonMatch(query=q, status=TaxonMatchStatus.NO_MATCH)
-
-        for q in misses:
-            matches[q] = await self._fuzzy_match(q)
+        for start in range(0, len(distinct), _PAGE_LIMIT):
+            chunk = distinct[start : start + _PAGE_LIMIT]
+            try:
+                nodes = await self._dataset_report(chunk)
+            except httpx.HTTPStatusError as exc:
+                status = (
+                    TaxonMatchStatus.NO_MATCH
+                    if is_not_found_status(exc.response.status_code)
+                    else TaxonMatchStatus.ERROR
+                )
+                for q in chunk:
+                    matches[q] = TaxonMatch(
+                        query=q,
+                        status=status,
+                        error=None
+                        if status is TaxonMatchStatus.NO_MATCH
+                        else f"NCBI taxonomy error: {format_exc(exc)}",
+                    )
+                continue
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                for q in chunk:
+                    matches[q] = TaxonMatch(
+                        query=q,
+                        status=TaxonMatchStatus.ERROR,
+                        error=f"NCBI taxonomy error: {format_exc(exc)}",
+                    )
+                continue
+            for q in chunk:
+                node = nodes.get(q)
+                if node is not None:
+                    matches[q] = self._node_match(q, node, match_type="exact")
+                elif capability_id == vocab.RESOLVE_NAME and self._allow_fuzzy:
+                    try:
+                        matches[q] = await self._fuzzy_match(q)
+                    except httpx.HTTPStatusError as exc:
+                        status = (
+                            TaxonMatchStatus.NO_MATCH
+                            if is_not_found_status(exc.response.status_code)
+                            else TaxonMatchStatus.ERROR
+                        )
+                        matches[q] = TaxonMatch(
+                            query=q,
+                            status=status,
+                            error=None
+                            if status is TaxonMatchStatus.NO_MATCH
+                            else f"NCBI suggestion error: {format_exc(exc)}",
+                        )
+                    except (
+                        httpx.HTTPError,
+                        json.JSONDecodeError,
+                        UnicodeDecodeError,
+                        _InvalidResponse,
+                    ) as exc:
+                        matches[q] = TaxonMatch(
+                            query=q,
+                            status=TaxonMatchStatus.ERROR,
+                            error=f"NCBI suggestion error: {format_exc(exc)}",
+                        )
+                else:
+                    matches[q] = TaxonMatch(query=q, status=TaxonMatchStatus.NO_MATCH)
 
         if need_lineage:
             await self._attach_lineage(matches)
@@ -174,7 +352,12 @@ class DatasetsV2Backend:
                     LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
                 )
                 continue
-            except httpx.HTTPError as exc:
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
                 logger.warning("NCBI children failed for %r: %s", taxid, exc)
                 records.append(
                     LookupRecord(query=q, error=f"NCBI children error: {format_exc(exc)}")
@@ -208,10 +391,10 @@ class DatasetsV2Backend:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/taxonomy/taxon/{taxid}/dataset_report", params=params)
             resp.raise_for_status()
-            body = resp.json()
+            body = _report_payload(resp, "taxonomy")
             for entry in body.get("reports") or []:
                 node = entry.get("taxonomy") or {}
-                tid = node.get("tax_id")
+                tid = _identifier(node.get("tax_id"))
                 if tid is None or str(tid) == taxid:
                     continue  # skip the queried node itself
                 if rank and (node.get("rank") or "").lower() != rank:
@@ -262,7 +445,12 @@ class DatasetsV2Backend:
                     LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
                 )
                 continue
-            except httpx.HTTPError as exc:
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
                 records.append(
                     LookupRecord(query=q, error=f"NCBI genomes error: {format_exc(exc)}")
                 )
@@ -295,7 +483,7 @@ class DatasetsV2Backend:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/genome/taxon/{taxid}/dataset_report", params=params)
             resp.raise_for_status()
-            body = resp.json()
+            body = _report_payload(resp, "genome")
             for a in body.get("reports") or []:
                 acc = a.get("accession")
                 if not acc or acc in out:
@@ -329,25 +517,44 @@ class DatasetsV2Backend:
         want_sequences = "sequences" in groups
         accs = [str(q.get(vocab.GENOME_ACCESSION, "") or "").strip() for q in queries]
         distinct = sorted({a for a in accs if a})
-        try:
-            reports = await self._genome_reports(distinct)
-        except httpx.HTTPError as exc:
-            err = f"NCBI genome error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+        reports: dict[str, dict[str, Any]] = {}
+        source_errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _ACC_CHUNK):
+            chunk = distinct[start : start + _ACC_CHUNK]
+            try:
+                reports.update(await self._genome_reports(chunk))
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    source_errors.update(
+                        dict.fromkeys(chunk, f"NCBI report error: {format_exc(exc)}")
+                    )
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                source_errors.update(dict.fromkeys(chunk, f"NCBI report error: {format_exc(exc)}"))
 
         sequences: dict[str, list[dict[str, Any]]] = {}
+        enrichment_errors: dict[str, str] = {}
         if want_sequences:
             found = [a for a in distinct if a in reports]
-            fetched = await asyncio.gather(
-                *(self._fetch_sequences(a) for a in found), return_exceptions=True
-            )
-            sequences = {a: r for a, r in zip(found, fetched) if not isinstance(r, Exception)}
+            sequences, enrichment_errors = await _enrich(self._fetch_sequences, found)
 
         records: list[LookupRecord] = []
         for q, acc in zip(queries, accs):
+            if acc in source_errors:
+                records.append(LookupRecord(query=q, error=source_errors[acc]))
+                continue
             report = reports.get(acc) if acc else None
             if report is None:
                 records.append(LookupRecord(query=q, found=False))
+                continue
+            if acc in enrichment_errors:
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI sequences error: {enrichment_errors[acc]}")
+                )
                 continue
             values = self._genome_values(report)
             if want_sequences and acc in sequences:
@@ -376,11 +583,14 @@ class DatasetsV2Backend:
                     f"/genome/accession/{','.join(chunk)}/dataset_report", params=params
                 )
                 resp.raise_for_status()
-                body = resp.json()
+                body = _report_payload(resp, "genome")
                 for a in body.get("reports") or []:
                     acc = a.get("accession")
-                    if acc:
-                        out[str(acc)] = a
+                    if acc not in chunk:
+                        raise _InvalidResponse(
+                            "NCBI genome response contains unrequested accession"
+                        )
+                    out[acc] = a
                 page_token = body.get("next_page_token")
                 if not page_token:
                     break
@@ -426,7 +636,7 @@ class DatasetsV2Backend:
                 f"/genome/accession/{acc}/sequence_reports", params=params
             )
             resp.raise_for_status()
-            body = resp.json()
+            body = _report_payload(resp, "sequence")
             for s in body.get("reports") or []:
                 out.append(
                     {
@@ -482,31 +692,45 @@ class DatasetsV2Backend:
         symbols = [str(q.get(vocab.PROTEIN_QUERY, "") or "").strip() for q in queries]
         distinct = sorted({s for s in symbols if s})
         by_symbol: dict[str, dict[str, Any]] = {}
-        try:
-            for start in range(0, len(distinct), _SYMBOL_CHUNK):
-                chunk = distinct[start : start + _SYMBOL_CHUNK]
-                if not chunk:
-                    continue
+        errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _SYMBOL_CHUNK):
+            chunk = distinct[start : start + _SYMBOL_CHUNK]
+            try:
                 resp = await self._http().get(
                     f"/gene/symbol/{','.join(chunk)}/taxon/{tx}/dataset_report"
                 )
                 resp.raise_for_status()
-                for r in resp.json().get("reports") or []:
+                for r in _report_payload(resp, "gene").get("reports") or []:
                     gene = r.get("gene")
                     if not gene or gene.get("gene_id") is None:
                         continue
-                    for echoed in r.get("query") or []:
-                        by_symbol.setdefault(str(echoed), gene)
-        except httpx.HTTPStatusError as exc:
-            if not is_not_found_status(exc.response.status_code):
-                err = f"NCBI gene error: {format_exc(exc)}"
-                return [LookupRecord(query=q, error=err) for q in queries]
-        except httpx.HTTPError as exc:
-            err = f"NCBI gene error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+                    echoed_queries = r.get("query")
+                    if (
+                        not isinstance(echoed_queries, list)
+                        or not echoed_queries
+                        or any(echo not in chunk for echo in echoed_queries)
+                    ):
+                        raise _InvalidResponse(
+                            "NCBI gene report cannot be correlated to requested symbol"
+                        )
+                    for echoed in echoed_queries:
+                        by_symbol.setdefault(echoed, gene)
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    errors.update(dict.fromkeys(chunk, f"NCBI gene error: {format_exc(exc)}"))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"NCBI gene error: {format_exc(exc)}"))
 
         records: list[LookupRecord] = []
         for q, symbol in zip(queries, symbols):
+            if symbol in errors:
+                records.append(LookupRecord(query=q, error=errors[symbol]))
+                continue
             gene = by_symbol.get(symbol) if symbol else None
             if gene is None:
                 records.append(LookupRecord(query=q, found=False))
@@ -537,25 +761,44 @@ class DatasetsV2Backend:
         want_products = "products" in groups
         gids = [str(q.get(vocab.GENE_ID, "") or "").strip() for q in queries]
         distinct = sorted({g for g in gids if g})
-        try:
-            summaries = await self._gene_reports(distinct)
-        except httpx.HTTPError as exc:
-            err = f"NCBI gene error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+        summaries: dict[str, dict[str, Any]] = {}
+        source_errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _GENE_ID_CHUNK):
+            chunk = distinct[start : start + _GENE_ID_CHUNK]
+            try:
+                summaries.update(await self._gene_reports(chunk))
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    source_errors.update(
+                        dict.fromkeys(chunk, f"NCBI report error: {format_exc(exc)}")
+                    )
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                source_errors.update(dict.fromkeys(chunk, f"NCBI report error: {format_exc(exc)}"))
 
         products: dict[str, list[dict[str, Any]]] = {}
+        enrichment_errors: dict[str, str] = {}
         if want_products:
             found = [g for g in distinct if g in summaries]
-            fetched = await asyncio.gather(
-                *(self._fetch_gene_products(g) for g in found), return_exceptions=True
-            )
-            products = {g: r for g, r in zip(found, fetched) if not isinstance(r, Exception)}
+            products, enrichment_errors = await _enrich(self._fetch_gene_products, found)
 
         records: list[LookupRecord] = []
         for q, gid in zip(queries, gids):
+            if gid in source_errors:
+                records.append(LookupRecord(query=q, error=source_errors[gid]))
+                continue
             gene = summaries.get(gid) if gid else None
             if gene is None:
                 records.append(LookupRecord(query=q, found=False))
+                continue
+            if gid in enrichment_errors:
+                records.append(
+                    LookupRecord(query=q, error=f"NCBI products error: {enrichment_errors[gid]}")
+                )
                 continue
             values = self._gene_summary(gene)
             if want_products and gid in products:
@@ -585,11 +828,12 @@ class DatasetsV2Backend:
                     f"/gene/id/{','.join(chunk)}/dataset_report", params=params
                 )
                 resp.raise_for_status()
-                body = resp.json()
+                body = _report_payload(resp, "gene")
                 for r in body.get("reports") or []:
                     gene = r.get("gene")
-                    if gene and gene.get("gene_id") is not None:
-                        out[str(gene["gene_id"])] = gene
+                    if str(gene["gene_id"]) not in chunk:
+                        raise _InvalidResponse("NCBI gene response contains unrequested identifier")
+                    out[str(gene["gene_id"])] = gene
                 page_token = body.get("next_page_token")
                 if not page_token:
                     break
@@ -600,7 +844,7 @@ class DatasetsV2Backend:
         resp = await self._http().get(f"/gene/id/{gid}/product_report", params={"page_size": 1000})
         resp.raise_for_status()
         out: list[dict[str, Any]] = []
-        for r in resp.json().get("reports") or []:
+        for r in _report_payload(resp, "product").get("reports") or []:
             product = r.get("product") or {}
             for t in product.get("transcripts") or []:
                 prot = t.get("protein") or {}
@@ -634,7 +878,12 @@ class DatasetsV2Backend:
                     LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
                 )
                 continue
-            except httpx.HTTPError as exc:
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
                 records.append(
                     LookupRecord(query=q, error=f"NCBI orthologs error: {format_exc(exc)}")
                 )
@@ -667,10 +916,10 @@ class DatasetsV2Backend:
                 params["page_token"] = page_token
             resp = await self._http().get(f"/gene/id/{gid}/orthologs", params=params)
             resp.raise_for_status()
-            body = resp.json()
+            body = _report_payload(resp, "gene")
             for r in body.get("reports") or []:
                 g = r.get("gene") or {}
-                oid = g.get("gene_id")
+                oid = _identifier(g.get("gene_id"))
                 if oid is None or str(oid) == gid or oid in out:
                     continue  # skip the query gene itself
                 out[oid] = {
@@ -694,13 +943,33 @@ class DatasetsV2Backend:
                 continue
             resp = await self._http().post("/taxonomy/dataset_report", json={"taxons": chunk})
             resp.raise_for_status()
-            payload = resp.json()
+            payload = _report_payload(resp, "taxonomy")
             # Datasets v2 now returns "reports"; older responses used "taxonomy_nodes".
             for entry in payload.get("reports") or payload.get("taxonomy_nodes") or []:
                 node = entry.get("taxonomy")
-                if not node:
+                echoed = entry.get("query")
+                if (
+                    not isinstance(echoed, list)
+                    or not echoed
+                    or any(str(q) not in chunk for q in echoed)
+                ):
+                    raise _InvalidResponse(
+                        "NCBI taxonomy report cannot be correlated to requested input"
+                    )
+                if node is None:
+                    invalid = [
+                        identifier
+                        for error in entry["errors"]
+                        for identifier in error["invalid_identifiers"]
+                    ]
+                    if any(
+                        str(identifier) not in {str(q) for q in echoed} for identifier in invalid
+                    ):
+                        raise _InvalidResponse(
+                            "NCBI taxonomy absence contains unrequested identifiers"
+                        )
                     continue
-                for q in entry.get("query", []):
+                for q in echoed:
                     out[str(q)] = node
         return out
 
@@ -709,7 +978,16 @@ class DatasetsV2Backend:
             f"/taxonomy/taxon_suggest/{query}", params={"exact_match": "false"}
         )
         resp.raise_for_status()
-        suggestions = resp.json().get("sci_name_and_ids", []) or []
+        body = _object(resp.json(), "suggestions response")
+        # The live suggest endpoint returns {} for zero suggestions (protobuf defaults).
+        if body and "sci_name_and_ids" not in body:
+            raise _InvalidResponse("NCBI suggestions response lacks sci_name_and_ids")
+        suggestions = _objects(body.get("sci_name_and_ids", []), "suggestions")
+        for suggestion in suggestions:
+            _identifier(suggestion.get("tax_id"))
+            for field in ("sci_name", "rank"):
+                if suggestion.get(field) is not None and not isinstance(suggestion[field], str):
+                    raise _InvalidResponse(f"NCBI suggestion {field} must be a string")
         if not suggestions:
             return TaxonMatch(query=query, status=TaxonMatchStatus.NO_MATCH)
         candidates = [
@@ -753,7 +1031,20 @@ class DatasetsV2Backend:
             ancestor_ids.update(m.lineage_taxids)
         if not ancestor_ids:
             return
-        nodes = await self._dataset_report([str(t) for t in sorted(ancestor_ids)])
+        nodes: dict[str, dict] = {}
+        failed_ancestors: dict[int, str] = {}
+        identifiers = [str(t) for t in sorted(ancestor_ids)]
+        for start in range(0, len(identifiers), _PAGE_LIMIT):
+            chunk = identifiers[start : start + _PAGE_LIMIT]
+            try:
+                nodes.update(await self._dataset_report(chunk))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                failed_ancestors.update(dict.fromkeys((int(t) for t in chunk), format_exc(exc)))
         by_taxid: dict[int, dict] = {}
         for node in nodes.values():
             tid = node.get("tax_id")
@@ -761,6 +1052,13 @@ class DatasetsV2Backend:
                 by_taxid[int(tid)] = node
         for m in matches.values():
             if not m.lineage_taxids or m.taxid is None:
+                continue
+            failed = next(
+                (failed_ancestors[tid] for tid in m.lineage_taxids if tid in failed_ancestors), None
+            )
+            if failed is not None:
+                m.status = TaxonMatchStatus.ERROR
+                m.error = f"NCBI lineage error: {failed}"
                 continue
             entries = [
                 LineageEntry(

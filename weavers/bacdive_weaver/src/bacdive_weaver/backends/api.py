@@ -23,17 +23,64 @@ read goes through ``_first`` / ``_as_list``.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
 
 logger = logging.getLogger("bacdive_weaver.api")
 
 DEFAULT_BASE_URL = "https://api.bacdive.dsmz.de/v2"
 _FETCH_BATCH = 100  # /fetch accepts up to 100 semicolon-joined ids per call
+
+
+class _InvalidResponse(ValueError):
+    """A malformed BacDive source response."""
+
+
+def _strain_id(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, (str, int)) or not str(value).isdigit():
+        raise _InvalidResponse("BacDive strain identifier must be a positive integer")
+    try:
+        result = int(value)
+    except ValueError as exc:
+        raise _InvalidResponse("BacDive strain identifier is too large") from exc
+    if result < 1:
+        raise _InvalidResponse("BacDive strain identifier must be positive")
+    return result
+
+
+def _validated_record(record: Any) -> dict[str, Any]:
+    if not isinstance(record, dict) or "Name and taxonomic classification" not in record:
+        raise _InvalidResponse("BacDive strain must contain taxonomic classification")
+    for section in (
+        "Name and taxonomic classification",
+        "Morphology",
+        "Physiology and metabolism",
+        "Culture and growth conditions",
+    ):
+        value = record.get(section)
+        if value is not None and (
+            not isinstance(value, (dict, list))
+            or (isinstance(value, list) and any(not isinstance(row, dict) for row in value))
+        ):
+            raise _InvalidResponse(f"BacDive {section} must be an object or object list")
+    for section, keys in (
+        ("Morphology", ("cell morphology",)),
+        ("Physiology and metabolism", ("oxygen tolerance", "spore formation")),
+        ("Culture and growth conditions", ("culture temp", "culture pH")),
+    ):
+        for key in keys:
+            value = _section(record, section).get(key)
+            if value is not None and (
+                not isinstance(value, (dict, list))
+                or (isinstance(value, list) and any(not isinstance(row, dict) for row in value))
+            ):
+                raise _InvalidResponse(f"BacDive {key} must be an object or object list")
+    return record
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -157,7 +204,12 @@ class BacdiveApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         try:
             type_strain = await self._find_type_strain(genus, species)
-        except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # expected source failures are values
             logger.warning("BacDive lookup failed for %r: %s", name, exc)
             return LookupRecord(query=query, error=f"BacDive API error: {format_exc(exc)}")
 
@@ -171,9 +223,15 @@ class BacdiveApiBackend(BackendBase):
         scanned = 0
         while path:
             resp = await self._http().get(path)
+            if is_not_found_status(resp.status_code):
+                return None  # taxon search absence; /fetch failures remain errors
             resp.raise_for_status()
             page = resp.json()
-            ids = [int(i) for i in page.get("results", [])]
+            if not isinstance(page, dict) or not isinstance(page.get("results"), list):
+                raise _InvalidResponse("BacDive taxon response must contain an identifier list")
+            if page.get("next") is not None and not isinstance(page["next"], str):
+                raise _InvalidResponse("BacDive next page must be a URL string or null")
+            ids = [_strain_id(i) for i in page["results"]]
             for start in range(0, len(ids), _FETCH_BATCH):
                 chunk = ids[start : start + _FETCH_BATCH]
                 records = await self._fetch_records(chunk)
@@ -200,5 +258,14 @@ class BacdiveApiBackend(BackendBase):
         joined = ";".join(str(i) for i in strain_ids)
         resp = await self._http().get(f"/fetch/{joined}")
         resp.raise_for_status()
-        results = resp.json().get("results", {})
-        return {int(k): v for k, v in results.items() if v is not None}
+        body = resp.json()
+        if not isinstance(body, dict) or not isinstance(body.get("results"), dict):
+            raise _InvalidResponse("BacDive fetch response must contain records keyed by strain id")
+        results = {
+            _strain_id(key): _validated_record(value) for key, value in body["results"].items()
+        }
+        if set(results) != set(strain_ids):
+            raise _InvalidResponse(
+                "BacDive fetch response does not match requested strain identifiers"
+            )
+        return results

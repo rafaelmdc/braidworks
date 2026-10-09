@@ -118,3 +118,10 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/ncbi_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+
+## Source response and failure handling
+
+Taxonomy, genome, gene and requested enrichment responses are validated at source-local seams. Taxonomy, assembly/gene-detail and symbol request chunks preserve unrelated successes. Taxonomy HTTP 400/404 and explicitly reported invalid-identifier absence remain misses; network/service/malformed data failures are errors. The observed empty taxonomy-suggest response {} remains a miss. Failed requested lineage, sequence or product enrichment now makes the affected query an error instead of returning apparent success with silently missing requested fields. Cancellation and unrelated programming faults propagate through enrichment. API-only live checks select test_live tests; the unrestricted test-live target also acquires the large local taxonomy database.
+
+Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.

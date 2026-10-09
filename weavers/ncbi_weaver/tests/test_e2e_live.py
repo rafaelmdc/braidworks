@@ -134,8 +134,8 @@ async def test_e2e_known_lineage_homo_sapiens(real_db_path):
     assert sm[vocab.TAXON_ID] == 9606
     assert sm[vocab.PARENT_ID] == 9605  # genus Homo
     lineage_ids = [entry["taxid"] for entry in sm[vocab.LINEAGE]]
-    assert 9605 in lineage_ids   # Homo
-    assert 9604 in lineage_ids   # Hominidae
+    assert 9605 in lineage_ids  # Homo
+    assert 9604 in lineage_ids  # Hominidae
     assert 40674 in lineage_ids  # Mammalia
     assert lineage_ids[-1] == 9606  # the taxon itself is last
 
@@ -234,7 +234,8 @@ async def test_live_gene_resolve_describe_orthologs():
     res = await weaver.execute_batch(
         vocab.RESOLVE_GENE,
         [StrandSet.from_strands("e", [Strand(vocab.PROTEIN_QUERY, "TP53")])],
-        requested_outputs=vocab.RESOLVE_GENE_OUTPUTS, backend="api",
+        requested_outputs=vocab.RESOLVE_GENE_OUTPUTS,
+        backend="api",
     )
     skip_if_transient(res[0])  # a timeout here is green-lightable, not a data-drift failure
     sm = {s.type_id: s.value for s in res[0].strands}
@@ -243,7 +244,8 @@ async def test_live_gene_resolve_describe_orthologs():
     desc = await weaver.execute_batch(
         vocab.DESCRIBE_GENE,
         [StrandSet.from_strands("g", [Strand(vocab.GENE_ID, 7157)])],
-        requested_outputs=vocab.GENE_SUMMARY_GROUP | vocab.GENE_PRODUCTS_GROUP, backend="api",
+        requested_outputs=vocab.GENE_SUMMARY_GROUP | vocab.GENE_PRODUCTS_GROUP,
+        backend="api",
     )
     skip_if_transient(desc[0])
     d = {s.type_id: s.value for s in desc[0].strands}
@@ -253,10 +255,48 @@ async def test_live_gene_resolve_describe_orthologs():
     orth = await weaver.execute_batch(
         vocab.LIST_ORTHOLOGS,
         [StrandSet.from_strands("o", [Strand(vocab.GENE_ID, 7157)])],
-        requested_outputs=vocab.ORTHOLOG_OUTPUTS, backend="api",
+        requested_outputs=vocab.ORTHOLOG_OUTPUTS,
+        backend="api",
         params={"taxon_filter": "40674"},  # mammals
     )
     skip_if_transient(orth[0])
     o = {s.type_id: s.value for s in orth[0].strands}
     assert 7157 not in o[vocab.GENE_ID]  # excludes the query gene
     assert o[vocab.ORTHOLOG_COUNT] > 5 and 22059 in o[vocab.GENE_ID]  # mouse Trp53
+
+
+async def test_live_api_taxonomy_with_lineage():
+    """API-only taxonomy drift check; does not acquire the local taxonomy database."""
+    weaver = build_ncbi_weaver(enable_api=True)
+    result = (
+        await weaver.execute_batch(
+            vocab.RESOLVE_NAME,
+            [StrandSet.from_strands("human", [Strand(vocab.ORGANISM_NAME, "Homo sapiens")])],
+            requested_outputs=frozenset({vocab.TAXON_ID, vocab.SCIENTIFIC_NAME, vocab.LINEAGE}),
+            backend="api",
+        )
+    )[0]
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    values = _strand_map(result)
+    assert values[vocab.TAXON_ID] == 9606 and values[vocab.SCIENTIFIC_NAME] == "Homo sapiens"
+    assert values[vocab.LINEAGE][-1]["taxid"] == 9606
+    assert any(entry["name"] == "Hominidae" for entry in values[vocab.LINEAGE])
+
+
+async def test_live_api_unknown_taxonomy_is_no_match():
+    weaver = build_ncbi_weaver(enable_api=True)
+    result = (
+        await weaver.execute_batch(
+            vocab.RESOLVE_NAME,
+            [
+                StrandSet.from_strands(
+                    "unknown", [Strand(vocab.ORGANISM_NAME, "Notarealus fakenamei")]
+                )
+            ],
+            requested_outputs=frozenset({vocab.TAXON_ID}),
+            backend="api",
+        )
+    )[0]
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.NO_MATCH

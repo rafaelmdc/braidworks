@@ -18,6 +18,7 @@ against the live API (mapping/UniProt/P04637/pathways).
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -30,6 +31,27 @@ logger = logging.getLogger("reactome_weaver.api")
 DEFAULT_BASE_URL = "https://reactome.org/ContentService"
 DEFAULT_LIMIT = 30  # top pathways to surface in names/records (count stays the true total)
 _ID_CHUNK = 100  # pathway ids per POST /data/query/ids request (keeps the body bounded)
+
+
+class _InvalidResponse(ValueError):
+    """Expected source schema or correlation failure, rather than a coding fault."""
+
+
+def _validated_rows(body: Any, requested: list[str] | None = None) -> list[dict[str, Any]]:
+    """Keep source schema and correlation rules at the Reactome boundary."""
+    if not isinstance(body, list):
+        raise _InvalidResponse("Reactome response must be a list")
+    for row in body:
+        if not isinstance(row, dict) or not isinstance(row.get("stId"), str) or not row["stId"]:
+            raise _InvalidResponse("Reactome row must contain a stable identifier")
+        if requested is not None and row["stId"] not in requested:
+            raise _InvalidResponse("Reactome response contains an unrequested identifier")
+        for field in ("displayName", "speciesName", "releaseDate", "schemaClass"):
+            if row.get(field) is not None and not isinstance(row[field], str):
+                raise _InvalidResponse(f"Reactome {field} must be a string or null")
+        if row.get("isInDisease") is not None and not isinstance(row["isInDisease"], bool):
+            raise _InvalidResponse("Reactome isInDisease must be a boolean or null")
+    return body
 
 
 def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
@@ -141,36 +163,35 @@ class ReactomeApiBackend(BackendBase):
         pids = [str(q.get("pathway.reactome.id", "")).strip() for q in queries]
         distinct = sorted({p for p in pids if p})
         objs: dict[str, dict[str, Any]] = {}
-        try:
-            for start in range(0, len(distinct), _ID_CHUNK):
-                chunk = distinct[start : start + _ID_CHUNK]
-                if not chunk:
-                    continue
+        errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _ID_CHUNK):
+            chunk = distinct[start : start + _ID_CHUNK]
+            try:
                 resp = await self._http().post(
                     "/data/query/ids",
                     content=",".join(chunk),
                     headers={"Content-Type": "text/plain"},
                 )
                 resp.raise_for_status()
-                body = resp.json()
-                for obj in body if isinstance(body, list) else []:
-                    st_id = obj.get("stId")
-                    if st_id:
-                        objs[str(st_id)] = obj
-        except httpx.HTTPStatusError as exc:
-            if not is_not_found_status(exc.response.status_code):
-                logger.warning("Reactome detail failed: %s", exc)
-                err = f"Reactome API error: {format_exc(exc)}"
-                return [LookupRecord(query=q, error=err) for q in queries]
-        except httpx.HTTPError as exc:
-            logger.warning("Reactome detail failed: %s", exc)
-            err = f"Reactome API error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+                rows = _validated_rows(resp.json(), chunk)
+                objs.update({obj["stId"]: obj for obj in rows})
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    errors.update(dict.fromkeys(chunk, f"Reactome API error: {format_exc(exc)}"))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"Reactome API error: {format_exc(exc)}"))
 
         records: list[LookupRecord] = []
         for query, pid in zip(queries, pids):
             obj = objs.get(pid) if pid else None
-            if not obj:
+            if pid in errors:
+                records.append(LookupRecord(query=query, error=errors[pid]))
+            elif not obj:
                 records.append(LookupRecord(query=query, found=False))
             else:
                 records.append(LookupRecord(query=query, found=True, values=_describe(obj)))
@@ -182,17 +203,22 @@ class ReactomeApiBackend(BackendBase):
         try:
             resp = await self._http().get(f"/data/mapping/UniProt/{accession}/pathways")
             resp.raise_for_status()
-            rows = resp.json()
+            rows = _validated_rows(resp.json())
         except httpx.HTTPStatusError as exc:
             # Reactome 404/400s an accession it can't map to pathways — a NO_MATCH, not error.
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
             logger.warning("Reactome lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
-        except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # expected source failures are values
             logger.warning("Reactome lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"Reactome API error: {format_exc(exc)}")
 
-        if not isinstance(rows, list) or not rows:
+        if not rows:
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_extract(rows, self._limit))

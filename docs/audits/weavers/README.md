@@ -35,3 +35,9 @@ reports distinguish full page reads, indexed text and live observations. Example
 a teaching fixture. No usage-frequency rankings or full live certification claimed.
 
 [GitHub issue hierarchy and second-pass grouping review](issue-hierarchy.md).
+
+
+Implementation progress: shared group #152 (atomic database replacement) and
+#150 (validated responses and isolated failure values) are complete locally.
+See [SH-03 implementation evidence](SH-03.implementation.md) for #150's fifteen
+findings, migration notes and validation. Remaining groups retain their own scope.

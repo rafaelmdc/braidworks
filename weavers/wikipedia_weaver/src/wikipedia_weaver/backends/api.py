@@ -14,6 +14,7 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
@@ -27,12 +28,32 @@ _USER_AGENT = "Cladewright/0.1 (https://github.com/rafaelmdc; rafaelmdcorreia@gm
 _WINDOW_MONTHS = 12
 
 
+class _InvalidResponse(ValueError):
+    """Expected source schema or correlation failure, rather than a coding fault."""
+
+
 def _window(now: datetime) -> tuple[str, str]:
     """(start, end) timestamps (YYYYMMDD00) for the trailing window of whole months."""
     end = datetime(now.year, now.month, 1, tzinfo=UTC)
     months = (now.year * 12 + (now.month - 1)) - _WINDOW_MONTHS
     start = datetime(months // 12, months % 12 + 1, 1, tzinfo=UTC)
     return start.strftime("%Y%m%d00"), end.strftime("%Y%m%d00")
+
+
+def _pageviews(body: Any) -> int | None:
+    if not isinstance(body, dict) or not isinstance(body.get("items"), list):
+        raise _InvalidResponse("pageviews response must contain an items list")
+    if not body["items"]:
+        return None
+    total = 0
+    for item in body["items"]:
+        if not isinstance(item, dict):
+            raise _InvalidResponse("pageviews item must be an object")
+        views = item.get("views")
+        if isinstance(views, bool) or not isinstance(views, int) or views < 0:
+            raise _InvalidResponse("pageviews views must be a non-negative integer")
+        total += views
+    return total
 
 
 class WikipediaApiBackend(BackendBase):
@@ -72,10 +93,9 @@ class WikipediaApiBackend(BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         start, end = _window(datetime.now(UTC))
-        titles = [str(q.get("wikipedia.title", "")).strip() for q in queries]
+        titles = [str(q.get("wikipedia.title") or "").strip() for q in queries]
 
-        async def one(title: str) -> LookupRecord:
-            query = {"wikipedia.title": title}
+        async def one(query: dict[str, Any], title: str) -> LookupRecord:
             if not title:
                 return LookupRecord(query=query, found=False)
             path = (
@@ -85,17 +105,24 @@ class WikipediaApiBackend(BackendBase):
             try:
                 resp = await self._http().get(path, headers={"User-Agent": _USER_AGENT})
                 resp.raise_for_status()
+                total = _pageviews(resp.json())
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
                     return LookupRecord(query=query, found=False)  # no data for this title
                 return LookupRecord(
                     query=query, found=False, error=f"pageviews HTTP {exc.response.status_code}"
                 )
-            except httpx.HTTPError as exc:
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
                 return LookupRecord(query=query, found=False, error=f"pageviews failed: {exc}")
 
-            total = sum(int(item.get("views", 0)) for item in resp.json().get("items", []))
+            if total is None:
+                return LookupRecord(query=query, found=False)
             return LookupRecord(query=query, found=True, values={"wikipedia.pageviews": total})
 
         # Per-article endpoint: issue the batch concurrently, preserve input order.
-        return list(await asyncio.gather(*(one(t) for t in titles)))
+        return list(await asyncio.gather(*(one(q, t) for q, t in zip(queries, titles))))

@@ -18,7 +18,9 @@ against the live API (best_structures for P04637).
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 from typing import Any
 
 import httpx
@@ -32,6 +34,45 @@ DEFAULT_LIMIT = 25  # top structures to surface in ids/records (count stays the 
 _BEST_CHUNK = 100  # accessions per bulk best-structure request
 _SUMMARY_CHUNK = 200  # pdb ids per POST /pdb/entry/summary request (keeps the body bounded)
 _WORST_RESOLUTION = 1e9  # sort sentinel for entries with no resolution (NMR/EM sometimes)
+
+
+class _InvalidResponse(ValueError):
+    """Expected source schema or correlation failure, rather than a coding fault."""
+
+
+def _validated_mapping(body: Any, requested: list[str], *, summaries: bool = False) -> dict:
+    """Validate the keyed PDBe envelope before projecting source rows."""
+    if not isinstance(body, dict):
+        raise _InvalidResponse("PDBe response must be an object keyed by requested identifier")
+    expected = {key.upper() for key in requested}
+    result = {}
+    for key, rows in body.items():
+        if key.upper() not in expected:
+            raise _InvalidResponse("PDBe response contains an unrequested identifier")
+        if not isinstance(rows, list):
+            raise _InvalidResponse("PDBe identifier rows must be a list")
+        for row in rows:
+            if not isinstance(row, dict):
+                raise _InvalidResponse("PDBe row must be an object")
+            if summaries:
+                if not isinstance(row.get("title"), str) or not row["title"]:
+                    raise _InvalidResponse("PDBe summary must contain a title")
+                method = row.get("experimental_method", [])
+                if not isinstance(method, list) or any(not isinstance(m, str) for m in method):
+                    raise _InvalidResponse("PDBe summary methods must be a string list")
+            else:
+                if not isinstance(row.get("pdb_id"), str) or not row["pdb_id"]:
+                    raise _InvalidResponse("PDBe mapping must contain a PDB identifier")
+                for field in ("coverage", "resolution"):
+                    value = row.get(field)
+                    if value is not None and (
+                        isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(value)
+                    ):
+                        raise _InvalidResponse(f"PDBe {field} must be a finite number or null")
+        result[key.upper()] = rows
+    return result
 
 
 def _record(raw: dict[str, Any]) -> dict[str, Any]:
@@ -160,11 +201,16 @@ class PdbeApiBackend(BackendBase):
                         headers={"Content-Type": "text/plain"},
                     )
                 response.raise_for_status()
-                mappings.update({key.upper(): rows for key, rows in response.json().items()})
+                mappings.update(_validated_mapping(response.json(), chunk))
             except httpx.HTTPStatusError as exc:
                 if not is_not_found_status(exc.response.status_code):
                     errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
-            except httpx.HTTPError as exc:
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
                 errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
         records = []
         for query, accession in zip(queries, accessions):
@@ -189,34 +235,35 @@ class PdbeApiBackend(BackendBase):
         pids = [str(q.get("pdb.id", "")).strip() for q in queries]
         distinct = sorted({p for p in pids if p})
         summaries: dict[str, dict[str, Any]] = {}
-        try:
-            for start in range(0, len(distinct), _SUMMARY_CHUNK):
-                chunk = distinct[start : start + _SUMMARY_CHUNK]
-                if not chunk:
-                    continue
+        errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _SUMMARY_CHUNK):
+            chunk = distinct[start : start + _SUMMARY_CHUNK]
+            try:
                 resp = await self._http().post(
                     "/pdb/entry/summary",
                     content=",".join(chunk),
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
                 resp.raise_for_status()
-                for key, rows in (resp.json() or {}).items():
-                    if rows:
-                        summaries[key.lower()] = rows[0]
-        except httpx.HTTPStatusError as exc:
-            if not is_not_found_status(exc.response.status_code):
-                logger.warning("PDBe detail failed: %s", exc)
-                err = f"PDBe API error: {format_exc(exc)}"
-                return [LookupRecord(query=q, error=err) for q in queries]
-        except httpx.HTTPError as exc:
-            logger.warning("PDBe detail failed: %s", exc)
-            err = f"PDBe API error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+                body = _validated_mapping(resp.json(), chunk, summaries=True)
+                summaries.update({key.lower(): rows[0] for key, rows in body.items() if rows})
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
 
         records: list[LookupRecord] = []
         for query, pid in zip(queries, pids):
             obj = summaries.get(pid.lower()) if pid else None
-            if obj is None:
+            if pid in errors:
+                records.append(LookupRecord(query=query, error=errors[pid]))
+            elif obj is None:
                 records.append(LookupRecord(query=query, found=False))
             else:
                 records.append(LookupRecord(query=query, found=True, values=_describe(pid, obj)))

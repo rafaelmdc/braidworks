@@ -97,3 +97,10 @@ availability is not assumed.
 This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/quickgo_weaver/LICENSE). Upstream biological data,
 bundled source samples and provider content retain their separately declared source
 licenses. The source license in a weaver manifest describes its data, not this code.
+
+
+## Source response and failure handling
+
+Annotation/term rows and pagination metadata are validated before projection. Missing pagination metadata still means unknown coverage, with the existing exported warning. The observed empty-source convention (zero hits, current=total=0) remains a clean miss. An explicitly echoed different accession/page or unrequested term is an error. Term-detail chunk failures preserve other chunks. For legacy singleton responses without geneProductId, correlation still relies on the single requested accession; present echoes are checked.
+
+Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.

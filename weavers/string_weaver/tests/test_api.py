@@ -73,10 +73,11 @@ async def test_ordering_is_deterministic_score_then_name():
     assert v["protein.interaction.partners"] == ["AAA", "BBB", "ZZZ"]
 
 
-async def test_nameless_edge_is_skipped():
+async def test_uncorrelatable_nameless_edge_is_error():
     payload = [_edge("MDM2", 0.9), {"preferredName_A": "TP53", "score": 0.8}]
-    v = (await _one(_backend(payload), "P04637")).values
-    assert v["protein.interaction.partners"] == ["MDM2"]
+    record = await _one(_backend(payload), "P04637")
+    assert record.error and not record.found
+    assert "correlated" in record.error
 
 
 async def test_empty_list_is_a_miss():

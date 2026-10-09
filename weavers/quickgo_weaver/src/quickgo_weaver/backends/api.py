@@ -43,6 +43,46 @@ _ASPECTS = {
 }
 
 
+class _InvalidResponse(ValueError):
+    """Expected source schema or correlation failure, rather than a coding fault."""
+
+
+def _validated_results(body: Any, *, annotation: bool) -> list[dict[str, Any]]:
+    if not isinstance(body, dict) or not isinstance(body.get("results"), list):
+        raise _InvalidResponse("QuickGO response must contain a results list")
+    for row in body["results"]:
+        key = "goId" if annotation else "id"
+        if not isinstance(row, dict) or not isinstance(row.get(key), str) or not row[key]:
+            raise _InvalidResponse(f"QuickGO row must contain {key}")
+        for field in (
+            ("goName", "goAspect", "geneProductId", "id") if annotation else ("name", "aspect")
+        ):
+            if row.get(field) is not None and not isinstance(row[field], str):
+                raise _InvalidResponse(f"QuickGO {field} must be a string or null")
+        if not annotation:
+            definition = row.get("definition")
+            if definition is not None and (
+                not isinstance(definition, dict)
+                or (definition.get("text") is not None and not isinstance(definition["text"], str))
+            ):
+                raise _InvalidResponse("QuickGO definition must be an object with string text")
+    if annotation:
+        info = body.get("pageInfo")
+        if info is not None:
+            if not isinstance(info, dict):
+                raise _InvalidResponse("QuickGO pageInfo must be an object")
+            for key in ("total", "current"):
+                value = info.get(key)
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or value < 0
+                ):
+                    raise _InvalidResponse(f"QuickGO pageInfo.{key} must be a non-negative integer")
+        hits = body.get("numberOfHits")
+        if hits is not None and (isinstance(hits, bool) or not isinstance(hits, int) or hits < 0):
+            raise _InvalidResponse("QuickGO numberOfHits must be a non-negative integer")
+    return body["results"]
+
+
 def _describe(term: dict[str, Any]) -> dict[str, Any]:
     """One GO term object (/ontology/go/terms/{id}) -> describe_go_term outputs."""
     definition = (term.get("definition") or {}).get("text")
@@ -168,7 +208,7 @@ class QuickgoApiBackend(BackendBase):
                 a: LookupRecord(query=q, error=f"QuickGO API error: {format_exc(exc)}")
                 for a, q in queries.items()
             }
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
             return {
                 a: LookupRecord(query=q, error=f"QuickGO API error: {format_exc(exc)}")
                 for a, q in queries.items()
@@ -206,30 +246,35 @@ class QuickgoApiBackend(BackendBase):
         ids = [str(q.get("go.term", "")).strip() for q in queries]
         distinct = sorted({t for t in ids if t})
         terms: dict[str, dict[str, Any]] = {}
-        try:
-            for start in range(0, len(distinct), _TERM_CHUNK):
-                chunk = distinct[start : start + _TERM_CHUNK]
-                if not chunk:
-                    continue
+        errors: dict[str, str] = {}
+        for start in range(0, len(distinct), _TERM_CHUNK):
+            chunk = distinct[start : start + _TERM_CHUNK]
+            try:
                 resp = await self._http().get(f"/ontology/go/terms/{','.join(chunk)}")
                 resp.raise_for_status()
-                for t in resp.json().get("results") or []:
-                    if t.get("id"):
-                        terms[t["id"]] = t
-        except httpx.HTTPStatusError as exc:
-            if not is_not_found_status(exc.response.status_code):
-                logger.warning("QuickGO term detail failed: %s", exc)
-                err = f"QuickGO API error: {format_exc(exc)}"
-                return [LookupRecord(query=q, error=err) for q in queries]
-        except httpx.HTTPError as exc:
-            logger.warning("QuickGO term detail failed: %s", exc)
-            err = f"QuickGO API error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+                rows = _validated_results(resp.json(), annotation=False)
+                if any(row["id"] not in chunk for row in rows):
+                    raise _InvalidResponse(
+                        "QuickGO term response contains an unrequested identifier"
+                    )
+                terms.update({row["id"]: row for row in rows})
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    errors.update(dict.fromkeys(chunk, f"QuickGO API error: {format_exc(exc)}"))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"QuickGO API error: {format_exc(exc)}"))
 
         records: list[LookupRecord] = []
         for query, term_id in zip(queries, ids):
             term = terms.get(term_id) if term_id else None
-            if term is None:
+            if term_id in errors:
+                records.append(LookupRecord(query=query, error=errors[term_id]))
+            elif term is None:
                 records.append(LookupRecord(query=query, found=False))
             else:
                 records.append(LookupRecord(query=query, found=True, values=_describe(term)))
@@ -245,7 +290,12 @@ class QuickgoApiBackend(BackendBase):
                 return LookupRecord(query=query, found=False)
             logger.warning("QuickGO lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
-        except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # network/HTTP problem is a per-entity error
             logger.warning("QuickGO lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"QuickGO API error: {format_exc(exc)}")
 
@@ -314,9 +364,24 @@ class QuickgoApiBackend(BackendBase):
             )
             resp.raise_for_status()
             body = resp.json()
-            rows.extend(body.get("results") or [])
+            page_rows = _validated_results(body, annotation=True)
+            expected = set(accession.upper().split(","))
+            for row in page_rows:
+                echo = row.get("geneProductId")
+                if (echo is not None and echo.rsplit(":", 1)[-1].upper() not in expected) or (
+                    len(expected) > 1 and not echo
+                ):
+                    raise _InvalidResponse(
+                        "QuickGO response cannot be correlated to requested accession"
+                    )
+            rows.extend(page_rows)
             pages_retrieved = page
-            reported_pages = (body.get("pageInfo") or {}).get("total")
+            info = body.get("pageInfo") or {}
+            # Live QuickGO uses current=total=0 for a genuine empty result.
+            empty_page = not page_rows and body.get("numberOfHits") == 0 and info.get("total") == 0
+            if info.get("current") is not None and info["current"] != page and not empty_page:
+                raise _InvalidResponse("QuickGO response echoes a different page")
+            reported_pages = info.get("total")
             reported_hits = body.get("numberOfHits")
             if isinstance(reported_hits, int) and not isinstance(reported_hits, bool):
                 total_annotations = reported_hits

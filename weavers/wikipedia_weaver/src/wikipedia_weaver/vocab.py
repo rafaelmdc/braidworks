@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "wikipedia"
-WEAVER_VERSION = "0.1.3"
+WEAVER_VERSION = "0.1.4"
 WEAVER_TITLE = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

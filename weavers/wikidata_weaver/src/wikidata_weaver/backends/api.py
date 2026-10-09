@@ -14,7 +14,12 @@ Guide: weaverkit/docs/implementing-backends.md
 from __future__ import annotations
 
 import asyncio
+import json
+import math
+import re
+import time
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import unquote
 
@@ -24,7 +29,6 @@ from braidworks.core import (
     Candidate,
     MatchStatus,
     ResolverRecord,
-    is_not_found_status,
 )
 from braidworks.core.http_pacing import PacedHTTPClient
 
@@ -72,7 +76,9 @@ def _title(article_uri: str) -> str:
 
 
 def _sparql_literal(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    # JSON string escapes are also valid SPARQL short-string escapes, including
+    # newline/tab/control characters which must never appear literally in VALUES.
+    return json.dumps(value, ensure_ascii=True)
 
 
 # Names per SPARQL request. The batch is POSTed (no URL-length limit) and split into
@@ -86,6 +92,57 @@ _CHUNK = 200
 _MAX_ATTEMPTS = 4
 _BACKOFF_BASE = 0.5  # seconds: 0.5, 1, 2 between attempts
 _RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+_RETRY_BUDGET = 90.0  # elapsed seconds per chunk, including server-advised waits
+
+
+class _InvalidResponse(ValueError):
+    """A malformed or uncorrelatable SPARQL source response."""
+
+
+def _validated_payload(body: Any) -> dict[str, Any]:
+    if (
+        not isinstance(body, dict)
+        or not isinstance(body.get("results"), dict)
+        or not isinstance(body["results"].get("bindings"), list)
+    ):
+        raise _InvalidResponse("SPARQL response must contain results.bindings")
+    for binding in body["results"]["bindings"]:
+        if not isinstance(binding, dict):
+            raise _InvalidResponse("SPARQL binding must be an object")
+        for key in ("sname", "item"):
+            if key not in binding:
+                raise _InvalidResponse(f"SPARQL binding must contain {key}")
+        for key in ("sname", "item", "article", "sitelinks", "vn", "rankLabel"):
+            if key in binding and (
+                not isinstance(binding[key], dict) or not isinstance(binding[key].get("value"), str)
+            ):
+                raise _InvalidResponse(f"SPARQL {key} binding must contain a string value")
+        if not re.fullmatch(
+            r"https?://www\.wikidata\.org/entity/Q[1-9][0-9]*", binding["item"]["value"]
+        ):
+            raise _InvalidResponse("SPARQL item must be a Wikidata entity URI")
+        if "article" in binding and not binding["article"]["value"].startswith(
+            "https://en.wikipedia.org/wiki/"
+        ):
+            raise _InvalidResponse("SPARQL article must be an English Wikipedia URI")
+        if "sitelinks" in binding and not binding["sitelinks"]["value"].isdigit():
+            raise _InvalidResponse("SPARQL sitelinks must be a non-negative integer")
+    return body
+
+
+def _retry_after(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            seconds = (parsedate_to_datetime(value) - datetime.now(UTC)).total_seconds()
+        except (ValueError, TypeError, OverflowError):
+            return None
+    return max(0.0, seconds) if math.isfinite(seconds) else None
 
 
 class _ChunkFailed(Exception):
@@ -122,36 +179,50 @@ class WikidataApiBackend(BackendBase):
     async def _post_chunk(self, query: str) -> dict[str, Any]:
         """POST one chunk and return the parsed SPARQL JSON, retrying transient failures.
 
-        A genuine not-found status returns an empty result (not an error). A non-transient
-        client error (e.g. a malformed query → 400) is not retried. Raises ``_ChunkFailed``
-        once the attempts are exhausted."""
+        SPARQL 400/404 are service/query errors, not biological absence. Honor
+        Retry-After within an elapsed budget; cancellation propagates unchanged."""
         last = "unknown error"
+        deadline = time.monotonic() + _RETRY_BUDGET
         for attempt in range(_MAX_ATTEMPTS):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                last = f"retry elapsed budget exhausted: {last}"
+                break
+            delay = _BACKOFF_BASE * (2**attempt)
             try:
                 # POST (not GET) so a large VALUES batch isn't capped by URL length.
-                resp = await self._http().post(
-                    "/sparql",
-                    data={"query": query, "format": "json"},
-                    headers={
-                        "Accept": "application/sparql-results+json",
-                        "User-Agent": _USER_AGENT,
-                    },
-                )
+                async with asyncio.timeout(remaining):
+                    resp = await self._http().post(
+                        "/sparql",
+                        data={"query": query, "format": "json"},
+                        timeout=min(60.0, remaining),
+                        headers={
+                            "Accept": "application/sparql-results+json",
+                            "User-Agent": _USER_AGENT,
+                        },
+                    )
                 resp.raise_for_status()
-                return resp.json()  # may raise ValueError (JSONDecodeError) on a bad body
+                return _validated_payload(resp.json())
             except httpx.HTTPStatusError as exc:
                 code = exc.response.status_code
-                if is_not_found_status(code):
-                    return {"results": {"bindings": []}}  # nothing matched — not an error
                 last = f"HTTP {code}"
                 if code not in _RETRY_STATUS:
-                    break  # client error (e.g. 400) won't fix on retry
+                    break
+                advice = _retry_after(exc.response.headers.get("Retry-After"))
+                if advice is not None:
+                    delay = max(delay, advice)
+            except TimeoutError:
+                last = "retry elapsed budget exhausted during request"
+                break
             except httpx.HTTPError as exc:  # timeouts, connection resets, …
                 last = str(exc)
-            except ValueError as exc:  # JSONDecodeError ⊂ ValueError: 200 with a bad/partial body
+            except (json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
                 last = f"malformed response: {exc}"
             if attempt < _MAX_ATTEMPTS - 1:
-                await asyncio.sleep(_BACKOFF_BASE * (2**attempt))
+                if delay >= deadline - time.monotonic():
+                    last = f"retry wait exceeds elapsed budget: {last}"
+                    break
+                await asyncio.sleep(delay)
         raise _ChunkFailed(last)
 
     async def fetch(
@@ -170,15 +241,21 @@ class WikidataApiBackend(BackendBase):
         rows_by_name: dict[str, dict[str, dict[str, Any]]] = {n: {} for n in distinct}
         # A chunk that exhausts its retries marks ONLY its own names ERROR — a transient WDQS
         # failure must not nuke the enrichment of every other name in the batch.
-        failed: set[str] = set()
+        failed: dict[str, str] = {}
 
         for start in range(0, len(distinct), _CHUNK):
             chunk = distinct[start : start + _CHUNK]
             query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in chunk))
             try:
-                _accumulate(await self._post_chunk(query), rows_by_name)
-            except _ChunkFailed:
-                failed.update(chunk)
+                payload = await self._post_chunk(query)
+                if any(
+                    binding["sname"]["value"] not in chunk
+                    for binding in payload["results"]["bindings"]
+                ):
+                    raise _ChunkFailed("SPARQL response contains an unrequested name")
+                _accumulate(payload, rows_by_name)
+            except _ChunkFailed as exc:
+                failed.update(dict.fromkeys(chunk, str(exc)))
 
         # Optional disambiguator: when a name resolves to several items, prefer the one
         # whose taxon rank (P105) matches this. Omitted (default) → historical behaviour.
@@ -193,7 +270,7 @@ class WikidataApiBackend(BackendBase):
                         status=MatchStatus.ERROR,
                         values={},
                         candidates=[],
-                        error="Wikidata query failed after retries",
+                        error=f"Wikidata query failed: {failed[name]}",
                     )
                 )
                 continue

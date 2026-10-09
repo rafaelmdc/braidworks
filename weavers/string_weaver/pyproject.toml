@@ -1,6 +1,6 @@
 [project]
 name = "string_weaver"
-version = "0.1.6"
+version = "0.1.7"
 description = "STRING protein-protein interactions (accession -> partners + scores) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

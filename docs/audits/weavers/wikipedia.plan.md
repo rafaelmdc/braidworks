@@ -16,3 +16,10 @@ as needed. Cache/resume and large historical aggregation remain separately revie
 Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
 are open under #147. Use those issues for work-package acceptance and evidence. Necessary
 breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+
+### SH-03 implementation (2026-10-09)
+
+Completed the #150 response-validation/failure-isolation scope for #292. Pageviews responses must contain an items list with non-negative integer view counts. A returned monthly row with zero views is valid data; an empty items list is a miss. A missing/malformed items envelope is an error rather than a fabricated zero. Records retain the original query, including extra fields and whitespace.
+
+See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.

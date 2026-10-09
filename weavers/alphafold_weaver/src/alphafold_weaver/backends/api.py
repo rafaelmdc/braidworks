@@ -17,7 +17,9 @@ against the live API (prediction for P04637 -> AF-P04637-F1).
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 from typing import Any
 
 import httpx
@@ -27,6 +29,41 @@ from braidworks.core.http_pacing import PacedHTTPClient
 logger = logging.getLogger("alphafold_weaver.api")
 
 DEFAULT_BASE_URL = "https://alphafold.ebi.ac.uk"
+
+
+class _InvalidResponse(ValueError):
+    """Expected source schema or correlation failure, rather than a coding fault."""
+
+
+def _validated_entries(body: Any) -> list[dict[str, Any]]:
+    if not isinstance(body, list):
+        raise _InvalidResponse("AlphaFold response must be a list")
+    for entry in body:
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("entryId"), str)
+            or not entry["entryId"]
+        ):
+            raise _InvalidResponse("AlphaFold entry must contain an entryId")
+        for field in ("pdbUrl", "cifUrl", "paeImageUrl"):
+            if entry.get(field) is not None and not isinstance(entry[field], str):
+                raise _InvalidResponse(f"AlphaFold {field} must be a string or null")
+        for field in (
+            "globalMetricValue",
+            "latestVersion",
+            "fractionPlddtVeryHigh",
+            "fractionPlddtConfident",
+            "fractionPlddtLow",
+            "fractionPlddtVeryLow",
+        ):
+            value = entry.get(field)
+            if value is not None and (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise _InvalidResponse(f"AlphaFold {field} must be a finite number or null")
+    return body
 
 
 def _pick(entries: list[dict[str, Any]], accession: str) -> dict[str, Any]:
@@ -107,7 +144,7 @@ class AlphafoldApiBackend(BackendBase):
     ) -> list[LookupRecord]:
         async def resolve(query: dict[str, Any]) -> LookupRecord:
             return await self._resolve_one(
-                query, str(query.get("protein.uniprot.accession", "")).strip()
+                query, str(query.get("protein.uniprot.accession") or "").strip()
             )
 
         return await map_bounded(queries, resolve, limit=self._max_concurrency)
@@ -118,7 +155,7 @@ class AlphafoldApiBackend(BackendBase):
         try:
             resp = await self._http().get(f"/api/prediction/{accession}")
             resp.raise_for_status()
-            entries = resp.json()
+            entries = _validated_entries(resp.json())
         except httpx.HTTPStatusError as exc:
             # AlphaFold returns 400 for a malformed/unmappable accession and 404 for none —
             # both are "no model", a NO_MATCH, not an error. (Coverage is near-universal, so
@@ -127,10 +164,15 @@ class AlphafoldApiBackend(BackendBase):
                 return LookupRecord(query=query, found=False)
             logger.warning("AlphaFold lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"AlphaFold API error: {format_exc(exc)}")
-        except httpx.HTTPError as exc:  # network/timeout problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # expected source failures are values
             logger.warning("AlphaFold lookup failed for %r: %s", accession, exc)
             return LookupRecord(query=query, error=f"AlphaFold API error: {format_exc(exc)}")
 
-        if not isinstance(entries, list) or not entries:
+        if not entries:
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_extract(_pick(entries, accession)))

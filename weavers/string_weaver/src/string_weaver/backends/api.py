@@ -21,7 +21,9 @@ against the live API (interaction_partners for P04637 -> TP53's partners).
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 from typing import Any
 
 import httpx
@@ -43,6 +45,42 @@ _CHANNELS = {
     "dscore": "database",
     "tscore": "textmining",
 }
+
+
+class _InvalidResponse(ValueError):
+    """An invalid or uncorrelatable STRING source response."""
+
+
+def _validate_rows(body: Any, path: str, identifiers: list[str]) -> list[dict[str, Any]]:
+    if not isinstance(body, list):
+        raise _InvalidResponse("STRING response must be a list")
+    for row in body:
+        if not isinstance(row, dict):
+            raise _InvalidResponse("STRING row must be an object")
+        if path.endswith("get_string_ids"):
+            if (
+                row.get("queryItem") not in identifiers
+                or not isinstance(row.get("stringId"), str)
+                or not row["stringId"]
+            ):
+                raise _InvalidResponse(
+                    "STRING mapping cannot be correlated to requested identifier"
+                )
+        else:
+            if row.get("stringId_A") not in identifiers:
+                raise _InvalidResponse("STRING edge cannot be correlated to requested identifier")
+            for field in ("stringId_B", "preferredName_B"):
+                if not isinstance(row.get(field), str) or not row[field]:
+                    raise _InvalidResponse(f"STRING edge must contain {field}")
+            for field in ("score", *_CHANNELS):
+                value = row.get(field)
+                if value is not None and (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(value)
+                ):
+                    raise _InvalidResponse(f"STRING {field} must be a finite number or null")
+    return body
 
 
 def _edge(raw: dict[str, Any]) -> dict[str, Any] | None:
@@ -130,52 +168,69 @@ class StringApiBackend(BackendBase):
         distinct = sorted({a for a in accs if a})
         if not distinct:
             return [LookupRecord(query=q, found=False) for q in queries]
-        try:
-            idmap = await self._string_ids(distinct)
-            partners = await self._partners(sorted(set(idmap.values())))
-        except httpx.HTTPError as exc:  # network/server problem is a whole-batch error
-            logger.warning("STRING lookup failed: %s", exc)
-            err = f"STRING API error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+        idmap, mapping_errors = await self._string_ids(distinct)
+        partners, partner_errors = await self._partners(sorted(set(idmap.values())))
 
         records: list[LookupRecord] = []
         for query, acc in zip(queries, accs):
             string_id = idmap.get(acc) if acc else None
             edges = partners.get(string_id) if string_id else None
-            if not edges:
+            error = mapping_errors.get(acc) or partner_errors.get(string_id)
+            if error:
+                records.append(LookupRecord(query=query, error=error))
+            elif not edges:
                 records.append(LookupRecord(query=query, found=False))
             else:
                 records.append(LookupRecord(query=query, found=True, values=_extract(edges)))
         return records
 
-    async def _string_ids(self, accessions: list[str]) -> dict[str, str]:
+    async def _string_ids(self, accessions: list[str]) -> tuple[dict[str, str], dict[str, str]]:
         """Bulk-resolve accessions to STRING ids, keyed by the echoed ``queryItem``."""
         out: dict[str, str] = {}
+        errors: dict[str, str] = {}
         for start in range(0, len(accessions), _ID_CHUNK):
             chunk = accessions[start : start + _ID_CHUNK]
             if not chunk:
                 continue
-            for row in await self._get("/json/get_string_ids", "\r".join(chunk)):
-                query_item, string_id = row.get("queryItem"), row.get("stringId")
-                if query_item and string_id:
-                    out.setdefault(str(query_item), str(string_id))
-        return out
+            try:
+                rows = await self._get("/json/get_string_ids", "\r".join(chunk))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"STRING API error: {format_exc(exc)}"))
+                continue
+            for row in rows:
+                out.setdefault(row["queryItem"], row["stringId"])
+        return out, errors
 
-    async def _partners(self, string_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    async def _partners(
+        self, string_ids: list[str]
+    ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
         """Bulk-fetch interaction partners, grouped by the query protein (``stringId_A``)."""
         out: dict[str, list[dict[str, Any]]] = {}
+        errors: dict[str, str] = {}
         for start in range(0, len(string_ids), _ID_CHUNK):
             chunk = string_ids[start : start + _ID_CHUNK]
             if not chunk:
                 continue
-            rows = await self._get(
-                "/json/interaction_partners", "\r".join(chunk), limit=str(self._limit)
-            )
+            try:
+                rows = await self._get(
+                    "/json/interaction_partners", "\r".join(chunk), limit=str(self._limit)
+                )
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors.update(dict.fromkeys(chunk, f"STRING API error: {format_exc(exc)}"))
+                continue
             for row in rows:
-                a = row.get("stringId_A")
-                if a:
-                    out.setdefault(str(a), []).append(row)
-        return out
+                out.setdefault(row["stringId_A"], []).append(row)
+        return out, errors
 
     async def _get(self, path: str, identifiers: str, **extra: str) -> list[dict[str, Any]]:
         """A STRING GET returning the JSON list, mapping the no-match status (400/404)
@@ -189,4 +244,4 @@ class StringApiBackend(BackendBase):
                 return []
             raise
         payload = resp.json()
-        return payload if isinstance(payload, list) else []
+        return _validate_rows(payload, path, identifiers.split("\r"))

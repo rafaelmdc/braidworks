@@ -20,12 +20,14 @@ keys, since unreviewed entries omit recommendedName / gene / function.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import math
 import re
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, map_bounded
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
 
 from uniprot_weaver import mapping
@@ -52,6 +54,74 @@ _FIELDS = (
 _PAGE = 25
 # Official UniProtKB accession syntax (so "P04637" routes to an exact lookup).
 _ACCESSION = re.compile(r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}")
+
+
+class _InvalidResponse(ValueError):
+    """An invalid UniProt search or mapping-job source response."""
+
+
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise _InvalidResponse(f"UniProt {label} must be an object")
+    return value
+
+
+def _rows(value: Any, label: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
+        raise _InvalidResponse(f"UniProt {label} must be an object list")
+    return value
+
+
+def _validate_entry(entry: dict[str, Any]) -> None:
+    if not isinstance(entry.get("primaryAccession"), str) or not entry["primaryAccession"]:
+        raise _InvalidResponse("UniProt entry must contain primaryAccession")
+    score = entry.get("annotationScore")
+    if score is not None and (
+        isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score)
+    ):
+        raise _InvalidResponse("UniProt annotationScore must be a finite number")
+    for field in ("organism", "sequence", "proteinDescription"):
+        if entry.get(field) is not None:
+            _object(entry[field], field)
+    if entry.get("entryType") is not None and not isinstance(entry["entryType"], str):
+        raise _InvalidResponse("UniProt entryType must be a string")
+    organism = entry.get("organism") or {}
+    if organism.get("scientificName") is not None and not isinstance(
+        organism["scientificName"], str
+    ):
+        raise _InvalidResponse("UniProt scientificName must be a string")
+    for label, value in (
+        ("taxonId", organism.get("taxonId")),
+        ("length", (entry.get("sequence") or {}).get("length")),
+    ):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise _InvalidResponse(f"UniProt {label} must be a non-negative integer")
+    description = entry.get("proteinDescription") or {}
+    names = []
+    if description.get("recommendedName") is not None:
+        names.append(_object(description["recommendedName"], "recommendedName"))
+    for field in ("submittedName", "alternativeNames"):
+        if description.get(field) is not None:
+            names.extend(_rows(description[field], field))
+    for name in names:
+        if name.get("fullName") is not None:
+            full = _object(name["fullName"], "fullName")
+            if full.get("value") is not None and not isinstance(full["value"], str):
+                raise _InvalidResponse("UniProt fullName value must be a string")
+    if entry.get("genes") is not None:
+        for gene in _rows(entry["genes"], "genes"):
+            if gene.get("geneName") is not None:
+                value = _object(gene["geneName"], "geneName").get("value")
+                if value is not None and not isinstance(value, str):
+                    raise _InvalidResponse("UniProt geneName value must be a string")
+    if entry.get("comments") is not None:
+        for comment in _rows(entry["comments"], "comments"):
+            if comment.get("texts") is not None:
+                for text in _rows(comment["texts"], "texts"):
+                    if text.get("value") is not None and not isinstance(text["value"], str):
+                        raise _InvalidResponse("UniProt comment text must be a string")
 
 
 def _next_link(resp: httpx.Response) -> str | None:
@@ -119,23 +189,23 @@ _EVIDENCE = re.compile(r"\s*\((?:PubMed:[^)]*|By similarity|Probable|Potential|R
 
 def _recommended_name(desc: dict[str, Any]) -> str | None:
     """Best display name: recommended, else submitted, else first alternative."""
-    recommended = desc.get("recommendedName", {})
-    if isinstance(recommended, dict) and recommended.get("fullName", {}).get("value"):
+    recommended = desc.get("recommendedName") or {}
+    if isinstance(recommended, dict) and (recommended.get("fullName") or {}).get("value"):
         return recommended["fullName"]["value"]
     submitted = desc.get("submittedName")
     if isinstance(submitted, list) and submitted:
-        full = submitted[0].get("fullName", {})
+        full = submitted[0].get("fullName") or {}
         if full.get("value"):
             return full["value"]
     alternatives = desc.get("alternativeNames")
     if isinstance(alternatives, list) and alternatives:
-        return alternatives[0].get("fullName", {}).get("value")
+        return (alternatives[0].get("fullName") or {}).get("value")
     return None
 
 
 def _primary_gene(genes: Any) -> str | None:
     if isinstance(genes, list) and genes:
-        return genes[0].get("geneName", {}).get("value")
+        return (genes[0].get("geneName") or {}).get("value")
     return None
 
 
@@ -254,20 +324,24 @@ class UniprotApiBackend(BackendBase):
                     break
             per_query.append(hit)
 
-        try:
-            resolved: dict[str, dict[str, list[str]]] = {}
-            reviewed: dict[str, dict[str, list[str]]] = {}
-            for from_db, ids in by_db.items():
+        resolved: dict[str, dict[str, list[str]]] = {}
+        reviewed: dict[str, dict[str, list[str]]] = {}
+        errors: dict[str, str] = {}
+        for from_db, ids in by_db.items():
+            try:
                 rev, allm = await asyncio.gather(
                     self._idmap(from_db, mapping.UNIPROT_TO_REVIEWED, sorted(ids)),
                     self._idmap(from_db, mapping.UNIPROT_TO, sorted(ids)),
                 )
                 reviewed[from_db] = rev
                 resolved[from_db] = allm
-        except httpx.HTTPError as exc:
-            logger.warning("UniProt ID-mapping (to accession) failed: %s", exc)
-            err = f"UniProt ID-mapping error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors[from_db] = f"UniProt ID-mapping error: {format_exc(exc)}"
 
         records: list[LookupRecord] = []
         for q, hit in zip(queries, per_query):
@@ -275,6 +349,9 @@ class UniprotApiBackend(BackendBase):
                 records.append(LookupRecord(query=q, found=False))
                 continue
             from_db, src = hit
+            if from_db in errors:
+                records.append(LookupRecord(query=q, error=errors[from_db]))
+                continue
             rev = reviewed[from_db].get(src, [])
             rev_set = set(rev)
             ordered = rev + [a for a in resolved[from_db].get(src, []) if a not in rev_set]
@@ -294,10 +371,15 @@ class UniprotApiBackend(BackendBase):
             maps: dict[str, dict[str, list[str]]] = {}
             for type_id, to_db in targets.items():
                 maps[type_id] = await self._idmap(mapping.UNIPROT_FROM, to_db, accs) if accs else {}
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
             logger.warning("UniProt ID-mapping (from accession) failed: %s", exc)
             err = f"UniProt ID-mapping error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+            return [
+                LookupRecord(query=q, error=err)
+                if str(q.get(mapping.ACCESSION) or "").strip()
+                else LookupRecord(query=q, found=False)
+                for q in queries
+            ]
 
         records: list[LookupRecord] = []
         for q in queries:
@@ -330,23 +412,49 @@ class UniprotApiBackend(BackendBase):
             "/idmapping/run", data={"from": from_db, "to": to_db, "ids": ",".join(ids)}
         )
         run.raise_for_status()
-        job = run.json()["jobId"]
+        job = _object(run.json(), "job submission").get("jobId")
+        if not isinstance(job, str) or not job:
+            raise _InvalidResponse("UniProt job submission must contain jobId")
         await self._await_job(http, job)
 
         out: dict[str, list[str]] = {}
         url: str | None = f"/idmapping/results/{job}"
         req_params: dict[str, Any] | None = {"format": "json", "size": _IDMAP_RESULT_PAGE}
+        visited: set[str] = set()
         while url:
+            if url in visited or len(visited) >= 1000:
+                raise _InvalidResponse(
+                    "UniProt mapping result pagination repeats or exceeds budget"
+                )
+            visited.add(url)
             resp = await http.get(url, params=req_params)
             resp.raise_for_status()
-            for row in resp.json().get("results", []):
+            body = _object(resp.json(), "mapping results")
+            if "results" not in body and "failedIds" not in body:
+                raise _InvalidResponse("UniProt mapping page must contain results or failedIds")
+            failed = body.get("failedIds", [])
+            if not isinstance(failed, list) or any(
+                not isinstance(src, str) or src not in ids for src in failed
+            ):
+                raise _InvalidResponse("UniProt failedIds must identify requested inputs")
+            for row in _rows(body.get("results", []), "mapping results"):
                 to_val = row.get("to")
                 target = (
-                    to_val if isinstance(to_val, str) else (to_val or {}).get("primaryAccession")
+                    to_val
+                    if isinstance(to_val, str)
+                    else _object(to_val, "mapping target").get("primaryAccession")
                 )
-                src = str(row.get("from", ""))
-                if target and src:
-                    out.setdefault(src, []).append(target)
+                src = row.get("from")
+                if (
+                    not isinstance(src, str)
+                    or src not in ids
+                    or not isinstance(target, str)
+                    or not target
+                ):
+                    raise _InvalidResponse(
+                        "UniProt mapping row cannot be correlated to requested identifier"
+                    )
+                out.setdefault(src, []).append(target)
             url = _next_link(resp)  # follow paginated results; absolute URL, no params
             req_params = None
         return out
@@ -356,7 +464,12 @@ class UniprotApiBackend(BackendBase):
         for _ in range(_IDMAP_POLL_TRIES):
             resp = await http.get(f"/idmapping/status/{job}")
             resp.raise_for_status()
-            status = resp.json().get("jobStatus")
+            body = _object(resp.json(), "job status")
+            status = body.get("jobStatus")
+            if status is None:
+                if "results" not in body and "failedIds" not in body:
+                    raise _InvalidResponse("UniProt job status has no state or result evidence")
+                _rows(body.get("results", []), "job status results")
             if status is None or status == "FINISHED":  # absent => results inline / ready
                 return
             if status in ("RUNNING", "NEW", "QUEUED"):
@@ -372,7 +485,12 @@ class UniprotApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         try:
             entry = await self._best_hit(term, organism)
-        except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # network/HTTP problem is a per-entity error
             logger.warning("UniProt lookup failed for %r: %s", term, exc)
             return LookupRecord(query=query, error=f"UniProt API error: {format_exc(exc)}")
 
@@ -416,5 +534,11 @@ class UniprotApiBackend(BackendBase):
                 "sort": "annotation_score desc",
             },
         )
+        if is_not_found_status(resp.status_code):
+            return []
         resp.raise_for_status()
-        return resp.json().get("results", [])
+        body = _object(resp.json(), "search response")
+        rows = _rows(body.get("results"), "search results")
+        for row in rows:
+            _validate_entry(row)
+        return rows

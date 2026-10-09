@@ -1,6 +1,6 @@
 [project]
 name = "uniprot_weaver"
-version = "0.2.3"
+version = "0.2.4"
 description = "UniProt protein identity (gene/protein query -> accession + taxid + annotation) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
