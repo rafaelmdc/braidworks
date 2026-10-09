@@ -1,12 +1,10 @@
 """The local backend for faprotax_weaver.
 
-Maps an organism's NCBI lineage to FAPROTAX functional groups, from the bundled
-``FAPROTAX.txt``. FAPROTAX defines ~90 functional groups, each as a list of
-member taxon patterns (``*Level*Level*`` — an ordered, case-insensitive
-subsequence over a taxon's lineage names). A taxon is affiliated with a group if
-any of that group's patterns is a subsequence of the taxon's lineage. Groups may
-compose others via ``add_group:``, resolved recursively at load. A taxon matching
-zero groups is a miss (FAPROTAX only annotates clades of known function).
+Maps full NCBI lineage names to putative functional groups from bundled
+``FAPROTAX.txt``. Source patterns use ordered complete words, so species epithets
+can match inside binomial names without substring false positives. Membership
+honors ordered add/subtract/intersect operations over earlier defined groups.
+A taxon matching no groups is a miss, not evidence that it lacks those functions.
 
 Guide: weaverkit/docs/implementing-backends.md
 """
@@ -17,10 +15,11 @@ import asyncio
 from collections.abc import Mapping
 from functools import lru_cache
 from importlib.resources import files
-from types import MappingProxyType
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+
+from faprotax_weaver.rules import RuleError, _evaluate, _parse_groups
 
 # The bundled FAPROTAX release. This is the backend's fingerprint source, so it
 # must change when the bundled FAPROTAX.txt changes and stay identical otherwise.
@@ -30,71 +29,21 @@ _FUNCTIONAL_GROUPS = "microbe.ecology.functional_groups"
 
 
 @lru_cache(maxsize=1)
-def _load_groups() -> Mapping[str, tuple[tuple[str, ...], ...]]:
-    """Parse the bundled FAPROTAX.txt into ``{group_name: (member_patterns,)}``.
-
-    A member pattern is a tuple of lowercased taxon tokens (from ``*A*B*``).
-    ``add_group:`` references are flattened recursively (cycle-guarded), so each
-    group carries the full set of patterns it and its included groups define.
-    """
+def _load_rules():
     raw = (files("faprotax_weaver") / "data" / _DATA_FILE).read_text(encoding="utf-8")
-
-    # First pass: group -> ordered list of members, each ("taxa", tokens) or
-    # ("group", referenced_group_name).
-    parsed: dict[str, list[tuple[str, Any]]] = {}
-    current: str | None = None
-    for line in raw.splitlines():
-        line = line.split("#", 1)[0].rstrip()  # drop full-line and inline comments
-        if not line.strip():
-            continue
-        if line.startswith("*"):  # member taxon pattern: *Level1*Level2*
-            tokens = tuple(t.lower() for t in line.strip().strip("*").split("*") if t)
-            if current is not None and tokens:
-                parsed[current].append(("taxa", tokens))
-        elif line.lstrip().startswith("add_group:"):  # compose another group
-            ref = line.split("add_group:", 1)[1].strip()
-            if current is not None and ref:
-                parsed[current].append(("group", ref))
-        elif not line[0].isspace():  # group header at column 0: name<TAB>attrs
-            current = line.split("\t", 1)[0].split()[0].strip()
-            parsed.setdefault(current, [])
-
-    # Second pass: flatten add_group references into concrete pattern sets.
-    resolved: dict[str, tuple[tuple[str, ...], ...]] = {}
-
-    def patterns_for(name: str, seen: frozenset[str]) -> list[tuple[str, ...]]:
-        if name in resolved:
-            return list(resolved[name])
-        if name in seen:  # cycle guard
-            return []
-        seen = seen | {name}
-        out: list[tuple[str, ...]] = []
-        for kind, value in parsed.get(name, []):
-            if kind == "taxa":
-                out.append(value)
-            else:
-                out.extend(patterns_for(value, seen))
-        return out
-
-    for name in parsed:
-        resolved[name] = tuple(patterns_for(name, frozenset()))
-    return MappingProxyType(resolved)
+    return _parse_groups(raw)
 
 
-def _is_subsequence(pattern: tuple[str, ...], lineage_lower: list[str]) -> bool:
-    """True if every pattern token appears in ``lineage_lower`` in order."""
-    it = iter(lineage_lower)
-    return all(any(token == name for name in it) for token in pattern)
+def _load_groups() -> Mapping:
+    """Immutable ordered operations; compatibility for local rule inspection."""
+    from types import MappingProxyType
+
+    return MappingProxyType({name: group.rules for name, group in _load_rules().items()})
 
 
 def _functional_groups(lineage_names: list[str]) -> list[str]:
-    """The sorted FAPROTAX functional groups affiliated with this lineage."""
-    lineage_lower = [n.lower() for n in lineage_names]
-    return sorted(
-        group
-        for group, patterns in _load_groups().items()
-        if any(_is_subsequence(p, lineage_lower) for p in patterns)
-    )
+    """Evaluate source word patterns and ordered group set operations."""
+    return _evaluate(_load_rules(), lineage_names)
 
 
 def _lineage_names(value: Any) -> list[str]:
@@ -148,7 +97,13 @@ class FaprotaxLocalBackend(BackendBase):
             names = _lineage_names(query.get("ncbi.taxon.lineage"))
             key = tuple(name.lower() for name in names)
             if key not in matches:
-                matches[key] = tuple(_functional_groups(names)) if names else ()
+                try:
+                    matches[key] = tuple(_functional_groups(names)) if names else ()
+                except RuleError as exc:
+                    records.append(
+                        LookupRecord(query=query, error=f"Invalid FAPROTAX rules: {exc}")
+                    )
+                    continue
             groups = list(matches[key])
             if groups:
                 records.append(

@@ -24,3 +24,7 @@ work packages remain separately tracked.
 Shared configuration/lifecycle findings in #149 are implemented; see
 [SH-02 acceptance, verification and migrations](SH-02.implementation.md).
 Source-specific remaining proposals and capabilities stay separately tracked.
+
+## Source audit pack acceptance
+
+Issues #256, #257, #258, #259 are implemented; see [FAPROTAX implementation, migrations and evidence](SRC-FAPROTAX.implementation.md). Other conditional work remains separately tracked.

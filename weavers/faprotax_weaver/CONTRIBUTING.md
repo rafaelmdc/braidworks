@@ -66,11 +66,12 @@ See [README.md](README.md) and `weaver.spec.toml` for the current output keys an
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- Update the bundled source verbatim, its embedded license and DATA_VERSION together.
-  Validate ordered pattern tokens and add_group references with known matching and
-  nonmatching lineages. Unknown lineage names and unmatched rules are misses.
-- Current inference is putative clade affiliation, not a measured phenotype or
-  proof of function in every strain. Group composition/cycle semantics remain
-  tracked in the source-specific audit.
+- Preserve the bundled database verbatim, including its license and references.
+- Match the provider's default complete-word mode (alphanumeric and hyphen word
+  characters), not an exact sequence of NCBI lineage-entry names. Species entries
+  include binomials. Preserve source order for add/subtract/intersect operations.
+- Every reference targets an earlier defined group. Keep unknown/cyclic source
+  diagnostics explicit and retain group attributes/literature in parsed rules.
+- Run `tests/test_rules.py` after parser changes; rerun the retained provider differential
+  probe when updating the source database. Public evidence fields and community
+  abundance aggregation are separate scope proposals.

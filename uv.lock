@@ -302,7 +302,7 @@ lua = [
 
 [[package]]
 name = "faprotax-weaver"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "weavers/faprotax_weaver" }
 dependencies = [
     { name = "braidworks-core" },

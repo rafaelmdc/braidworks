@@ -14,14 +14,18 @@ Consumes an organism's `ncbi.taxon.lineage` (as produced by `ncbi_weaver`) and
 produces `microbe.ecology.functional_groups` — the FAPROTAX ecological/metabolic
 functional groups the organism's clade is affiliated with (e.g. `methanotrophy`,
 `nitrification`, `sulfate_respiration`, `fermentation`). FAPROTAX defines ~90
-groups, each as member taxon patterns (`*Level*Level*` — an ordered,
-case-insensitive subsequence over the lineage names); a taxon inherits a group if
-any ancestor in its lineage matches. A taxon matching zero groups is a miss
+groups, each as ordered, case-insensitive complete-word patterns (`*Level*Level*`).
+The words are matched over the full lineage text, so `*Methanosarcina*barkeri*`
+matches the NCBI binomial `Methanosarcina barkeri`. Word boundaries prevent suffix
+and hyphenated-word false positives. A taxon matching zero groups is a miss
 (FAPROTAX only annotates clades of established function).
 
 The `local` backend serves a bundled copy of `FAPROTAX.txt` (~950 KB, v1.2.12) —
-no network or download. Parsing (incl. recursive `add_group:` resolution) and
-matching live in `src/faprotax_weaver/backends/local.py`.
+no network or download. The private pure parser/interpreter in `rules.py` honors ordered `add_group:`,
+`subtract_group:` and `intersect_group:` operations. References must target earlier
+groups; missing references, cycles and malformed definitions are explicit source errors.
+Group attributes and rule literature comments are retained in immutable parsed rules.
+A public evidence-output group remains a separate scope proposal.
 
 ## Licensing & attribution
 
@@ -72,8 +76,8 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 Parsed bundled rules are immutable. Matching runs in a worker thread and scans
 once per distinct case-insensitive lineage within a batch. Each result receives
-a separate list; query results are not cached across batches. This preserves the
-ordered-subsequence matching rules and miss semantics.
+a separate list; query results are not cached across batches. This preserves sorted outputs and miss semantics while applying the source-compatible
+word and set-operation rules described above.
 
 ## Construction and resource lifetime
 

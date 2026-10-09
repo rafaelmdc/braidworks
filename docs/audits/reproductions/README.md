@@ -36,3 +36,16 @@ AGORA parser memory characterization (synthetic local XML, no downloads):
 
 The script consumes reactions without retaining the parsed XML. It measures parser
 allocations, not SQLite/native allocations or full-archive ingestion.
+
+## FAPROTAX source differential
+
+`python docs/audits/reproductions/faprotax_reference.py /path/to/collapse_table.py`
+from the repo root compares the bundled database against the provider's 1.3.7 script,
+shipped in the official FAPROTAX 1.2.12 archive. Requires only the installed local weaver
+and stdlib. It loads named provider functions without executing the CLI or importing
+numpy/BIOM. Keep downloaded provider software outside tracked files.
+
+[Retained result](faprotax-reference-result.json): all 92 groups, 25,068 representative
+source-pattern/binomial/false-positive cases, zero mismatches; the provider script's
+SHA256 is recorded. This extends the original small grammar reproduction rather than
+replacing the audit evidence with a claim of biological ground truth.
