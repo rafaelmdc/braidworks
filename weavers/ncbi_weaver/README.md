@@ -180,3 +180,17 @@ operations. The local backend supplies taxonomy resolution; Datasets supplies al
 Dispatch raises `UnsupportedCapability` when an optional operation is absent. Custom
 backends should implement only their supported interfaces; existing duck-typed backends
 continue to work. The previous ABC's inherited unsupported methods have been removed.
+
+`ncbi.describe_taxon_history` is a **local-only** capability consuming
+`ncbi.taxon.id` and producing `ncbi.taxon.history`. It reports requested/current
+taxids, observed merge chains, current/merged/deleted/unknown status, history-file
+availability and dump/build identity. New builds retain optional `merged.dmp` and
+`delnodes.dmp`; missing files or older databases mean history unavailable, not
+proof that an ID was never present. Deleted/unknown IDs have no inferred successor.
+Existing `ncbi.describe_taxon` and name resolution are unchanged.
+
+The history operation is separate from taxonomy resolution and advertised only
+when local is wired. Local descendant listing remains deferred;
+`ncbi.list_children` still requires the API backend and its documented rank scope.
+No full taxonomy download is required for conformance: tiny synthetic dump
+fixtures exercise merge chains, deletion, missing history and atomic failures.

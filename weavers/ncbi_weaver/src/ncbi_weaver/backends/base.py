@@ -37,6 +37,15 @@ class ResolutionBackend(Protocol):
 
 
 @runtime_checkable
+class TaxonomyHistoryBackend(Protocol):
+    """Optional local dump history, independent of current taxonomy resolution."""
+
+    async def describe_taxon_history(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        """Describe requested/current IDs, merge chains, deletion and source availability."""
+        ...
+
+
+@runtime_checkable
 class TaxonomyChildrenBackend(Protocol):
     """Optional descendant listing, separate from taxonomy resolution."""
 

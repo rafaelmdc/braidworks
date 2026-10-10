@@ -87,6 +87,7 @@ class BackendDispatchWeaver(BaseWeaver):
         # LookupRecord/map_lookup path. Each builds queries, calls a backend method, maps.
         if capability_id in (
             vocab.LIST_CHILDREN,
+            vocab.DESCRIBE_TAXON_HISTORY,
             vocab.LIST_GENOMES,
             vocab.DESCRIBE_GENOME,
             vocab.RESOLVE_GENE,
@@ -131,6 +132,8 @@ class BackendDispatchWeaver(BaseWeaver):
         (input_type,) = tuple(cap.consumes)
         queries = [{input_type: self._value(ss, input_type)} for ss in strand_sets]
         effective = cap.resolve_params(params)
+        if capability_id == vocab.DESCRIBE_TAXON_HISTORY:
+            return await self._operation(strategy, "describe_taxon_history")(queries)
         if capability_id == vocab.LIST_CHILDREN:
             return await self._operation(strategy, "list_children")(
                 queries, rank=effective.get("rank")

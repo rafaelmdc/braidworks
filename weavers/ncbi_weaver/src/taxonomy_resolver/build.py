@@ -418,6 +418,31 @@ def _build_staged_database(
                 )
             )
             build_connection.commit()
+            from .history import parse_history
+
+            history_rows = {}
+            for filename in ("merged.dmp", "delnodes.dmp"):
+                if filename in available_members:
+                    handle = archive.extractfile(_find_member(archive, filename))
+                    if handle is None:
+                        raise ValueError(f"Unable to read {filename}")
+                    with handle:
+                        history_rows[filename] = list(_iter_dmp_rows(handle))
+            merged, deleted = parse_history(
+                history_rows.get("merged.dmp", []), history_rows.get("delnodes.dmp", [])
+            )
+            if (set(merged) | deleted) & set(_parent_by_taxid):
+                raise ValueError("Historical taxids conflict with current nodes.dmp identities")
+            build_connection.execute(
+                "CREATE TABLE taxon_merged (old_taxid INTEGER PRIMARY KEY, new_taxid INTEGER NOT NULL)"
+            )
+            build_connection.execute("CREATE TABLE taxon_deleted (taxid INTEGER PRIMARY KEY)")
+            build_connection.executemany(
+                "INSERT INTO taxon_merged VALUES (?, ?)", sorted(merged.items())
+            )
+            build_connection.executemany(
+                "INSERT INTO taxon_deleted VALUES (?)", [(taxid,) for taxid in sorted(deleted)]
+            )
 
         build_connection.commit()
         _notify_progress(
@@ -467,6 +492,8 @@ def _build_staged_database(
                 "scientific_name_count": str(scientific_name_count),
                 "synonym_count": str(synonym_count),
                 "root_taxid_count": str(root_taxid_count),
+                "merged_history_present": str("merged.dmp" in available_members).lower(),
+                "deleted_history_present": str("delnodes.dmp" in available_members).lower(),
                 "rankedlineage_present": str("rankedlineage.dmp" in available_members).lower(),
                 "sqlite_build_pragmas_json": json.dumps(BUILD_PRAGMA_STATEMENTS),
                 "sqlite_post_build_optimized": "true",

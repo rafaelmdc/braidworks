@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
+from braidworks.core import LookupRecord
 from braidworks.core.source_identity import SourceBinding
 from taxonomy_resolver.policy import ResolutionStatus
 from taxonomy_resolver.schemas import BatchResolveRequest, ResolveRequest, ResolveResult
@@ -71,6 +73,84 @@ class LocalTaxonomyBackend:
         return await asyncio.to_thread(
             self._resolve_sync, capability_id, list(queries), need_lineage
         )
+
+    async def describe_taxon_history(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        return await asyncio.to_thread(self._history_sync, queries)
+
+    def _history_sync(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        with self._source.session() as con:
+            meta = dict(con.execute("SELECT key, value FROM metadata"))
+            merged_available = meta.get("merged_history_present") == "true"
+            deleted_available = meta.get("deleted_history_present") == "true"
+            records = []
+            for query in queries:
+                raw = query.get(vocab.TAXON_ID)
+                try:
+                    taxid = int(raw)
+                    if isinstance(raw, bool) or taxid < 1 or isinstance(raw, float):
+                        raise ValueError("invalid taxid")
+                except (TypeError, ValueError):
+                    records.append(LookupRecord(query=query, found=False))
+                    continue
+                chain = [taxid]
+                current = taxid
+                seen = set()
+                error = None
+                while merged_available:
+                    row = con.execute(
+                        "SELECT new_taxid FROM taxon_merged WHERE old_taxid=?", (current,)
+                    ).fetchone()
+                    if row is None:
+                        break
+                    if current in seen:
+                        error = "Taxonomy history merge cycle"
+                        break
+                    seen.add(current)
+                    current = row[0]
+                    chain.append(current)
+                if error:
+                    records.append(LookupRecord(query=query, error=error))
+                    continue
+                present = (
+                    con.execute("SELECT 1 FROM taxa WHERE taxid=?", (current,)).fetchone()
+                    is not None
+                )
+                deleted = (
+                    deleted_available
+                    and con.execute(
+                        "SELECT 1 FROM taxon_deleted WHERE taxid=?", (current,)
+                    ).fetchone()
+                    is not None
+                )
+                status = (
+                    ("merged" if len(chain) > 1 else "current")
+                    if present
+                    else "deleted"
+                    if deleted
+                    else "unknown"
+                )
+                records.append(
+                    LookupRecord(
+                        query=query,
+                        found=True,
+                        values={
+                            "ncbi.taxon.history": {
+                                "requested_taxid": taxid,
+                                "current_taxid": current if present else None,
+                                "status": status,
+                                "merge_chain": chain,
+                                "history_available": {
+                                    "merged": merged_available,
+                                    "deleted": deleted_available,
+                                },
+                                "source_dump_sha256": meta.get("source_dump_sha256"),
+                                "build_version": meta.get("taxonomy_build_version"),
+                                "interpretation": "dump-scoped identity; deleted/unknown IDs have no inferred successor",
+                            }
+                        },
+                    )
+                )
+            return records
 
     # --- sync worker (runs in a thread) ------------------------------------
 

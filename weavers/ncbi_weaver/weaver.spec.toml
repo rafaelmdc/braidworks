@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.2.11"
+version = "0.2.12"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -106,6 +106,16 @@ always_computed_groups = ["core"]
   [[capability.group]]
   id = "lineage"
   outputs = ["ncbi.taxon.lineage", "ncbi.taxon.species_id"]
+
+[[capability]]
+id = "ncbi.describe_taxon_history"
+consumes = ["ncbi.taxon.id"]
+backends = ["local"]
+max_batch_size = 1000
+
+  [[capability.group]]
+  id = "history"
+  outputs = ["ncbi.taxon.history"]
 
 # ncbi.list_children: a taxid -> its descendant taxids of a given rank (default
 # species). API-only — it walks the live NCBI taxonomy subtree via the Datasets v2

@@ -65,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.11"
+WEAVER_VERSION = "0.2.12"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -78,6 +78,7 @@ PROVENANCE = Provenance(
 
 RESOLVE_NAME = "ncbi.resolve_name"
 DESCRIBE_TAXON = "ncbi.describe_taxon"
+DESCRIBE_TAXON_HISTORY = "ncbi.describe_taxon_history"
 LIST_CHILDREN = "ncbi.list_children"
 LIST_GENOMES = "ncbi.list_genomes"
 DESCRIBE_GENOME = "ncbi.describe_genome"
@@ -299,6 +300,19 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         resolve_name_capability(backends=backends),
         describe_taxon_capability(backends=backends),
     ]
+    if "local" in backends:
+        capabilities.append(
+            Capability(
+                id=DESCRIBE_TAXON_HISTORY,
+                consumes=frozenset({TAXON_ID}),
+                produces=frozenset({"ncbi.taxon.history"}),
+                output_groups=(
+                    OutputGroup(id="history", outputs=frozenset({"ncbi.taxon.history"})),
+                ),
+                backends=("local",),
+                max_batch_size=MAX_BATCH_SIZE,
+            )
+        )
     if "api" in backends:
         capabilities.append(list_children_capability(backends=("api",)))
         capabilities.append(list_genomes_capability(backends=("api",)))
