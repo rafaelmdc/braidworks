@@ -41,3 +41,9 @@ Run package tests and strict verification for each changed package. Changed HTTP
 backends also require opt-in live E2E; document genuine upstream failures without
 claiming verification. Run workspace lint/test and regenerate indexes at pack
 boundaries. Report exact checks and remaining/deferred scopes on GitHub.
+
+Pack 1 registry verification corrected a missing canonical string declaration for
+`structure.alphafold.model_id` and cataloged all six new leaf outputs. Core 0.21.7
+and weaverkit 0.6.10 include those declarations; no scientific logic was added to
+core. Core's 541 tests and weaverkit's 291 tests pass with the existing contracts.
+Full workspace validation is running; its result will be recorded separately.

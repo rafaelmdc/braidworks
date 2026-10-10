@@ -64,6 +64,12 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "gtdb.genome.representative": "Selected species representative accession with source/release provenance; not necessarily the input strain.",
+    "microbe.abundance.run_metadata": "Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage.",
+    "microbe.ecology.evidence": "Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence.",
+    "structure.pdb.quality": "Observed entry-level PDBe quality metrics with method, availability and missing-value semantics.",
+    "wikipedia.pageviews.series": "Ordered observed monthly bins; absent months are not measured zero.",
+    "wikipedia.pageviews.title": "Supplied English Wikipedia article key and explicit redirect policy.",
     "structure.alphafold.confidence": "Observed PAE/pLDDT references with model version, coverage and metric semantics.",
     "structure.alphafold.models": "Capped display of API-observed AlphaFold models; full identities are a separate fan set.",
     "structure.alphafold.model_coverage": "Observed model/display counts and API-only enumeration scope.",

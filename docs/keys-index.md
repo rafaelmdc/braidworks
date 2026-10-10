@@ -44,10 +44,11 @@ Registered bridge keys — what links weavers together.
 | `protein.ensembl.id` | Ensembl protein id for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `protein.interpro.id` | An InterPro entry id. | — | — |
 | `protein.pfam.id` | A Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
+| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `alphafold:list_models`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `string.id` | Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping. | `string:list_interactions`, `uniprot:map_from_accession` | `uniprot:map_to_accession` |
+| `structure.alphafold.model_id` | Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction. | `alphafold:list_models` | `alphafold:describe_prediction` |
 | `wikidata.qid` | Wikidata item id (Qxxxx) for one taxon — joins Wikidata/Wikipedia datasets. | `wikidata:resolve_taxon` | — |
 | `wikipedia.title` | English Wikipedia article title for one taxon — the pageviews join key. | `wikidata:resolve_taxon` | `wikipedia:describe_pageviews` |
 
@@ -92,6 +93,7 @@ Descriptive payload fields; nothing joins on them.
 | `go.term.definition` | What this GO term means. | `quickgo:describe_go_term` | — |
 | `go.term.detail` | Full detail of this GO term — name, aspect, definition, synonyms. | `quickgo:describe_go_term` | — |
 | `go.term.name` | The name of this GO term. | `quickgo:describe_go_term` | — |
+| `gtdb.genome.representative` | Selected species representative accession with source/release provenance; not necessarily the input strain. | `gtdb:describe_gtdb_taxonomy` | — |
 | `gtdb.lineage` | This organism's GTDB genome-based, rank-normalized lineage — an ordered list of {rank, name} from domain to species. | `gtdb:describe_gtdb_taxonomy` | — |
 | `gtdb.tree.rootpath` | This organism's path from the root of the GTDB reference tree to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic). | `gtdb:describe_gtdb_tree_placement` | — |
 | `microbe.abundance.associations` | This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
@@ -100,11 +102,13 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.abundance.overview` | This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.phenotype_names` | The gut-metagenome phenotypes (diseases/health) this microbe is reported prevalent in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.records` | Full GMrepo abundance rows for this microbe — the global overview plus every per-phenotype prevalence/abundance record. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.run_metadata` | Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage. | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.abundance.sample_profiles` | Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI). | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.ecology.evidence` | Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence. | `faprotax:describe_ecology` | — |
 | `microbe.ecology.functional_groups` | FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration). | `faprotax:describe_ecology` | — |
 | `microbe.metabolism.reactions` | The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}. | `agora:describe_metabolic_reconstruction` | — |
 | `microbe.metabolism.reconstruction` | This organism's AGORA2 genome-scale metabolic reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome). | `agora:describe_metabolic_reconstruction` | — |
@@ -146,19 +150,25 @@ Descriptive payload fields; nothing joins on them.
 | `protein.sequence` | Canonical UniProtKB entry amino-acid sequence; produced by describe_protein. | `uniprot:describe_protein` | — |
 | `protein.uniprot.mapping.count` | How many ids this protein mapped to. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `protein.uniprot.mapping.records` | The ids this protein mapped to — id plus reviewed/db. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
-| `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model` | — |
-| `structure.alphafold.mean_plddt` | The AlphaFold model's mean pLDDT confidence, 0–100. | `alphafold:describe_model` | — |
-| `structure.alphafold.model_url` | Where to download this protein's AlphaFold model. | `alphafold:describe_model` | — |
-| `structure.alphafold.pae_image_url` | The AlphaFold model's predicted-aligned-error plot. | `alphafold:describe_model` | — |
-| `structure.alphafold.records` | Full AlphaFold model metadata — id, confidence, URLs. | `alphafold:describe_model` | — |
-| `structure.alphafold.version` | Which AlphaFold model version this is. | `alphafold:describe_model` | — |
+| `structure.alphafold.confidence` | Observed PAE/pLDDT references with model version, coverage and metric semantics. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.mean_plddt` | The AlphaFold model's mean pLDDT confidence, 0–100. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.model_coverage` | Observed model/display counts and API-only enumeration scope. | `alphafold:list_models` | — |
+| `structure.alphafold.model_url` | Where to download this protein's AlphaFold model. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.models` | Capped display of API-observed AlphaFold models; full identities are a separate fan set. | `alphafold:list_models` | — |
+| `structure.alphafold.pae_image_url` | The AlphaFold model's predicted-aligned-error plot. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.records` | Full AlphaFold model metadata — id, confidence, URLs. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.alphafold.version` | Which AlphaFold model version this is. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.pdb.count` | How many PDB structures cover this protein. | `pdbe:list_structures` | — |
 | `structure.pdb.detail` | Full detail of one PDB structure — title, method, dates, authors. | `pdbe:describe_structure` | — |
 | `structure.pdb.ids` | Experimental PDB structures of this protein. | `pdbe:list_structures` | — |
 | `structure.pdb.method` | How one PDB structure was solved. | `pdbe:describe_structure` | — |
+| `structure.pdb.quality` | Observed entry-level PDBe quality metrics with method, availability and missing-value semantics. | `pdbe:describe_structure` | — |
 | `structure.pdb.records` | This protein's PDB structures — id, method, resolution, coverage. | `pdbe:list_structures` | — |
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
 | `wikidata.sitelinks` | Language/site links associated with a Wikidata taxon item. | `wikidata:resolve_taxon` | — |
 | `wikipedia.pageviews` | English-Wikipedia pageview subtotal; compare only matching measurement scopes. | `wikipedia:describe_pageviews` | — |
 | `wikipedia.pageviews.measurement` | Pageview period, project, access, agent and observed/requested monthly-bin coverage. | `wikipedia:describe_pageviews` | — |
+| `wikipedia.pageviews.series` | Ordered observed monthly bins; absent months are not measured zero. | `wikipedia:describe_pageviews` | — |
+| `wikipedia.pageviews.title` | Supplied English Wikipedia article key and explicit redirect policy. | `wikipedia:describe_pageviews` | — |
