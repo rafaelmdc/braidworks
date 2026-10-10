@@ -25,7 +25,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 2 | #207 | QuickGO typed relations/obsoletion group | Complete minimum: 75 tests, strict, 6 live |
 | 2 | #212 | Reactome hierarchy and typed participant groups | Complete minimum: 62 tests, strict, 4 live |
 | 2 | #231 | NCBI current/merged/deleted identity evidence; accurate docs | Complete minimum: 228 package tests, 7 targeted, strict |
-| 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Pending |
+| 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Complete minimum: 64 tests, strict, 3 live |
 | 2 | #251 | AGORA reconstruction list/describe with artifact availability | Pending |
 | 2 | #278 | Direct MONDO-ID describe, definition and history | Pending |
 | 2 | #286 | Wikidata exact ID entry and localized labels; English join preserved | Pending |

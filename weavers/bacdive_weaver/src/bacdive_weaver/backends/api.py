@@ -245,6 +245,10 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "describe_strain":
+            return await self._describe_strains(queries)
+        if capability_id == "list_strains":
+            return await self._list_strains(queries)
         # The whole record arrives in one fetch, so we compute every trait and let
         # the shared mapper filter to requested_outputs; no per-group gating needed.
         names = [str(q.get("organism.scientific_name", "")).strip() for q in queries]
@@ -260,6 +264,121 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
             replace(by_name[name], query=q, values=deepcopy(by_name[name].values))
             for name, q in zip(names, queries)
         ]
+
+    async def _list_strains(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        names = [str(q.get("organism.scientific_name", "")).strip() for q in queries]
+
+        async def one(name: str) -> LookupRecord:
+            query = {"organism.scientific_name": name}
+            genus, species = _split_name(name)
+            if not genus:
+                return LookupRecord(query=query, found=False)
+            if len(name.split()) != 2 or species.lower() in {"sp.", "spp.", "cf.", "aff."}:
+                return LookupRecord(
+                    query=query,
+                    error="BacDive strain listing requires an unqualified binomial species name",
+                )
+            try:
+                ids = await self._strain_ids(genus, species)
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                return LookupRecord(query=query, error=f"BacDive listing failed: {exc}")
+            return LookupRecord(
+                query=query,
+                found=bool(ids),
+                values={
+                    "microbe.bacdive.strain_id": ids,
+                    "microbe.bacdive.strain_coverage": {
+                        "observed_strains": len(ids),
+                        "complete": True,
+                        "scope": "complete observed provider binomial listing; type and non-type strains",
+                    },
+                },
+            )
+
+        distinct = sorted(set(names))
+        values = await map_bounded(distinct, one, limit=self._max_concurrency)
+        by_name = dict(zip(distinct, values))
+        return [
+            replace(by_name[name], query=query, values=deepcopy(by_name[name].values))
+            for name, query in zip(names, queries)
+        ]
+
+    async def _describe_strains(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        identifiers = []
+        errors = {}
+        for index, query in enumerate(queries):
+            try:
+                identifiers.append(_strain_id(query.get("microbe.bacdive.strain_id")))
+            except _InvalidResponse as exc:
+                identifiers.append(None)
+                errors[index] = str(exc)
+        distinct = sorted({identifier for identifier in identifiers if identifier is not None})
+        records = {}
+        source_errors = {}
+        for start in range(0, len(distinct), _FETCH_BATCH):
+            chunk = distinct[start : start + _FETCH_BATCH]
+            try:
+                records.update(await self._fetch_records(chunk, allow_missing=True))
+            except httpx.HTTPStatusError as exc:
+                if not is_not_found_status(exc.response.status_code):
+                    source_errors.update(dict.fromkeys(chunk, f"BacDive exact fetch failed: {exc}"))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                source_errors.update(dict.fromkeys(chunk, f"BacDive exact fetch failed: {exc}"))
+        results = []
+        for index, (query, identifier) in enumerate(zip(queries, identifiers)):
+            error = errors.get(index) or source_errors.get(identifier)
+            if error:
+                results.append(LookupRecord(query=query, error=error))
+            elif identifier not in records:
+                results.append(LookupRecord(query=query, found=False))
+            else:
+                record = records[identifier]
+                values, conflicts = _trait_projection(record)
+                values["microbe.trait.records"] = {
+                    "scope": "exact_strain",
+                    "strain_id": identifier,
+                    "matched_taxonomy": _canonical_evidence(
+                        record["Name and taxonomic classification"]
+                    ),
+                    "conflicts": conflicts,
+                    "source": _canonical_evidence(record),
+                }
+                taxonomy = _as_list(record["Name and taxonomic classification"])
+                flags = {
+                    row.get("type strain") for row in taxonomy if row.get("type strain") is not None
+                }
+                literature = record.get("Literature")
+                sequences = record.get("Sequence information")
+                values["microbe.bacdive.strain"] = {
+                    "strain_id": identifier,
+                    "taxonomy": deepcopy(taxonomy),
+                    "type_strain": next(iter(flags)) if len(flags) == 1 else None,
+                    "culture_collection_references": [
+                        {
+                            "source_text": row["culture collection no."],
+                            "source_reference": row.get("@ref"),
+                        }
+                        for row in _as_list(literature)
+                        if isinstance(row, dict) and row.get("culture collection no.")
+                    ]
+                    if literature is not None
+                    else None,
+                    "sequence_references": deepcopy(sequences),
+                    "source": deepcopy(record),
+                    "scope": "this exact BacDive strain; traits do not apply to every strain of its species",
+                }
+                results.append(LookupRecord(query=query, found=True, values=values))
+        return results
 
     async def _resolve_one(self, query: dict[str, Any], name: str) -> LookupRecord:
         genus, species = _split_name(name)
@@ -307,8 +426,7 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
             ),
         )
 
-    async def _find_type_strain(self, genus: str, species: str | None) -> dict[str, Any] | None:
-        """Sort the complete ID listing before bounded detail scans; smallest type ID wins."""
+    async def _strain_ids(self, genus: str, species: str) -> list[int]:
         path = f"/taxon/{genus}/{species}"
         seen_pages: set[str] = set()
         identifiers: set[int] = set()
@@ -322,7 +440,7 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
             if is_not_found_status(resp.status_code):
                 if len(seen_pages) > 1:
                     raise _InvalidResponse("incomplete strain scan: continuation page unavailable")
-                return None
+                return []
             resp.raise_for_status()
             page = resp.json()
             if not isinstance(page, dict) or not isinstance(page.get("results"), list):
@@ -331,7 +449,11 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
                 raise _InvalidResponse("BacDive next page must be a URL string or null")
             identifiers.update(_strain_id(identifier) for identifier in page["results"])
             path = page.get("next")
-        ids = sorted(identifiers)
+        return sorted(identifiers)
+
+    async def _find_type_strain(self, genus: str, species: str | None) -> dict[str, Any] | None:
+        """Sort the complete ID listing before bounded detail scans; smallest type ID wins."""
+        ids = await self._strain_ids(genus, species)
         budgeted = ids[: self._max_strains_scanned]
         expected = f"{genus} {species}".casefold()
         for start in range(0, len(budgeted), _FETCH_BATCH):
@@ -358,7 +480,9 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
             )
         return None
 
-    async def _fetch_records(self, strain_ids: list[int]) -> dict[int, dict[str, Any]]:
+    async def _fetch_records(
+        self, strain_ids: list[int], *, allow_missing: bool = False
+    ) -> dict[int, dict[str, Any]]:
         """Batch-fetch ``GET /fetch/{id1;id2;...}`` -> {strain_id: record}."""
         if not strain_ids:
             return {}
@@ -371,7 +495,19 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
         results = {
             _strain_id(key): _validated_record(value) for key, value in body["results"].items()
         }
-        if set(results) != set(strain_ids):
+        for identifier, record in results.items():
+            general = record.get("General")
+            if general is not None and not isinstance(general, dict):
+                raise _InvalidResponse("BacDive General section must be an object")
+            if (
+                general
+                and general.get("BacDive-ID") is not None
+                and _strain_id(general["BacDive-ID"]) != identifier
+            ):
+                raise _InvalidResponse("BacDive record ID conflicts with keyed identity")
+        if set(results) - set(strain_ids) or (
+            not allow_missing and set(results) != set(strain_ids)
+        ):
             raise _InvalidResponse(
                 "BacDive fetch response does not match requested strain identifiers"
             )

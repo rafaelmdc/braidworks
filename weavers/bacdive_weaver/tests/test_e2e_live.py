@@ -48,3 +48,37 @@ async def test_live_unknown_name_is_no_match():
     result = await _resolve(weaver, "Notarealus fakenamei")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_list_and_exact_strain_do_not_confuse_species_scope():
+    async with build_bacdive_weaver() as weaver:
+        listing = (
+            await weaver.execute_batch(
+                "list_strains",
+                [
+                    StrandSet.from_strands(
+                        "name", [Strand("organism.scientific_name", "Myroides odoratus")]
+                    )
+                ],
+                requested_outputs=frozenset({"microbe.bacdive.strain_id"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(listing)
+        assert listing.status is WeaveStatus.OK
+        ids = {s.type_id: s.value for s in listing.strands}["microbe.bacdive.strain_id"]
+        assert 5621 in ids
+        results = await weaver.execute_batch(
+            "describe_strain",
+            [
+                StrandSet.from_strands(str(i), [Strand("microbe.bacdive.strain_id", i)])
+                for i in [5621, 999999999]
+            ],
+            requested_outputs=frozenset({"microbe.bacdive.strain", "microbe.trait.records"}),
+            backend="api",
+        )
+        skip_if_transient(results[0])
+        assert results[0].status is WeaveStatus.OK and results[1].status is WeaveStatus.NO_MATCH
+        detail = {s.type_id: s.value for s in results[0].strands}["microbe.bacdive.strain"]
+        assert detail["strain_id"] == 5621
+        assert detail["culture_collection_references"] and detail["sequence_references"]

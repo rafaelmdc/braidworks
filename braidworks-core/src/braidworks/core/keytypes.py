@@ -26,6 +26,7 @@ from typing import Any
 # accessions, and ontology/EC/accession-style ids are ``str``; structured values keep
 # their container type and are left untouched by ``canonicalize``.
 CANONICAL_TYPES: dict[str, type] = {
+    "microbe.bacdive.strain_id": int,
     "organism.name": str,
     "ncbi.taxon.id": int,
     "ncbi.taxon.species_id": int,

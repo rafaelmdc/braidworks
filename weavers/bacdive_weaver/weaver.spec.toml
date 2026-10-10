@@ -9,7 +9,7 @@ db_name = "bacdive"
 weaver_id = "bacdive"
 kind = "lookup"
 title = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
-version = "0.1.11"
+version = "0.1.12"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab961"
 attribution = "BacDive (DSMZ)"
@@ -43,6 +43,8 @@ source_sample = """
     }
   }
 }
+# GET /v2/fetch/5621; observed collection and genome references
+{"results":{"5621":{"Literature":{"culture collection no.":"DSM 2801, ATCC 4651, IAM 14199, JCM 7458, NCTC 11036, CCUG 7321, LMG 1233, BCRC 10678, CCM 3296, CECT 998, CIP 103105, IFO 14945, NBRC 14945"},"Sequence information":{"Genome sequences":[{"INSDC accession":"GCA_000243275","assembly level":"chromosome"}]}}}}
 """
 
 # One name -> one taxon query -> fetch the matching type strain. The API has no
@@ -73,6 +75,41 @@ max_batch_size = 50
   id = "evidence"
   outputs = ["microbe.trait.records"]
 
+[[capability]]
+id = "list_strains"
+consumes = ["organism.scientific_name"]
+max_batch_size = 50
+set_outputs = ["microbe.bacdive.strain_id"]
+
+  [[capability.group]]
+  id = "strains"
+  outputs = ["microbe.bacdive.strain_id", "microbe.bacdive.strain_coverage"]
+
+[[capability]]
+id = "describe_strain"
+consumes = ["microbe.bacdive.strain_id"]
+max_batch_size = 100
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["microbe.bacdive.strain"]
+
+  [[capability.group]]
+  id = "morphology"
+  outputs = ["microbe.trait.gram_stain", "microbe.trait.cell_shape", "microbe.trait.motility", "microbe.trait.spore_formation"]
+
+  [[capability.group]]
+  id = "physiology"
+  outputs = ["microbe.trait.oxygen_tolerance"]
+
+  [[capability.group]]
+  id = "growth"
+  outputs = ["microbe.trait.optimum_temp", "microbe.trait.optimum_ph"]
+
+  [[capability.group]]
+  id = "evidence"
+  outputs = ["microbe.trait.records"]
+
 # Golden runs against the deterministic fixture (bacdive_weaver.fixture, an
 # httpx.MockTransport serving canned taxon + fetch responses for the type strain
 # of Escherichia coli) so `weaverkit verify --strict` is reproducible offline.
@@ -80,3 +117,13 @@ max_batch_size = 50
 capability = "describe_traits"
 input = { "organism.scientific_name" = "Escherichia coli" }
 expect = { "microbe.trait.gram_stain" = "negative", "microbe.trait.cell_shape" = "rod-shaped" }
+
+[[golden]]
+capability = "list_strains"
+input = { "organism.scientific_name" = "Escherichia coli" }
+expect = { "microbe.bacdive.strain_id" = [1, 2] }
+
+[[golden]]
+capability = "describe_strain"
+input = { "microbe.bacdive.strain_id" = 2 }
+expect = { "microbe.trait.gram_stain" = "negative" }

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 # type_id -> one-line description (what it identifies / who produces it).
 SHARED_KEYS: dict[str, str] = {
+    "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
     # Entry point
     "organism.name": "The text you start from — an organism name.",
     # Organism layer (ncbi_weaver / gtdb_weaver)
@@ -64,6 +65,12 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "go.term.relations": "Observed typed term children and obsoletion; parents/replacements not inferred.",
+    "pathway.reactome.hierarchy": "Direct observed hasEvent children with distinct pathway/reaction types.",
+    "pathway.reactome.participants": "Typed provider participant references with numeric IDs scoped to observed release.",
+    "ncbi.taxon.history": "Requested/current taxid, merge chain, deletion and dump history availability.",
+    "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
+    "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
     "gtdb.genome.representative": "Selected species representative accession with source/release provenance; not necessarily the input strain.",
     "microbe.abundance.run_metadata": "Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage.",
     "microbe.ecology.evidence": "Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence.",

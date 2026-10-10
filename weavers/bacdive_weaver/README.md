@@ -118,3 +118,16 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+`list_strains` lists the complete observed paginated binomial strain listing as
+`microbe.bacdive.strain_id`, including type and non-type strains. The registered
+integer key fans into `describe_strain`, which accepts exact BacDive IDs in
+100-ID chunks and preserves individual misses. `microbe.bacdive.strain` provides
+taxonomy, observed type-strain flag, culture collection references and sequence
+references with source context. Trait/evidence groups also work for exact strains;
+conflicting observations omit the scalar and remain in evidence.
+
+Existing `describe_traits` still selects the deterministic type-strain
+representative for an unqualified binomial. Exact strain traits do not describe
+every strain of the species. API v2 remains keyless; no provider SDK is needed.
+Collection-number resolution and new authentication flows are not introduced.
