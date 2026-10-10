@@ -10,7 +10,7 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.10"
+version = "0.1.11"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
@@ -68,10 +68,48 @@ max_batch_size = 25
   id = "full"
   outputs = ["structure.alphafold.records"]
 
+# API-observed entries only; archive-only long-protein fragments are not enumerated.
+[[capability]]
+id = "list_models"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+set_outputs = ["structure.alphafold.model_id"]
+
+  [[capability.group]]
+  id = "models"
+  outputs = ["structure.alphafold.model_id", "structure.alphafold.models", "structure.alphafold.model_coverage"]
+
+[[capability]]
+id = "describe_prediction"
+consumes = ["structure.alphafold.model_id"]
+max_batch_size = 25
+
+  [[capability.group]]
+  id = "model"
+  outputs = ["structure.alphafold.entry_id", "structure.alphafold.mean_plddt", "structure.alphafold.model_url", "structure.alphafold.pae_image_url", "structure.alphafold.version"]
+
+  [[capability.group]]
+  id = "confidence"
+  outputs = ["structure.alphafold.confidence"]
+
+  [[capability.group]]
+  id = "full"
+  outputs = ["structure.alphafold.records"]
+
 # Golden runs against the deterministic fixture (alphafold_weaver.fixture, an
 # httpx.MockTransport serving a canonical + one isoform entry for P04637, so the
 # canonical-pick path is exercised) so `weaverkit verify --strict` is reproducible offline.
 [[golden]]
 capability = "describe_model"
 input = { "protein.uniprot.accession" = "P04637" }
+expect = { "structure.alphafold.entry_id" = "AF-P04637-F1" }
+
+[[golden]]
+capability = "list_models"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "structure.alphafold.model_id" = ["AF-P04637-2-F1@v6", "AF-P04637-F1@v6"] }
+
+[[golden]]
+capability = "describe_prediction"
+input = { "structure.alphafold.model_id" = "AF-P04637-F1@v6" }
 expect = { "structure.alphafold.entry_id" = "AF-P04637-F1" }

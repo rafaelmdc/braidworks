@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "alphafold"
-WEAVER_VERSION = "0.1.10"
+WEAVER_VERSION = "0.1.11"
 WEAVER_TITLE = "AlphaFold predicted structure (accession -> model + confidence)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,6 +38,67 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_model",
                 consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {
+                        "structure.alphafold.confidence",
+                        "structure.alphafold.entry_id",
+                        "structure.alphafold.mean_plddt",
+                        "structure.alphafold.model_url",
+                        "structure.alphafold.pae_image_url",
+                        "structure.alphafold.records",
+                        "structure.alphafold.version",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="model",
+                        outputs=frozenset(
+                            {
+                                "structure.alphafold.entry_id",
+                                "structure.alphafold.mean_plddt",
+                                "structure.alphafold.model_url",
+                                "structure.alphafold.pae_image_url",
+                                "structure.alphafold.version",
+                            }
+                        ),
+                    ),
+                    OutputGroup(
+                        id="confidence", outputs=frozenset({"structure.alphafold.confidence"})
+                    ),
+                    OutputGroup(id="full", outputs=frozenset({"structure.alphafold.records"})),
+                ),
+                backends=backends,
+                max_batch_size=25,
+            ),
+            Capability(
+                id="list_models",
+                consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {
+                        "structure.alphafold.model_coverage",
+                        "structure.alphafold.model_id",
+                        "structure.alphafold.models",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="models",
+                        outputs=frozenset(
+                            {
+                                "structure.alphafold.model_coverage",
+                                "structure.alphafold.model_id",
+                                "structure.alphafold.models",
+                            }
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=25,
+                set_outputs=frozenset({"structure.alphafold.model_id"}),
+            ),
+            Capability(
+                id="describe_prediction",
+                consumes=frozenset({"structure.alphafold.model_id"}),
                 produces=frozenset(
                     {
                         "structure.alphafold.confidence",

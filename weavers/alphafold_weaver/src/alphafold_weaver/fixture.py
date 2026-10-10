@@ -51,6 +51,10 @@ def _handler(request: httpx.Request) -> httpx.Response:
         acc = request.url.path.rsplit("/", 1)[1]
         if acc in _PREDICTIONS:
             return httpx.Response(200, content=json.dumps(_PREDICTIONS[acc]))
+        for entries in _PREDICTIONS.values():
+            selected = [entry for entry in entries if entry["entryId"] == acc]
+            if selected:
+                return httpx.Response(200, json=selected)
         return httpx.Response(404, content=json.dumps({"detail": "no model"}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 

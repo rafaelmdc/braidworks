@@ -43,6 +43,7 @@ SHARED_KEYS: dict[str, str] = {
     "protein.pfam.id": "A Pfam family id.",
     "pdb.id": "A PDB / PDBe structure id.",
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    "structure.alphafold.model_id": "Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction.",
     # Disease layer (mondo_weaver) — entry points + the unified disease join key
     "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point "
     "for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
@@ -63,6 +64,9 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "structure.alphafold.confidence": "Observed PAE/pLDDT references with model version, coverage and metric semantics.",
+    "structure.alphafold.models": "Capped display of API-observed AlphaFold models; full identities are a separate fan set.",
+    "structure.alphafold.model_coverage": "Observed model/display counts and API-only enumeration scope.",
     # wikidata_weaver / wikipedia_weaver leaf outputs
     "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
     "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",

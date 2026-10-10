@@ -19,3 +19,12 @@ per-residue pLDDT JSON URLs, model/version/coverage and metric semantics. Missin
 URLs stay null; no linked files are fetched. Existing outputs and representative
 selection are unchanged. 44 package tests passed, strict verification passed, and
 all 3 live E2E tests passed. Parsed matrices/vectors remain outside this scope.
+
+## Approved model exploration — #202
+
+Version 0.1.11 adds `list_models` (API-observed, full ordered version-qualified ID
+fan set; ten display records) and `describe_prediction` (exact ID/version; no
+silent version upgrades). The provider direct-entry route was verified. Existing
+accession-based representative selection is unchanged. Toolkit 0.6.9 registers
+the paired bridge key. 47 package tests passed, strict passed, all 4 live tests
+passed. Archive-only long-protein fragments are explicitly outside API coverage.

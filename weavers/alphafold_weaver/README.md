@@ -111,3 +111,15 @@ Missing source URLs remain `None`; lookup never downloads those files. pLDDT
 is local confidence on a 0–100 scale; PAE measures predicted relative placement
 error in angstroms. Neither is an experimental measurement. Existing representative
 selection and outputs are unchanged.
+
+## Explore API-observed models
+
+`list_models` accepts `protein.uniprot.accession` and emits the full distinct,
+ordered `structure.alphafold.model_id` fan set (`entryId@vN`). Its display records
+are capped at ten; coverage counts the observed API entries only. The API does
+not enumerate archive-only long-protein fragments.
+
+`describe_prediction` consumes one of those version-qualified IDs and exposes the
+same model/full/confidence groups as `describe_model`. It queries the source entry
+and refuses a different returned version rather than silently upgrading a saved
+identity. Existing accession-based `describe_model` keeps its representative choice.

@@ -143,6 +143,41 @@ def _extract(entry: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in candidates.items() if v is not None}
 
 
+def _models(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """One explicit identity per observed model/version; conflicts cannot pick a winner."""
+    distinct = {}
+    for entry in entries:
+        version = entry.get("latestVersion")
+        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+            raise _InvalidResponse("AlphaFold model enumeration requires a positive version")
+        identity = f"{entry['entryId']}@v{version}"
+        if identity in distinct and distinct[identity] != entry:
+            raise _InvalidResponse(f"Conflicting AlphaFold model identity {identity}")
+        distinct[identity] = entry
+    identities = sorted(distinct)
+    records = []
+    for identity in identities[:10]:
+        entry = distinct[identity]
+        record = _extract(entry)["structure.alphafold.records"]
+        record.update(
+            model_id=identity,
+            provider_id=entry.get("providerId"),
+            uniprot_accession=entry.get("uniprotAccession"),
+        )
+        records.append(record)
+    return {
+        "structure.alphafold.model_id": identities,
+        "structure.alphafold.models": records,
+        "structure.alphafold.model_coverage": {
+            "scope": "API-returned entries; archive-only fragments excluded",
+            "observed_models": len(identities),
+            "display_limit": 10,
+            "displayed_models": len(records),
+            "source_complete": None,
+        },
+    }
+
+
 class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
     """AlphaFold DB REST backend. Always configured — the API is free, no key."""
 
@@ -188,16 +223,35 @@ class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         async def resolve(query: dict[str, Any]) -> LookupRecord:
+            if capability_id == "describe_prediction":
+                identity = str(query.get("structure.alphafold.model_id") or "")
+                matched = re.fullmatch(r"([A-Za-z0-9][A-Za-z0-9._-]*)@v([1-9][0-9]*)", identity)
+                if not matched:
+                    return LookupRecord(query=query, found=False)
+                return await self._resolve_one(
+                    query,
+                    matched[1],
+                    confidence="confidence" in groups_to_compute,
+                    mode=capability_id,
+                    version=int(matched[2]),
+                )
             return await self._resolve_one(
                 query,
                 str(query.get("protein.uniprot.accession") or "").strip(),
                 confidence="confidence" in groups_to_compute,
+                mode=capability_id,
             )
 
         return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     async def _resolve_one(
-        self, query: dict[str, Any], accession: str, *, confidence: bool = False
+        self,
+        query: dict[str, Any],
+        accession: str,
+        *,
+        confidence: bool = False,
+        mode: str = "describe_model",
+        version: int | None = None,
     ) -> LookupRecord:
         if not accession:
             return LookupRecord(query=query, found=False)
@@ -224,7 +278,27 @@ class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
 
         if not entries:
             return LookupRecord(query=query, found=False)
-        selected = _pick(entries, accession)
+        if mode == "list_models":
+            try:
+                return LookupRecord(query=query, values=_models(entries), found=True)
+            except _InvalidResponse as exc:
+                return LookupRecord(query=query, error=str(exc))
+        if mode == "describe_prediction":
+            candidates = [
+                entry
+                for entry in entries
+                if entry["entryId"] == accession and entry.get("latestVersion") == version
+            ]
+            if not candidates:
+                return LookupRecord(
+                    query=query,
+                    error="Requested AlphaFold model version is unavailable; refusing a different identity",
+                )
+            if any(entry != candidates[0] for entry in candidates):
+                return LookupRecord(query=query, error="Conflicting AlphaFold model identity")
+            selected = candidates[0]
+        else:
+            selected = _pick(entries, accession)
         values = _extract(selected)
         coverage = values["structure.alphafold.records"]["coverage"]
         if confidence:

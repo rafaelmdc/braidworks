@@ -87,3 +87,40 @@ async def test_live_confidence_references_are_source_urls():
         assert value["pae_json_url"].endswith(".json")
         assert value["plddt_json_url"].endswith(".json")
         assert value["coverage"]["uniprot_end"] == 393
+
+
+async def test_live_model_list_drills_to_source_entry():
+    async with build_alphafold_weaver() as weaver:
+        inputs = [StrandSet.from_strands("tp53", [Strand("protein.uniprot.accession", "P04637")])]
+        result = (
+            await weaver.execute_batch(
+                "list_models",
+                inputs,
+                requested_outputs=frozenset({"structure.alphafold.model_id"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        identities = next(
+            s.value for s in result.strands if s.type_id == "structure.alphafold.model_id"
+        )
+        identity = next(value for value in identities if value.startswith("AF-P04637-F1@"))
+        exact = [
+            StrandSet.from_strands("model", [Strand("structure.alphafold.model_id", identity)])
+        ]
+        result = (
+            await weaver.execute_batch(
+                "describe_prediction",
+                exact,
+                requested_outputs=frozenset(
+                    {"structure.alphafold.entry_id", "structure.alphafold.version"}
+                ),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["structure.alphafold.entry_id"] == "AF-P04637-F1"
+        assert identity.endswith(f"@v{values['structure.alphafold.version']}")
