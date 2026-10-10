@@ -11,11 +11,11 @@
 # Run it line by line in front of an audience, or `bash docs/demo.sh` start to finish.
 # Data prints to stdout; the resolved/unresolved count prints to stderr.
 #
-# Prereqs: the weavers installed (from the repo root: `uv run --all-packages braidworks
-# weavers` lists them). Everything below hits live, keyless public APIs — no API key.
+# Prereqs: activate the project environment after installing UniProt, PDBe, AlphaFold,
+# STRING, Reactome, QuickGO, and NCBI. See docs/installation.md. These queries use live APIs.
 
 set -eu
-BW="${BRAIDWORKS_CLI:-braidworks}"   # or: alias bw='uv run --all-packages braidworks'
+BW="${BRAIDWORKS_CLI:-braidworks}"   # executable path override; activate .venv first
 
 # ---------------------------------------------------------------------------
 # Act 0 — what's in the network?
@@ -57,7 +57,7 @@ $BW weave --have protein.query=TP53 --param organism=9606 \
 # `list_orthologs` returns more genes of the SAME type it consumed, so the planner
 # can't auto-route it. `--for-each orthologs` fans THROUGH that relationship and then
 # plans --want from each ortholog. 7157 = human TP53; taxon_filter=9443 = primates.
-# Each row is one species' TP53 (the `from` column regroups them to the query).
+# Rows follow returned orthologs; `parent` and `source_row` retain input lineage.
 $BW weave --have gene.ncbi.id=7157 --for-each orthologs --param taxon_filter=9443 \
     --want gene.symbol,gene.organism --format tsv
 
@@ -67,7 +67,7 @@ $BW weave --have gene.ncbi.id=7157 --for-each orthologs --param taxon_filter=944
 # Data is clean on stdout, so it pipes straight into jq / pandas / a spreadsheet:
 #
 #   $BW weave --have protein.query=TP53 --param organism=9606 \
-#       --want pathway.reactome.names --format json | jq '.[].values'
+#       --want pathway.reactome.names --format json | jq '.[].strands'
 #
 # And the network is an offline, shareable HTML map: `make view && open docs/braidworks-network.html`
 echo "done — say what you have, say what you want, get the route."

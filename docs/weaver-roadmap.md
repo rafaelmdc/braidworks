@@ -1,5 +1,9 @@
 # Weaver roadmap — linking organisms to function (ORDINA)
 
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [source catalogue](sources.md) and [key index](keys-index.md).
+> This record is retained for its rationale; it is not an operating guide.
+
 This document surveys the biological databases worth turning into Braidworks
 weavers, makes them **reachable from one another** (each weaver's consumed/produced
 strands + the shared keys that bridge databases), prioritizes them for **ORDINA**

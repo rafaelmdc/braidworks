@@ -1,5 +1,11 @@
 # Current audit completion record — 2026-10-05
 
+> **Historical programme record.** The implementation described here was pushed
+> on 2026-10-10 and completed trackers were closed. Original checkpoints below
+> retain their dates. Later cache/resume interfaces are documented in
+> [cache and saved runs](../persistence.md); current source delivery is recorded in
+> [weaver completion](../audits/weavers/remaining-features.plan.md).
+
 Branch: `feat/publication-readiness`. Implementation is complete locally; remote delivery
 is pending. Publishing and durable cache/resume are deferred at the user's request.
 

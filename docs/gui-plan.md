@@ -1,5 +1,9 @@
 # GUI plan — `weaverkit serve` (issue #87)
 
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [browser usage](usage.md#use-the-browser).
+> This record is retained for its rationale; it is not an operating guide.
+
 ## Context
 
 `weaverkit view` today produces a **static, read-only** HTML file (a picture you pan/hover

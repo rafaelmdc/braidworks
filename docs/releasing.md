@@ -63,8 +63,9 @@ pagination and redirects; rehearse shared Redis settings and supported backend w
 Rehearse matching worker/orchestrator deployments before production use.
 
 Rehearse --archive with a new output path and inspect its initial inputs, effective
-parameters, terminal outcomes and references. Archives preserve observations; durable
-cache and cross-process resume remain outside the first publication scope.
+parameters, terminal outcomes and references. Archives preserve observations. Opt-in lookup caches and saved-run continuation
+are separate implemented features; rehearse their [documented scope](persistence.md)
+if they are included in your release. Further persistence scope remains under #143.
 
 ## Publication and tags
 

@@ -1,5 +1,11 @@
 # Specifications and implementation programme
 
+> **Historical programme record.** The implementation described here was pushed
+> on 2026-10-10 and completed trackers were closed. Original checkpoints below
+> retain their dates. Later cache/resume interfaces are documented in
+> [cache and saved runs](../persistence.md); current source delivery is recorded in
+> [weaver completion](../audits/weavers/remaining-features.plan.md).
+
 Programme tracker: [#146](https://github.com/rafaelmdc/braidworks/issues/146).
 
 Date: 2026-10-05. The user accepted the direction of three audit rounds and requested

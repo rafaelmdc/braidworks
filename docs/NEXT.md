@@ -1,46 +1,46 @@
-# Publication work still to finish
+# Current project decisions and backlog
 
-Updated 2026-10-04. This is the current work list; older roadmap dates describe
-historical plans, not current release guarantees.
+Updated 2026-10-10. Completed readiness/refactoring and approved weaver work have
+been pushed to the review branch; they have not been merged or published. Historical
+plans remain in [design history](history.md). This page summarizes the open queue,
+not the instructions for using Braidworks.
 
-The gene-to-protein bridge already ships: UniProt's `map_to_accession` accepts
-`gene.ncbi.id` among its alternative inputs. The interactive server also animates
-executing routes. Neither is a new implementation task.
+## Decisions deliberately left open
 
-## Release gates
+| Work | Status |
+|---|---|
+| [Publication channel and release activation (#142)](https://github.com/rafaelmdc/braidworks/issues/142) | Deferred. Checkout/wheel installs are documented; package publication needs the owner's release decision. |
+| [Further cache/resume scope (#143)](https://github.com/rafaelmdc/braidworks/issues/143) | Deferred follow-up. Opt-in SQLite caches, saved runs, and human continuation interfaces already exist; see [persistence](persistence.md). |
+| [GTDB cross-tree distance semantics (#234)](https://github.com/rafaelmdc/braidworks/issues/234) | Deferred. Tree identity/distance changes need a deliberate design decision. |
 
-1. Keep `make lint` and `make test` green. Validate built wheels and sdists in a
-   fresh environment without workspace source overrides, including entry points,
-   bundled fixtures, and optional server dependencies.
-2. Check package core-version floors against the APIs they use. Choose and declare
-   the intended publication channel before publishing. MIT software licensing is
-   now declared separately from upstream data licenses.
-3. Rehearse the core 0.12 migration with existing workflows. Ambiguity now pauses
-   by default; explicit automatic selection still respects confidence floors. See
-   [migrating-to-0.12.md](migrating-to-0.12.md).
-4. Rehearse a bounded molecular example against live APIs. Record partial coverage
-   and upstream failures; an offline test pass does not establish live availability.
-5. Regenerate the weaver/key catalogue and verify documentation examples and links.
-   Make setup requirements and the browser's single-input scope explicit.
+The [GTDB parent (#165)](https://github.com/rafaelmdc/braidworks/issues/165) and
+[weaver programme (#147)](https://github.com/rafaelmdc/braidworks/issues/147) remain
+open for the deferred GTDB finding.
 
-Core correctness and browser transport/export fixes are under active validation.
-Do not describe the checkout as published, fully live-validated, or distributed-safe.
+## Standalone ideas awaiting reconciliation
 
-## Follow-up features
+These older issues remain open. Their titles do not establish whether later work
+partially addressed them; inspect before planning or closing them.
 
-GO evidence/completeness, run archives, upstream batching, browser batch input and
-HTTP request pacing are implemented. Publishing and durable cache/resume are deferred
-for separate design decisions. Disease bridges, extra taxonomy sources and production
-distributed deployment need deliberate scope and acceptance criteria.
+| Issue | Topic |
+|---|---|
+| [#135](https://github.com/rafaelmdc/braidworks/issues/135) | Prune expansion using downstream availability |
+| [#133](https://github.com/rafaelmdc/braidworks/issues/133) | Error-system refactor |
+| [#132](https://github.com/rafaelmdc/braidworks/issues/132) | Planner diagnostics for disabled backends |
+| [#131](https://github.com/rafaelmdc/braidworks/issues/131) | Acquisition progress |
+| [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Strand declaration decorators |
+| [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Workflow consolidation |
+| [#67](https://github.com/rafaelmdc/braidworks/issues/67) | Generated capability documentation |
+| [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Shared-key registry storage |
 
-## Pointers
+## Documentation review
 
-- Human CLI/API recipes: [usage.md](usage.md)
-- Existing weavers and planned sources: [weaver-roadmap.md](weaver-roadmap.md)
-- Core contracts: [architecture.md](architecture.md)
-- Weaver implementation loop: [../CONTRIBUTING.md](../CONTRIBUTING.md)
-- Demo script to rehearse: [demo.sh](demo.sh)
+[First-pass readability work (#299)](https://github.com/rafaelmdc/braidworks/issues/299)
+reorganizes onboarding and current guides. The next joint review will develop three
+researcher workflows with meaningful inputs, results, interpretation, and coverage
+checks; see the [first-pass findings](audits/documentation-readability.md).
 
-The June 2026 notes reported Reactome detail failures and unauthenticated NCBI rate
-limits. Those are historical observations; recheck the endpoints before treating
-either as a current limitation.
+For release checks use [release rehearsal](releasing.md). For evidence of delivered
+work use [weaver acceptance](audits/weavers/remaining-features.plan.md) and
+[refactoring acceptance](refactoring/final-acceptance.md). Local verification does
+not replace remote CI or a production distributed-deployment rehearsal.

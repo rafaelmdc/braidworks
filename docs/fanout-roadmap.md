@@ -1,5 +1,9 @@
 # Roadmap: cardinality fan-out (one → many expansion)
 
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [expansion usage](usage.md#follow-related-entities) and [core contracts](core-contracts.md).
+> This record is retained for its rationale; it is not an operating guide.
+
 **Status:** Phase 1 **shipped** (`braidworks-core` 0.2.0); Phases 2–4 designed, not
 built. This is a **core** feature, not a weaver capability. Build it deliberately, in
 phases — **the full fan-out mechanism (Phases 1–3) before the run visualizer (Phase 4).**

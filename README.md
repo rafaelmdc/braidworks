@@ -1,336 +1,83 @@
 # Braidworks
 
-Braidworks connects biological databases so you can go from *what you have* (a gene
-name, an organism, a protein accession) to *what you want* (structures, pathways,
-interactions, taxonomy, phenotypes) without hand-writing the glue between every API.
+Braidworks retrieves and connects biological data across databases. Give it the
+identifiers or names you have and the fields you want; it finds a route through
+installed data sources and runs the lookups for your inputs.
 
-Each data source is wrapped in a **weaver** that declares, in typed terms, what it
-*consumes* and *produces*. Braidworks reads those declarations, finds a route from
-your inputs to your targets across all installed weavers, and runs it — in batch,
-with caching, deduplication, and provenance/citations attached.
+For example, a protein query can resolve through UniProt to an accession, then use
+that accession to retrieve experimental structures from PDBe or pathways from
+Reactome. You can work from the command line, Python, or a local browser interface.
+Results retain source provenance, citations, missing fields, and review outcomes.
 
-> You describe what data you *have* and what you *want*; Braidworks finds the path
-> between them and runs it.
+## How it fits together
 
-Most weavers are **keyless and need zero setup** — they call free public APIs
-(UniProt, PDBe, Reactome, QuickGO, STRING, AlphaFold, NCBI). Install and run.
+A **weaver** is an adapter for one source, such as UniProt or NCBI. It declares which
+inputs it accepts and which outputs it can provide. A **braid** is a plan that
+connects those lookups. Shared identifiers let the output of one weaver become the
+input to another.
 
----
+You choose the data you need; Braidworks handles the connections. Available routes
+depend on your installed weavers and configured backends. Public APIs need network
+access; some sources require a separately prepared local database. See the
+[source catalogue](docs/sources.md) to choose sources for your work.
 
-## For biologists: the bare minimum
+## Try one query
 
-Goal: start from a gene symbol and get the biological processes it drives plus the
-proteins it interacts with — crossing two databases (QuickGO + STRING, reached via
-UniProt) automatically, in one command.
-
-### 1. Install
+You need Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+From a terminal, install the two sources for this example:
 
 ```bash
 git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
-uv sync --package uniprot-weaver --package pdbe-weaver --package quickgo-weaver --package string-weaver
-```
-
-This installs core and the four molecular sources used below into a local .venv.
-For every source, run `uv sync --all-extras`; for browser setup and standalone
-wheels, see [installation](docs/installation.md) and [source requirements](docs/sources.md).
-
-(That uses [`uv`](https://docs.astral.sh/uv/). The `braidworks` command lives inside
-the project environment `uv` just created, so run it as **`uv run --no-sync braidworks …`**
-from the repo root — that's what the examples below do. Prefer a bare `braidworks`?
-Activate the venv once with `source .venv/bin/activate` (then drop the `uv run`).
-Same idea for scripts: `uv run --no-sync python yourscript.py`.)
-
-### 2. Ask a question — from the shell
-
-A value you have is a **Strand** (a typed fact, e.g. `protein.query = "TP53"`).
-You tell Braidworks the strands you *have* and the strand *types* you *want*; it
-finds the route across all installed weavers and runs it. From bash:
-
-```bash
-uv run --no-sync braidworks weave --have protein.query=TP53 --param organism=9606 \
-    --want go.biological_process,protein.interaction.partners
-```
-
-```
-TP53
-  go.biological_process         apoptotic process; DNA damage response; cellular senescence; … (72)
-  protein.interaction.partners  MDM2; BRCA1; ATM; BCL2; CDKN1A; … (25)
-```
-
-A bare gene symbol like `TP53` exists in many species, so `--param organism=9606`
-pins it to human (`9606` is the human NCBI taxid) — without it you may get the mouse
-or hamster ortholog. Any UniProt accession (`P04637`), protein name, or `"insulin"`
-works as the query too.
-
-**Run a whole column of genes** (one per line) and get a table back for your
-spreadsheet/pandas. A ready-to-run sample list lives at
-[`examples/genes.txt`](examples/genes.txt) — no need to make your own:
-
-```bash
-uv run --no-sync braidworks weave --in-file examples/genes.txt --in-type protein.query \
-    --param organism=9606 --want go.biological_process,protein.interaction.partners \
-    --format tsv > out.tsv
-
-# or stream from a pipe straight into jq:
-cat examples/genes.txt | uv run --no-sync braidworks weave --in-file - --in-type protein.query \
-    --param organism=9606 --want protein.interaction.partners --format jsonl | jq .
-```
-
-**Drill every result** — fan one protein out into each of its structures, each then
-described:
-
-```bash
+uv sync --package uniprot-weaver --package pdbe-weaver
 uv run --no-sync braidworks weave --have protein.query=P04637 \
-    --want structure.pdb.title,structure.pdb.method --expand all --format tsv
+    --want protein.name,structure.pdb.ids
 ```
 
-Other commands (same `uv run` prefix): `uv run --no-sync braidworks weavers` (what's installed),
-`uv run --no-sync braidworks keys` (what each weaver produces/consumes), `uv run --no-sync braidworks path
---from … --to …` (preview a route), `uv run --no-sync braidworks run <weaver> <capability>` (call
-one capability directly). Add `--help` to any. Data goes to stdout; progress and a
-resolved/unresolved count go to stderr, so pipes stay clean.
+This asks for the name and experimental structure IDs associated with human p53's
+UniProt accession, `P04637`. It uses live APIs, so the returned structure inventory
+can change. The install creates a local `.venv`; it does not download biological
+databases. Keep `--no-sync` when running commands to preserve your selected packages.
 
-### 2b. …or from Python
+For gene symbols, constrain the species, for example `--have protein.query=TP53
+--param organism=9606` for human. UniProt search returns one representative, which
+is not an inventory of every matching protein or isoform.
 
-```python
-import asyncio
-from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
-from uniprot_weaver import build_uniprot_weaver
-from quickgo_weaver import build_quickgo_weaver
-from string_weaver import build_string_weaver
+## Choose your interface
 
-async def main():
-    registry = BraidRegistry()
-    registry.register(build_uniprot_weaver())   # gene/name/accession -> protein entry (+ accession)
-    registry.register(build_quickgo_weaver())   # protein -> GO terms by aspect
-    registry.register(build_string_weaver())    # protein -> interaction partners
-
-    braid = Braider(registry).plan(
-        available_types=frozenset({"protein.query"}),
-        target_types=frozenset({"go.biological_process", "protein.interaction.partners"}),
-    )
-    inputs = [StrandSet.from_strands("p53", [Strand("protein.query", "TP53")])]
-    result = await LocalExecutor(registry).execute(
-        braid, inputs,
-        params={"resolve_protein": {"organism": "9606"}},   # pin TP53 to human
-    )
-
-    for entity in result.resolved:
-        print(entity.get("go.biological_process").value)        # ['apoptotic process', ...]
-        print(entity.get("protein.interaction.partners").value) # ['MDM2', 'BRCA1', 'ATM', ...]
-
-asyncio.run(main())
-```
-
-Pass a list of many `StrandSet`s to process a whole batch in one call.
-
-### 3. Read the results
-
-Read the entity outcomes alongside any branch diagnostics:
-
-| Bucket | Meaning |
+| You want to… | Start here |
 |---|---|
-| `resolved` | At least one requested target was produced; other branches may be empty or fail. |
-| `unresolved` | The route ran but found no match (a valid biological "nothing here"). |
-| `review_queue` | The match was ambiguous; a human should pick. |
-| `errors` | Technical failures, including diagnostics for otherwise successful entities. |
+| Run queries or export a batch to a spreadsheet | [CLI usage](docs/usage.md#query-from-the-command-line) |
+| Retrieve values in a script or notebook | [Python usage](docs/usage.md#query-from-python) |
+| Build and run a query visually | [Browser usage](docs/usage.md#use-the-browser) |
+| Find available fields and source requirements | [Source catalogue](docs/sources.md) and [key index](docs/keys-index.md) |
+| Check missing data, ambiguity, and failures | [Reading results](docs/results.md) |
+| Reuse lookups or continue a saved run | [Cache and saved runs](docs/persistence.md) |
 
-`result.total()` counts distinct terminal entities, without counting multiple branch
-errors twice. Fan-out counts children rather than original inputs. Use
-`result.fatal_errors()` for failures that blocked an entity; a partial success can
-also carry nonfatal diagnostics in `errors`. These relationships survive JSON
-serialization through result-scoped `entity_refs`, even when input IDs repeat.
+A result marked resolved may still have missing fields. Keep coverage and review
+information alongside your data; an empty source lookup does not establish
+biological absence. The [documentation index](docs/index.md) links to the full guides.
 
-### 2c. …or the one-liner: `braidworks.fetch`
+## Contribute
 
-The registry/plan/execute/unwrap dance above is the right amount of control for the
-executor and the CLI. When you just want *"give me attribute Y for these N ids"*, the
-`fetch` facade collapses all of it into one batch call — it auto-discovers the
-installed weavers, plans the route, runs it, and hands back a plain per-id result:
-
-```python
-from braidworks import fetch
-
-res = fetch("microbe.metabolism.reactions", ids=["853", "1680"])   # taxids in
-res.get("853")["microbe.metabolism.reactions"]   # -> the AGORA2 reaction repertoire
-res.column("microbe.metabolism.reactions")       # -> {id: value} across all resolved ids
-res.unresolved                                    # -> ids with no model (your coverage gaps)
-```
-
-`have=` sets the input type (default `ncbi.taxon.id`); `want` may be a list to pull
-several attributes at once; pass a prebuilt `registry=` to skip re-discovery across
-many calls, and `params=` for capability parameters (bare `{"organism": "9606"}` or
-per-capability `{cap_id: {name: value}}`). `async_fetch(...)` is the coroutine form for
-when you are already inside an event loop. `fetch` is the easy 80%; for custom policies,
-traversal fan-out, or streaming events, drop down to `Braider`/`LocalExecutor` (§2b).
-
----
-
-## What you can ask for (the weavers)
-
-Selected weavers are shown below; the generated catalogue covers all packages.
-
-Two "hubs" — **organism** (NCBI taxid) and **protein** (UniProt accession) — are
-bridged by `uniprot_weaver`, so a question can cross from one to the other.
-
-| Weaver | From → To | Setup |
-|---|---|---|
-| `uniprot` | gene/name/accession → UniProt entry (+ name, gene, organism, **taxid**) | keyless API |
-| `pdbe` | protein → experimental **PDB structures** (and one id → its detail) | keyless API |
-| `alphafold` | protein → **predicted structure** model (pLDDT, model URL) | keyless API |
-| `quickgo` | protein → **GO terms** by aspect (and one term → its detail) | keyless API |
-| `reactome` | protein → **pathways** it participates in (and one id → its detail) | keyless API |
-| `string` | protein → **interaction partners** (STRING network) | keyless API |
-| `taxon` (`ncbi`) | organism name → **NCBI taxid** + lineage (and taxid → detail) | API, or local DB |
-| `bacdive` | organism → **type-strain phenotypes** (gram stain, shape, oxygen…) | keyless API |
-| `disbiome` | organism (taxid) → **microbe–disease** associations | bundled local DB |
-| `example` | taxid → a couple of traits from a tiny CSV (reference weaver) | bundled |
-
-The full, generated map of which weaver produces and consumes each key is in
-[docs/keys-index.md](docs/keys-index.md), and an **offline interactive diagram** of
-the whole network is at [docs/braidworks-network.html](docs/braidworks-network.html)
-(open it in a browser; regenerate with `make view`).
-
-### Capability naming — what a verb means
-
-Every weaver capability is named by what it does, so you can predict its shape:
-
-- **`resolve_*`** — fuzzy input → an identifier (e.g. a messy name → a UniProt accession).
-- **`list_*`** — one identifier → a *set* of related identifiers (e.g. a protein → all its PDB ids).
-- **`describe_*`** — one identifier → *that one entity's* attributes (e.g. one PDB id → its title/method/date).
-
----
-
-## Fan-out: one input → many results
-
-Some `list_*` capabilities emit a **set** identifier (e.g. `pdb.id`, `go.term`,
-`pathway.reactome.id`). By default Braidworks keeps the single best one, but you can
-ask it to **fan out** — fork one input into an independent child per result and keep
-going. That turns "p53 → its structures" into "p53 → *each* structure, each then
-drilled by `describe_structure`".
-
-```python
-from braidworks.core import ExpandPolicy
-
-result = await LocalExecutor(registry).execute(
-    braid, inputs,
-    expand_policy=ExpandPolicy.all(),           # one child per pdb.id
-    # or ExpandPolicy.top_k(5) to keep only the best five.
-)
-```
-
-Children carry a `parent_id` back to the originating input, so you can regroup the
-fanned leaves by the question that produced them. See
-[docs/fanout-roadmap.md](docs/fanout-roadmap.md) for the model.
-
----
-
-## Command-line tools
-
-The **`braidworks`** command (installed with `braidworks-core`) is the query/inspect
-front door — see [§2 above](#2-ask-a-question--from-the-shell). Run it as `uv run
-braidworks …` from the repo root, or `source .venv/bin/activate` once and drop the prefix:
+Braidworks is a `uv` workspace with a domain-neutral core, source-specific weavers,
+and `weaverkit` for creating and verifying adapters. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup and [AGENTS.md](AGENTS.md) for repository
+contracts. The [architecture](docs/architecture.md) explains the boundaries.
 
 ```bash
-uv run --no-sync braidworks weave --have TYPE=VALUE --want TYPE[,TYPE…]   # plan a route and run it
-uv run --no-sync braidworks run <weaver> <capability> --have TYPE=VALUE   # call one capability directly
-uv run --no-sync braidworks weavers                                       # list installed weavers + capabilities
-uv run --no-sync braidworks keys [--produces TYPE | --consumes TYPE]      # what flows between weavers
-uv run --no-sync braidworks path --from TYPE --to TYPE                    # preview a route, don't run it
-uv run --no-sync braidworks references                                    # source citations
+make sync
+make lint
+make test
 ```
 
-Inputs from flags, a file (`--in-file`, one value per line with `--in-type`, or a
-CSV/TSV with type-id columns), or stdin (`--in-file -`). Output `--format
-human|json|jsonl|tsv|csv`; `--expand all|top:K` to fan one→many; `--param name=value`
-to pass a capability's filters/options (see `uv run --no-sync braidworks weavers` for what each accepts).
+New weavers follow the spec → scaffold → implement → verify loop described in
+[weaverkit](weaverkit/README.md). Each package versions independently; installation
+currently uses the checkout or built wheels. See [installation](docs/installation.md)
+for other setups and [release rehearsal](docs/releasing.md) for maintainers.
 
-`weaverkit` (a separate CLI) is the *build/inspect* toolkit:
+## License and attribution
 
-```bash
-uv run weaverkit view --out net.html # render the offline network diagram
-make index                           # rebuild docs/keys-index.md + weavers-index.tsv
-make view                            # rebuild docs/braidworks-network.html
-make serve                           # interactive GUI: build/run braids in the browser
-
-ncbi-weaver ensure                  # one-time: build the local NCBI taxonomy DB (optional)
-```
-
-The **GUI** (`make serve`, or `pip install 'weaverkit[serve]'` then `weaverkit serve`)
-opens a localhost app to build a braid (pick a have-type and a want-type), see the route
-and the generated `braidworks weave` command, then run it and watch the braid light up —
-with a results table, CSV/TSV/JSON export, graph search, and saved recipes. The browser
-accepts pasted identifiers and CSV/TSV input batches; see [batch usage](docs/usage.md) for input
-files. Parameters and expansion limits are editable in both browser run modes; saved
-recipes and generated CLI/Python code preserve those settings. FastAPI lives
-in the optional `[serve]` extra; the base install depends on `braidworks-core` without the server extra.
-
-`weaverkit` is also the toolkit for *building* a new weaver from a spec — see below.
-
----
-
-## Repository layout
-
-A [`uv`](https://docs.astral.sh/uv/) workspace monorepo:
-
-```
-braidworks/
-├── braidworks-core/     # the framework: strands, capabilities, registry, braider, executor, cache
-├── weaverkit/           # toolkit to add a weaver deterministically (spec → scaffold → verify) + CLIs
-├── weavers/             # the data-source weavers (auto-discovered)
-│   ├── uniprot_weaver/  #   the hinge: protein query → UniProt entry (+ taxid)
-│   ├── pdbe_weaver/     #   protein → experimental structures
-│   ├── ...              #   alphafold, quickgo, reactome, string, taxon, bacdive, disbiome, example
-├── braidworks-arq/      # optional: distributed execution over arq/Redis
-├── docs/                # architecture, usage, key index, network view, roadmaps
-└── Makefile             # make help to list tasks
-```
-
-## Adding a weaver
-
-New data sources are added through `weaverkit`'s **Spec → Scaffold → Implement →
-Verify** loop, not hand-written. Start with [AGENTS.md](AGENTS.md) (the contributor
-contract) and [weaverkit/README.md](weaverkit/README.md).
-
-```bash
-make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
-make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>_weaver
-```
-
-## Development
-
-```bash
-make test     # run every package's test suite
-make lint     # ruff across the workspace
-make help     # list all tasks
-```
-
-Tests are per-package and the working directory matters — use `make test` (or see
-[CONTRIBUTING.md](CONTRIBUTING.md)) rather than a bare `pytest` from the repo root.
-
-## Documentation
-
-| Doc | What it covers |
-|---|---|
-| [docs/index.md](docs/index.md) | Start here: user guides, reference and contributor docs |
-| [docs/installation.md](docs/installation.md) | Selected sources, full workspace and standalone wheel installs |
-| [docs/sources.md](docs/sources.md) | Every source and its setup requirements |
-| [docs/usage.md](docs/usage.md) | Install → register weavers → plan → run, with more examples |
-| [docs/keys-index.md](docs/keys-index.md) | Catalog of keys that flow between weavers (generated) |
-| [docs/architecture.md](docs/architecture.md) | Core abstractions, contracts, design decisions |
-| [docs/fanout-roadmap.md](docs/fanout-roadmap.md) | Cardinality fan-out (one → many) model |
-| [docs/database.md](docs/database.md) | Building / acquiring the NCBI taxonomy DB |
-| [docs/repo-structure.md](docs/repo-structure.md) | Full repository layout |
-| [AGENTS.md](AGENTS.md) | Contributor boundaries + the Spec→Scaffold→Implement→Verify loop |
-| [weaverkit/README.md](weaverkit/README.md) | The spec/scaffold/conformance toolkit |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, testing, and how to add a new weaver |
-
-## Software license
-
-Braidworks software is licensed under [MIT](LICENSE). Biological data and provider
-content retain the licenses declared by their sources; software licensing does not
-change those terms. Each distribution includes its software license.
-
-Core 0.12 changes the default handling of ambiguous resolver matches. Read the
-[migration guide](docs/migrating-to-0.12.md) before updating automated workflows.
+The software is [MIT licensed](LICENSE). Biological data retain their providers'
+licenses and attribution requirements. Run `uv run --no-sync braidworks references`
+to inspect references from your installed sources.

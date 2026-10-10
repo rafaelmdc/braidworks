@@ -1,60 +1,71 @@
-# Weaver setup catalogue
+# Choose data sources
 
-This catalogue covers all 17 weaver packages in this checkout. The shared-key
-[index](keys-index.md) lists their current connections; braidworks weavers shows
-capabilities and parameters for the packages actually installed in your environment.
+Install the weavers for the fields you need, then prepare any required local data.
+A weaver's presence in the catalogue means its capabilities are declared; it does
+not mean every input will match or that an unconfigured backend is ready to run.
 
-Keyless HTTP sources require network access. A zero-config local-only builder can
-be discoverable while its database is unconfigured; discovery does not grant
-download consent. Fixture builders are for tests, not full biological datasets.
+Public API backends need network access. Local backends use bundled data or a
+separately acquired database/archive. Fixture builders contain tiny test datasets
+and are not research reference data.
 
-| Package | Setup and interpretation |
-|---|---|
-| [agora_weaver](../weavers/agora_weaver/README.md) | Bundled reconstruction crosswalk works offline. Reaction outputs need a separate consented SBML/database build; the archive is about 2.17 GB. build_agora_weaver(auto_setup=True) enables that build. Installing its archive dependency can require a compiler. |
-| [alphafold_weaver](../weavers/alphafold_weaver/README.md) | Keyless HTTP API; zero-config builder. Predictions are model data, not experimental structures. |
-| [bacdive_weaver](../weavers/bacdive_weaver/README.md) | Keyless HTTP API; zero-config builder. Returns a species type-strain representative, not an arbitrary isolate. |
-| [disbiome_weaver](../weavers/disbiome_weaver/README.md) | Local SQLite required. Run ensure_disbiome_db(auto=True) once, or use build_disbiome_weaver_configured(db_path=...) for a prepared database. The default discovery builder never downloads it. |
-| [example_weaver](../weavers/example_weaver/README.md) | Bundled teaching CSV; works offline. Deliberately has no discovery entry point. Register build_example_weaver() explicitly in Python. |
-| [faprotax_weaver](../weavers/faprotax_weaver/README.md) | Bundled FAPROTAX text; works offline. Input is a lineage, not a species-name string. Keep the source attribution and embedded license. |
-| [gmrepo_weaver](../weavers/gmrepo_weaver/README.md) | Local SQLite required. Run ensure_gmrepo_db(auto=True) once, or configure an existing db_path. Sample-profile outputs need profiles included in the build; see the package README. |
-| [gtdb_weaver](../weavers/gtdb_weaver/README.md) | Keyless API supports scientific-name queries. Taxid crosswalk and tree placement need local data; build_gtdb_weaver(auto_setup=True) acquires the crosswalk, with separate tree-placement options. |
-| [mondo_weaver](../weavers/mondo_weaver/README.md) | Local SQLite required. Run ensure_mondo_db(auto=True) once, or configure a prepared db_path. Names, MeSH IDs and MedDRA IDs have separate capabilities. |
-| [ncbi_weaver](../weavers/ncbi_weaver/README.md) | Keyless Datasets API is usable by default. Local taxonomy is optional and requires a database; see database.md. API-only Python configuration uses enable_api=True. |
-| [pdbe_weaver](../weavers/pdbe_weaver/README.md) | Keyless HTTP API; zero-config builder. List structures by accession, then describe a fanned pdb.id. |
-| [quickgo_weaver](../weavers/quickgo_weaver/README.md) | Keyless HTTP API; zero-config builder. Term inventories are bounded by a page cap. Annotation detail retains evidence/qualifiers, and coverage metadata plus warnings report incomplete retrieval. |
-| [reactome_weaver](../weavers/reactome_weaver/README.md) | Keyless HTTP API; zero-config builder. Lists pathway IDs and describes individual pathways. |
-| [string_weaver](../weavers/string_weaver/README.md) | Keyless HTTP API; zero-config builder. Results are STRING functional associations; inspect parameters for species, score and display limits. |
-| [uniprot_weaver](../weavers/uniprot_weaver/README.md) | Keyless HTTP API; zero-config builder. Pin organism for gene symbols. Symbol lookup selects a deterministic representative; an accession is the most specific input. |
-| [wikidata_weaver](../weavers/wikidata_weaver/README.md) | Keyless SPARQL endpoint; zero-config builder. Homonyms can pause for review. expected_rank refines taxon disambiguation. |
-| [wikipedia_weaver](../weavers/wikipedia_weaver/README.md) | Keyless API sums the trailing 12 whole months of English Wikipedia pageviews. Optional local dumps cover one explicit month, so the two backend totals have different windows. |
+## Source catalogue
+
+This checkout contains 17 weaver packages. Each linked README gives the source's
+capabilities, filters, coverage rules, and citations. `braidworks weavers` lists only
+the packages installed in your environment; the [key index](keys-index.md) shows
+connections across the repository.
+
+| Weaver | Use it for | Setup |
+|---|---|---|
+| [UniProt](../weavers/uniprot_weaver/README.md) | Protein identity, sequence/annotations, identifier mapping | Keyless API. Pin organism for gene symbols; representative search is not all-match resolution. |
+| [PDBe](../weavers/pdbe_weaver/README.md) | Experimental structures, entities/assemblies/ligands, SIFTS mapping, coordinate links | Keyless API; residue mapping downloads bounded per-entry SIFTS data on request. |
+| [AlphaFold](../weavers/alphafold_weaver/README.md) | Predicted model metadata and archive inventories | Keyless API; optional header-only indexing of supplied uncompressed outer TAR archives. Predictions are not experimental structures. |
+| [QuickGO](../weavers/quickgo_weaver/README.md) | GO annotations/evidence, term details/hierarchy, reverse gene-product queries | Keyless API. Pagination budgets can limit coverage; inspect completeness warnings. |
+| [Reactome](../weavers/reactome_weaver/README.md) | Pathways, contained reactions, and provider evidence | Keyless API. Evidence records are source observations, not synthesized confidence scores. |
+| [STRING](../weavers/string_weaver/README.md) | Functional association networks | Keyless API. Species, score, and display limits are parameters; associations need not be physical interactions. |
+| [NCBI](../weavers/ncbi_weaver/README.md) | Taxonomy, genes, genomes, and related-entity queries | Keyless Datasets API by default; optional local taxonomy database. Backend capability coverage differs. |
+| [BacDive](../weavers/bacdive_weaver/README.md) | Strain phenotypes and culture-collection/genome cross-references | Keyless API. Taxid lookup describes a type-strain representative, not every isolate. |
+| [Disbiome](../weavers/disbiome_weaver/README.md) | Microbe–disease associations and reverse disease queries | Prepared local SQLite database required. Provider disease IDs and MedDRA codes have distinct identity rules. |
+| [FAPROTAX](../weavers/faprotax_weaver/README.md) | Taxonomy-based ecological functional groups | Bundled text, offline. Input is a lineage; inferred functions are not measured traits. |
+| [GMrepo](../weavers/gmrepo_weaver/README.md) | Microbial abundance, phenotype associations, runs/cohorts | Prepared local SQLite database. Sample profiles must be included for profile outputs; cohort filters describe retained data coverage. |
+| [GTDB](../weavers/gtdb_weaver/README.md) | Taxon placement and genome-card quality/history | Keyless API for supported name/genome queries; taxid crosswalk and tree placement need separate local data. |
+| [MONDO](../weavers/mondo_weaver/README.md) | Disease names, identifiers, ontology details, typed mappings | Prepared local SQLite database. Typed mappings require explicitly supplied release-matched SSSOM data. |
+| [Wikidata](../weavers/wikidata_weaver/README.md) | Taxon names and entity identifiers | Keyless SPARQL endpoint. Homonyms can pause for review; `expected_rank` refines disambiguation. |
+| [Wikipedia](../weavers/wikipedia_weaver/README.md) | Pageview-based attention signals | Keyless API uses trailing 12 whole months; optional local dumps cover one specified month. Windows are not interchangeable. |
+| [AGORA](../weavers/agora_weaver/README.md) | Metabolic reconstructions, reaction membership, and genome crosswalks | Bundled crosswalk; reaction outputs require a separate SBML/database build, potentially multi-GB. |
+| [Example](../weavers/example_weaver/README.md) | Learn how an adapter works | Bundled teaching CSV, offline. Register explicitly in Python; deliberately not auto-discovered. |
 
 ## Prepare local-only sources
 
-Build a database explicitly before using its default CLI-discovered backend. These
-commands authorize a real network acquisition; run only for sources you need:
+Install the selected package before running its setup function. For example, after
+installing `disbiome_weaver`, save this as a script and run it in your environment:
 
-    from disbiome_weaver.setup import ensure_disbiome_db
-    from gmrepo_weaver.setup import ensure_gmrepo_db
-    from mondo_weaver.setup import ensure_mondo_db
+```python
+from disbiome_weaver.setup import ensure_disbiome_db
 
-    ensure_disbiome_db(auto=True)
-    ensure_gmrepo_db(auto=True)
-    ensure_mondo_db(auto=True)
+ensure_disbiome_db(auto=True)
+```
 
-Run the selected call from a script in the environment where that weaver is
-installed. Omit auto=True when checking for an already prepared database. Each
-setup function accepts an explicit database path; a custom path must also be passed
-to the Python configured builder. CLI discovery reads the default cache location.
+`auto=True` authorizes network acquisition. Omit it when checking for an already
+prepared database. GMrepo and MONDO provide equivalent helpers documented in their
+package READMEs; acquire only the sources you need.
 
-For NCBI local setup, see [database.md](database.md). For GTDB trees and AGORA
-reactions, read their package README before enabling the larger downloads.
+Default discovery reads the default cache location. If you choose a custom database
+path, pass it to the Python configured builder too. See
+[builder configuration](weaver-configuration.md).
 
-## Versions and citations
+For optional NCBI local setup, follow [database setup](database.md). Read the GTDB
+and AGORA package READMEs before acquiring larger reference data. AGORA's bundled
+reconstruction crosswalk works offline; reaction outputs require a separate SBML/database
+build that can acquire a multi-GB archive. Its archive dependency may need a compiler.
 
-Packages version independently. Metadata declares a core floor; the full workspace
-currently uses core 0.12.0 and its default review pause. See the
-[migration guide](migrating-to-0.12.md) before upgrading an older workflow.
+## Versions and attribution
 
-braidworks references prints source references from installed weavers. Braid results
-carry references for executed sources. MIT applies to software; each source keeps
-its own provenance license, attribution and data terms.
+Packages version independently and declare a minimum core version. The workspace
+resolves compatible local packages; check package metadata rather than relying on a
+version number in this guide. Older workflows may need the
+[ambiguity-policy migration](migrating-to-0.12.md).
+
+`braidworks references` lists source references from installed weavers; query results
+retain references for executed sources. MIT covers the software. Biological data keep
+their providers' licenses, citation requirements, and terms.

@@ -1,4 +1,4 @@
-# Weaver implementation guide (for agents)
+# Implement a weaver
 
 This is a build manual for an AI agent (or human) implementing a new Braidworks
 weaver. It is prescriptive: follow the steps in order, change only what's marked,
@@ -41,12 +41,12 @@ this guide just orients you.**
 
 Plus, around it: a **per-weaver `Makefile`**, **tests** (unit + contract mixins + opt-in live E2E), and — if the source ships a bulk file — a **`setup.py`** with `ensure_<db>_db(...)`.
 
-The braider connects weavers automatically: **a weaver is reachable iff some
-registered weaver produces a `type_id` it consumes.** So the single most important
-design choice is making `consumes` use the **shared key types** from
-[weaver-roadmap.md §1](weaver-roadmap.md) (`ncbi.taxon.id`,
-`organism.scientific_name` + `ncbi.taxon.lineage`, `protein.uniprot.accession`, …),
-never raw user input.
+A weaver is reachable when a caller supplies its input type or an upstream weaver
+produces it. Choose registered **shared key types** from the
+[registry](../weaverkit/src/weaverkit/keys.py) so it can connect to other sources.
+Check the [key index](keys-index.md) for current producers and consumers. Entry keys
+such as `protein.query` and `organism.name` are valid registered inputs; conjunctions
+needing multiple inputs are not projected as ordinary graph edges.
 
 ---
 
@@ -62,8 +62,8 @@ never raw user input.
 | License | Attribution / redistribution constraints? | CC BY — record in README |
 | Terminal vs intermediate | Does it also emit cross-ref IDs others consume? | terminal (traits only) |
 
-If `consumes` is not already produced by a registered weaver, you also need (or
-must rely on) an upstream weaver — usually `ncbi_weaver`.
+Prefer keys with existing producers. An input without an upstream producer is
+still usable directly; document that entry point rather than inventing a private key.
 
 ---
 

@@ -131,3 +131,9 @@ Weavers (and `weaverkit`) depend on the core with a **floor, not a ceiling** —
 Never commit taxonomy databases or taxdump archives — they are multi-GB and
 git-ignored (`*.sqlite`, `taxdump.tar.gz`, `/data/`). See
 [docs/database.md](docs/database.md) for building them.
+
+## Documentation changes
+
+Write guides around the reader's task and keep current instructions separate from
+design history. See the [documentation conventions](docs/documentation-style.md)
+for examples, source claims, links, and verification.

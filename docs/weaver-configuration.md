@@ -54,17 +54,21 @@ only captures unsupported names so they receive a clear configuration error.
 Local Disbiome/GMrepo/MONDO discovery builders forward nonempty config to their
 configured builder (listed immediately after the discovery signature).
 
+Configured helpers may be defined in `<package>.factory` rather than re-exported
+from `<package>`. Import from that module when needed. Signatures are a snapshot of
+the public functions in this checkout; consult their source when extending a builder.
+
 ### agora_weaver
 
 ```python
-build_agora_weaver(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, sbml_cache_dir: 'str | Path | None' = None, auto_download_models: 'bool' = False, **_config: 'Any') -> 'BaseWeaver'
+build_agora_weaver(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, sbml_cache_dir: 'str | Path | None' = None, auto_download_models: 'bool' = False, model_download_base_url: 'str' = 'https://vmh.life/api/getMicrobeReconstructions?version=agora2_2.01&format=sbml&id=', **_config: 'Any') -> 'BaseWeaver'
 build_agora_weaver_configured(**config: 'Any') -> 'BaseWeaver'
 ```
 
 ### alphafold_weaver
 
 ```python
-build_alphafold_weaver(*, base_url: 'str' = 'https://alphafold.ebi.ac.uk', client: 'httpx.AsyncClient | None' = None, max_concurrency: 'int' = 4, **_config: 'Any') -> 'BaseWeaver'
+build_alphafold_weaver(*, base_url: 'str' = 'https://alphafold.ebi.ac.uk', client: 'httpx.AsyncClient | None' = None, max_concurrency: 'int' = 4, archive_paths: 'list[str] | None' = None, max_archive_members: 'int' = 100000, max_archive_header_bytes: 'int' = 67108864, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### bacdive_weaver
@@ -97,7 +101,7 @@ build_faprotax_weaver(**_config: 'Any') -> 'BaseWeaver'
 
 ```python
 build_gmrepo_weaver(**config: 'Any') -> 'BaseWeaver'
-build_gmrepo_weaver_configured(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, profile_phenotypes: 'list[str] | None' = None, profile_max_runs: 'int' = 200, acquisition_policy: 'AcquisitionPolicy | None' = None, **_config: 'Any') -> 'BaseWeaver'
+build_gmrepo_weaver_configured(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, profile_phenotypes: 'list[str] | None' = None, profile_max_runs: 'int' = 200, profile_filters: 'dict[str, str | int] | None' = None, acquisition_policy: 'AcquisitionPolicy | None' = None, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### gtdb_weaver
@@ -111,7 +115,7 @@ build_gtdb_weaver_configured(**config: 'Any') -> 'BaseWeaver'
 
 ```python
 build_mondo_weaver(**config: 'Any') -> 'BaseWeaver'
-build_mondo_weaver_configured(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, expected_version: 'str | None' = None, **_config: 'Any') -> 'BaseWeaver'
+build_mondo_weaver_configured(*, db_path: 'str | Path | None' = None, auto_setup: 'bool' = False, refresh: 'bool' = False, expected_version: 'str | None' = None, mapping_path: 'str | Path | None' = None, mapping_release: 'str | None' = None, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### ncbi_weaver
@@ -153,7 +157,7 @@ build_uniprot_weaver(*, base_url: 'str' = 'https://rest.uniprot.org', client: 'h
 ### wikidata_weaver
 
 ```python
-build_wikidata_weaver(*, base_url: 'str' = 'https://query.wikidata.org', client: 'httpx.AsyncClient | None' = None, **_config: 'Any') -> 'BaseWeaver'
+build_wikidata_weaver(*, base_url: 'str' = 'https://query.wikidata.org', client: 'httpx.AsyncClient | None' = None, entity_api_url: 'str' = 'https://www.wikidata.org/w/api.php', **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### wikipedia_weaver

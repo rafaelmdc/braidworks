@@ -33,10 +33,14 @@ still propagate. Core does not cache registries; arq owns its worker-local cache
 
 Installing this package puts a `braidworks` command on your PATH — query and inspect the
 weaver network from the shell (`weave`, `run`, `weavers`, `keys`, `path`, `references`).
-See the [top-level README](https://github.com/rafaelmdc/braidworks/blob/main/README.md#2-ask-a-question--from-the-shell) and
+See the [top-level README](https://github.com/rafaelmdc/braidworks/blob/main/README.md#try-one-query) and
 [docs/usage.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/usage.md).
 
 ## Python API
+
+For ordinary lookups, start with [fetch usage](https://github.com/rafaelmdc/braidworks/blob/main/docs/usage.md#query-from-python).
+This lower-level fragment assumes a configured `some_weaver` and a batch of
+`strand_sets`, inside an async function:
 
 ```python
 from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
@@ -55,7 +59,7 @@ Tests: `make test-core` (or `cd braidworks-core && uv run --extra test pytest`).
 
 ## Installation and documentation
 
-Install this package together with a compatible core in a virtual environment.
+Install core together with the weavers you need in a virtual environment.
 See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
 [source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
 and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
@@ -71,14 +75,14 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 For inspectable CLI run records, add `--archive run.json` to `braidworks weave` or
 `braidworks run`. It saves inputs, settings, outcomes, fingerprints and citations in
-a new JSON file. See the [archive and restart scope](https://github.com/rafaelmdc/braidworks/blob/main/docs/usage.md#save-a-run-archive).
+a new JSON file. See the [archive reference](https://github.com/rafaelmdc/braidworks/blob/main/docs/results.md#save-a-run-archive).
 
 ### Local cache and saved runs
 
 Persistence is opt-in. Use local paths; ordinary queries keep the memory cache.
 
 ```bash
-braidworks weave --have protein.query=TP53 --want gene.symbol \
+braidworks weave --have protein.query=P04637 --want protein.name \
   --cache-db data/lookups.sqlite --run-db data/runs.sqlite --run-id example
 braidworks runs --run-db data/runs.sqlite
 braidworks runs example --run-db data/runs.sqlite --format json
@@ -104,4 +108,4 @@ Cache controls are `--cache-positive-ttl` (default 3600 seconds),
 bytes). Zero TTL disables that category. Errors are never cached; cached ambiguity
 still needs review. `--lease-seconds` defaults to 60 and renews during execution.
 An expired owner cannot save; another process can recover after expiry. See
-[database operations](../docs/database.md) for paths, retention and format limits.
+[cache and saved runs](https://github.com/rafaelmdc/braidworks/blob/main/docs/persistence.md) for paths, retention and format limits.

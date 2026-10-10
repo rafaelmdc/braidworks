@@ -11,4 +11,6 @@ Distributed fan-out now splits budgeted batches evenly, preserving upstream bulk
 requests. Third-party HTTP backends need the pacing seam before a matching rate rule
 can be used. See [request pacing](request-pacing.md).
 
-Publishing and durable cache/resume remain deferred for separate design decisions.
+At the time of this release, publication and durable cache/resume were deferred.
+Later releases added opt-in [cache and saved-run interfaces](persistence.md).
+Publication and further persistence scope remain separate project decisions.
