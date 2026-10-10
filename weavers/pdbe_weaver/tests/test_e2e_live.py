@@ -136,3 +136,39 @@ async def test_live_requested_quality_preserves_missing_data_metrics():
         assert quality["available"] and quality["pdb_id"] == "1tup"
         assert "X-ray diffraction" in quality["method"]
         assert "geometry_quality" in quality["metrics"]
+
+
+async def test_live_entities_assemblies_ligands_sifts_and_artifact_urls():
+    import httpx
+    from pdbe_weaver.backends.api import PdbeApiBackend
+
+    async with httpx.AsyncClient(base_url="https://www.ebi.ac.uk/pdbe/api", timeout=30) as client:
+        backend = PdbeApiBackend(client=client)
+        result = (
+            await backend.fetch(
+                "describe_structure",
+                [{"pdb.id": "1cbs"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(
+                    {"entities", "assemblies", "ligands", "mappings", "residues", "coordinates"}
+                ),
+            )
+        )[0]
+        assert not result.error, result.error
+        values = result.values
+        assert values["structure.pdb.entities"]["records"][0]["entity_id"] == 1
+        assert values["structure.pdb.assemblies"]["records"][0]["assembly_id"] == "1"
+        assert values["structure.pdb.ligands"]["records"][0]["chem_comp_id"] == "REA"
+        assert "P29373" in values["structure.pdb.mappings"]["records"]["UniProt"]
+        residues = values["structure.pdb.residues"]
+        assert residues["count"] == 137
+        refs = residues["records"][0]["cross_references"]
+        assert any(
+            ref.get("dbSource") == "UniProt"
+            and ref.get("dbAccessionId") == "P29373"
+            and ref.get("dbResNum") == "2"
+            for ref in refs
+        )
+        artifacts = values["structure.pdb.coordinates"]
+        assert artifacts["acquired"] is False
+        assert artifacts["assemblies"][0]["mmcif_gz_url"].endswith("1cbs-assembly-1.cif.gz")

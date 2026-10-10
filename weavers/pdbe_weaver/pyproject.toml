@@ -1,6 +1,6 @@
 [project]
 name = "pdbe_weaver"
-version = "0.1.13"
+version = "0.1.14"
 description = "PDB experimental structures via PDBe (accession -> structures) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

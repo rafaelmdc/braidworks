@@ -45,7 +45,7 @@ From Python:
 ```python
 from pdbe_weaver import build_pdbe_weaver
 
-weaver = build_pdbe_weaver()        # zero-config
+weaver = build_pdbe_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `pdbe_weaver.register(factory)` adds it as a provider.
 ```
 
@@ -119,14 +119,20 @@ import asyncio
 from braidworks.core import Strand, StrandSet
 from pdbe_weaver import build_pdbe_weaver
 
+
 async def main():
     async with build_pdbe_weaver(base_url="https://www.ebi.ac.uk/pdbe/api", limit=5) as weaver:
         inputs = [StrandSet.from_strands("p53", [Strand("protein.uniprot.accession", "P04637")])]
-        result = (await weaver.execute_batch(
-            "list_structures", inputs, backend="api",
-            requested_outputs=frozenset({"structure.pdb.records", "structure.pdb.count"}),
-        ))[0]
+        result = (
+            await weaver.execute_batch(
+                "list_structures",
+                inputs,
+                backend="api",
+                requested_outputs=frozenset({"structure.pdb.records", "structure.pdb.count"}),
+            )
+        )[0]
         print(result.to_json())
+
 
 asyncio.run(main())
 ```
@@ -147,3 +153,21 @@ bulk entry-level provider validation metrics, experimental method, source and
 availability. Null or absent metrics remain unknown. The group's additional
 request is skipped by default; these metrics do not define a cross-method ranking.
 Source: [PDBe model quality](https://www.ebi.ac.uk/training/online/courses/exploring-pdb-entry/pdb-entry-overview/model-quality/).
+
+### Entry detail and coordinate artifacts
+
+`describe_structure` has independent optional `entities`, `assemblies`, `ligands`,
+`mappings`, `residues` and `coordinates` groups. Entity/assembly/ligand requests use
+bulk source endpoints; the single-entry UniProt mapping endpoint runs concurrently.
+Provider chain IDs, structural asymmetry IDs, entity IDs, author residue numbers and
+insertion codes remain distinct. Range mappings are not expanded into guessed alignments.
+
+`structure.pdb.residues` streams the individual entry's SIFTS XML (at most 10 MiB
+compressed / 50 MiB expanded). It preserves explicit residue cross-references,
+unobserved-residue annotations, source database releases and artifact hash. An
+oversized or malformed artifact is an error; a missing artifact stays unavailable.
+[Provider SIFTS format and download paths](https://www.ebi.ac.uk/pdbe/docs/sifts/quick.html).
+
+`coordinates` returns the provider's entry mmCIF download URL and assembly mmCIF
+URLs built from observed assembly IDs. It downloads no coordinate file and makes no
+claim about artifact contents. Callers can acquire selected artifacts separately.

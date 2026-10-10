@@ -633,7 +633,7 @@ wheels = [
 
 [[package]]
 name = "pdbe-weaver"
-version = "0.1.13"
+version = "0.1.14"
 source = { editable = "weavers/pdbe_weaver" }
 dependencies = [
     { name = "braidworks-core" },

@@ -71,6 +71,13 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "structure.pdb.entities": "Observed PDBe entities detail with provider identity and availability.",
+    "structure.pdb.assemblies": "Observed PDBe assemblies detail with provider identity and availability.",
+    "structure.pdb.ligands": "Observed PDBe ligands detail with provider identity and availability.",
+    "structure.pdb.mappings": "Observed PDBe mappings detail with provider identity and availability.",
+    "structure.pdb.residues": "Observed PDBe residues detail with provider identity and availability.",
+    "structure.pdb.coordinates": "Observed PDBe coordinates detail with provider identity and availability.",
+
     "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
     "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
     "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",

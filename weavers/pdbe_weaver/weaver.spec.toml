@@ -10,7 +10,7 @@ db_name = "pdbe"
 weaver_id = "pdbe"
 kind = "lookup"
 title = "PDB experimental structures via PDBe (accession -> structures)"
-version = "0.1.13"
+version = "0.1.14"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkz990"
 attribution = "wwPDB / EMBL-EBI PDBe"
@@ -50,6 +50,12 @@ source_sample = """
 }
 # POST /validation/summary_quality_scores/entry body=1tup
 {"1tup":{"geometry_quality":1.73,"data_quality":null,"overall_quality":1.73,"experiment_data_available":false}}
+# Observed 1cbs extra detail, 2026-10-10
+# molecules: {"entity_id":1,"in_chains":["A"],"in_struct_asyms":["A"]}
+# assembly: {"assembly_id":"1","details":"author_defined_assembly"}
+# ligand: {"chem_comp_id":"REA","author_residue_number":200,"struct_asym_id":"B"}
+# SIFTS residue: <crossRefDb dbSource="PDB" dbResNum="1" dbChainId="A"/>
+# <crossRefDb dbSource="UniProt" dbAccessionId="P29373" dbResNum="2"/>
 """
 
 # Distinct accessions share POST /mappings/best_structures chunks of 100, keyed
@@ -91,6 +97,30 @@ max_batch_size = 25
   [[capability.group]]
   id = "quality"
   outputs = ["structure.pdb.quality"]
+
+  [[capability.group]]
+  id = "entities"
+  outputs = ["structure.pdb.entities"]
+
+  [[capability.group]]
+  id = "assemblies"
+  outputs = ["structure.pdb.assemblies"]
+
+  [[capability.group]]
+  id = "ligands"
+  outputs = ["structure.pdb.ligands"]
+
+  [[capability.group]]
+  id = "mappings"
+  outputs = ["structure.pdb.mappings"]
+
+  [[capability.group]]
+  id = "residues"
+  outputs = ["structure.pdb.residues"]
+
+  [[capability.group]]
+  id = "coordinates"
+  outputs = ["structure.pdb.coordinates"]
 
 # Golden runs against the deterministic fixture (pdbe_weaver.fixture, an
 # httpx.MockTransport serving a canned best_structures response for P04637 with two

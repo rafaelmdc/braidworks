@@ -21,13 +21,25 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
+import xml.etree.ElementTree as ET
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
+
+from pdbe_weaver.structure_detail import (
+    SIFTS_COMPRESSED_LIMIT,
+    DetailFormatError,
+    coordinate_artifacts,
+    sifts_residues,
+    source_detail,
+)
 
 logger = logging.getLogger("pdbe_weaver.api")
 
@@ -213,8 +225,129 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
     ) -> list[LookupRecord]:
         # describe_structure drills PDB ids; list_structures lists a protein's structures.
         if capability_id == "describe_structure":
-            return await self._describe_structures(queries, quality="quality" in groups_to_compute)
+            records = await self._describe_structures(
+                queries, quality="quality" in groups_to_compute
+            )
+            return await self._supplement(records, groups_to_compute)
         return await self._list_structures(queries)
+
+    async def _supplement(self, records, groups):
+        endpoints = {
+            "entities": "/pdb/entry/molecules",
+            "assemblies": "/pdb/entry/assembly",
+            "ligands": "/pdb/entry/ligand_monomers",
+            "mappings": "/mappings/uniprot",
+        }
+        ids = sorted(
+            {
+                str(record.query.get("pdb.id", "")).strip().lower()
+                for record in records
+                if record.found and not record.error
+            }
+        )
+        details, errors = {}, {}
+        selected = set(groups) & set(endpoints)
+        if "coordinates" in groups:
+            selected.add("assemblies")
+        for group in sorted(selected):
+            endpoint = endpoints[group]
+            details[group] = {}
+            if group == "mappings":
+
+                async def acquire_mapping(pid, endpoint=endpoint, group=group):
+                    try:
+                        response = await self._http().get(f"{endpoint}/{pid}")
+                        response.raise_for_status()
+                        return pid, source_detail(response.json(), {pid}, group).get(pid), None
+                    except httpx.HTTPStatusError as exc:
+                        if is_not_found_status(exc.response.status_code):
+                            return pid, None, None
+                        return pid, None, f"PDBe mapping error: {format_exc(exc)}"
+                    except (httpx.HTTPError, ValueError) as exc:
+                        return pid, None, f"PDBe mapping error: {format_exc(exc)}"
+
+                for pid, value, error in await map_bounded(ids, acquire_mapping, limit=4):
+                    if error:
+                        errors[pid] = error
+                    elif value is not None:
+                        details[group][pid] = value
+                continue
+            for start in range(0, len(ids), _SUMMARY_CHUNK):
+                chunk = ids[start : start + _SUMMARY_CHUNK]
+                try:
+                    response = await self._http().post(
+                        endpoint,
+                        content=",".join(chunk),
+                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    )
+                    response.raise_for_status()
+                    details[group].update(source_detail(response.json(), set(chunk), group))
+                except httpx.HTTPStatusError as exc:
+                    if not is_not_found_status(exc.response.status_code):
+                        errors.update(
+                            dict.fromkeys(chunk, f"PDBe {group} error: {format_exc(exc)}")
+                        )
+                except (httpx.HTTPError, ValueError) as exc:
+                    errors.update(dict.fromkeys(chunk, f"PDBe {group} error: {format_exc(exc)}"))
+        residues = {}
+        if "residues" in groups:
+
+            async def acquire(pid):
+                url = f"https://ftp.ebi.ac.uk/pub/databases/msd/sifts/xml/{pid}.xml.gz"
+                try:
+                    if not re.fullmatch(r"[0-9][a-z0-9]{3}", pid):
+                        raise DetailFormatError("SIFTS requires a four-character PDB entry ID")
+                    data = bytearray()
+                    async with self._http().stream("GET", url) as response:
+                        response.raise_for_status()
+                        async for chunk in response.aiter_bytes():
+                            data.extend(chunk)
+                            if len(data) > SIFTS_COMPRESSED_LIMIT:
+                                raise DetailFormatError("SIFTS compressed byte limit exceeded")
+                    return pid, sifts_residues(bytes(data), pid, url), None
+                except httpx.HTTPStatusError as exc:
+                    if is_not_found_status(exc.response.status_code):
+                        return pid, None, None
+                    return pid, None, f"SIFTS acquisition error: {format_exc(exc)}"
+                except (httpx.HTTPError, ValueError, OSError, EOFError, ET.ParseError) as exc:
+                    return pid, None, f"SIFTS mapping error: {format_exc(exc)}"
+
+            for pid, value, error in await map_bounded(ids, acquire, limit=4):
+                if error:
+                    errors[pid] = error
+                else:
+                    residues[pid] = value
+        output = []
+        for record in records:
+            pid = str(record.query.get("pdb.id", "")).strip().lower()
+            if pid in errors:
+                output.append(LookupRecord(query=record.query, error=errors[pid]))
+                continue
+            if not record.found or record.error:
+                output.append(record)
+                continue
+            values = deepcopy(record.values)
+            for group in selected & set(groups):
+                source = details[group].get(pid)
+                values[f"structure.pdb.{group}"] = {
+                    "pdb_id": pid,
+                    "records": deepcopy(source),
+                    "available": source is not None,
+                    "source": endpoints[group],
+                    "interpretation": "observed source identities and numbering; range endpoints are not a full residue alignment",
+                }
+            if "residues" in groups:
+                values["structure.pdb.residues"] = (
+                    deepcopy(residues[pid])
+                    if residues[pid] is not None
+                    else {"pdb_id": pid, "available": False, "records": None}
+                )
+            if "coordinates" in groups:
+                values["structure.pdb.coordinates"] = coordinate_artifacts(
+                    pid, details["assemblies"].get(pid)
+                )
+            output.append(replace(record, values=values))
+        return output
 
     async def _list_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         accessions = [str(q.get("protein.uniprot.accession", "")).strip() for q in queries]
