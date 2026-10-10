@@ -11,7 +11,7 @@ db_name = "agora"
 weaver_id = "agora"
 kind = "lookup"
 title = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
-version = "0.2.7"
+version = "0.2.8"
 license = "CC-BY-NC-4.0"
 citation = "https://doi.org/10.1038/s41587-022-01628-0"
 attribution = "AGORA2 / Virtual Metabolic Human (VMH), Heinken et al., Nat Biotechnol 2023 (data CC BY-NC 4.0)"
@@ -53,6 +53,37 @@ max_batch_size = 50
   id = "model"
   outputs = ["microbe.metabolism.sbml"]
 
+[[capability]]
+id = "list_reconstructions"
+consumes = ["ncbi.taxon.id"]
+max_batch_size = 50
+set_outputs = ["microbe.agora.reconstruction_id"]
+
+  [[capability.group]]
+  id = "reconstructions"
+  outputs = ["microbe.agora.reconstruction_id", "microbe.agora.reconstructions", "microbe.agora.coverage"]
+
+[[capability]]
+id = "describe_reconstruction"
+consumes = ["microbe.agora.reconstruction_id"]
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["microbe.agora.reconstruction"]
+
+  [[capability.group]]
+  id = "artifact"
+  outputs = ["microbe.agora.artifact"]
+
+  [[capability.group]]
+  id = "reactions"
+  outputs = ["microbe.metabolism.reactions"]
+
+  [[capability.group]]
+  id = "model"
+  outputs = ["microbe.metabolism.sbml"]
+
 # Goldens run against build_agora_weaver_fixture (bundled crosswalk + a tiny fixture
 # reaction DB), so `verify --strict` is reproducible offline.
 # core: Abiotrophia defectiva (taxid 592010) -> its one AGORA2 reconstruction.
@@ -67,3 +98,8 @@ expect = { "microbe.metabolism.reconstruction" = [ { reconstruction_id = "Abiotr
 capability = "describe_metabolic_reconstruction"
 input = { "ncbi.taxon.id" = "592010" }
 expect = { "microbe.metabolism.reactions" = [ { reconstruction_id = "Abiotrophia_defectiva_ATCC_49176", abbreviation = "23DHMPO", subsystem = "Valine, leucine, and isoleucine metabolism", ec = "1.1.1.86" }, { reconstruction_id = "Abiotrophia_defectiva_ATCC_49176", abbreviation = "26DAPLLAT", subsystem = "Lysine metabolism", ec = "2.6.1.83" } ] }
+
+[[golden]]
+capability = "list_reconstructions"
+input = { "ncbi.taxon.id" = "592010" }
+expect = { "microbe.agora.reconstruction_id" = ["AGORA2-v2.01:Abiotrophia_defectiva_ATCC_49176"] }

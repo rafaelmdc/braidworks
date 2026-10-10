@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 from braidworks.core import BackendBase, LookupRecord
 from braidworks.core.exceptions import BackendConfigurationError
+from braidworks.core.localdb import auto_consented
 from braidworks.core.source_identity import SourceBinding, artifact_stamp
 
 from agora_weaver import dataset
@@ -75,7 +76,7 @@ class AgoraLocalBackend(BackendBase):
         )
         state = {
             "directory": str(directory.resolve()),
-            "auto_download": self._auto_download_models,
+            "auto_download": auto_consented(self._auto_download_models),
             "artifacts": [
                 (path.name, artifact_stamp(path)) for path in sorted(directory.glob("*.xml"))
             ],
@@ -99,10 +100,17 @@ class AgoraLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id in {"list_reconstructions", "describe_reconstruction"}:
+            return await asyncio.to_thread(
+                self._fetch_sync, queries, groups_to_compute, capability_id
+            )
         return await asyncio.to_thread(self._fetch_sync, queries, groups_to_compute)
 
     def _fetch_sync(
-        self, queries: list[dict[str, Any]], groups_to_compute: frozenset[str]
+        self,
+        queries: list[dict[str, Any]],
+        groups_to_compute: frozenset[str],
+        capability_id: str | None = None,
     ) -> list[LookupRecord]:
         self._check_generation()
         want_reactions = "reactions" in groups_to_compute
@@ -117,11 +125,47 @@ class AgoraLocalBackend(BackendBase):
             for query in queries:  # one record per query, in order — never reorder/drop
                 taxid = str(query.get("ncbi.taxon.id", "") or "").strip()
                 recs = dataset.reconstructions_for(taxid) if taxid else []
+                if capability_id == "describe_reconstruction":
+                    key = str(query.get("microbe.agora.reconstruction_id", ""))
+                    release, separator, reconstruction_id = key.partition(":")
+                    if not separator or release != dataset.CROSSWALK_RELEASE:
+                        records.append(
+                            LookupRecord(
+                                query=query,
+                                error="AGORA reconstruction ID must match the bundled release-qualified identity",
+                            )
+                        )
+                        continue
+                    recs = dataset.reconstruction_for(reconstruction_id)
+
                 if not recs:
                     records.append(LookupRecord(query=query, found=False))  # a miss is normal
                     continue
                 values: dict[str, Any] = {"microbe.metabolism.reconstruction": recs}
                 try:
+                    if capability_id == "list_reconstructions":
+                        ids = sorted(
+                            {f"{dataset.CROSSWALK_RELEASE}:{r['reconstruction_id']}" for r in recs}
+                        )
+                        values["microbe.agora.reconstruction_id"] = ids
+                        values["microbe.agora.reconstructions"] = recs[:10]
+                        values["microbe.agora.coverage"] = {
+                            "observed_count": len(ids),
+                            "display_count": min(10, len(recs)),
+                            "scope": "bundled crosswalk",
+                            "release": dataset.CROSSWALK_RELEASE,
+                        }
+                    elif capability_id == "describe_reconstruction":
+                        values["microbe.agora.reconstruction"] = {
+                            "id": key,
+                            "reconstruction_id": reconstruction_id,
+                            "release": dataset.CROSSWALK_RELEASE,
+                            "source_associations": recs,
+                        }
+                        if "artifact" in groups_to_compute:
+                            values["microbe.agora.artifact"] = self._artifact_metadata(
+                                reconstruction_id
+                            )
                     if con is not None:
                         ids = [r["reconstruction_id"] for r in recs]
                         values["microbe.metabolism.reactions"] = dataset.reactions_for(con, ids)
@@ -139,6 +183,40 @@ class AgoraLocalBackend(BackendBase):
                     continue
                 records.append(LookupRecord(query=query, found=True, values=values))
             return records
+
+    def _artifact_metadata(self, reconstruction_id: str) -> dict[str, Any]:
+        from agora_weaver.setup import default_sbml_cache_dir
+
+        directory = (
+            self._sbml_cache_dir if self._sbml_cache_dir is not None else default_sbml_cache_dir()
+        )
+        path = directory / f"{reconstruction_id}.xml"
+        result = {
+            "reconstruction_id": reconstruction_id,
+            "crosswalk_release": dataset.CROSSWALK_RELEASE,
+            "remote_availability": "unverified; tracked by issue #298",
+            "download_enabled": auto_consented(self._auto_download_models),
+            "release_verified": False,
+            "path": None,
+            "model_id": None,
+            "sha256": None,
+        }
+        if path.exists():
+            result.update(
+                {
+                    "status": "cached_structurally_valid_release_unverified",
+                    "path": str(path),
+                    "model_id": validate_model_sbml(path),
+                    "sha256": _sha256(path),
+                }
+            )
+        else:
+            result["status"] = (
+                "consent_required"
+                if not self._auto_download_models
+                else "remote_acquisition_unverified"
+            )
+        return result
 
     def _models_for(self, recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Cached (lazily-downloaded) SBML path per reconstruction — omitting any not available."""

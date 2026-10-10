@@ -63,6 +63,23 @@ def reconstructions_for(taxid: str) -> list[dict[str, str]]:
     ]
 
 
+@lru_cache(maxsize=1)
+def _reconstruction_index() -> Mapping[str, tuple[tuple[str, str], ...]]:
+    index: dict[str, set[tuple[str, str]]] = {}
+    for taxid, rows in _crosswalk_index().items():
+        for reconstruction_id, genome in rows:
+            index.setdefault(reconstruction_id, set()).add((taxid, genome))
+    return MappingProxyType({key: tuple(sorted(rows)) for key, rows in index.items()})
+
+
+def reconstruction_for(reconstruction_id: str) -> list[dict[str, str]]:
+    """All observed source taxid/genome associations for one reconstruction."""
+    return [
+        {"taxid": taxid, "reconstruction_id": reconstruction_id, "gcf_id": genome}
+        for taxid, genome in _reconstruction_index().get(reconstruction_id, ())
+    ]
+
+
 def load_crosswalk() -> dict[str, list[dict[str, str]]]:
     """Return a detached full crosswalk; single-taxid queries use the private index."""
     return {taxid: reconstructions_for(taxid) for taxid in _crosswalk_index()}

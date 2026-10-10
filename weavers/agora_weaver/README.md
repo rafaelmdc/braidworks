@@ -140,3 +140,16 @@ The license meaning is described by [Creative Commons](https://creativecommons.o
 Live validation on 2026-10-09 found the configured individual VMH model URL returning
 HTML instead of SBML. Model requests report a resource error and publish no artifact;
 this limitation remains tracked as an upstream acquisition follow-up.
+
+`list_reconstructions` emits the full distinct `microbe.agora.reconstruction_id`
+set (`AGORA2-v2.01:<model>`), a capped display of ten crosswalk records and coverage.
+`describe_reconstruction` consumes that release-qualified key. Its identity group
+retains exact source taxid/genome associations; reactions/model groups reuse the
+existing resource and consent behavior. IDs for other releases are explicit errors.
+
+The requested artifact group reports local structural validation, model ID/hash,
+and availability. It never starts downloads. A cached file is **not** proof of
+its AGORA release: `release_verified` remains false. Missing artifacts report
+consent-required or unverified remote acquisition according to effective consent.
+Remote acquisition is still unresolved in #298; metadata routing does not claim
+that download workflow is fixed or that a solver result exists.

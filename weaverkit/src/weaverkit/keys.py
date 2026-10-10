@@ -11,6 +11,7 @@ from __future__ import annotations
 
 # type_id -> one-line description (what it identifies / who produces it).
 SHARED_KEYS: dict[str, str] = {
+    "microbe.agora.reconstruction_id": "Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it.",
     "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
     # Entry point
     "organism.name": "The text you start from — an organism name.",
@@ -65,6 +66,10 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "microbe.agora.reconstruction": "One release-qualified model's source taxid/genome associations.",
+    "microbe.agora.reconstructions": "Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set.",
+    "microbe.agora.coverage": "AGORA crosswalk release and full observed versus display counts.",
+    "microbe.agora.artifact": "Observed local SBML structural status; release verification and remote availability remain explicit.",
     "go.term.relations": "Observed typed term children and obsoletion; parents/replacements not inferred.",
     "pathway.reactome.hierarchy": "Direct observed hasEvent children with distinct pathway/reaction types.",
     "pathway.reactome.participants": "Typed provider participant references with numeric IDs scoped to observed release.",

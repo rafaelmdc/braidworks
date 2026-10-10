@@ -31,3 +31,20 @@ acquisition, not proof that individual files are permanently unavailable.
 No replacement endpoint was verified, no release/mirror was substituted, and no
 large archive was downloaded. #298 remains open. Existing SBML validation still
 rejects HTML and prevents publication of an invalid downloaded model.
+
+## Approved reconstruction metadata routing — #251
+
+Version 0.2.8 adds release-qualified reconstruction list/describe using an
+immutable inverse crosswalk index. Listing preserves the full fan set while
+capping presentation at ten. Exact identity preserves all source taxid/genome
+associations and refuses mismatched releases. Requested artifact metadata does
+not acquire resources; it reports local structural validity with release
+verification explicitly false, and distinguishes missing/consent/unverified
+remote states. Existing organism lookup and reaction/SBML consent behavior remain
+intact; effective global consent is reflected in metadata/fingerprint policy.
+Core 0.21.9 and toolkit 0.6.12 register the new string bridge and output catalog.
+
+Verification: 46 package tests and strict passed. Tests cover offline routing,
+uncapped fan/capped display, cached versus absent artifacts and release mismatch.
+No API backend was changed, no model/archive was downloaded. #298 remote
+acquisition and broader model workflows remain deferred; #251 stays open.
