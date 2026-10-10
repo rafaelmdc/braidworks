@@ -51,7 +51,7 @@ From Python:
 ```python
 from alphafold_weaver import build_alphafold_weaver
 
-weaver = build_alphafold_weaver()        # zero-config
+weaver = build_alphafold_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `alphafold_weaver.register(factory)` adds it as a provider.
 ```
 
@@ -123,3 +123,37 @@ not enumerate archive-only long-protein fragments.
 same model/full/confidence groups as `describe_model`. It queries the source entry
 and refuses a different returned version rather than silently upgrading a saved
 identity. Existing accession-based `describe_model` keeps its representative choice.
+
+### Archive-only long fragments and isoforms
+
+The [provider's downloads documentation](https://alphafold.ebi.ac.uk/download)
+places long-protein overlapping fragments in proteome archives, outside the ordinary
+website/API inventory. Use an already acquired, **uncompressed outer TAR**:
+
+```python
+weaver = build_alphafold_weaver(
+    archive_paths=["/data/UP000005640_9606_HUMAN_v6.tar"],
+    max_archive_members=100_000,
+    max_archive_header_bytes=64 * 1024 * 1024,
+)
+# Execute list_models / describe_prediction with backend="archive".
+```
+
+The backend seeks over compressed model bodies and reads only headers; it extracts
+nothing and downloads nothing. It enumerates explicit `AF-<accession>-F<n>-model_v<v>`
+identities, keeps versions distinct, and groups CIF/PDB members as artifact locators.
+A canonical accession query includes observed isoform filenames; an isoform query
+matches that isoform only. Full fan IDs remain separate from the ten-record display.
+A capped scan warns; an unobserved model in an incomplete scan is an error. Completeness
+refers only to supported model filenames in the supplied archives, never the global DB.
+
+`describe_prediction` returns exact entry/version identity and archive/member/offset
+locators. It does not invent web URLs, residue ranges or confidence values from a
+filename. The original representative capability also works with this scoped metadata.
+The archive fingerprint covers observed headers, configured limits and file state;
+it is explicitly not a full coordinate checksum. File changes invalidate the instance
+and require rebuilding its index. Duplicate competing artifacts are rejected.
+Compressed outer archives are rejected to avoid an implicit full decompression pass.
+
+A real 4096-byte HTTP range probe of the current human archive observed
+`AF-A0A024R1R8-F1-model_v6.cif.gz`; the full 5.18 GB archive was not downloaded.

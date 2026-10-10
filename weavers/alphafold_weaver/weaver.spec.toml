@@ -10,14 +10,14 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.11"
+version = "0.1.12"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
 source_url = "https://alphafold.ebi.ac.uk"
 fingerprint_source = "AlphaFold DB REST API contract (alphafold.ebi.ac.uk/api/prediction)"
 api_key = "none"
-backends = ["api"]
+backends = ["api", "archive"]
 # Real excerpt of GET https://alphafold.ebi.ac.uk/api/prediction/P04637 (one entry).
 source_sample = """
 [
@@ -40,6 +40,9 @@ source_sample = """
     "plddtDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-confidence_v6.json"
   }
 ]
+# Observed first human proteome TAR header (4096-byte HTTP range probe), 2026-10-10:
+# UP000005640_9606_HUMAN_v6.tar, total 5177506304 bytes
+# AF-A0A024R1R8-F1-model_v6.cif.gz, member size 16736, data offset 512
 """
 
 # One accession -> one prediction call. The endpoint may return several models (the
@@ -68,7 +71,7 @@ max_batch_size = 25
   id = "full"
   outputs = ["structure.alphafold.records"]
 
-# API-observed entries only; archive-only long-protein fragments are not enumerated.
+# Backend-scoped enumeration: API-returned entries or supplied archive fragments/isoforms.
 [[capability]]
 id = "list_models"
 consumes = ["protein.uniprot.accession"]

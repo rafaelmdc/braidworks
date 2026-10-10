@@ -54,7 +54,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "alphafold-weaver"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "weavers/alphafold_weaver" }
 dependencies = [
     { name = "braidworks-core" },

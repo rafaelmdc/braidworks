@@ -17,7 +17,7 @@ remain excluded. No pushing, release tags or publication.
 | 8 | #212 | Reactome recursive reactions/evidence | Complete: 65 tests, strict, five live checks |
 | 9 | #193 | PDBe entity/alignment/assembly/ligand/coordinate workflows | Complete: 65 tests, strict; six live checks pass, one transient skip |
 | 10 | #240 | GTDB genome quality/synonym/release history (no tree-distance changes) | Complete: 90 tests, strict, two lightweight live checks |
-| 11 | #202 | AlphaFold archive-only fragment exploration | Pending |
+| 11 | #202 | AlphaFold archive-only fragment exploration | Complete: 51 tests, strict, bounded real archive header probe |
 
 Implement one coherent source contract at a time. Keep source-specific projections
 pure where useful; use existing lookup/resolver mappers and optional protocols,

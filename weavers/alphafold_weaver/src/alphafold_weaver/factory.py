@@ -21,6 +21,7 @@ from braidworks.core import BaseWeaver
 from braidworks.core.lifecycle import reject_unknown_options
 
 from alphafold_weaver.backends.api import AlphafoldApiBackend
+from alphafold_weaver.backends.archive import AlphafoldArchiveBackend
 from alphafold_weaver.weaver import AlphafoldWeaver
 
 
@@ -29,15 +30,23 @@ def build_alphafold_weaver(
     base_url: str = "https://alphafold.ebi.ac.uk",
     client: httpx.AsyncClient | None = None,
     max_concurrency: int = 4,
+    archive_paths: list[str] | None = None,
+    max_archive_members: int = 100_000,
+    max_archive_header_bytes: int = 64 * 1024 * 1024,
     **_config: Any,
 ) -> BaseWeaver:
     """Build with explicit source settings; injected clients remain caller-owned."""
     reject_unknown_options(_config)
     return AlphafoldWeaver(
         {
+            "archive": AlphafoldArchiveBackend(
+                archive_paths,
+                max_members=max_archive_members,
+                max_header_bytes=max_archive_header_bytes,
+            ),
             "api": AlphafoldApiBackend(
                 base_url=base_url, client=client, max_concurrency=max_concurrency
-            )
+            ),
         }
     )
 
