@@ -11,8 +11,8 @@ remain excluded. No pushing, release tags or publication.
 | 2 | #272 | GMrepo standalone run/cohort/phenotype workflows | Complete: 69 tests, strict, four live checks |
 | 3 | #264 | Disbiome reverse disease bridge with exact observed taxa | Complete: 48 tests and strict |
 | 4 | #246 | BacDive culture/genome identifiers with multiplicity | Complete: 68 tests, strict, four live checks |
-| 5 | #251 | AGORA genome/reaction routing bridges | Implementation |
-| 6 | #278 | MONDO release-matched typed SSSOM ingestion | Pending |
+| 5 | #251 | AGORA genome/reaction routing bridges | Complete: 55 tests and strict |
+| 6 | #278 | MONDO release-matched typed SSSOM ingestion | Research and implementation |
 | 7 | #207 | QuickGO hierarchy/replacements and bounded reverse annotations | Pending |
 | 8 | #212 | Reactome recursive reactions/evidence | Pending |
 | 9 | #193 | PDBe entity/alignment/assembly/ligand/coordinate workflows | Pending |

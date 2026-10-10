@@ -31,11 +31,11 @@ Registered bridge keys — what links weavers together.
 | `gene.hgnc.id` | HGNC id for one human gene. | — | `uniprot:map_to_accession` |
 | `gene.ncbi.id` | NCBI Gene id for one gene. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_from_accession` | `ncbi:ncbi.describe_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_to_accession` |
 | `gene.symbol` | A gene's official symbol, e.g. TP53 — joins gene databases. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | `uniprot:map_to_accession` |
-| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `bacdive:map_to_strain`, `ncbi:ncbi.describe_genome` |
+| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `agora:list_genomes`, `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `agora:list_reconstructions`, `bacdive:map_to_strain`, `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
 | `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
-| `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction` |
+| `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction`, `agora:list_genomes`, `agora:list_reactions` |
 | `microbe.bacdive.strain_id` | BacDive strain record integer ID; list_strains produces and describe_strain consumes it. | `bacdive:list_strains`, `bacdive:map_to_strain` | `bacdive:describe_strain`, `bacdive:map_from_strain` |
 | `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `disbiome:disbiome.list_taxa`, `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gmrepo:gmrepo.list_phenotypes`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
@@ -51,6 +51,7 @@ Registered bridge keys — what links weavers together.
 | `protein.pfam.id` | A Pfam family id. | — | — |
 | `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `alphafold:list_models`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
+| `reaction.vmh.id` | Observed VMH reaction abbreviation; produced by AGORA list_reactions and consumed by describe_reaction. | `agora:list_reactions` | `agora:describe_reaction` |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `string.id` | Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping. | `string:list_interactions`, `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `structure.alphafold.model_id` | Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction. | `alphafold:list_models` | `alphafold:describe_prediction` |
@@ -118,6 +119,8 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.abundance.sample_profiles` | Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI). | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.agora.artifact` | Observed local SBML structural status; release verification and remote availability remain explicit. | `agora:describe_reconstruction` | — |
 | `microbe.agora.coverage` | AGORA crosswalk release and full observed versus display counts. | `agora:list_reconstructions` | — |
+| `microbe.agora.genome_listing` | Exact model-to-assembly source associations from the pinned crosswalk. | `agora:list_genomes` | — |
+| `microbe.agora.reaction_listing` | Processed-model reaction repertoire with full fan and database source identity. | `agora:list_reactions` | — |
 | `microbe.agora.reconstruction` | One release-qualified model's source taxid/genome associations. | `agora:describe_reconstruction` | — |
 | `microbe.agora.reconstructions` | Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set. | `agora:list_reconstructions` | — |
 | `microbe.bacdive.identifier_evidence` | Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions. | `bacdive:map_from_strain` | — |
@@ -175,6 +178,7 @@ Descriptive payload fields; nothing joins on them.
 | `protein.sequence` | Canonical UniProtKB entry amino-acid sequence; produced by describe_protein. | `uniprot:describe_protein` | — |
 | `protein.uniprot.mapping.count` | How many ids this protein mapped to. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `protein.uniprot.mapping.records` | The ids this protein mapped to — id plus reviewed/db. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
+| `reaction.vmh.record` | VMH reaction annotation and observed model membership with database provenance. | `agora:describe_reaction` | — |
 | `structure.alphafold.confidence` | Observed PAE/pLDDT references with model version, coverage and metric semantics. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.mean_plddt` | The AlphaFold model's mean pLDDT confidence, 0–100. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |

@@ -80,6 +80,24 @@ def reconstruction_for(reconstruction_id: str) -> list[dict[str, str]]:
     ]
 
 
+@lru_cache(maxsize=1)
+def _genome_index() -> Mapping[str, tuple[tuple[str, str], ...]]:
+    index: dict[str, set[tuple[str, str]]] = {}
+    for taxid, rows in _crosswalk_index().items():
+        for reconstruction, genome in rows:
+            if genome:
+                index.setdefault(genome, set()).add((taxid, reconstruction))
+    return MappingProxyType({key: tuple(sorted(rows)) for key, rows in index.items()})
+
+
+def reconstructions_for_genome(genome: str) -> list[dict[str, str]]:
+    """Exact observed versioned assembly identity; no GCA/GCF alias inference."""
+    return [
+        {"taxid": taxid, "reconstruction_id": rid, "gcf_id": genome}
+        for taxid, rid in _genome_index().get(genome, ())
+    ]
+
+
 def load_crosswalk() -> dict[str, list[dict[str, str]]]:
     """Return a detached full crosswalk; single-taxid queries use the private index."""
     return {taxid: reconstructions_for(taxid) for taxid in _crosswalk_index()}

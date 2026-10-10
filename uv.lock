@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.2.9"
+version = "0.2.10"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.12"
+version = "0.21.13"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.17"
+version = "0.6.18"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

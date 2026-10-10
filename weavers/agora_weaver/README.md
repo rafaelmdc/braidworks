@@ -157,3 +157,19 @@ its AGORA release: `release_verified` remains false. Missing artifacts report
 consent-required or not-cached according to effective consent.
 Metadata describes service availability without fetching it; it does not claim
 exhaustive model availability, archive-byte equivalence or a solver result.
+
+### Genome and reaction bridges
+
+`list_reconstructions` now also accepts exact `genome.accession`; an explicitly
+supplied genome is authoritative if both alternatives occur. The pinned crosswalk
+retains assembly versions and does not guess GCA/GCF equivalence or latest versions.
+`list_genomes` consumes a release-qualified reconstruction ID and emits the full
+observed assembly set, preserving exact model/strain associations.
+
+`list_reactions` consumes that same model identity and uses the acquired reaction
+DB to emit the full sorted `reaction.vmh.id` set plus ten display records and true
+counts. `describe_reaction` consumes one VMH abbreviation and reports source
+annotations and observed model memberships with database release/content identity.
+Missing annotations remain null, not guessed KEGG/Rhea equivalence. Unprocessed
+model coverage is an error, not an empty repertoire. These routes require no new
+HTTP calls or model acquisition; missing reaction databases remain explicit errors.

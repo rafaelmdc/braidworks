@@ -118,11 +118,110 @@ class AgoraLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id in {"list_genomes", "list_reactions", "describe_reaction"}:
+            return await asyncio.to_thread(self._bridge_queries, capability_id, queries)
         if capability_id in {"list_reconstructions", "describe_reconstruction"}:
             return await asyncio.to_thread(
                 self._fetch_sync, queries, groups_to_compute, capability_id
             )
         return await asyncio.to_thread(self._fetch_sync, queries, groups_to_compute)
+
+    def _bridge_queries(self, capability, queries):
+        self._check_generation()
+        wants_reactions = capability in {"list_reactions", "describe_reaction"}
+        if wants_reactions and not self._reaction_db_ready():
+            return [
+                LookupRecord(query=q, error="AGORA reaction database unavailable") for q in queries
+            ]
+        with self._source.session() if wants_reactions else nullcontext(None) as con:
+            metadata = dict(con.execute("SELECT key,value FROM meta")) if con else {}
+            if wants_reactions and metadata.get("release") != dataset.CROSSWALK_RELEASE:
+                return [
+                    LookupRecord(
+                        query=q,
+                        error="AGORA reaction database release does not match the pinned crosswalk",
+                    )
+                    for q in queries
+                ]
+            results = []
+            for query in queries:
+                try:
+                    if capability == "describe_reaction":
+                        abbreviation = str(query.get("reaction.vmh.id") or "")
+                        row = con.execute(
+                            "SELECT abbreviation,subsystem,ec,kegg,rhea FROM rxn_info WHERE abbreviation=?",
+                            (abbreviation,),
+                        ).fetchone()
+                        memberships = [
+                            r[0]
+                            for r in con.execute(
+                                "SELECT reconstruction FROM reaction WHERE abbreviation=? ORDER BY reconstruction",
+                                (abbreviation,),
+                            )
+                        ]
+                        if row is None and not memberships:
+                            results.append(LookupRecord(query=query, found=False))
+                            continue
+                        values = {
+                            "reaction.vmh.record": {
+                                "id": abbreviation,
+                                "annotations": dict(
+                                    zip(("abbreviation", "subsystem", "ec", "kegg", "rhea"), row)
+                                )
+                                if row
+                                else None,
+                                "observed_reconstructions": memberships,
+                                "source_release": metadata.get("release"),
+                                "source_content_hash": metadata.get("content_hash"),
+                                "annotation_source": metadata.get("annotation_source"),
+                                "scope": "observed VMH abbreviation and source annotations; no inferred cross-reference equivalence",
+                            }
+                        }
+                    else:
+                        key = str(query.get("microbe.agora.reconstruction_id") or "")
+                        release, separator, identifier = key.partition(":")
+                        if not separator or release != dataset.CROSSWALK_RELEASE:
+                            results.append(
+                                LookupRecord(
+                                    query=query,
+                                    error="AGORA reconstruction ID must match the bundled release-qualified identity",
+                                )
+                            )
+                            continue
+                        associations = dataset.reconstruction_for(identifier)
+                        if not associations:
+                            results.append(LookupRecord(query=query, found=False))
+                            continue
+                        if capability == "list_genomes":
+                            ids = sorted({row["gcf_id"] for row in associations if row["gcf_id"]})
+                            values = {
+                                "genome.accession": ids,
+                                "microbe.agora.genome_listing": {
+                                    "source_associations": associations,
+                                    "observed_count": len(ids),
+                                    "release": release,
+                                    "scope": "exact crosswalk model/strain assembly associations",
+                                },
+                            }
+                        else:
+                            rows = dataset.reactions_for(con, [identifier])
+                            ids = sorted({row["abbreviation"] for row in rows})
+                            values = {
+                                "reaction.vmh.id": ids,
+                                "microbe.agora.reaction_listing": {
+                                    "records": rows[:10],
+                                    "observed_count": len(ids),
+                                    "release": metadata.get("release"),
+                                    "source_content_hash": metadata.get("content_hash"),
+                                    "scope": "processed source model repertoire; full ID set, display capped at ten",
+                                },
+                            }
+                    results.append(LookupRecord(query=query, found=True, values=values))
+                except (sqlite3.Error, dataset.IncompleteModelCoverage) as exc:
+                    results.append(
+                        LookupRecord(query=query, error=f"AGORA reaction source error: {exc}")
+                    )
+            return results
 
     def _fetch_sync(
         self,
@@ -143,6 +242,11 @@ class AgoraLocalBackend(BackendBase):
             for query in queries:  # one record per query, in order — never reorder/drop
                 taxid = str(query.get("ncbi.taxon.id", "") or "").strip()
                 recs = dataset.reconstructions_for(taxid) if taxid else []
+                if (
+                    capability_id == "list_reconstructions"
+                    and query.get("genome.accession") is not None
+                ):
+                    recs = dataset.reconstructions_for_genome(str(query["genome.accession"]))
                 if capability_id == "describe_reconstruction":
                     key = str(query.get("microbe.agora.reconstruction_id", ""))
                     release, separator, reconstruction_id = key.partition(":")

@@ -11,7 +11,7 @@ db_name = "agora"
 weaver_id = "agora"
 kind = "lookup"
 title = "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
-version = "0.2.9"
+version = "0.2.10"
 license = "CC-BY-NC-4.0"
 citation = "https://doi.org/10.1038/s41587-022-01628-0"
 attribution = "AGORA2 / Virtual Metabolic Human (VMH), Heinken et al., Nat Biotechnol 2023 (data CC BY-NC 4.0)"
@@ -60,7 +60,8 @@ max_batch_size = 50
 
 [[capability]]
 id = "list_reconstructions"
-consumes = ["ncbi.taxon.id"]
+consumes = ["ncbi.taxon.id", "genome.accession"]
+consumes_any = true
 max_batch_size = 50
 set_outputs = ["microbe.agora.reconstruction_id"]
 
@@ -108,3 +109,37 @@ expect = { "microbe.metabolism.reactions" = [ { reconstruction_id = "Abiotrophia
 capability = "list_reconstructions"
 input = { "ncbi.taxon.id" = "592010" }
 expect = { "microbe.agora.reconstruction_id" = ["AGORA2-v2.01:Abiotrophia_defectiva_ATCC_49176"] }
+
+
+[[capability]]
+id = "list_genomes"
+consumes = ["microbe.agora.reconstruction_id"]
+set_outputs = ["genome.accession"]
+  [[capability.group]]
+  id = "genomes"
+  outputs = ["genome.accession", "microbe.agora.genome_listing"]
+
+[[capability]]
+id = "list_reactions"
+consumes = ["microbe.agora.reconstruction_id"]
+set_outputs = ["reaction.vmh.id"]
+  [[capability.group]]
+  id = "reactions"
+  outputs = ["reaction.vmh.id", "microbe.agora.reaction_listing"]
+
+[[capability]]
+id = "describe_reaction"
+consumes = ["reaction.vmh.id"]
+  [[capability.group]]
+  id = "reaction"
+  outputs = ["reaction.vmh.record"]
+
+[[golden]]
+capability = "list_genomes"
+input = { "microbe.agora.reconstruction_id" = "AGORA2-v2.01:Abiotrophia_defectiva_ATCC_49176" }
+expect = { "genome.accession" = ["GCF_000160075.2"] }
+
+[[golden]]
+capability = "list_reactions"
+input = { "microbe.agora.reconstruction_id" = "AGORA2-v2.01:Abiotrophia_defectiva_ATCC_49176" }
+expect = { "reaction.vmh.id" = ["23DHMPO", "26DAPLLAT"] }

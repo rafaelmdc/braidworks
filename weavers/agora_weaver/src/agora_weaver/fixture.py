@@ -51,6 +51,7 @@ def fixture_reaction_db_path() -> Path:
             (_FIXTURE_RECON, "processed", len(_FIXTURE_REACTIONS), "fixture.xml", None),
         )
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('content_hash', 'fixture')")
+        con.execute("INSERT INTO meta VALUES ('release', ?)", (dataset.CROSSWALK_RELEASE,))
         con.commit()
     finally:
         con.close()

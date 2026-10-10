@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "agora"
-WEAVER_VERSION = "0.2.9"
+WEAVER_VERSION = "0.2.10"
 WEAVER_TITLE = (
     "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
 )
@@ -61,7 +61,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             ),
             Capability(
                 id="list_reconstructions",
-                consumes=frozenset({"ncbi.taxon.id"}),
+                consumes=frozenset({"genome.accession", "ncbi.taxon.id"}),
                 produces=frozenset(
                     {
                         "microbe.agora.coverage",
@@ -84,6 +84,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=50,
                 set_outputs=frozenset({"microbe.agora.reconstruction_id"}),
+                consumes_any=True,
             ),
             Capability(
                 id="describe_reconstruction",
@@ -106,6 +107,41 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 ),
                 backends=backends,
                 max_batch_size=50,
+            ),
+            Capability(
+                id="list_genomes",
+                consumes=frozenset({"microbe.agora.reconstruction_id"}),
+                produces=frozenset({"genome.accession", "microbe.agora.genome_listing"}),
+                output_groups=(
+                    OutputGroup(
+                        id="genomes",
+                        outputs=frozenset({"genome.accession", "microbe.agora.genome_listing"}),
+                    ),
+                ),
+                backends=backends,
+                set_outputs=frozenset({"genome.accession"}),
+            ),
+            Capability(
+                id="list_reactions",
+                consumes=frozenset({"microbe.agora.reconstruction_id"}),
+                produces=frozenset({"microbe.agora.reaction_listing", "reaction.vmh.id"}),
+                output_groups=(
+                    OutputGroup(
+                        id="reactions",
+                        outputs=frozenset({"microbe.agora.reaction_listing", "reaction.vmh.id"}),
+                    ),
+                ),
+                backends=backends,
+                set_outputs=frozenset({"reaction.vmh.id"}),
+            ),
+            Capability(
+                id="describe_reaction",
+                consumes=frozenset({"reaction.vmh.id"}),
+                produces=frozenset({"reaction.vmh.record"}),
+                output_groups=(
+                    OutputGroup(id="reaction", outputs=frozenset({"reaction.vmh.record"})),
+                ),
+                backends=backends,
             ),
         ),
     )

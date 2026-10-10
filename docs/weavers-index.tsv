@@ -1,7 +1,10 @@
 weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
 agora	describe_metabolic_reconstruction	lookup	none	local	ncbi.taxon.id	microbe.metabolism.reconstruction;microbe.metabolism.reactions;microbe.metabolism.sbml	
-agora	list_reconstructions	lookup	none	local	ncbi.taxon.id	microbe.agora.reconstruction_id;microbe.agora.reconstructions;microbe.agora.coverage	
+agora	list_reconstructions	lookup	none	local	ncbi.taxon.id;genome.accession	microbe.agora.reconstruction_id;microbe.agora.reconstructions;microbe.agora.coverage	
 agora	describe_reconstruction	lookup	none	local	microbe.agora.reconstruction_id	microbe.agora.reconstruction;microbe.agora.artifact;microbe.metabolism.reactions;microbe.metabolism.sbml	
+agora	list_genomes	lookup	none	local	microbe.agora.reconstruction_id	genome.accession;microbe.agora.genome_listing	
+agora	list_reactions	lookup	none	local	microbe.agora.reconstruction_id	reaction.vmh.id;microbe.agora.reaction_listing	
+agora	describe_reaction	lookup	none	local	reaction.vmh.id	reaction.vmh.record	
 alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.confidence;structure.alphafold.records	
 alphafold	list_models	lookup	none	api	protein.uniprot.accession	structure.alphafold.model_id;structure.alphafold.models;structure.alphafold.model_coverage	
 alphafold	describe_prediction	lookup	none	api	structure.alphafold.model_id	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.confidence;structure.alphafold.records	
