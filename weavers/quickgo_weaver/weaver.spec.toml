@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.13"
+version = "0.1.14"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -207,6 +207,37 @@ max_batch_size = 10
   [[capability.group]]
   id = "relations"
   outputs = ["go.term.relations"]
+
+  [[capability.group]]
+  id = "hierarchy"
+  outputs = ["go.term.hierarchy"]
+
+[[capability]]
+id = "list_gene_products"
+consumes = ["go.term"]
+set_outputs = ["protein.uniprot.accession"]
+max_batch_size = 10
+
+  [[capability.group]]
+  id = "products"
+  outputs = ["protein.uniprot.accession", "go.reverse.annotations", "go.reverse.coverage"]
+
+  [[capability.parameter]]
+  name = "taxon_id"
+  type = "int"
+  description = "Restrict annotations to a source NCBI taxon ID"
+
+  [[capability.parameter]]
+  name = "evidence_code"
+  type = "string"
+  description = "ECO evidence code"
+
+  [[capability.parameter]]
+  name = "evidence_usage"
+  type = "string"
+  enum = ["exact", "descendants"]
+  default = "exact"
+  description = "ECO matching scope"
 
 # Golden runs against the deterministic fixture (quickgo_weaver.fixture, an
 # httpx.MockTransport serving a canned 3-term annotation page for P04637 plus a

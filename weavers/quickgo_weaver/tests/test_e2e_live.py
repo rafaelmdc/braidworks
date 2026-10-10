@@ -169,3 +169,39 @@ async def test_live_typed_term_children():
         assert {child["relation"] for child in relations["children"]} >= {"is_a", "part_of"}
         assert relations["is_obsolete"] is False
         assert relations["parents"] is None and relations["replacement_ids"] is None
+
+
+async def test_live_hierarchy_and_reverse_products():
+    import httpx
+    from quickgo_weaver.backends.api import QuickgoApiBackend
+
+    async with httpx.AsyncClient(
+        base_url="https://www.ebi.ac.uk/QuickGO/services", timeout=30
+    ) as client:
+        backend = QuickgoApiBackend(max_pages=1, client=client)
+        hierarchy = (
+            await backend.fetch(
+                "describe_go_term",
+                [{"go.term": "GO:0006915"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"hierarchy"}),
+            )
+        )[0]
+        assert not hierarchy.error, hierarchy.error
+        value = hierarchy.values["go.term.hierarchy"]
+        assert {"id": "GO:0012501", "relation": "is_a"} in value["parents"]
+        assert "GO:0008150" in value["ancestors"]
+        assert value["replaces"] and value["replacements"] is None
+        reverse = (
+            await backend.fetch(
+                "list_gene_products",
+                [{"go.term": "GO:0006915"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(),
+                params={"taxon_id": 9606},
+            )
+        )[0]
+        assert not reverse.error, reverse.error
+        assert reverse.values["protein.uniprot.accession"]
+        assert reverse.values["go.reverse.coverage"]["complete"] is False
+        assert reverse.warnings

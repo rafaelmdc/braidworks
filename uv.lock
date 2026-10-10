@@ -814,7 +814,7 @@ wheels = [
 
 [[package]]
 name = "quickgo-weaver"
-version = "0.1.13"
+version = "0.1.14"
 source = { editable = "weavers/quickgo_weaver" }
 dependencies = [
     { name = "braidworks-core" },

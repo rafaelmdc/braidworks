@@ -58,7 +58,7 @@ From Python:
 ```python
 from quickgo_weaver import build_quickgo_weaver
 
-weaver = build_quickgo_weaver()        # zero-config
+weaver = build_quickgo_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `quickgo_weaver.register(factory)` adds it as a provider.
 ```
 
@@ -139,3 +139,21 @@ term data. Child relation types remain distinct. Parents/replacement IDs are not
 acquired or inferred. This group reuses the term response, with no additional call.
 Sources: [QuickGO annotations](https://www.ebi.ac.uk/training/online/courses/goa-and-quickgo-quick-tour/what-is-quickgo/viewing-go-annotations/),
 [GO annotation semantics](https://www.geneontology.org/docs/go-annotations/).
+
+### Hierarchy and reverse annotation queries
+
+Request `go.term.hierarchy` on `describe_go_term` for typed parents from explicit
+`is_a,part_of` paths to the three GO aspect roots, the provider's ancestor list
+(including self), complete term history, `replacements` and `replaces`. Replacement
+`consider` suggestions are retained, never followed automatically. The existing
+children-only relation group keeps its original scope. Single-term supplementary
+endpoints run with bounded concurrency and repeated inputs share acquisition.
+
+`list_gene_products` consumes `go.term` and produces a full sorted set of observed
+positive UniProt accessions, raw annotation evidence and `go.reverse.coverage`.
+GO matching is exact; use `taxon_id` and optional ECO `evidence_code`/`evidence_usage`
+filters. Source hit totals count annotations, not distinct proteins. The configured
+`max_pages` bounds acquisition per multi-term batch; incomplete coverage carries a
+warning and an unobserved term in an incomplete batch returns an error rather than
+an unsupported no-match. Negative annotations stay in evidence and out of the fan set.
+Source contracts: [QuickGO API](https://www.ebi.ac.uk/QuickGO/api/index.html).
