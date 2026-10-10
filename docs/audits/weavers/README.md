@@ -5,7 +5,10 @@ Audit baseline: 2026-10-08, branch `audit/individual-weavers`. Reports below des
 that baseline. Review and approved remediation are complete locally on
 `feat/weaver-audit-approved-scopes`, including all eleven subsequently approved
 feature expansions. See [current acceptance and issue state](remaining-features.plan.md).
-Only #234 remains deferred within this weaver audit; remote delivery is not performed.
+Only #234 remains deferred within this weaver audit. Completed work is pushed to
+[the review branch](https://github.com/rafaelmdc/braidworks/tree/feat/weaver-audit-approved-scopes);
+completed readiness/refactor trackers #136–#141 and #144–#146 are closed. No merge
+or publication was performed.
 Publishing #142 and durable cache/resume #143 remain outside this pass.
 
 | Order | Weaver | Status | Main findings | Documents |

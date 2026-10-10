@@ -1,5 +1,14 @@
 # Finish the remaining feature issues
 
+Delivery update (2026-10-10): the owner authorized pushing and closing completed
+trackers. The implementation through `58a1420` is pushed to
+[feat/weaver-audit-approved-scopes](https://github.com/rafaelmdc/braidworks/tree/feat/weaver-audit-approved-scopes).
+Completed #136–#141 and #144–#146 are closed. Deferred #234, #142 and #143,
+parents #165/#147, and the older standalone backlog remain open. Local-only and
+no-push statements below describe the preceding acceptance checkpoint. No merge,
+tag or package publication was performed. The current CI workflow runs for PRs
+and pushes to main; this branch-only push does not start remote CI.
+
 User instruction (2026-10-10): implement the remaining issues, including the larger
 expansions previously separated in recommendation-research.md. This supersedes
 those research deferrals. #234, publishing #142 and persistent cache/resume #143
