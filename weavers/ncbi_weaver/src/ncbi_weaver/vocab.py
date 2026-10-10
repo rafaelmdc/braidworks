@@ -65,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.12"
+WEAVER_VERSION = "0.2.13"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -130,7 +130,7 @@ def list_children_capability(*, backends: tuple[str, ...]) -> Capability:
     Emits ``ncbi.taxon.id`` as a **set output** (the fan dimension), so a caller can
     fan out one child per descendant — "genus -> all species, each drillable". The
     ``rank`` parameter (default ``species``) selects which descendant rank to return.
-    API-only: NCBI Datasets ``dataset_report?children=true`` walks the subtree.
+    Local dump or NCBI Datasets ``dataset_report?children=true`` walks the subtree.
     """
     return Capability(
         id=LIST_CHILDREN,
@@ -293,7 +293,7 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """The NCBI weaver manifest, declaring each capability for the wired backends.
 
-    The genome + ``list_children`` capabilities are API-only (they hit the live NCBI
+    Genome/gene capabilities are API-only (they hit the live NCBI
     Datasets service), so they appear only when the ``api`` backend is wired.
     """
     capabilities = [
@@ -313,8 +313,8 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=MAX_BATCH_SIZE,
             )
         )
+    capabilities.append(list_children_capability(backends=backends))
     if "api" in backends:
-        capabilities.append(list_children_capability(backends=("api",)))
         capabilities.append(list_genomes_capability(backends=("api",)))
         capabilities.append(describe_genome_capability(backends=("api",)))
         capabilities.append(resolve_gene_capability(backends=("api",)))

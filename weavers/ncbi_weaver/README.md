@@ -17,7 +17,7 @@ backends emit identical shapes even though their matching differs.
 |---|---|---|
 | `ncbi.resolve_name` | `organism.name` | **core:** `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.match_type`, `ncbi.taxon.review_required` · **lineage:** `ncbi.taxon.lineage` |
 | `ncbi.describe_taxon` | `ncbi.taxon.id` | **core:** `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id` · **lineage:** `ncbi.taxon.lineage` |
-| `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **api-only** |
+| `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **local + api** |
 | `ncbi.list_genomes` ⤜ | `ncbi.taxon.id` | **`genome.accession`** (⤜ fan: each assembly), `genome.assembly.count`, `genome.assembly.records` — params `reference_only`, `annotated_only`, `assembly_level` · **api-only** |
 | `ncbi.describe_genome` | `genome.accession` | **assembly:** `genome.assembly.title`, `genome.assembly.level`, `genome.assembly.organism`, `genome.assembly.detail` · **sequences:** `genome.sequence.records` · **api-only** |
 | `ncbi.resolve_gene` | `protein.query` | `gene.ncbi.id`, `gene.symbol`, `gene.name`, `gene.organism` — param `taxon` (default `9606`) · **api-only** |
@@ -190,7 +190,14 @@ proof that an ID was never present. Deleted/unknown IDs have no inferred success
 Existing `ncbi.describe_taxon` and name resolution are unchanged.
 
 The history operation is separate from taxonomy resolution and advertised only
-when local is wired. Local descendant listing remains deferred;
+when local is wired. Local descendant listing uses the same capability and rank semantics as the API;
 `ncbi.list_children` still requires the API backend and its documented rank scope.
 No full taxonomy download is required for conformance: tiny synthetic dump
 fixtures exercise merge chains, deletion, missing history and atomic failures.
+
+Local `ncbi.list_children` traverses **all strict descendants**, not only direct
+children. `rank=species` is the default; an empty rank returns every descendant
+rank. The queried node is excluded, the fan key contains the full distinct sorted
+ID set, and display records are capped at 200, matching the API. It reads only the current dump;
+historical IDs are not silently followed. Empty/unknown subtrees are NO_MATCH.
+Traversal uses the parent index off the event loop and terminates on cyclic input.

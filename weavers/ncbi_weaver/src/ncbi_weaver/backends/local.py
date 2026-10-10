@@ -9,6 +9,8 @@ read session is bound to the backend generation.
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +75,58 @@ class LocalTaxonomyBackend:
         return await asyncio.to_thread(
             self._resolve_sync, capability_id, list(queries), need_lineage
         )
+
+    async def list_children(
+        self, queries: list[dict[str, Any]], *, rank: str
+    ) -> list[LookupRecord]:
+        """List all strict descendants of the requested rank in this dump."""
+        return await asyncio.to_thread(
+            self._children_sync, queries, (rank or "species").strip().lower()
+        )
+
+    def _children_sync(self, queries, rank):
+        with self._source.session() as con:
+            resolved = {}
+            records = []
+            for query in queries:
+                raw = query.get(vocab.TAXON_ID)
+                try:
+                    taxid = int(raw)
+                    if isinstance(raw, (bool, float)) or taxid < 1:
+                        raise ValueError("invalid taxid")
+                except (TypeError, ValueError):
+                    records.append(LookupRecord(query=query, found=False))
+                    continue
+                if taxid not in resolved:
+                    # UNION bounds traversal even for malformed cyclic parent graphs.
+                    # The seed includes the input, which is excluded from the result.
+                    rows = con.execute(
+                        "WITH RECURSIVE subtree(taxid) AS ("
+                        " SELECT taxid FROM taxa WHERE taxid=?"
+                        " UNION SELECT t.taxid FROM taxa t JOIN subtree s ON t.parent_taxid=s.taxid"
+                        ") SELECT t.taxid, t.rank,"
+                        " (SELECT MIN(n.name_txt) FROM taxon_names n"
+                        " WHERE n.taxid=t.taxid AND n.name_class='scientific name')"
+                        " FROM subtree s JOIN taxa t ON t.taxid=s.taxid"
+                        " WHERE t.taxid!=? AND (?='' OR lower(t.rank)=?) ORDER BY t.taxid",
+                        (taxid, taxid, rank, rank),
+                    ).fetchall()
+                    children = [{"taxid": r[0], "rank": r[1].lower(), "name": r[2]} for r in rows]
+                    resolved[taxid] = LookupRecord(
+                        query=query,
+                        found=bool(children),
+                        values={
+                            vocab.TAXON_ID: [r["taxid"] for r in children],
+                            vocab.CHILDREN_COUNT: len(children),
+                            vocab.CHILDREN_RECORDS: children[:200],
+                        }
+                        if children
+                        else {},
+                    )
+                records.append(
+                    replace(resolved[taxid], query=query, values=deepcopy(resolved[taxid].values))
+                )
+            return records
 
     async def describe_taxon_history(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
         return await asyncio.to_thread(self._history_sync, queries)

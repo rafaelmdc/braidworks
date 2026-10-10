@@ -54,8 +54,8 @@ class TaxonomyChildrenBackend(Protocol):
     ) -> list[LookupRecord]:
         """List each input taxid's descendant taxids of ``rank`` (one record per input).
 
-        Only the API backend implements this (it walks the live taxonomy subtree); the
-        capability is declared API-only, so a non-API backend is never asked.
+        Local and API backends implement strict all-descendant rank filtering.
+        The queried node itself is excluded; this is not immediate-child traversal.
         """
         ...
 

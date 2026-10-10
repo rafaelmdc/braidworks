@@ -99,10 +99,10 @@ def test_factory_both_backends_declared(mini_db_path):
     client = httpx.AsyncClient(base_url="https://api.test/v2", transport=httpx.MockTransport(lambda r: httpx.Response(200, json={})))
     weaver = build_ncbi_weaver(db_path=mini_db_path, api_client=client)
     caps = {c.id: c for c in weaver.MANIFEST.capabilities}
-    # resolve/describe run on either backend; list_children is API-only.
+    # Taxonomy resolution, description and descendants run on either backend.
     assert caps["ncbi.resolve_name"].backends == ("api", "local")
     assert caps["ncbi.describe_taxon"].backends == ("api", "local")
-    assert caps["ncbi.list_children"].backends == ("api",)
+    assert caps["ncbi.list_children"].backends == ("api", "local")
 
 
 def test_unconfigured_backend_fingerprint_is_stable(mini_db_path):
