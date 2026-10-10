@@ -49,7 +49,7 @@ from braidworks.core import WeaverFactory
 import gtdb_weaver
 
 factory = WeaverFactory()
-gtdb_weaver.register(factory)        # makes "gtdb" buildable
+gtdb_weaver.register(factory)  # makes "gtdb" buildable
 ```
 
 ## Installation and documentation
@@ -147,3 +147,19 @@ representatives remain unavailable. The API backend reports only a returned row
 explicitly marked representative and leaves the release unknown; it does not
 guess a release or fetch another genome. Existing taxonomy and tree outputs are
 unchanged. Genomic quality and cross-release history remain separate work.
+
+### Genome-specific quality, synonyms and release history
+
+`describe_genome` consumes an exact versioned `genome.accession` on the **api**
+backend. It returns observed card identity, with optional genome `quality`, source
+`synonyms` and cross-release `history` groups. It does not attach genome metrics to
+species-name lookups. CheckM and CheckM2 stay separate and no threshold is implied.
+
+The card may explicitly associate GCA/GCF identities; both are retained without
+assuming all such accessions are interchangeable. Its endpoint supplies no current
+release, so that field remains unknown. History records retain every returned release
+and lineage; classification changes are not synonyms or equivalence assertions.
+Absent provider synonyms remain null. Single-genome requests run with bounded
+concurrency, share repeated inputs, and preserve detached results.
+[Provider OpenAPI contract](https://gtdb-api.ecogenomic.org/openapi.json).
+Tree placement and distance semantics are unchanged; #234 remains deferred.

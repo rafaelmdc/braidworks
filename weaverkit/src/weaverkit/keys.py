@@ -71,6 +71,11 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "gtdb.genome.identity": "Observed GTDB genome-specific identity, distinct from species/tree assertions.",
+    "gtdb.genome.quality": "Observed GTDB genome-specific quality, distinct from species/tree assertions.",
+    "gtdb.genome.synonyms": "Observed GTDB genome-specific synonyms, distinct from species/tree assertions.",
+    "gtdb.genome.history": "Observed GTDB genome-specific history, distinct from species/tree assertions.",
+
     "structure.pdb.entities": "Observed PDBe entities detail with provider identity and availability.",
     "structure.pdb.assemblies": "Observed PDBe assemblies detail with provider identity and availability.",
     "structure.pdb.ligands": "Observed PDBe ligands detail with provider identity and availability.",

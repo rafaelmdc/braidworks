@@ -16,7 +16,7 @@ remain excluded. No pushing, release tags or publication.
 | 7 | #207 | QuickGO hierarchy/replacements and bounded reverse annotations | Complete: 77 tests, strict, seven live checks |
 | 8 | #212 | Reactome recursive reactions/evidence | Complete: 65 tests, strict, five live checks |
 | 9 | #193 | PDBe entity/alignment/assembly/ligand/coordinate workflows | Complete: 65 tests, strict; six live checks pass, one transient skip |
-| 10 | #240 | GTDB genome quality/synonym/release history (no tree-distance changes) | Pending |
+| 10 | #240 | GTDB genome quality/synonym/release history (no tree-distance changes) | Complete: 90 tests, strict, two lightweight live checks |
 | 11 | #202 | AlphaFold archive-only fragment exploration | Pending |
 
 Implement one coherent source contract at a time. Keep source-specific projections

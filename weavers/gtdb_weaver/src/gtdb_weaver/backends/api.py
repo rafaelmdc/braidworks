@@ -25,6 +25,12 @@ from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
 from gtdb_weaver import taxonomy
+from gtdb_weaver.genome_detail import (
+    GenomeFormatError,
+    normalize_accession,
+    project_card,
+    project_history,
+)
 
 # Base URL of the GTDB API (the api.gtdb.ecogenomic.org host has a broken cert).
 BASE_URL = "https://gtdb-api.ecogenomic.org"
@@ -77,6 +83,8 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "describe_genome":
+            return await self._genomes(queries, groups_to_compute)
         # One record per query, in order — the API search is per-name, so fire the
         # distinct names concurrently and map results back positionally.
         names = [_query_name(q) for q in queries]
@@ -112,6 +120,36 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
                 continue
             records.append(_relabel(result, query))
         return records
+
+    async def _genomes(self, queries, groups):
+        ids = [normalize_accession(q.get("genome.accession")) for q in queries]
+        distinct = sorted({identifier for identifier in ids if identifier})
+
+        async def acquire(accession):
+            try:
+                response = await self._http().get(f"/genome/{accession}/card")
+                response.raise_for_status()
+                values = project_card(response.json(), accession)
+                if "history" in groups:
+                    response = await self._http().get(f"/genome/{accession}/taxon-history")
+                    response.raise_for_status()
+                    values["gtdb.genome.history"] = project_history(response.json(), accession)
+                return LookupRecord(query={}, found=True, values=values)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    return LookupRecord(query={}, found=False)
+                return LookupRecord(query={}, error=f"GTDB genome error: {format_exc(exc)}")
+            except (httpx.HTTPError, ValueError, GenomeFormatError) as exc:
+                return LookupRecord(query={}, error=f"GTDB genome error: {format_exc(exc)}")
+
+        fetched = await map_bounded(distinct, acquire, limit=self._max_concurrency)
+        mapped = dict(zip(distinct, fetched))
+        return [
+            _relabel(mapped[identifier], query)
+            if identifier
+            else LookupRecord(query=query, found=False)
+            for query, identifier in zip(queries, ids)
+        ]
 
     async def _search(self, name: str, *, representative: bool = False) -> LookupRecord:
         """Resolve one GTDB species name to a record (found/miss); raises only on HTTP errors."""

@@ -10,7 +10,7 @@ db_name = "gtdb"
 weaver_id = "gtdb"
 kind = "lookup"
 title = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
-version = "0.2.10"
+version = "0.2.11"
 license = "CC-BY-SA-4.0"
 citation = "https://doi.org/10.1093/nar/gkab776"
 attribution = "GTDB (Genome Taxonomy Database), Parks et al."
@@ -34,6 +34,10 @@ RS_GCF_027889305.1	f	d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Ent
 # bac120.tree (Newick excerpt, GTDB R232) — leaves are representative genome accessions
 # (GB_/RS_ prefix, matching `accession` above); internal nodes carry bootstrap support values.
 (RS_GCF_001579805.1:0.00055,RS_GCF_013385825.1:0.00055)86.0:0.00055
+# GET /genome/GCF_000005845.2/card observed 2026-10-10 (selected fields)
+{"genome":{"accession":"GCA_000005845.2","name":"GCF_000005845.2"},"metadata_gene":{"checkm_completeness":99.97,"checkm_contamination":0.04,"checkm2_completeness":100.0,"checkm2_contamination":0.13},"metadataTaxonomy":{"synonyms":null}}
+# /taxon-history same assembly, observed release classifications, not synonyms:
+[{"release":"R232","s":"s__G047199095 sp047199095"},{"release":"R226","s":"s__Escherichia coli"}]
 """
 
 # One organism (taxid OR name) -> GTDB species id + rank-normalized lineage.
@@ -70,6 +74,25 @@ max_batch_size = 50
   [[capability.group]]
   id = "core"
   outputs = ["gtdb.tree.rootpath"]
+
+[[capability]]
+id = "describe_genome"
+consumes = ["genome.accession"]
+backends = ["api"]
+max_batch_size = 50
+always_computed_groups = ["identity"]
+  [[capability.group]]
+  id = "identity"
+  outputs = ["gtdb.genome.identity"]
+  [[capability.group]]
+  id = "quality"
+  outputs = ["gtdb.genome.quality"]
+  [[capability.group]]
+  id = "synonyms"
+  outputs = ["gtdb.genome.synonyms"]
+  [[capability.group]]
+  id = "history"
+  outputs = ["gtdb.genome.history"]
 
 # Goldens run against the bundled fixture crosswalk (build_gtdb_weaver_fixture),
 # so `verify --strict` is reproducible offline. E. coli by taxid and by name.

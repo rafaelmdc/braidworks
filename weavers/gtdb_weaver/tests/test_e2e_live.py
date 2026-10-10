@@ -106,3 +106,27 @@ async def test_live_representative_scope_does_not_invent_release():
         record = next(s.value for s in result.strands if s.type_id == "gtdb.genome.representative")
         assert record["release"] is None
         assert record["gtdb_taxon_id"] == "s__Escherichia coli"
+
+
+async def test_live_genome_quality_and_release_history():
+    async with build_gtdb_weaver(enable_api=True) as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_genome",
+                [StrandSet.from_strands("genome", [Strand("genome.accession", "GCF_000005845.2")])],
+                requested_outputs=frozenset(
+                    {"gtdb.genome.quality", "gtdb.genome.history", "gtdb.genome.synonyms"}
+                ),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK, result.to_json()
+        values = {strand.type_id: strand.value for strand in result.strands}
+        quality = values["gtdb.genome.quality"]["gene"]
+        assert quality["checkm_completeness"] > 95 and quality["checkm2_completeness"] > 95
+        history = values["gtdb.genome.history"]["records"]
+        assert any(
+            row["release"] == "R226" and row["s"] == "s__Escherichia coli" for row in history
+        )
+        assert len(history) > 1
+        assert "synonyms" in values["gtdb.genome.synonyms"]
