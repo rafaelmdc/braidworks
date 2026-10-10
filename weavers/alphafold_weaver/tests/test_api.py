@@ -153,3 +153,49 @@ async def test_lookup_batch_is_bounded_concurrent_and_keeps_query_order():
                 record.found
                 and record.values["structure.alphafold.entry_id"] == "AF-" + accession + "-F1"
             )
+
+
+async def test_confidence_references_are_requested_and_do_not_download():
+    calls = []
+    backend = _backend(
+        [
+            _entry(
+                "AF-P04637-F1", paeDocUrl="https://af/pae.json", plddtDocUrl="https://af/plddt.json"
+            )
+        ],
+        calls=calls,
+    )
+    query = {"protein.uniprot.accession": "P04637"}
+    default = (
+        await backend.fetch(CAP, [query], requested_outputs=ALL, groups_to_compute=frozenset())
+    )[0]
+    assert "structure.alphafold.confidence" not in default.values
+    record = (
+        await backend.fetch(
+            CAP,
+            [query],
+            requested_outputs=frozenset({"structure.alphafold.confidence"}),
+            groups_to_compute=frozenset({"confidence"}),
+        )
+    )[0]
+    confidence = record.values["structure.alphafold.confidence"]
+    assert confidence["pae_json_url"] == "https://af/pae.json"
+    assert confidence["plddt_json_url"] == "https://af/plddt.json"
+    assert confidence["entry_id"] == "AF-P04637-F1" and confidence["version"] == 6
+    assert len(calls) == 2 and all("/api/prediction/" in call for call in calls)
+    await backend.aclose()
+
+
+async def test_missing_confidence_references_are_not_guessed():
+    backend = _backend([_entry("AF-P04637-F1")])
+    record = (
+        await backend.fetch(
+            CAP,
+            [{"protein.uniprot.accession": "P04637"}],
+            requested_outputs=frozenset({"structure.alphafold.confidence"}),
+            groups_to_compute=frozenset({"confidence"}),
+        )
+    )[0]
+    assert record.values["structure.alphafold.confidence"]["pae_json_url"] is None
+    assert record.values["structure.alphafold.confidence"]["plddt_json_url"] is None
+    await backend.aclose()

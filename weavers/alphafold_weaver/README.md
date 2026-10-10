@@ -102,3 +102,12 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Confidence data references
+
+Request `structure.alphafold.confidence` from `describe_model` to receive the
+provider's PAE and per-residue pLDDT JSON URLs, model version and sequence coverage.
+Missing source URLs remain `None`; lookup never downloads those files. pLDDT
+is local confidence on a 0–100 scale; PAE measures predicted relative placement
+error in angstroms. Neither is an experimental measurement. Existing representative
+selection and outputs are unchanged.

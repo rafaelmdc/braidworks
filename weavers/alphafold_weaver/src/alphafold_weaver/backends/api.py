@@ -66,7 +66,7 @@ def _validated_entries(body: Any) -> list[dict[str, Any]]:
             and (start > end or (sequence and end > len(sequence)))
         ):
             raise _InvalidResponse("AlphaFold residue range is inconsistent with sequence")
-        for field in ("pdbUrl", "cifUrl", "paeImageUrl"):
+        for field in ("pdbUrl", "cifUrl", "paeImageUrl", "paeDocUrl", "plddtDocUrl"):
             if entry.get(field) is not None and not isinstance(entry[field], str):
                 raise _InvalidResponse(f"AlphaFold {field} must be a string or null")
         for field in (
@@ -189,12 +189,16 @@ class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
     ) -> list[LookupRecord]:
         async def resolve(query: dict[str, Any]) -> LookupRecord:
             return await self._resolve_one(
-                query, str(query.get("protein.uniprot.accession") or "").strip()
+                query,
+                str(query.get("protein.uniprot.accession") or "").strip(),
+                confidence="confidence" in groups_to_compute,
             )
 
         return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
-    async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
+    async def _resolve_one(
+        self, query: dict[str, Any], accession: str, *, confidence: bool = False
+    ) -> LookupRecord:
         if not accession:
             return LookupRecord(query=query, found=False)
         try:
@@ -223,6 +227,17 @@ class AlphafoldApiBackend(HTTPClientLifecycle, BackendBase):
         selected = _pick(entries, accession)
         values = _extract(selected)
         coverage = values["structure.alphafold.records"]["coverage"]
+        if confidence:
+            values["structure.alphafold.confidence"] = {
+                "entry_id": selected["entryId"],
+                "version": selected.get("latestVersion"),
+                "coverage": dict(coverage),
+                "pae_json_url": selected.get("paeDocUrl"),
+                "plddt_json_url": selected.get("plddtDocUrl"),
+                "plddt_scale": [0, 100],
+                "pae_unit": "angstrom",
+                "interpretation": "predicted confidence; pLDDT is local, PAE is relative placement",
+            }
         warnings = []
         if coverage["status"] == "partial":
             warnings.append(

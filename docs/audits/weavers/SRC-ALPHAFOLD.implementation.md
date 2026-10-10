@@ -11,3 +11,11 @@ Live E2E: both known TP53 coverage and malformed-accession cases passed. Coverag
 Package suite: **42 passed, 2 opt-in skips**. Strict verification passed. Repository lint passed. Full workspace result is recorded in the batch report after completion.
 
 Repository validation: `make test` passed (2094 pytest tests, 56 opt-in skips, plus 5 tool unittest checks); `make lint` passed. Tooling used the isolated audit environment.
+
+## Approved confidence references — #199
+
+Version 0.1.10 adds requested `structure.alphafold.confidence`: observed PAE and
+per-residue pLDDT JSON URLs, model/version/coverage and metric semantics. Missing
+URLs stay null; no linked files are fetched. Existing outputs and representative
+selection are unchanged. 44 package tests passed, strict verification passed, and
+all 3 live E2E tests passed. Parsed matrices/vectors remain outside this scope.

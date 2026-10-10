@@ -65,3 +65,25 @@ async def test_live_malformed_accession_is_no_match():
     result = await _model(weaver, "NOTAREALACC")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_confidence_references_are_source_urls():
+    async with build_alphafold_weaver() as weaver:
+        inputs = [StrandSet.from_strands("tp53", [Strand("protein.uniprot.accession", "P04637")])]
+        result = (
+            await weaver.execute_batch(
+                "describe_model",
+                inputs,
+                requested_outputs=frozenset({"structure.alphafold.confidence"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        value = next(
+            s.value for s in result.strands if s.type_id == "structure.alphafold.confidence"
+        )
+        assert value["entry_id"] == "AF-P04637-F1"
+        assert value["pae_json_url"].endswith(".json")
+        assert value["plddt_json_url"].endswith(".json")
+        assert value["coverage"]["uniprot_end"] == 393

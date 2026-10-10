@@ -10,7 +10,7 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.9"
+version = "0.1.10"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
@@ -35,7 +35,9 @@ source_sample = """
     "fractionPlddtVeryLow": 0.34,
     "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb",
     "cifUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.cif",
-    "paeImageUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-predicted_aligned_error_v6.png"
+    "paeImageUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-predicted_aligned_error_v6.png",
+    "paeDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-predicted_aligned_error_v6.json",
+    "plddtDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-confidence_v6.json"
   }
 ]
 """
@@ -57,6 +59,10 @@ max_batch_size = 25
     "structure.alphafold.pae_image_url",
     "structure.alphafold.version",
   ]
+
+  [[capability.group]]
+  id = "confidence"
+  outputs = ["structure.alphafold.confidence"]
 
   [[capability.group]]
   id = "full"
