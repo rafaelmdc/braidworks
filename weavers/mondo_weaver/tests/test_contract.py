@@ -63,7 +63,11 @@ class TestMondoLookupByMeshCacheFingerprint(CacheFingerprintTests):
 
 class TestMondoLookupByMeddraCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("mondo.lookup_by_meddra")
-    consumed_values_a: ClassVar[dict[str, object]] = {"disease.meddra.id": "sample-a-disease.meddra.id"}
-    consumed_values_b: ClassVar[dict[str, object]] = {"disease.meddra.id": "sample-b-disease.meddra.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {
+        "disease.meddra.id": "sample-a-disease.meddra.id"
+    }
+    consumed_values_b: ClassVar[dict[str, object]] = {
+        "disease.meddra.id": "sample-b-disease.meddra.id"
+    }
     group_subset = "term"
     group_superset = "ancestors"

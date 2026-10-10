@@ -36,6 +36,8 @@ def build_mondo_weaver_configured(
     auto_setup: bool = False,
     refresh: bool = False,
     expected_version: str | None = None,
+    mapping_path: str | Path | None = None,
+    mapping_release: str | None = None,
     **_config: Any,
 ) -> BaseWeaver:
     """Configured builder for real use: ensures the local DB, then wires the backend.
@@ -46,7 +48,12 @@ def build_mondo_weaver_configured(
     """
     reject_unknown_options(_config)
     path = ensure_mondo_db(
-        db_path, auto=auto_setup, refresh=refresh, expected_version=expected_version
+        db_path,
+        auto=auto_setup,
+        refresh=refresh,
+        expected_version=expected_version,
+        mapping_path=mapping_path,
+        mapping_release=mapping_release,
     )
     return MondoWeaver({"local": MondoLocalBackend(path)})
 

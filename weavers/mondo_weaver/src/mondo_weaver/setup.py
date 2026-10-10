@@ -14,6 +14,7 @@ publish) lives in ``braidworks.core.localdb``; this module supplies the domain p
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import re
@@ -200,8 +201,49 @@ def _validate_graph(terms: list[_Term]) -> None:
         raise ValueError("MONDO is_a graph contains a cycle") from exc
 
 
+def parse_sssom(lines: Iterator[str]) -> tuple[list[dict[str, str]], list[str]]:
+    """Preserve canonical typed mapping rows and the complete metadata prelude."""
+    metadata = []
+
+    def data():
+        for line in lines:
+            if line.startswith("#"):
+                metadata.append(line.rstrip("\n"))
+            elif line.strip():
+                yield line
+
+    reader = csv.DictReader(data(), delimiter="\t")
+    required = {"subject_id", "predicate_id", "object_id", "mapping_justification"}
+    fields = reader.fieldnames
+    if not fields or len(set(fields)) != len(fields) or not required <= set(fields):
+        raise ValueError("MONDO SSSOM needs distinct headers and typed mapping columns")
+    rows = {}
+    for row in reader:
+        if None in row or any(value is None for value in row.values()):
+            raise ValueError("Malformed MONDO SSSOM row width")
+        if any(not row[key].strip() for key in required):
+            raise ValueError("MONDO SSSOM has an incomplete typed mapping")
+        if not re.fullmatch(r"MONDO:\d+", row["subject_id"]):
+            raise ValueError("MONDO SSSOM subject must be a MONDO identifier")
+        rows[json.dumps(row, sort_keys=True)] = row
+    return [rows[key] for key in sorted(rows)], metadata
+
+
+def _release_date(version: str | None) -> str:
+    match = re.fullmatch(r"(?:releases/|v)?(\d{4}-\d{2}-\d{2})", version or "")
+    if not match:
+        raise ValueError("SSSOM ingestion requires a dated MONDO release")
+    return match[1]
+
+
 def write_db(
-    target: Path, *, data_version: str | None, terms: list[_Term], source: dict | None = None
+    target: Path,
+    *,
+    data_version: str | None,
+    terms: list[_Term],
+    source: dict | None = None,
+    mappings: list[dict[str, str]] | None = None,
+    mapping_source: dict | None = None,
 ) -> None:
     """Build the SQLite at ``target`` from parsed MONDO terms (shared by build + fixture)."""
     _validate_graph(terms)
@@ -235,6 +277,15 @@ def write_db(
     )
     version = data_version.strip() if known_version else "unversioned:sha256:" + source["sha256"]
     valid_ids = {t.mondo_id for t in terms}
+    if mappings is not None:
+        if not mapping_source or _release_date(mapping_source.get("release")) != _release_date(
+            data_version
+        ):
+            raise ValueError("MONDO OBO and SSSOM releases must match")
+        if not re.fullmatch(r"[0-9a-f]{64}", mapping_source.get("sha256", "")):
+            raise ValueError("SSSOM source needs a SHA-256 identity")
+        if any(row["subject_id"] not in valid_ids for row in mappings):
+            raise ValueError("SSSOM has subjects missing from the OBO release")
     con = sqlite3.connect(target)
     try:
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
@@ -248,6 +299,12 @@ def write_db(
         )
         # name index: normalized label/exact-synonym -> mondo id (priority 0=label, 1=synonym).
         con.execute("CREATE TABLE name (norm TEXT, mondo_id TEXT, priority INTEGER)")
+        con.execute("CREATE TABLE mapping (mondo_id TEXT NOT NULL, record TEXT NOT NULL)")
+        con.executemany(
+            "INSERT INTO mapping VALUES (?, ?)",
+            [(row["subject_id"], json.dumps(row, sort_keys=True)) for row in mappings or []],
+        )
+        con.execute("CREATE INDEX ix_mapping_subject ON mapping(mondo_id)")
         con.executemany(
             "INSERT INTO term VALUES (?, ?, ?, ?, ?, ?)",
             [
@@ -299,12 +356,14 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "4"),
+                ("schema_version", "5"),
                 ("build_id", uuid.uuid4().hex),
                 ("data_version", version),
                 ("release_known", str(known_version).lower()),
                 ("source_sha256", source["sha256"]),
                 ("source_descriptor", json.dumps(source, sort_keys=True)),
+                ("mapping_source", json.dumps(mapping_source, sort_keys=True)),
+                ("n_mappings", str(len(mappings or []))),
                 ("n_terms", str(len(terms))),
                 ("n_edges", str(n_edges)),
                 ("n_xref", str(n_xref)),
@@ -327,7 +386,7 @@ def db_is_valid(path: Path) -> bool:
     try:
         meta = dict(con.execute("SELECT key, value FROM meta"))
         if (
-            meta.get("schema_version") != "4"
+            meta.get("schema_version") != "5"
             or not re.fullmatch(r"[0-9a-f]{64}", meta.get("source_sha256", ""))
             or meta.get("data_version", "").lower() in {"", "unknown", "latest"}
         ):
@@ -359,14 +418,22 @@ def db_is_valid(path: Path) -> bool:
                 return False
             by_id[child].parents.append(parent)
         _validate_graph(terms)
+        mapping_source = json.loads(meta["mapping_source"])
+        if mapping_source is not None and (
+            not isinstance(mapping_source, dict)
+            or _release_date(mapping_source.get("release")) != _release_date(meta["data_version"])
+            or not re.fullmatch(r"[0-9a-f]{64}", mapping_source.get("sha256", ""))
+        ):
+            return False
         counts = {
+            "n_mappings": con.execute("SELECT COUNT(*) FROM mapping").fetchone()[0],
             "n_terms": len(terms),
             "n_edges": con.execute("SELECT COUNT(*) FROM isa").fetchone()[0],
             "n_xref": con.execute("SELECT COUNT(*) FROM xref").fetchone()[0],
         }
         if any(meta.get(key) != str(value) for key, value in counts.items()):
             return False
-        for table in ("xref", "name"):
+        for table in ("xref", "name", "mapping"):
             if con.execute(
                 f"SELECT 1 FROM {table} t LEFT JOIN term ON t.mondo_id=term.mondo_id WHERE term.mondo_id IS NULL LIMIT 1"
             ).fetchone():
@@ -401,6 +468,8 @@ def _build(
     progress: ProgressCallback | None = None,
     expected_version: str | None = None,
     source_url: str | None = None,
+    mapping_path: str | Path | None = None,
+    mapping_release: str | None = None,
 ) -> None:
     """Download + parse mondo.obo and write the SQLite at ``target`` (``download`` injectable)."""
     obo_path = target.with_suffix(".obo.tmp")
@@ -414,8 +483,23 @@ def _build(
             )
         with obo_path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        mappings, mapping_source = None, None
+        if mapping_path is not None:
+            with Path(mapping_path).open(encoding="utf-8") as stream:
+                mappings, metadata = parse_sssom(iter(stream))
+            with Path(mapping_path).open("rb") as stream:
+                mapping_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+            mapping_source = {
+                "release": mapping_release,
+                "sha256": mapping_hash,
+                "path": str(Path(mapping_path).resolve()),
+                "metadata": metadata,
+                "kind": "caller-supplied-release-matched-sssom",
+            }
         write_db(
             target,
+            mappings=mappings,
+            mapping_source=mapping_source,
             data_version=data_version,
             terms=terms,
             source={
@@ -436,6 +520,8 @@ def ensure_mondo_db(
     refresh: bool = False,
     progress: ProgressCallback | None = None,
     expected_version: str | None = None,
+    mapping_path: str | Path | None = None,
+    mapping_release: str | None = None,
 ) -> Path:
     """Ensure a valid local MONDO SQLite exists, building it if consented.
 
@@ -443,17 +529,40 @@ def ensure_mondo_db(
     (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); without it, an actionable
     ``BackendConfigurationError`` is raised. ``refresh=True`` re-downloads.
     """
+    if (mapping_path is None) != (mapping_release is None):
+        raise ValueError("Supply mapping_path and mapping_release together")
+    mapping_hash = None
+    if mapping_path is not None:
+        _release_date(mapping_release)
+        with Path(mapping_path).open("rb") as stream:
+            mapping_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     path = Path(db_path) if db_path else default_mondo_db_path()
 
     def _build_with_progress(target: Path) -> None:
-        _build(target, progress=progress, expected_version=expected_version)
+        _build(
+            target,
+            progress=progress,
+            expected_version=expected_version,
+            mapping_path=mapping_path,
+            mapping_release=mapping_release,
+        )
 
     def valid(target: Path) -> bool:
         if not db_is_valid(target):
             return False
         with sqlite3.connect(f"file:{target}?mode=ro", uri=True) as con:
             observed = con.execute("SELECT value FROM meta WHERE key='data_version'").fetchone()[0]
-        return expected_version is None or observed == expected_version
+            mapping = json.loads(
+                con.execute("SELECT value FROM meta WHERE key='mapping_source'").fetchone()[0]
+            )
+        return (expected_version is None or observed == expected_version) and (
+            mapping_hash is None
+            or (
+                mapping is not None
+                and mapping["sha256"] == mapping_hash
+                and _release_date(mapping["release"]) == _release_date(mapping_release)
+            )
+        )
 
     return ensure_local_db(
         path,

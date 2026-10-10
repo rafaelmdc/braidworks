@@ -17,7 +17,7 @@ db_name = "mondo"
 weaver_id = "mondo"
 kind = "lookup"
 title = "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
-version = "0.2.8"
+version = "0.2.9"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1101/2022.04.13.22273750"
 attribution = "Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)"
@@ -34,6 +34,9 @@ name: ulcerative colitis
 is_a: MONDO:0005292 ! colitis
 xref: MESH:D003093 {source="MONDO:equivalentTo"}
 xref: DOID:8577 {source="MONDO:equivalentTo"}
+# Canonical tagged SSSOM v2026-10-06 observed 2026-10-10
+# subject_id predicate_id object_id mapping_justification
+# MONDO:0000001 skos:exactMatch mesh:D004194 semapv:UnspecifiedMatching
 # Observed mondo-edit.obo bounded prefix, 2026-10-10
 [Term]
 id: MONDO:0000002
@@ -125,6 +128,10 @@ always_computed_groups = ["identity"]
   [[capability.group]]
   id = "ancestors"
   outputs = ["disease.ontology.ancestors"]
+
+  [[capability.group]]
+  id = "mappings"
+  outputs = ["disease.ontology.external_mappings"]
 
 # Golden runs against the deterministic fixture (build_mondo_weaver_fixture: a tiny SQLite
 # with ulcerative colitis / colitis / IBD terms) so verify --strict is reproducible offline.

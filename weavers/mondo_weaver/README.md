@@ -43,7 +43,7 @@ from braidworks.core import WeaverFactory
 import mondo_weaver
 
 factory = WeaverFactory()
-mondo_weaver.register(factory)        # makes "mondo" buildable
+mondo_weaver.register(factory)  # makes "mondo" buildable
 ```
 
 ## Installation and documentation
@@ -136,26 +136,37 @@ import asyncio
 from braidworks.core import Strand, StrandSet
 from mondo_weaver.factory import build_mondo_weaver_fixture
 
+
 async def main():
     async with build_mondo_weaver_fixture() as weaver:
-        result = (await weaver.execute_batch(
-            'mondo.lookup_by_mesh',
-            [StrandSet.from_strands("example", [Strand('disease.mesh.id', 'D003093')])],
-            requested_outputs=frozenset({'disease.mondo.id'}), backend="local",
-        ))[0]
+        result = (
+            await weaver.execute_batch(
+                "mondo.lookup_by_mesh",
+                [StrandSet.from_strands("example", [Strand("disease.mesh.id", "D003093")])],
+                requested_outputs=frozenset({"disease.mondo.id"}),
+                backend="local",
+            )
+        )[0]
         print(result.to_json())
-        result = (await weaver.execute_batch(
-            'mondo.lookup_by_meddra',
-            [StrandSet.from_strands("example", [Strand('disease.meddra.id', '10045365')])],
-            requested_outputs=frozenset({'disease.mondo.id'}), backend="local",
-        ))[0]
+        result = (
+            await weaver.execute_batch(
+                "mondo.lookup_by_meddra",
+                [StrandSet.from_strands("example", [Strand("disease.meddra.id", "10045365")])],
+                requested_outputs=frozenset({"disease.mondo.id"}),
+                backend="local",
+            )
+        )[0]
         print(result.to_json())
-        result = (await weaver.execute_batch(
-            'mondo.lookup_by_name',
-            [StrandSet.from_strands("example", [Strand('disease.name', 'ulcerative colitis')])],
-            requested_outputs=frozenset({'disease.ontology.ancestors'}), backend="local",
-        ))[0]
+        result = (
+            await weaver.execute_batch(
+                "mondo.lookup_by_name",
+                [StrandSet.from_strands("example", [Strand("disease.name", "ulcerative colitis")])],
+                requested_outputs=frozenset({"disease.ontology.ancestors"}),
+                backend="local",
+            )
+        )[0]
         print(result.to_json())
+
 
 asyncio.run(main())
 ```
@@ -175,3 +186,22 @@ Existing name/xref ambiguity and relation review are preserved. Release-matched
 SSSOM mapping ingestion remains a separate deferred feature; this change does
 not reinterpret all cross-references as equivalence.
 Source: [MONDO obsoletion guidance](https://mondo.readthedocs.io/en/stable/editors-guide/merging-and-obsoleting/).
+
+### Typed external mappings
+
+`describe_disease` can return `disease.ontology.external_mappings` when requested.
+Build with `mapping_path="mondo.sssom.tsv"` and
+`mapping_release="2026-10-06"` alongside `expected_version="releases/2026-10-06"`.
+Use the canonical SSSOM file from the **same tagged MONDO release** as the OBO:
+[observed tagged source](https://github.com/monarch-initiative/mondo/blob/v2026-10-06/src/ontology/mappings/mondo.sssom.tsv).
+The release is supplied explicitly because this file's metadata has no release date;
+the caller must acquire it from that tag. Ingestion rejects mismatched dates and
+subjects absent from the ontology. Every row retains its directional predicate,
+justification and extra columns; metadata and the mapping byte hash accompany results.
+Broad, narrow, related and exact mappings remain distinct. This optional dataset does
+not change existing OBO-based identity resolution.
+
+Schema 5 rebuilds older databases. Supplying a changed mapping file invalidates reuse;
+source fingerprints include its hash. Without ingestion, requesting mappings returns
+an actionable error instead of implying that an empty list means no mappings exist.
+No SSSOM download occurs implicitly; ordinary OBO acquisition retains its consent gate.

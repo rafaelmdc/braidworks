@@ -263,6 +263,25 @@ class MondoLocalBackend(BackendBase):
                     "source_sha256": meta["source_sha256"],
                     "interpretation": "observed source history; consider targets are suggestions, not automatic replacements",
                 }
+        if "mappings" in groups:
+            meta = dict(con.execute("SELECT key, value FROM meta"))
+            mapping_source = json.loads(meta["mapping_source"])
+            if mapping_source is None:
+                return LookupRecord(
+                    query=query,
+                    error="Typed mappings unavailable: rebuild with release-matched mapping_path and mapping_release",
+                )
+            values["disease.ontology.external_mappings"] = {
+                "records": [
+                    json.loads(row[0])
+                    for row in con.execute(
+                        "SELECT record FROM mapping WHERE mondo_id=? ORDER BY record", (mondo_id,)
+                    )
+                ],
+                "source": mapping_source,
+                "data_version": meta["data_version"],
+                "interpretation": "observed directional predicates; no blanket equivalence",
+            }
         if "term" in groups:
             values[PARENTS] = sorted(
                 [
