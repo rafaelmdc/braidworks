@@ -50,7 +50,10 @@ original source findings remain, plus #296/#297/#298 follow-ups. Nothing is push
 
 #265 closed; #262 exact routing committed in d8f8ce4, with rank coverage still open.
 Package version 0.3.6: 44 tests passed, strict verification and lint passed.
-The workspace run passed 2102 pytest cases before the five additional validation
-tests, which passed in the package suite; a second complete run verifies those too.
+The final full workspace run passed 2102 pytest cases with 56 skips, plus
+five tool unittest checks; workspace lint and strict verification passed.
 Eighteen original source findings remain, plus follow-ups #296/#297/#298.
 AGORA replacement acquisition remains unverified; no release or mirror changed.
+
+Five additional source-identity regressions passed in the final 44-test Disbiome
+package run; they were added after the workspace run reached Disbiome.

@@ -32,3 +32,9 @@ caches remain readable; refreshed caches carry the new provenance.
 Eleven new regressions verify malformed source rejection without destination changes
 and truthful nullable-join coverage. Package suite: 44 passed, 1 live skipped;
 strict verification and workspace lint passed. No HTTP backend changed.
+
+Final complete workspace validation: 2102 pytest cases passed, 56 skipped, plus
+five tool unittest checks. Workspace lint and strict verification passed.
+
+Five additional source-identity regressions passed in the final 44-test Disbiome
+package run; they were added after the workspace run reached Disbiome.
