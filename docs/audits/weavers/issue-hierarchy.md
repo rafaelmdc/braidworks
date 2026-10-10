@@ -59,15 +59,15 @@ to pass tests, authorize publishing, or reopen deferred cache/resume implementat
 | [example](example.audit.md) | [#157](https://github.com/rafaelmdc/braidworks/issues/157) | 4 complete ([evidence](SRC-EXAMPLE.implementation.md)) |
 | [uniprot](uniprot.audit.md) | [#158](https://github.com/rafaelmdc/braidworks/issues/158) | 3 complete ([evidence](SRC-UNIPROT.implementation.md)) |
 | [pdbe](pdbe.audit.md) | [#159](https://github.com/rafaelmdc/braidworks/issues/159) | 2: 1 complete ([evidence](SRC-PDBE.implementation.md)), #193 pending |
-| [alphafold](alphafold.audit.md) | [#160](https://github.com/rafaelmdc/braidworks/issues/160) | 3 |
+| [alphafold](alphafold.audit.md) | [#160](https://github.com/rafaelmdc/braidworks/issues/160) | 3: 1 complete ([evidence](SRC-ALPHAFOLD.implementation.md)), #199/#202 pending |
 | [quickgo](quickgo.audit.md) | [#161](https://github.com/rafaelmdc/braidworks/issues/161) | 2 |
-| [reactome](reactome.audit.md) | [#162](https://github.com/rafaelmdc/braidworks/issues/162) | 2 |
-| [string](string.audit.md) | [#163](https://github.com/rafaelmdc/braidworks/issues/163) | 2 |
-| [ncbi](ncbi.audit.md) | [#164](https://github.com/rafaelmdc/braidworks/issues/164) | 3 |
+| [reactome](reactome.audit.md) | [#162](https://github.com/rafaelmdc/braidworks/issues/162) | 2: 1 complete ([evidence](SRC-REACTOME.implementation.md)), #212 pending |
+| [string](string.audit.md) | [#163](https://github.com/rafaelmdc/braidworks/issues/163) | 2: 1 complete ([evidence](SRC-STRING.implementation.md)), #219 pending |
+| [ncbi](ncbi.audit.md) | [#164](https://github.com/rafaelmdc/braidworks/issues/164) | 3: 2 complete (#223 previously; [#230 evidence](SRC-NCBI.implementation.md)), #231 pending |
 | [gtdb](gtdb.audit.md) | [#165](https://github.com/rafaelmdc/braidworks/issues/165) | 3: 1 complete ([evidence](SRC-GTDB.implementation.md)), #234/#240 pending |
 | [bacdive](bacdive.audit.md) | [#166](https://github.com/rafaelmdc/braidworks/issues/166) | 1 |
-| [agora](agora.audit.md) | [#167](https://github.com/rafaelmdc/braidworks/issues/167) | 3 |
-| [faprotax](faprotax.audit.md) | [#168](https://github.com/rafaelmdc/braidworks/issues/168) | 4 |
+| [agora](agora.audit.md) | [#167](https://github.com/rafaelmdc/braidworks/issues/167) | 3: 2 complete ([evidence](SRC-AGORA.implementation.md)), #251 pending; acquisition follow-up #298 |
+| [faprotax](faprotax.audit.md) | [#168](https://github.com/rafaelmdc/braidworks/issues/168) | 4 complete ([evidence](SRC-FAPROTAX.implementation.md)); public evidence follow-up #297 pending |
 | [disbiome](disbiome.audit.md) | [#169](https://github.com/rafaelmdc/braidworks/issues/169) | 3 |
 | [gmrepo](gmrepo.audit.md) | [#170](https://github.com/rafaelmdc/braidworks/issues/170) | 2: 1 complete ([evidence](SRC-GMREPO.implementation.md)), #272 pending |
 | [mondo](mondo.audit.md) | [#171](https://github.com/rafaelmdc/braidworks/issues/171) | 2: 1 complete ([evidence](SRC-MONDO.implementation.md)), #278 pending |
@@ -232,3 +232,14 @@ tests proving behavior is correct. No production source changes, push, tags or p
 Disbiome group #169. It retains the optional evidence-filter proposal split from
 #267 during SH-09. The original 122-finding register remains historical; this
 follow-up does not claim a newly discovered finding or implemented feature.
+
+## Source pack of 10
+
+Ten original findings are implemented; [acceptance and validation](source-pack-10.implementation.md).
+FAPROTAX public rule evidence is retained in native sub-issue #297 under #168.
+Observed AGORA individual acquisition failure is native sub-issue #298 under #167.
+Group #168 remains open for its optional follow-up; the four original findings are complete.
+
+Current original source finding count is **19 open**, plus #296/#297/#298 follow-ups.
+The previous count overstated remaining work by one: #223 was already closed on
+2026-10-08. This update reconciles the source table with GitHub status.
