@@ -67,3 +67,40 @@ async def test_exact_strain_fetch_chunks_at_provider_hundred_id_limit():
         )
         assert [len(chunk) for chunk in calls] == [100, 1]
         assert len(records) == 101 and all(record.found for record in records)
+
+
+async def test_exact_traits_warn_on_conflicts_and_malformed_flag_is_error():
+    from copy import deepcopy
+
+    from bacdive_weaver.fixture import _TYPE_STRAIN
+
+    source = deepcopy(_TYPE_STRAIN)
+    source["Morphology"]["cell morphology"] = [
+        {"gram stain": "positive"},
+        {"gram stain": "negative"},
+    ]
+
+    def handler(request):
+        return httpx.Response(200, json={"results": {"2": source}})
+
+    async with httpx.AsyncClient(
+        base_url="https://fixture/v2", transport=httpx.MockTransport(handler)
+    ) as client:
+        backend = BacdiveApiBackend(client=client)
+
+        async def fetch():
+            return (
+                await backend.fetch(
+                    "describe_strain",
+                    [{"microbe.bacdive.strain_id": 2}],
+                    requested_outputs=frozenset(),
+                    groups_to_compute=frozenset({"morphology"}),
+                )
+            )[0]
+
+        record = await fetch()
+        assert record.found and record.warnings
+        assert "microbe.trait.gram_stain" not in record.values
+        source["Name and taxonomic classification"]["type strain"] = ["yes"]
+        malformed = await fetch()
+        assert malformed.error and not malformed.found

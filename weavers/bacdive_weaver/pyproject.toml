@@ -1,6 +1,6 @@
 [project]
 name = "bacdive_weaver"
-version = "0.1.12"
+version = "0.1.13"
 description = "BacDive type-strain phenotypes (scientific name -> microbe traits) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

@@ -25,7 +25,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 2 | #207 | QuickGO typed relations/obsoletion group | Complete minimum: 75 tests, strict, 6 live |
 | 2 | #212 | Reactome hierarchy and typed participant groups | Complete minimum: 62 tests, strict, 4 live |
 | 2 | #231 | NCBI current/merged/deleted identity evidence; accurate docs | Complete minimum: 228 package tests, 7 targeted, strict |
-| 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Complete minimum: 64 tests, strict, 3 live |
+| 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Complete minimum: 65 tests, strict, 3 live |
 | 2 | #251 | AGORA reconstruction list/describe with artifact availability | Complete minimum: 46 tests and strict |
 | 2 | #278 | Direct MONDO-ID describe, definition and history | Complete minimum: 57 tests and strict |
 | 2 | #286 | Wikidata exact ID entry and localized labels; English join preserved | Complete minimum: 54 tests, strict, 3 live |
@@ -46,7 +46,7 @@ Pack 1 registry verification corrected a missing canonical string declaration fo
 `structure.alphafold.model_id` and cataloged all six new leaf outputs. Core 0.21.7
 and weaverkit 0.6.10 include those declarations; no scientific logic was added to
 core. Core's 541 tests and weaverkit's 291 tests pass with the existing contracts.
-Full workspace validation is running; its result will be recorded separately.
+Final workspace validation is recorded below.
 
 Workspace checkpoint after pack 1 and QuickGO's initial pack-2 changes:
 `make lint` passed; `make test` passed with **2,129 pytest cases, 63 opt-in skips,
@@ -54,3 +54,17 @@ and five tool unittests**. Index regenerated without uncataloged pack-1 outputs.
 The full test run includes QuickGO's initial code; its six opt-in live checks
 were run separately and passed. Pack-2 changes after this checkpoint require
 fresh final workspace validation.
+
+Final verification of the approved scopes: `make test` passed with **2,149
+pytest cases, 69 opt-in skips, and five tool unittests**. `make lint` and strict
+verification of all **17 weavers** passed. The final BacDive review adds one
+regression (65 package tests total) for malformed type-strain flags and exact-strain
+conflict warnings; its three live tests passed again after that correction.
+Changed HTTP packages passed 37 distinct live E2E cases across ten weavers; these
+are bounded known-truth checks, not exhaustive upstream guarantees.
+
+All 18 approved minimum scopes are complete. GitHub issues #199, #206, #286,
+#295, #296 and #297 are closed; broader findings retain their implementation
+comments and deferred scope. #234, release/publishing #142, persistent cache/resume
+#143 and AGORA remote artifact acquisition #298 remain deferred. Changes are on
+`feat/weaver-audit-approved-scopes` as local commits; nothing was pushed or released.

@@ -72,6 +72,9 @@ def _validated_record(record: Any) -> dict[str, Any]:
             or (isinstance(value, list) and any(not isinstance(row, dict) for row in value))
         ):
             raise _InvalidResponse(f"BacDive {section} must be an object or object list")
+    for row in _as_list(record["Name and taxonomic classification"]):
+        if row.get("type strain") is not None and not isinstance(row["type strain"], str):
+            raise _InvalidResponse("BacDive type strain flag must be a string or null")
     for section, keys in (
         ("Morphology", ("cell morphology",)),
         ("Physiology and metabolism", ("oxygen tolerance", "spore formation")),
@@ -377,7 +380,17 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
                     "source": deepcopy(record),
                     "scope": "this exact BacDive strain; traits do not apply to every strain of its species",
                 }
-                results.append(LookupRecord(query=query, found=True, values=values))
+                results.append(
+                    LookupRecord(
+                        query=query,
+                        found=True,
+                        values=values,
+                        warnings=tuple(
+                            f"Conflicting BacDive observations for {key}; scalar omitted: {observed}"
+                            for key, observed in conflicts.items()
+                        ),
+                    )
+                )
         return results
 
     async def _resolve_one(self, query: dict[str, Any], name: str) -> LookupRecord:

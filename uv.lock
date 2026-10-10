@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.12"
+version = "0.1.13"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
