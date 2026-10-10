@@ -17,3 +17,17 @@ Tests exercise malformed/HTML/truncated downloads, invalid existing files, faile
 Package suite: **44 passed, 1 opt-in skip**. Strict verification passed. Repository lint passed. Full workspace result is recorded in the batch report after completion.
 
 Repository validation: `make test` passed (2094 pytest tests, 56 opt-in skips, plus 5 tool unittest checks); `make lint` passed. Tooling used the isolated audit environment.
+
+## Acquisition follow-up #298 — research update (2026-10-10)
+
+The official [AGORA2 repository](https://github.com/VirtualMetabolicHuman/AGORA2)
+still directs dataset acquisition to VMH. A search result retained an indexed
+AGORA2 directory, but opening the current
+[2.01 release directory](https://www.vmh.life/files/reconstructions/AGORA2/version2.01/)
+returned HTTP 404 through the browsing tool. The reconstruction-download page was
+also inaccessible to that tool. These observations are evidence of unresolved
+acquisition, not proof that individual files are permanently unavailable.
+
+No replacement endpoint was verified, no release/mirror was substituted, and no
+large archive was downloaded. #298 remains open. Existing SBML validation still
+rejects HTML and prevents publication of an invalid downloaded model.

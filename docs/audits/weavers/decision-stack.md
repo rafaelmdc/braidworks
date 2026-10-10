@@ -32,7 +32,7 @@ The current source queue has been screened. These choices remain separate from c
 
 ## Work that can proceed without a scope question
 
-- #265: Disbiome build shape/identity/join validation and source coverage provenance.
+- #265 is complete: Disbiome build shape/identity/join validation and source coverage provenance (local commit acb4ad0).
 - #262: Correct Disbiome exact generic/genus/species taxid inputs and preserve evidence rank. Optional ancestor roll-up is a separate future scope; it must not imply a genus measurement for every species.
 - #298: Research and verify AGORA's individual model acquisition source; malformed HTML remains an error.
 - Mixed docs/feature issues (#231/#240/#246/#251/#295) can receive accurate docs without approving their optional features.
@@ -45,3 +45,12 @@ Publishing and durable cache/resume remain deferred (#142/#143).
 #297 retains the optional FAPROTAX evidence choice; #298 tracks the observed AGORA
 acquisition failure. The latter needs source research, not a user decision. Nineteen
 original source findings remain, plus #296/#297/#298 follow-ups. Nothing is pushed.
+
+## Disbiome follow-on
+
+#265 closed; #262 exact routing committed in d8f8ce4, with rank coverage still open.
+Package version 0.3.6: 44 tests passed, strict verification and lint passed.
+The workspace run passed 2102 pytest cases before the five additional validation
+tests, which passed in the package suite; a second complete run verifies those too.
+Eighteen original source findings remain, plus follow-ups #296/#297/#298.
+AGORA replacement acquisition remains unverified; no release or mirror changed.
