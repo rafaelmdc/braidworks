@@ -199,3 +199,27 @@ also survives profiles with no retained rows. Default profile output is unchange
 Existing databases without retained metadata report `available=false`; rebuild
 with the same bounded profile selection to acquire it. A capped subset is not a
 complete cohort, and QC labels are not reinterpreted.
+
+
+### Run and phenotype routing
+
+`gmrepo.list_runs` takes `disease.mesh.id` and emits the full ordered
+`metagenome.run_id` set plus `microbe.abundance.run_listing` (display capped at ten).
+`gmrepo.describe_run` consumes one run ID and returns `microbe.abundance.run`:
+retained metadata by phenotype, empty/failed acquisition outcomes, and profile rows.
+Run, sample and project identities remain distinct; failed profiles are not empty
+measurements. Old caller-supplied profiles remain drillable with unavailable metadata.
+`gmrepo.list_phenotypes` maps a taxid to observed `disease.mesh.id` identifiers, which
+can route into profile/run workflows. No name-based disease identity is inferred.
+
+The configured builder accepts `profile_filters`, an exact source-field mapping
+(`country`, `sex`, `project_id`, `QCStatus`), applied while paginating **before** the
+`profile_max_runs` cap. Missing metadata never matches a filter. Request/call budgets
+still bound scanning and incomplete acquisition is reported. Example:
+`profile_filters={"country": "China", "QCStatus": 1}`.
+
+The same declared parameters on `list_runs` refine only already-retained runs;
+their coverage says this explicitly. They cannot recover excluded/unacquired data
+or claim a complete cohort. Rebuild with builder filters for pre-cap selection.
+The source's total valid-run denominator describes the unfiltered phenotype;
+selected/fetched counts and filter provenance describe this acquisition.

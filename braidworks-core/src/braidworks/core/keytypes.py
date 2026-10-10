@@ -58,6 +58,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "pdb.id": str,
     "structure.alphafold.model_id": str,
     "genome.accession": str,
+    "metagenome.run_id": str,
     "disease.mondo.id": str,
 }
 

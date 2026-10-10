@@ -15,12 +15,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from braidworks.core import BaseWeaver
+from braidworks.core import BackendConfigurationError, BaseWeaver
 from braidworks.core.lifecycle import reject_unknown_options
 
 from gmrepo_weaver.acquisition import AcquisitionPolicy
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
-from gmrepo_weaver.setup import ensure_gmrepo_db
+from gmrepo_weaver.setup import _validated_run_filters, ensure_gmrepo_db
 from gmrepo_weaver.weaver import GmrepoWeaver
 
 
@@ -43,6 +43,7 @@ def build_gmrepo_weaver_configured(
     refresh: bool = False,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    profile_filters: dict[str, str | int] | None = None,
     acquisition_policy: AcquisitionPolicy | None = None,
     **_config: Any,
 ) -> BaseWeaver:
@@ -57,12 +58,17 @@ def build_gmrepo_weaver_configured(
     layer. Since the build is idempotent, adding profiles to an existing DB needs ``refresh=True``.
     """
     reject_unknown_options(_config)
+    try:
+        profile_filters = _validated_run_filters(profile_filters)
+    except (TypeError, ValueError) as exc:
+        raise BackendConfigurationError(str(exc)) from exc
     path = ensure_gmrepo_db(
         db_path,
         auto=auto_setup,
         refresh=refresh,
         profile_phenotypes=profile_phenotypes,
         profile_max_runs=profile_max_runs,
+        profile_filters=profile_filters,
         acquisition_policy=acquisition_policy,
     )
     return GmrepoWeaver({"local": GmrepoLocalBackend(path)})

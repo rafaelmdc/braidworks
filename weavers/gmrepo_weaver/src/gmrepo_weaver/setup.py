@@ -470,15 +470,35 @@ def _taxon_associations(taxid: int, payload: Any) -> list[dict]:
     )
 
 
+def _validated_run_filters(filters: dict[str, str | int] | None) -> dict[str, str | int]:
+    if filters is None:
+        return {}
+    if not isinstance(filters, dict):
+        raise TypeError("GMrepo run filters must be a mapping")
+    for key, value in filters.items():
+        if key == "QCStatus":
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError("GMrepo QCStatus filter must be an integer")
+        elif key in {"country", "sex", "project_id"}:
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"GMrepo {key} filter must be a nonempty string")
+        else:
+            raise ValueError("Unknown GMrepo run filter")
+    return dict(filters)
+
+
 def _fetch_run_ids(
     post: Callable[[str, dict[str, Any]], Any],
     mesh_id: str,
     max_runs: int,
     coverage: dict[str, Any] | None = None,
+    *,
+    filters: dict[str, str | int] | None = None,
 ) -> list[str]:
     """List up to ``max_runs`` run ids for a phenotype (paginated over the live *Limit route)."""
     if isinstance(max_runs, bool) or not isinstance(max_runs, int) or max_runs < 1:
         raise ValueError("max_runs must be a positive integer")
+    filters = _validated_run_filters(filters)
     run_ids: list[str] = []
     run_metadata: dict[str, dict[str, Any]] = {}
     seen: set[str] = set()
@@ -504,8 +524,9 @@ def _fetch_run_ids(
             if not rid or str(rid) in seen:
                 raise _InvalidResponse("run listing contains a missing/repeated run id")
             seen.add(str(rid))
-            run_ids.append(str(rid))
-            run_metadata[str(rid)] = dict(r)
+            if all(r.get(key) == value for key, value in filters.items()):
+                run_ids.append(str(rid))
+                run_metadata[str(rid)] = dict(r)
         skip += len(rows)
         if len(rows) < want:
             exhausted = True
@@ -515,6 +536,9 @@ def _fetch_run_ids(
             {
                 "run_metadata": {rid: run_metadata[rid] for rid in run_ids[:max_runs]},
                 "selected_runs": len(run_ids[:max_runs]),
+                "selection_filters": dict(filters),
+                "filter_policy": "exact source metadata before selection cap; unknown does not match",
+                "scanned_runs": len(seen),
                 "cap": max_runs,
                 "listing_exhausted": exhausted,
                 "capped": not exhausted,
@@ -560,6 +584,7 @@ def _fetch_profiles(
     coverage: dict[str, Any] | None = None,
     *,
     workers: int = _FETCH_WORKERS,
+    filters: dict[str, str | int] | None = None,
 ) -> list[dict]:
     """Fetch per-run species/genus profiles for the given phenotypes (bounded by ``max_runs``).
 
@@ -579,11 +604,16 @@ def _fetch_profiles(
             "empty_runs": 0,
             "failed_runs": 0,
             "cohort_total_runs": None,
+            "cohort_total_runs_scope": "provider unfiltered phenotype valid runs",
         }
         if coverage is not None:
             coverage[mesh_id] = scope
         try:
-            run_ids = _fetch_run_ids(post, mesh_id, max_runs, scope)
+            run_ids = (
+                _fetch_run_ids(post, mesh_id, max_runs, scope, filters=filters)
+                if filters
+                else _fetch_run_ids(post, mesh_id, max_runs, scope)
+            )
         except _EXPECTED_FAILURES as exc:
             scope.update({"status": "failed", "complete": False, "error": str(exc)})
             continue
@@ -683,6 +713,7 @@ def _build(
     progress: ProgressCallback | None = None,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    profile_filters: dict[str, str | int] | None = None,
     acquisition_policy: AcquisitionPolicy | None = None,
 ) -> None:
     """Fetch the GMrepo tables and write the SQLite at ``target`` (``post`` injectable).
@@ -690,6 +721,7 @@ def _build(
     If ``profile_phenotypes`` (mesh ids) are given, also crawl up to ``profile_max_runs``
     per-run profiles for each — the per-sample substrate for the co-occurrence layer.
     """
+    profile_filters = _validated_run_filters(profile_filters)
     policy = acquisition_policy or AcquisitionPolicy()
     client = _AcquisitionClient(post, policy)
     acquisition: dict[str, Any] = {"scope": "gmrepo-api", "taxa": {}, "profiles": {}}
@@ -704,6 +736,7 @@ def _build(
             progress,
             acquisition["profiles"],
             workers=policy.workers,
+            filters=profile_filters,
         )
         if profile_phenotypes
         else []
@@ -732,6 +765,7 @@ def ensure_gmrepo_db(
     progress: ProgressCallback | None = None,
     profile_phenotypes: list[str] | None = None,
     profile_max_runs: int = 200,
+    profile_filters: dict[str, str | int] | None = None,
     acquisition_policy: AcquisitionPolicy | None = None,
 ) -> Path:
     """Ensure a valid local GMrepo SQLite exists, building it if consented.
@@ -752,6 +786,7 @@ def ensure_gmrepo_db(
             progress=progress,
             profile_phenotypes=profile_phenotypes,
             profile_max_runs=profile_max_runs,
+            profile_filters=profile_filters,
             acquisition_policy=acquisition_policy,
         )
 

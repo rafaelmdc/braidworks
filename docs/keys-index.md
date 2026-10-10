@@ -11,7 +11,7 @@ Supplied by the user at the start of a braid.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `disease.meddra.id` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_meddra` |
-| `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | — | `gmrepo:gmrepo.sample_profiles`, `mondo:mondo.lookup_by_mesh` |
+| `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | `gmrepo:gmrepo.list_phenotypes` | `gmrepo:gmrepo.sample_profiles`, `gmrepo:gmrepo.list_runs`, `mondo:mondo.lookup_by_mesh` |
 | `disease.name` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_name` |
 | `organism.name` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_name` |
 | `protein.query` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
@@ -32,9 +32,10 @@ Registered bridge keys — what links weavers together.
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
+| `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
 | `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction` |
 | `microbe.bacdive.strain_id` | BacDive strain record integer ID; list_strains produces and describe_strain consumes it. | `bacdive:list_strains` | `bacdive:describe_strain` |
-| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
+| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gmrepo:gmrepo.list_phenotypes`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
@@ -105,8 +106,11 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.abundance.count` | How many phenotypes this microbe has a GMrepo abundance record for. | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.coverage` | GMrepo taxon association acquisition outcome and completeness. | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.overview` | This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.phenotype_listing` | Observed source MeSH phenotype identities for a taxon. | `gmrepo:gmrepo.list_phenotypes` | — |
 | `microbe.abundance.phenotype_names` | The gut-metagenome phenotypes (diseases/health) this microbe is reported prevalent in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.records` | Full GMrepo abundance rows for this microbe — the global overview plus every per-phenotype prevalence/abundance record. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.run` | One acquired GMrepo sequencing run, metadata and taxonomic profile evidence. | `gmrepo:gmrepo.describe_run` | — |
+| `microbe.abundance.run_listing` | Acquired GMrepo runs and exact metadata filters with retained-scope coverage. | `gmrepo:gmrepo.list_runs` | — |
 | `microbe.abundance.run_metadata` | Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage. | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.abundance.sample_profiles` | Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI). | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.agora.artifact` | Observed local SBML structural status; release verification and remote availability remain explicit. | `agora:describe_reconstruction` | — |

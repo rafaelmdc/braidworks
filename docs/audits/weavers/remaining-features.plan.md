@@ -8,7 +8,7 @@ remain excluded. No pushing, release tags or publication.
 | Order | Issue | Full remaining scope | Status |
 |---|---|---|---|
 | 1 | #231 | NCBI local descendant parity | Complete: 231 tests and strict |
-| 2 | #272 | GMrepo standalone run/cohort/phenotype workflows | Implementation and verification |
+| 2 | #272 | GMrepo standalone run/cohort/phenotype workflows | Complete: 69 tests, strict, four live checks |
 | 3 | #264 | Disbiome reverse disease bridge with exact observed taxa | Pending |
 | 4 | #246 | BacDive culture/genome identifiers with multiplicity | Pending |
 | 5 | #251 | AGORA genome/reaction routing bridges | Pending |

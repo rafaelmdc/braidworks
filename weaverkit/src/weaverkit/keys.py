@@ -44,6 +44,7 @@ SHARED_KEYS: dict[str, str] = {
     "protein.interpro.id": "An InterPro entry id.",
     "protein.pfam.id": "A Pfam family id.",
     "pdb.id": "A PDB / PDBe structure id.",
+    "metagenome.run_id": "Observed sequencing run accession; produced and consumed by GMrepo run workflows.",
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
     "structure.alphafold.model_id": "Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction.",
     # Disease layer (mondo_weaver) — entry points + the unified disease join key
@@ -81,6 +82,9 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
     "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
     "gtdb.genome.representative": "Selected species representative accession with source/release provenance; not necessarily the input strain.",
+    "microbe.abundance.run_listing": "Acquired GMrepo runs and exact metadata filters with retained-scope coverage.",
+    "microbe.abundance.run": "One acquired GMrepo sequencing run, metadata and taxonomic profile evidence.",
+    "microbe.abundance.phenotype_listing": "Observed source MeSH phenotype identities for a taxon.",
     "microbe.abundance.run_metadata": "Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage.",
     "microbe.ecology.evidence": "Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence.",
     "structure.pdb.quality": "Observed entry-level PDBe quality metrics with method, availability and missing-value semantics.",

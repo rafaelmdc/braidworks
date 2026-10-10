@@ -131,3 +131,29 @@ async def test_live_run_listing_retains_observed_metadata():
     assert row["project_id"] and row["sample_id"]
     assert "QCStatus" in row
     assert scope["selected_runs"] == 1 and scope["cap"] == 1
+
+
+async def test_live_selection_filter_and_run_drill_down(tmp_path):
+    scope = {}
+    post = _AcquisitionClient(_post, AcquisitionPolicy(max_calls=4))
+    ids = _fetch_run_ids(post, "D003093", max_runs=1, coverage=scope, filters={"country": "China"})
+    assert ids and scope["run_metadata"][ids[0]]["country"] == "China"
+    db = tmp_path / "run.sqlite"
+    write_db(
+        db,
+        overview=[],
+        associations=[],
+        phenotypes=[],
+        acquisition={"profiles": {"D003093": scope}, "taxa": {}},
+    )
+    backend = GmrepoLocalBackend(db)
+    described = (
+        await backend.fetch(
+            "gmrepo.describe_run",
+            [{"metagenome.run_id": ids[0]}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset({"run"}),
+        )
+    )[0]
+    assert described.found
+    assert described.values["microbe.abundance.run"]["source_evidence"][0]["metadata"]["project_id"]

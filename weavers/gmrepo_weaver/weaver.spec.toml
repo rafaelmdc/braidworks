@@ -21,7 +21,7 @@ db_name = "gmrepo"
 weaver_id = "gmrepo"
 kind = "lookup"
 title = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
-version = "0.2.8"
+version = "0.2.9"
 license = "Open"
 citation = "https://doi.org/10.1093/nar/gkz764"
 attribution = "GMrepo (Wu et al., NAR 2020)"
@@ -149,3 +149,48 @@ consumes = ["disease.mesh.id"]
 capability = "gmrepo.list_abundances"
 input = { "ncbi.taxon.id" = 816 }
 expect = { "microbe.abundance.count" = 1, "microbe.abundance.phenotype_names" = ["Colitis, Ulcerative"] }
+
+
+[[capability]]
+id = "gmrepo.list_runs"
+consumes = ["disease.mesh.id"]
+set_outputs = ["metagenome.run_id"]
+  [[capability.group]]
+  id = "runs"
+  outputs = ["metagenome.run_id", "microbe.abundance.run_listing"]
+  [[capability.parameter]]
+  name = "country"
+  type = "string"
+  description = "Exact country within acquired run metadata; no inferred cohort completeness"
+  [[capability.parameter]]
+  name = "sex"
+  type = "string"
+  description = "Exact provider sex label; unknown excluded"
+  [[capability.parameter]]
+  name = "project_id"
+  type = "string"
+  description = "Exact source project identifier"
+  [[capability.parameter]]
+  name = "QCStatus"
+  type = "int"
+  description = "Exact source QC status code, no reinterpretation"
+
+[[capability]]
+id = "gmrepo.describe_run"
+consumes = ["metagenome.run_id"]
+  [[capability.group]]
+  id = "run"
+  outputs = ["microbe.abundance.run"]
+
+[[capability]]
+id = "gmrepo.list_phenotypes"
+consumes = ["ncbi.taxon.id"]
+set_outputs = ["disease.mesh.id"]
+  [[capability.group]]
+  id = "phenotypes"
+  outputs = ["disease.mesh.id", "microbe.abundance.phenotype_listing"]
+
+[[golden]]
+capability = "gmrepo.list_runs"
+input = { "disease.mesh.id" = "D003093" }
+expect = { "metagenome.run_id" = ["ERRFIX01", "ERRFIX02"] }
