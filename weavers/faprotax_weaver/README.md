@@ -8,6 +8,18 @@ FAPROTAX ecological function (organism lineage -> functional groups) weaver for 
 
 The contract lives in [`weaver.spec.toml`](https://github.com/rafaelmdc/braidworks/blob/main/weavers/faprotax_weaver/weaver.spec.toml).
 
+## Capabilities
+
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_ecology` | `ncbi.taxon.lineage` | `ecology`, `evidence` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
+
 ## What it does
 
 Consumes an organism's `ncbi.taxon.lineage` (as produced by `ncbi_weaver`) and
@@ -46,8 +58,10 @@ make test     # run conformance + contract + golden tests
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory

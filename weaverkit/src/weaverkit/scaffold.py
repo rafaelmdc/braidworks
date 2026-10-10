@@ -408,7 +408,10 @@ def _implementation_md_source(spec: WeaverSpec) -> str:
             f"- [ ] `weaverkit verify --spec weaver.spec.toml --package {pkg} --strict` "
             "— no placeholders left, golden runs"
         ),
-        "- [ ] register the weaver where the app assembles its `WeaverFactory` (see README)",
+        (
+            "- [ ] confirm entry-point discovery or register a built instance in `BraidRegistry` "
+            "for application execution (see README)"
+        ),
         (
             f"- [ ] bump the package version before merging; CI creates `{pkg}-v{spec.version}` "
             "automatically after merge to main (do not create tags by hand)"
@@ -472,10 +475,10 @@ def _contributing_md_source(spec: WeaverSpec) -> str:
         "",
         "```bash",
         "scratch_dir=$(mktemp -d)",
-        "weaverkit new --spec weaver.spec.toml --dest \"$scratch_dir/package\"",
-        "diff -ru --exclude=.git --exclude=__pycache__ --exclude=.pytest_cache . \"$scratch_dir/package\"",
+        'weaverkit new --spec weaver.spec.toml --dest "$scratch_dir/package"',
+        'diff -ru --exclude=.git --exclude=__pycache__ --exclude=.pytest_cache . "$scratch_dir/package"',
         "# diff exits 1 when differences exist; review them before the next command.",
-        f"cp \"$scratch_dir/package/src/{pkg}/vocab.py\" src/{pkg}/vocab.py",
+        f'cp "$scratch_dir/package/src/{pkg}/vocab.py" src/{pkg}/vocab.py',
         "```",
         "",
         "Copy only the reviewed generated vocab. Merge capability/backend additions",
@@ -572,8 +575,10 @@ make test     # run conformance + contract + golden tests
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers an installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes a builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory
@@ -1173,9 +1178,9 @@ def build_{{DBWEAVER}}(**_config: Any) -> BaseWeaver:
 _PROVIDER = '''\
 """{{CLASS}}WeaverProvider — the Layer 1 conformance wrapper, plus registration.
 
-A weaver only becomes reachable to the braider once its provider is registered in
-the application's ``WeaverFactory``. ``register(factory)`` is the one-liner that
-does it; call it from wherever you assemble the factory (see the README).
+``register(factory)`` makes this provider available to an application using
+``WeaverFactory``. Routing uses built weavers registered in ``BraidRegistry``;
+CLI entry-point discovery does not require this optional factory registration.
 """
 
 from __future__ import annotations

@@ -45,8 +45,10 @@ make test     # run conformance + contract + golden tests
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory
@@ -149,10 +151,19 @@ configuration, source selection and owned/borrowed HTTP clients. Use
 
 ## Capabilities and output groups
 
-| Capability | Input | Outputs by group |
-|---|---|---|
-| `gmrepo.list_abundances` | `ncbi.taxon.id` | **summary**: `microbe.abundance.count`, `microbe.abundance.coverage`, `microbe.abundance.overview`, `microbe.abundance.phenotype_names`; **associations**: `microbe.abundance.associations`; **full**: `microbe.abundance.records` |
-| `gmrepo.sample_profiles` | `disease.mesh.id` | **profiles**: `microbe.abundance.sample_profiles` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `gmrepo.list_abundances` | `ncbi.taxon.id` | `summary`, `associations`, `full` | `local` | — |
+| `gmrepo.sample_profiles` | `disease.mesh.id` | `profiles`, `metadata` | `local` | — |
+| `gmrepo.list_runs` | `disease.mesh.id` | `runs`; expands `metagenome.run_id` | `local` | `country`, `sex`, `project_id`, `QCStatus` |
+| `gmrepo.describe_run` | `metagenome.run_id` | `run` | `local` | — |
+| `gmrepo.list_phenotypes` | `ncbi.taxon.id` | `phenotypes`; expands `disease.mesh.id` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## Complete offline Python example
 

@@ -13,6 +13,20 @@ rank-prefixed token, e.g. `s__Escherichia coli`) and `gtdb.lineage` (an ordered
 list of `{rank, name}` from domain to species). The consumed inputs are alternatives
 (`consumes_any`): whichever strand is present is used.
 
+## Capabilities
+
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_gtdb_taxonomy` | `ncbi.taxon.id` or `organism.scientific_name` | `core`, `lineage`, `representative` | `local`, `api` | — |
+| `describe_gtdb_tree_placement` | `ncbi.taxon.id` or `organism.scientific_name` | `core` | `local` | — |
+| `describe_genome` | `genome.accession` | `identity`, `quality`, `synonyms`, `history` | `api` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
+
 ## Backends
 
 - **local** (preferred, observed genome crosswalk) — a small SQLite NCBI-taxid / species-name →
@@ -20,8 +34,9 @@ list of `{rank, name}` from domain to species). The consumed inputs are alternat
   `~/.cache` via `ensure_gtdb_db` (consent-gated, ~283 MB for R232 download). Resolves by taxid
   (unique observed classification) or GTDB species name.
 - **api** (online fallback, keyless) — the live GTDB search API
-  (`gtdb-api.ecogenomic.org/search/gtdb`). Name-based only; a taxid-only query is a
-  miss here (use the local backend for taxids).
+  (`gtdb-api.ecogenomic.org/search/gtdb`) for exact species-name taxonomy queries.
+  A taxid-only taxonomy query is a miss here (use local). The API also supports
+  `describe_genome` for exact versioned genome accessions and observed quality/history.
 
 ```python
 import gtdb_weaver
@@ -41,8 +56,10 @@ BRAIDWORKS_RUN_LIVE=1 make test   # also run the live GTDB-API E2E
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory
@@ -146,7 +163,8 @@ species representative, not necessarily the input strain's own assembly. Missing
 representatives remain unavailable. The API backend reports only a returned row
 explicitly marked representative and leaves the release unknown; it does not
 guess a release or fetch another genome. Existing taxonomy and tree outputs are
-unchanged. Genomic quality and cross-release history remain separate work.
+unchanged. Genome-specific quality and cross-release history are supplied by
+`describe_genome`, documented below.
 
 ### Genome-specific quality, synonyms and release history
 

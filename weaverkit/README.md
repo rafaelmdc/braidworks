@@ -1,7 +1,7 @@
 # weaverkit
 
 Guardrails for building Braidworks weavers, so an agent can add a database
-weaver reliably instead of vibe-coding it. Three pieces:
+weaver reliably. Its main tools:
 
 - **spec** (`weaver.spec.toml`) — the contract an agent fills *before* coding:
   db name, source, license, capabilities (consuming **registered shared keys**),
@@ -32,8 +32,8 @@ weaver reliably instead of vibe-coding it. Three pieces:
   snippet / braid JSON (with the route's source citations), then **run** it with real
   values and watch the braid **light up wave-by-wave** (green per step, red + reroute on
   failure), with a results table and CSV/TSV/JSON export and a fan-out control
-  (`top`/`top-k`/`all`). Requires the optional extra (`pip install 'weaverkit[serve]'` —
-  FastAPI + uvicorn); the base package depends on braidworks-core (and its networkx/platformdirs dependencies). Localhost-only; the static
+  (`top`/`top-k`/`all`). Requires the optional `serve` extra (FastAPI + uvicorn); see
+  [browser installation](../docs/installation.md#add-the-browser). the base package depends on braidworks-core (and its networkx/platformdirs dependencies). Localhost-only; the static
   `view` export is unaffected.
 
 The architectural decisions behind the toolkit (what's contract vs weaver freedom,
@@ -100,8 +100,8 @@ a deliberate choice over YAML:
   boolean `False` (the "Norway problem"), `version: 1.10` becomes a float and
   drops the trailing zero, `id: 09` can error on octal. TOML keeps every value
   exactly as written. For a *guardrail*, no-surprise parsing matters most.
-- **Zero dependencies.** weaverkit is the package everything else trusts; keeping
-  it stdlib-only (no PyYAML) is worth more here than anywhere. It also matches the
+- **No parser dependency.** TOML parsing uses the standard library, so the spec
+  parser needs no PyYAML. The toolkit itself depends on core. It also matches the
   rest of the repo — authors are already in `pyproject.toml` headspace.
 - **Fails loud, not silent.** TOML errors on malformed structure; YAML often
   parses subtly-wrong input into the wrong shape (merged keys, stray tabs). For an
@@ -155,7 +155,7 @@ from `QueryPersistence.to_json()`. Inspect with GET `/api/runs?run_db=...` and
 `/api/run/status?run_db=...&run_id=...`. POST `/api/resume` or
 `/api/resume/stream` takes `run_id`, `persistence` and optional version-1
 `decisions`; query-policy overrides are rejected. Missing status files are not created.
-See [storage operations](../docs/database.md) for leases, retention and schema limits.
+See [storage operations](../docs/persistence.md) for leases, retention and schema limits.
 
 
 ### Inspecting and writing scaffolds from Python

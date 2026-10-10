@@ -35,8 +35,10 @@ make test     # run conformance + contract + golden tests
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory
@@ -63,7 +65,7 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 ## Source provenance and ontology validation
 
-Schema 2 records the original OBO SHA-256, observed `data-version`, source descriptor
+The current schema retains the original OBO SHA-256, observed `data-version`, source descriptor
 and acquisition time. A missing/unknown release is represented as an explicitly
 unversioned content hash, rather than a fabricated release. Caller-supplied terms
 have a separately labelled normalized-content hash and do not claim an OBO byte hash.
@@ -81,7 +83,7 @@ to obtain source provenance and the stronger validation gate.
 
 ### Identity and mapping evidence
 
-Schema 3 retains mapping relationships and original xref text, including equivalent,
+The current schema retains mapping relationships and original xref text, including equivalent,
 MONDO-broader/narrower, related, sibling, SKOS exact/close/broad/narrow and unspecified
 relationships. `disease.ontology.mapping.records` exposes observed evidence. Only a
 unique explicit `MONDO:equivalentTo` supplies confident cross-reference identity.
@@ -103,7 +105,8 @@ reused for the same resolved term within a batch. Result projections are detache
 
 Migration: clients selecting groups explicitly should include `identity` for
 identity fields previously in `term`. Output-key requests need no change. This
-change uses the existing schema-3 database and does not require rebuilding it.
+group separation originally used schema 3 without a rebuild. Current releases
+require schema 5 for obsolete-term and optional SSSOM support; rebuild older databases.
 
 ## Coverage measurement
 
@@ -123,11 +126,18 @@ configuration, source selection and owned/borrowed HTTP clients. Use
 
 ## Capabilities and output groups
 
-| Capability | Input | Outputs by group |
-|---|---|---|
-| `mondo.lookup_by_mesh` | `disease.mesh.id` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
-| `mondo.lookup_by_meddra` | `disease.meddra.id` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
-| `mondo.lookup_by_name` | `disease.name` | **identity**: `disease.mondo.id`, `disease.ontology.mapping.records`, `disease.ontology.name`; **term**: `disease.ontology.depth`, `disease.ontology.parents`; **ancestors**: `disease.ontology.ancestors` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `mondo.lookup_by_mesh` | `disease.mesh.id` | `identity`, `term`, `ancestors` | `local` | — |
+| `mondo.lookup_by_meddra` | `disease.meddra.id` | `identity`, `term`, `ancestors` | `local` | — |
+| `mondo.lookup_by_name` | `disease.name` | `identity`, `term`, `ancestors` | `local` | — |
+| `describe_disease` | `disease.mondo.id` | `identity`, `definition`, `history`, `term`, `ancestors`, `mappings` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## Complete offline Python example
 
@@ -181,10 +191,10 @@ Requested definition/history groups report observed definitions, obsoletion,
 remain suggestions; the weaver never follows them as automatic replacements.
 Obsolete terms stay out of name and equivalence resolution indexes.
 
-Schema 4 retains obsolete terms and requires rebuilding older local databases.
-Existing name/xref ambiguity and relation review are preserved. Release-matched
-SSSOM mapping ingestion remains a separate deferred feature; this change does
-not reinterpret all cross-references as equivalence.
+The current database is schema 5; rebuild older local databases. Obsolete-term
+retention and existing name/xref relation review are preserved. Release-matched
+SSSOM ingestion is implemented as an optional input, described below; it does not
+reinterpret all cross-references as equivalence.
 Source: [MONDO obsoletion guidance](https://mondo.readthedocs.io/en/stable/editors-guide/merging-and-obsoleting/).
 
 ### Typed external mappings

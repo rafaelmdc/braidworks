@@ -36,7 +36,9 @@ partially addressed them; inspect before planning or closing them.
 ## Documentation review
 
 [First-pass readability work (#299)](https://github.com/rafaelmdc/braidworks/issues/299)
-reorganizes onboarding and current guides. The next joint review will develop three
+reorganizes onboarding and current guides. The [accuracy follow-up (#300)](https://github.com/rafaelmdc/braidworks/issues/300)
+reconciles active source summaries and generated catalogues; see the
+[accuracy findings](audits/documentation-accuracy.md). The next joint review will develop three
 researcher workflows with meaningful inputs, results, interpretation, and coverage
 checks; see the [first-pass findings](audits/documentation-readability.md).
 

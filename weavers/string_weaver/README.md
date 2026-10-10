@@ -9,9 +9,15 @@ scores and per-evidence-channel subscores.
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_interactions` | `protein.uniprot.accession` | **`string.id`** (⤜ fan: each taxon-scoped partner ID), `protein.interaction.partners`, `protein.interaction.count`, `protein.interaction.records` (full edges: partner, combined score, per-channel subscores) |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `list_interactions` | `protein.uniprot.accession` | `summary`, `full`; expands `string.id` | `api` | `required_score`, `network_type`, `species` |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 STRING maps the accession to its protein + species itself, so this is single-input and
 reachable directly off the hub. It emits each partner ID as **`string.id`** (a set

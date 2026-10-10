@@ -11,8 +11,27 @@ AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repert
 
 Maps an organism (by **NCBI taxid**) to its AGORA2 genome-scale metabolic
 reconstruction(s) and, on request, the **reaction repertoire** of those models — the
-substrate for metabolic complementarity/competition analysis. Consumes only `ncbi.taxon.id`
-(name→taxid is `ncbi_weaver`'s job; the braider chains them).
+substrate for metabolic complementarity/competition analysis. Taxid-based operations
+consume `ncbi.taxon.id`; other capabilities accept release-qualified reconstruction
+IDs, genome accessions, or VMH reaction IDs. Name→taxid resolution can precede those
+operations through NCBI. Model reaction membership is not measured metabolic activity.
+
+## Capabilities
+
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_metabolic_reconstruction` | `ncbi.taxon.id` | `core`, `reactions`, `model` | `local` | — |
+| `list_reconstructions` | `genome.accession` or `ncbi.taxon.id` | `reconstructions`; expands `microbe.agora.reconstruction_id` | `local` | — |
+| `describe_reconstruction` | `microbe.agora.reconstruction_id` | `identity`, `artifact`, `reactions`, `model` | `local` | — |
+| `list_genomes` | `microbe.agora.reconstruction_id` | `genomes`; expands `genome.accession` | `local` | — |
+| `list_reactions` | `microbe.agora.reconstruction_id` | `reactions`; expands `reaction.vmh.id` | `local` | — |
+| `describe_reaction` | `reaction.vmh.id` | `reaction` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## Outputs (grouped)
 
@@ -47,8 +66,10 @@ make test     # conformance + contract + golden tests (offline)
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory

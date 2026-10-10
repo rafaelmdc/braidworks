@@ -10,10 +10,16 @@ covering a protein, and drills any single structure into its detail.
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_structures` | `protein.uniprot.accession` | **`pdb.id`** (⤜ fan: every distinct structure), `structure.pdb.ids` (top N), `structure.pdb.count` (true total), `structure.pdb.records` |
-| `describe_structure` | `pdb.id` | `structure.pdb.title`, `structure.pdb.method`, `structure.pdb.release_date`, `structure.pdb.detail` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `list_structures` | `protein.uniprot.accession` | `summary`, `full`; expands `pdb.id` | `api` | — |
+| `describe_structure` | `pdb.id` | `detail`, `quality`, `entities`, `assemblies`, `ligands`, `mappings`, `residues`, `coordinates` | `api` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 `list_structures` emits `pdb.id` as a **set output** (the fan dimension), and
 `describe_structure` consumes it — so a fanned structure is drillable end-to-end:

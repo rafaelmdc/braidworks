@@ -12,9 +12,15 @@ and deliberate removal of the discovery entry point. It passes the full `--stric
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `describe_traits` | `ncbi.taxon.id` | **traits.core:** `microbe.trait.gram_stain` · **traits.growth:** `microbe.trait.optimum_temp` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_traits` | `ncbi.taxon.id` | `traits.core`, `traits.growth` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## The files to copy
 

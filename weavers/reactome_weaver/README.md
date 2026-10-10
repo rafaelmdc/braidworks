@@ -10,10 +10,18 @@ drills any single pathway into its detail.
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_pathways` | `protein.uniprot.accession` | **`pathway.reactome.id`** (⤜ fan: every distinct pathway), `pathway.reactome.names` (top N), `pathway.reactome.count` (true total), `pathway.reactome.records` |
-| `describe_pathway` | `pathway.reactome.id` | `pathway.reactome.display_name`, `pathway.reactome.species`, `pathway.reactome.in_disease`, `pathway.reactome.detail` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `list_pathways` | `protein.uniprot.accession` | `summary`, `full`; expands `pathway.reactome.id` | `api` | — |
+| `describe_pathway` | `pathway.reactome.id` | `detail`, `hierarchy`, `participants`, `evidence` | `api` | — |
+| `list_reactions` | `pathway.reactome.id` | `reactions`; expands `reaction.reactome.id` | `api` | — |
+| `describe_reaction` | `reaction.reactome.id` | `detail` | `api` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 `list_pathways` emits `pathway.reactome.id` as a **set output** (the fan dimension), and
 `describe_pathway` consumes it — so a fanned pathway is drillable end-to-end.

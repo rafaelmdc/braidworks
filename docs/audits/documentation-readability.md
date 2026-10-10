@@ -110,3 +110,10 @@ These are focused documentation checks; no browser usability trial, full environ
 installation, full test-suite rerun, or source-by-source live recertification is claimed.
 Runtime code, schemas, dependencies, package versions, and generated manifests are
 unchanged. No new tools or biological reference databases are required for this edit.
+
+## Accuracy follow-up
+
+The owner's follow-up requested reconciliation after recent feature additions.
+[The accuracy report](documentation-accuracy.md) records the separate pass, including
+all package capability summaries and the small catalogue/scaffold corrections.
+The earlier verification and scope above describe the first readability commit.

@@ -25,8 +25,11 @@ HTTP scaffold includes this wiring. A matching rule for an unsupported backend r
 `BackendConfigurationError`. Prefer `weaver:api` rules so local database backends do
 not accidentally inherit an HTTP budget.
 
-Pacing is off unless configured. Choose rates according to the provider's policy and
-your account; these controls do not discover provider limits. Setup/download utilities
+Without an explicit rule, API backends may apply their own defaults: BacDive uses
+2 requests/second, STRING 1, and NCBI/GTDB/Wikipedia 5. Other shipped API backends
+have no default rate. An executor budget takes precedence over environment rules;
+environment rules override source defaults. These project defaults do not discover
+provider limits. Choose explicit rates according to the provider's policy and account. Setup/download utilities
 outside backend execution are outside this budget. Cancellation interrupts pending
 waits without sending another request. Separate local processes and external tools
 are not coordinated by local pacing.

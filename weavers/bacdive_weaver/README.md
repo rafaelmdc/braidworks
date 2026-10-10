@@ -10,9 +10,19 @@ scientific name) or `uniprot_weaver` (organism of a protein).
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `describe_traits` | `organism.scientific_name` | **morphology:** `microbe.trait.gram_stain`, `microbe.trait.cell_shape` · **physiology:** `microbe.trait.motility`, `microbe.trait.spore_formation`, `microbe.trait.oxygen_tolerance` · **growth:** `microbe.trait.optimum_temp`, `microbe.trait.optimum_ph` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_traits` | `organism.scientific_name` | `morphology`, `physiology`, `growth`, `evidence` | `api` | — |
+| `list_strains` | `organism.scientific_name` | `strains`; expands `microbe.bacdive.strain_id` | `api` | — |
+| `describe_strain` | `microbe.bacdive.strain_id` | `identity`, `morphology`, `physiology`, `growth`, `evidence` | `api` | — |
+| `map_to_strain` | `culture.collection.id` or `genome.accession` | `strains`; expands `microbe.bacdive.strain_id` | `api` | — |
+| `map_from_strain` | `microbe.bacdive.strain_id` | `identifiers`; expands `culture.collection.id`, `genome.accession` | `api` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 Requesting any output computes its group; the mapper emits only the requested slice.
 

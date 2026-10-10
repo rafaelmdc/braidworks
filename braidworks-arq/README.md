@@ -25,7 +25,7 @@ LocalExecutor (orchestrator)
                  └─ await weaver.execute_batch(...)
 ```
 
-A weave-step is a pure, cache-keyed function of `(weaver_id, capability_id, backend,
+A weave-step is identified for caching by `(weaver_id, capability_id, backend,
 input StrandSets, requested_outputs, effective parameters)` plus the backend fingerprint.
 The executor sends the expected manifest and backend fingerprint to each dispatched
 worker; a mismatch aborts before fetching rather than mixing datasets or package versions.
@@ -62,10 +62,16 @@ Configuration (all env, all optional):
 | `BRAIDWORKS_REDIS_URL` | `redis://localhost:6379/0` | Redis for the queue + job results |
 | `BRAIDWORKS_QUEUE` | `weaver.default` | the queue a worker consumes (set to `weaver.<id>`) |
 | `BRAIDWORKS_WEAVERS` | _(all)_ | comma list of weaver ids to load into a worker |
-| `BRAIDWORKS_RATE_LIMITS` | _(off)_ | `weaver[:backend]=requests_per_sec`, e.g. `ncbi:api=3` |
+| `BRAIDWORKS_RATE_LIMITS` | _(no explicit rules)_ | `weaver[:backend]=requests_per_sec`, e.g. `ncbi:api=3` |
 | `BRAIDWORKS_FANOUT` | _(off)_ | `weaver[:backend]=width` — split a step's batch across up to `width` concurrent workers |
 | `BRAIDWORKS_FANOUT_UNBUDGETED` | _(empty)_ | `weaver[:backend]` list asserted to make **no** rate-limited external calls (local-DB backends) |
 | `BRAIDWORKS_FANOUT_CHUNK` | _(auto)_ | `weaver[:backend]=N` entities-per-task override |
+
+Workers install a request-budget callback for every job. Without a matching explicit
+rate rule, that callback charges no pacing budget; source-local defaults do not
+supply a Redis limit. Configure `BRAIDWORKS_RATE_LIMITS` entries for cluster-wide
+pacing. Local source defaults described in [request pacing](../docs/request-pacing.md)
+apply when no executor budget overrides them.
 
 ### Entity-level fan-out
 

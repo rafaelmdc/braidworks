@@ -2,17 +2,26 @@
 
 Microbe ↔ disease associations from **[Disbiome](https://disbiome.ugent.be)** (Ghent
 University): given an organism by NCBI taxid, the diseases where its abundance is reported
-**Elevated/Reduced** vs healthy controls (human host, MedDRA-coded). A terminal weaver off
-the organism layer; chains straight behind `ncbi_weaver`.
+**Elevated/Reduced** vs healthy controls (human host, MedDRA-coded). The reverse
+lookup lists recorded taxa for a provider disease ID or MedDRA code. Taxon IDs and
+provider disease IDs connect those observations to downstream lookups.
 
 - **Source:** https://disbiome.ugent.be (keyless JSON API on port 8080) · **License:** Open · **Cite:** https://doi.org/10.1186/s12866-018-1197-5 — Janssens et al., 2018
 - **Backend:** `local` (a small SQLite built from the API; see below) · **Discoverable as** `disbiome`
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `disbiome.list_diseases` | `ncbi.taxon.id` or `ncbi.taxon.species_id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `disbiome.list_diseases` | `ncbi.taxon.id` or `ncbi.taxon.species_id` | `summary`, `associations`, `coverage`, `identity`, `full`; expands `disease.disbiome.id`, `disease.meddra.id` | `local` | `sample`, `method`, `outcome` |
+| `disbiome.list_taxa` | `disease.disbiome.id` or `disease.meddra.id` | `taxa`; expands `ncbi.taxon.id` | `local` | `sample`, `method`, `outcome` |
+| `disbiome.describe_disease` | `disease.disbiome.id` | `disease` | `local` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 Output slices, light → heavy (the mapper emits only the requested group):
 
@@ -61,8 +70,8 @@ make test       # conformance + contract + behavior, offline (live E2E self-skip
 make test-live  # opt-in: build the real DB from the API and resolve a known taxid
 ```
 
-Extend it ([CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/CONTRIBUTING.md)): reverse disease→microbe lookup, emitting
-the taxid back out, etc. Build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+Extend it using [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/CONTRIBUTING.md).
+Reverse disease→taxon lookup already exists as `disbiome.list_taxa`. Build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
 
 ## Installation and documentation
 

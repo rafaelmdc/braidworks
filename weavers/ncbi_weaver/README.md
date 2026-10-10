@@ -1,28 +1,34 @@
 # ncbi_weaver
 
-NCBI Taxonomy — resolve a free-text organism name to its NCBI taxid + ranked lineage, and
-describe a taxid. The **organism hub** of Braidworks (the taxid that BacDive, Disbiome,
-STRING, and UniProt all join on) and the **advanced reference weaver**: a `resolver` (fuzzy
-name matching, with review for ambiguous hits) with two interchangeable backends — a local
-SQLite resolver (`taxonomy_resolver`, migrated from taxonbridge) and the NCBI Datasets v2
-REST API. Both normalize to a neutral `TaxonMatch`, then one mapper produces strands, so the
-backends emit identical shapes even though their matching differs.
+NCBI taxonomy, genes, and genome assembly data for Braidworks. Resolve organism
+names or describe taxids, list descendants and assemblies, and retrieve gene details
+and orthologs. The local taxonomy database and Datasets API share taxonomy/descendant
+operations; reference history is local-only and gene/genome operations are API-only.
+Name resolution can preserve ambiguity for review. NCBI retains its custom records,
+mapping, and dispatch as the advanced implementation reference.
 
 - **Source:** https://www.ncbi.nlm.nih.gov/taxonomy · **License:** Public Domain — NCBI Taxonomy
 - **Backends:** `local` (SQLite, bulk) + `api` (NCBI Datasets v2, keyless) · **Discoverable as** `ncbi`
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `ncbi.resolve_name` | `organism.name` | **core:** `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.match_type`, `ncbi.taxon.review_required` · **lineage:** `ncbi.taxon.lineage` |
-| `ncbi.describe_taxon` | `ncbi.taxon.id` | **core:** `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id` · **lineage:** `ncbi.taxon.lineage` |
-| `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **local + api** |
-| `ncbi.list_genomes` ⤜ | `ncbi.taxon.id` | **`genome.accession`** (⤜ fan: each assembly), `genome.assembly.count`, `genome.assembly.records` — params `reference_only`, `annotated_only`, `assembly_level` · **api-only** |
-| `ncbi.describe_genome` | `genome.accession` | **assembly:** `genome.assembly.title`, `genome.assembly.level`, `genome.assembly.organism`, `genome.assembly.detail` · **sequences:** `genome.sequence.records` · **api-only** |
-| `ncbi.resolve_gene` | `protein.query` | `gene.ncbi.id`, `gene.symbol`, `gene.name`, `gene.organism` — param `taxon` (default `9606`) · **api-only** |
-| `ncbi.describe_gene` | `gene.ncbi.id` | **summary:** `gene.symbol`, `gene.name`, `gene.type`, `gene.organism`, `gene.detail` · **products:** `gene.product.records` · **api-only** |
-| `ncbi.list_orthologs` ⤜ | `gene.ncbi.id` | **`gene.ncbi.id`** (⤜ fan: each ortholog), `gene.ortholog.count`, `gene.ortholog.records` — param `taxon_filter` · **api-only** |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `ncbi.resolve_name` | `organism.name` | `core`, `lineage` | `local`, `api` | — |
+| `ncbi.describe_taxon` | `ncbi.taxon.id` | `core`, `lineage` | `local`, `api` | — |
+| `ncbi.describe_taxon_history` | `ncbi.taxon.id` | `history` | `local` | — |
+| `ncbi.list_children` | `ncbi.taxon.id` | `children`; expands `ncbi.taxon.id` | `local`, `api` | `rank` |
+| `ncbi.list_genomes` | `ncbi.taxon.id` | `genomes`; expands `genome.accession` | `api` | `reference_only`, `annotated_only`, `assembly_level` |
+| `ncbi.describe_genome` | `genome.accession` | `assembly`, `sequences` | `api` | — |
+| `ncbi.resolve_gene` | `protein.query` | `gene` | `api` | `taxon` |
+| `ncbi.describe_gene` | `gene.ncbi.id` | `summary`, `products` | `api` | — |
+| `ncbi.list_orthologs` | `gene.ncbi.id` | `orthologs`; expands `gene.ncbi.id` | `api` | `taxon_filter` |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 This is a **resolver**: a fuzzy/ambiguous name match can come back flagged
 (`ncbi.taxon.review_required`) for human confirmation rather than guessing silently.
@@ -74,8 +80,11 @@ weaver = build_ncbi_weaver(auto_setup=True)                 # build/reuse the DB
 weaver = build_ncbi_weaver(db_path="…", enable_api=True)    # local preferred, API fallback
 ```
 
-The manifest advertises only the backends you wire in, so a missing one never breaks
-planning — it just isn't an option. See [docs/database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
+Explicit backend selection advertises the wired backends and their supported
+capabilities. Zero-argument construction declares both backends for discovery: the
+API is usable, while local may be unconfigured. A declared route therefore does not
+guarantee a prepared local database. Gene/genome operations remain API-only; history
+is local-only; taxonomy and descendant listing support both. See [docs/database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
 local DB. In an app that wires a `WeaverFactory`, `ncbi_weaver.register(factory)` adds it.
 
 ## Use it
@@ -176,7 +185,8 @@ Use `json.dumps(match.to_json())` for wire JSON; reconstruction produces detache
 Backend interfaces are structural protocols, not a base class that every backend must
 inherit. `ResolutionBackend` describes taxonomy resolution plus configuration/fingerprint;
 `TaxonomyChildrenBackend`, `GenomeBackend` and `GeneBackend` describe their separate
-operations. The local backend supplies taxonomy resolution; Datasets supplies all four.
+operations. The local backend supplies taxonomy resolution, history, and descendant listing;
+Datasets supplies taxonomy/children, genome, and gene operations.
 Dispatch raises `UnsupportedCapability` when an optional operation is absent. Custom
 backends should implement only their supported interfaces; existing duck-typed backends
 continue to work. The previous ABC's inherited unsupported methods have been removed.
@@ -190,8 +200,8 @@ proof that an ID was never present. Deleted/unknown IDs have no inferred success
 Existing `ncbi.describe_taxon` and name resolution are unchanged.
 
 The history operation is separate from taxonomy resolution and advertised only
-when local is wired. Local descendant listing uses the same capability and rank semantics as the API;
-`ncbi.list_children` still requires the API backend and its documented rank scope.
+when local is wired. `ncbi.list_children` supports both local and API backends,
+with the descendant/rank semantics described below.
 No full taxonomy download is required for conformance: tiny synthetic dump
 fixtures exercise merge chains, deletion, missing history and atomic failures.
 

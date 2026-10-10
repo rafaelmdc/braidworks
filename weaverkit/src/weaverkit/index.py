@@ -60,11 +60,12 @@ class IndexRow:
 
 
 def discover_specs(root: str | Path) -> list[Path]:
-    """Find every real ``weaver.spec.toml`` under ``root`` (skipping test fixtures)."""
+    """Find every real ``weaver.spec.toml`` under ``root`` (skipping test fixtures and hidden scratch directories)."""
     root = Path(root)
     found: list[Path] = []
     for path in sorted(root.rglob(SPEC_FILENAME)):
-        if any(part in _SKIP_DIRS for part in path.relative_to(root).parts):
+        parts = path.relative_to(root).parts
+        if any(part in _SKIP_DIRS or part.startswith(".") for part in parts[:-1]):
             continue
         found.append(path)
     return found
@@ -93,7 +94,7 @@ def build_rows(specs: list[WeaverSpec]) -> list[IndexRow]:
                     capability=cap.id,
                     kind=spec.kind,
                     api_key=spec.api_key,
-                    backends=";".join(spec.backends),
+                    backends=";".join(cap.backends or spec.backends),
                     consumes=";".join(cap.consumes),
                     produces=";".join(cap.produces),
                     unmet_inputs=";".join(unmet),

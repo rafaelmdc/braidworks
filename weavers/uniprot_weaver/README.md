@@ -11,12 +11,18 @@ pathways, interactions — and back into the organism layer. Free, keyless UniPr
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
-| `describe_protein` | `protein.uniprot.accession` | Identity/details; optional `protein.sequence` and `protein.annotation.records` |
-| `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id`, `string.id` | `protein.uniprot.accession` (set) + mapping count/records |
-| `map_from_accession` | `protein.uniprot.accession` | **any of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `pathway.kegg.id`, `pathway.reactome.id`, `refseq.protein.id`, `orthodb.group`, `eggnog.group`, `chembl.id`, `drugbank.id`, `pdb.id`, `string.id` (each a set) + mapping count/records |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `resolve_protein` | `protein.query` | `identity`, `taxonomy`, `function` | `api` | `organism` |
+| `describe_protein` | `protein.uniprot.accession` | `identity`, `sequence`, `annotations` | `api` | — |
+| `map_to_accession` | `gene.ensembl.id` or `gene.hgnc.id` or `gene.ncbi.id` or `gene.symbol` or `nucleotide.insdc.accession` or `pdb.id` or `protein.ensembl.id` or `refseq.protein.id` or `string.id` | `mapping`; expands `protein.uniprot.accession` | `api` | — |
+| `map_from_accession` | `protein.uniprot.accession` | `gene_ncbi_id`, `gene_ensembl_id`, `protein_ensembl_id`, `pathway_kegg_id`, `pathway_reactome_id`, `refseq_protein_id`, `orthodb_group`, `eggnog_group`, `chembl_id`, `drugbank_id`, `pdb_id`, `string_id`, `summary`; expands `chembl.id`, `drugbank.id`, `eggnog.group`, `gene.ensembl.id`, `gene.ncbi.id`, `orthodb.group`, `pathway.kegg.id`, `pathway.reactome.id`, `pdb.id`, `protein.ensembl.id`, `refseq.protein.id`, `string.id` | `api` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## ID mapping (`map_to_accession` / `map_from_accession`)
 

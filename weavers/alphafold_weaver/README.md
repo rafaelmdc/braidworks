@@ -1,18 +1,26 @@
 # alphafold_weaver
 
-AlphaFold predicted 3D structure models via EBI AlphaFold DB — a **terminal** molecular
-weaver off the protein hub, over the free, keyless AlphaFold DB REST API. The "what does
-it look like (predicted)" panel; the companion to `pdbe_weaver` (experimental) and the
-answer when no experimental structure exists.
+AlphaFold prediction metadata and model inventories from the keyless AlphaFold DB
+API or explicitly supplied local archives. List observed model IDs, then describe
+individual predictions. These are predicted structures; PDBe provides experimental
+structure records. Provider coverage determines whether a prediction is available.
 
 - **Source:** https://alphafold.ebi.ac.uk · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkab1061 — AlphaFold DB (Google DeepMind & EMBL-EBI)
-- **Backend:** `api` (keyless) · **Discoverable as** `alphafold`
+- **Backends:** `api` (keyless), `archive` (explicit local TAR files) · **Discoverable as** `alphafold`
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `describe_model` | `protein.uniprot.accession` | `structure.alphafold.entry_id`, `structure.alphafold.mean_plddt` (0–100 confidence), `structure.alphafold.model_url`, `structure.alphafold.pae_image_url`, `structure.alphafold.version`, `structure.alphafold.records` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `describe_model` | `protein.uniprot.accession` | `model`, `confidence`, `full` | `api`, `archive` | — |
+| `list_models` | `protein.uniprot.accession` | `models`; expands `structure.alphafold.model_id` | `api`, `archive` | — |
+| `describe_prediction` | `structure.alphafold.model_id` | `model`, `confidence`, `full` | `api`, `archive` | — |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 ## Representative model and coverage
 
@@ -24,8 +32,9 @@ confidence breakdown). Its `coverage` object retains the observed 1-based inclus
 UniProt start/end, sequence length, model length and fragment number. Status is
 `full_sequence`, `partial` or `unknown` when evidence is missing. Partial models carry
 a warning even on scalar-only requests. F1 can be the first overlapping fragment of
-a long protein; it does not guarantee a complete model. Model listing remains a
-separate proposal (#202).
+a long protein; it does not guarantee a complete model. `list_models` separately
+lists entries observed by the selected API or archive backend; `describe_prediction`
+retrieves one explicit model identity.
 
 A valid UniProt accession can lack a model. Coverage depends on the provider’s
 datasets and sequence exclusions; isoforms and fragments need separate inspection.

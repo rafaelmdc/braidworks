@@ -6,6 +6,20 @@ Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title) we
 - **License:** CC0-1.0
 - **Cite:** Wikidata, the free knowledge base. https://www.wikidata.org/
 
+## Capabilities
+
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `resolve_taxon` | `organism.scientific_name` | `core`, `names` | `api` | `expected_rank` |
+| `map_from_taxid` | `ncbi.taxon.id` | `core`, `names` | `api` | — |
+| `describe_taxon` | `wikidata.qid` | `core`, `localized` | `api` | `language` |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
+
 ## Use it
 
 The implemented keyless SPARQL backend resolves taxon scientific names to Wikidata
@@ -28,8 +42,10 @@ make test     # run conformance + contract + golden tests
 
 ## Registering this weaver
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+The CLI discovers this installed weaver through its entry point. Python applications
+can register a built instance directly in `BraidRegistry`. `WeaverFactory` registration
+is optional construction support; it makes the builder available by ID, not a route.
+For applications using that factory:
 
 ```python
 from braidworks.core import WeaverFactory

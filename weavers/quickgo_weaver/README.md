@@ -9,10 +9,17 @@ the three GO aspects), and drills any single term into its definition.
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_go_terms` | `protein.uniprot.accession` | **`go.term`** (⤜ fan: every distinct GO id), `go.molecular_function`, `go.biological_process`, `go.cellular_component` (term-name lists), `go.count`, `go.records`, `go.annotation.records`, `go.annotation.coverage` |
-| `describe_go_term` | `go.term` | `go.term.name`, `go.term.aspect`, `go.term.definition`, `go.term.detail` |
+| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
+|---|---|---|---|---|
+| `list_go_terms` | `protein.uniprot.accession` | `aspects`, `summary`, `full`, `annotations`, `coverage`; expands `go.term` | `api` | `evidence_code`, `evidence_usage`, `qualifier`, `aspect` |
+| `describe_go_term` | `go.term` | `detail`, `relations`, `hierarchy` | `api` | — |
+| `list_gene_products` | `go.term` | `products`; expands `protein.uniprot.accession` | `api` | `taxon_id`, `evidence_code`, `evidence_usage` |
+
+These are the current declared capabilities. Output groups select fields computed
+together; expandable keys identify related entities you can follow. See
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
+`braidworks weavers` for the installed inventory. Backend declarations do not imply
+that optional local data are already configured.
 
 `list_go_terms` emits `go.term` as a **set output** (the fan dimension), and
 `describe_go_term` consumes it — so a fanned term is drillable end-to-end.
