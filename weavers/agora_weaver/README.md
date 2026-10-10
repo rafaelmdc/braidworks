@@ -137,9 +137,13 @@ source identity. Artifact acquisition/replacement changes that identity.
 relax the noncommercial terms. References retain attribution and noncommercial notices.
 The license meaning is described by [Creative Commons](https://creativecommons.org/licenses/by-nc/4.0/).
 
-Live validation on 2026-10-09 found the configured individual VMH model URL returning
-HTML instead of SBML. Model requests report a resource error and publish no artifact;
-this limitation remains tracked as an upstream acquisition follow-up.
+Live validation on 2026-10-10 verified VMH's current individual-model service:
+`https://vmh.life/api/getMicrobeReconstructions?version=agora2_2.01&format=sbml&id=<reconstruction_id>`.
+The explicit family selector pins AGORA2 version 2.01. This service generates SBML
+from the provider's release data; it is not a byte-identical copy of the original
+archive XML. The obsolete static route returned HTML and is no longer the default.
+Caller-configured XML directories can be supplied through `model_download_base_url`;
+that configuration affects backend fingerprints and exported source URLs.
 
 `list_reconstructions` emits the full distinct `microbe.agora.reconstruction_id`
 set (`AGORA2-v2.01:<model>`), a capped display of ten crosswalk records and coverage.
@@ -150,6 +154,6 @@ existing resource and consent behavior. IDs for other releases are explicit erro
 The requested artifact group reports local structural validation, model ID/hash,
 and availability. It never starts downloads. A cached file is **not** proof of
 its AGORA release: `release_verified` remains false. Missing artifacts report
-consent-required or unverified remote acquisition according to effective consent.
-Remote acquisition is still unresolved in #298; metadata routing does not claim
-that download workflow is fixed or that a solver result exists.
+consent-required or not-cached according to effective consent.
+Metadata describes service availability without fetching it; it does not claim
+exhaustive model availability, archive-byte equivalence or a solver result.

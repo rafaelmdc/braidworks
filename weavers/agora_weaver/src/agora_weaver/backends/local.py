@@ -18,6 +18,7 @@ import sqlite3
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from braidworks.core import BackendBase, LookupRecord
@@ -26,7 +27,7 @@ from braidworks.core.localdb import auto_consented
 from braidworks.core.source_identity import SourceBinding, artifact_stamp
 
 from agora_weaver import dataset
-from agora_weaver.setup import InvalidSBML, validate_model_sbml
+from agora_weaver.setup import DEFAULT_INDIVIDUAL_SBML_BASE, InvalidSBML, validate_model_sbml
 
 
 class _ResourceUnavailable(ValueError):
@@ -44,7 +45,22 @@ class AgoraLocalBackend(BackendBase):
         *,
         sbml_cache_dir: str | Path | None = None,
         auto_download_models: bool = False,
+        model_download_base_url: str = DEFAULT_INDIVIDUAL_SBML_BASE,
     ) -> None:
+        if not isinstance(model_download_base_url, str):
+            raise BackendConfigurationError("model_download_base_url must be an HTTP URL")
+        try:
+            endpoint = urlsplit(model_download_base_url)
+        except ValueError as exc:
+            raise BackendConfigurationError("model_download_base_url must be an HTTP URL") from exc
+        if endpoint.scheme not in {"http", "https"} or not endpoint.netloc:
+            raise BackendConfigurationError("model_download_base_url must be an HTTP URL")
+        if model_download_base_url != DEFAULT_INDIVIDUAL_SBML_BASE and (
+            endpoint.query or endpoint.fragment
+        ):
+            raise BackendConfigurationError(
+                "Configured model_download_base_url must be an XML directory without query or fragment"
+            )
         # ``None`` = "the default reaction-DB path, present-or-not"; core works either way.
         self._reaction_db_path = (
             Path(reaction_db_path) if reaction_db_path is not None else _default_db_path()
@@ -53,6 +69,7 @@ class AgoraLocalBackend(BackendBase):
         # on demand (the ``model`` group; each model is ~8 MB).
         self._sbml_cache_dir = Path(sbml_cache_dir) if sbml_cache_dir is not None else None
         self._auto_download_models = auto_download_models
+        self._model_download_base_url = model_download_base_url
         self._source = SourceBinding(
             self._reaction_db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
         )
@@ -77,6 +94,7 @@ class AgoraLocalBackend(BackendBase):
         state = {
             "directory": str(directory.resolve()),
             "auto_download": auto_consented(self._auto_download_models),
+            "download_base_url": self._model_download_base_url,
             "artifacts": [
                 (path.name, artifact_stamp(path)) for path in sorted(directory.glob("*.xml"))
             ],
@@ -194,7 +212,11 @@ class AgoraLocalBackend(BackendBase):
         result = {
             "reconstruction_id": reconstruction_id,
             "crosswalk_release": dataset.CROSSWALK_RELEASE,
-            "remote_availability": "unverified; tracked by issue #298",
+            "remote_availability": (
+                "provider_release_selected_service"
+                if self._model_download_base_url == DEFAULT_INDIVIDUAL_SBML_BASE
+                else "caller_configured_unverified"
+            ),
             "download_enabled": auto_consented(self._auto_download_models),
             "release_verified": False,
             "path": None,
@@ -213,8 +235,8 @@ class AgoraLocalBackend(BackendBase):
         else:
             result["status"] = (
                 "consent_required"
-                if not self._auto_download_models
-                else "remote_acquisition_unverified"
+                if not auto_consented(self._auto_download_models)
+                else "not_cached"
             )
         return result
 
@@ -229,6 +251,7 @@ class AgoraLocalBackend(BackendBase):
                 recon_id,
                 cache_dir=self._sbml_cache_dir,
                 auto=self._auto_download_models,
+                base_url=self._model_download_base_url,
             )
             if path is None:
                 raise _ResourceUnavailable(f"SBML unavailable for {recon_id}; download not enabled")
@@ -237,7 +260,9 @@ class AgoraLocalBackend(BackendBase):
                     {
                         "reconstruction_id": recon_id,
                         "path": str(path),
-                        "source_url": individual_sbml_url(recon_id),
+                        "source_url": individual_sbml_url(
+                            recon_id, base_url=self._model_download_base_url
+                        ),
                         "release": dataset.CROSSWALK_RELEASE,
                         "model_id": validate_model_sbml(path),
                         "sha256": _sha256(path),

@@ -20,7 +20,13 @@ from braidworks.core import BaseWeaver
 from braidworks.core.lifecycle import reject_unknown_options
 
 from agora_weaver.backends.local import AgoraLocalBackend
-from agora_weaver.setup import auto_consented, db_is_valid, default_db_path, ensure_agora_db
+from agora_weaver.setup import (
+    DEFAULT_INDIVIDUAL_SBML_BASE,
+    auto_consented,
+    db_is_valid,
+    default_db_path,
+    ensure_agora_db,
+)
 from agora_weaver.weaver import AgoraWeaver
 
 
@@ -31,6 +37,7 @@ def build_agora_weaver(
     refresh: bool = False,
     sbml_cache_dir: str | Path | None = None,
     auto_download_models: bool = False,
+    model_download_base_url: str = DEFAULT_INDIVIDUAL_SBML_BASE,
     **_config: Any,
 ) -> BaseWeaver:
     """Build an AgoraWeaver with the local backend.
@@ -55,6 +62,7 @@ def build_agora_weaver(
                 reaction_db,
                 sbml_cache_dir=sbml_cache_dir,
                 auto_download_models=auto_download_models,
+                model_download_base_url=model_download_base_url,
             )
         }
     )

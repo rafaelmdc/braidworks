@@ -16,3 +16,7 @@ lint:
 
 fmt:
 	uvx ruff==0.16.10 format .
+
+.PHONY: test-live
+test-live:
+	BRAIDWORKS_RUN_LIVE=1 uv run --extra test python -m pytest tests/test_model_sbml.py -v

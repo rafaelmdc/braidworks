@@ -66,5 +66,6 @@ are bounded known-truth checks, not exhaustive upstream guarantees.
 All 18 approved minimum scopes are complete. GitHub issues #199, #206, #286,
 #295, #296 and #297 are closed; broader findings retain their implementation
 comments and deferred scope. #234, release/publishing #142, persistent cache/resume
-#143 and AGORA remote artifact acquisition #298 remain deferred. Changes are on
+#143 remain deferred. AGORA acquisition #298 was subsequently fixed and closed
+(see nondeferred-completion.plan.md). Changes are on
 `feat/weaver-audit-approved-scopes` as local commits; nothing was pushed or released.

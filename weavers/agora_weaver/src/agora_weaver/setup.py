@@ -34,12 +34,11 @@ DEFAULT_SBML_URL = (
     "sbml_files_fixed/zipped/AGORA2_models/AGORA2_SBML.zip"
 )
 DEFAULT_REACTIONS_API = "https://www.vmh.life/_api/reactions/"
-# Per-model SBML: individual model files live alongside the zip, so the metabolic-model
-# capability fetches just the ~8 MB model a caller asks for (lazy, cached) rather than the
-# 2.17 GB archive — the substrate for the metabolic.complementarity layer (seed-set / SMETANA).
+# VMH's current single-model service. Explicit family selection prevents the
+# default/multiple-version route from silently returning AGORA1 or APOLLO.
+# It generates SBML for this release; it is not the byte-identical archive XML.
 DEFAULT_INDIVIDUAL_SBML_BASE = (
-    "https://www.vmh.life/files/reconstructions/AGORA2/version2.01/"
-    "sbml_files/individual_reconstructions/"
+    "https://vmh.life/api/getMicrobeReconstructions?version=agora2_2.01&format=sbml&id="
 )
 
 _NAMESPACE = "agora"
@@ -123,7 +122,10 @@ def individual_sbml_url(
 ) -> str:
     """VMH URL for a single AGORA2 model's SBML file."""
     _validate_model_id(reconstruction_id)
-    return f"{base_url}{reconstruction_id}.xml"
+    if base_url == DEFAULT_INDIVIDUAL_SBML_BASE:
+        return f"{base_url}{reconstruction_id}"
+    # Explicit caller-configured directories retain the original XML convention.
+    return f"{base_url.rstrip('/')}/{reconstruction_id}.xml"
 
 
 def ensure_model_sbml(
@@ -136,7 +138,7 @@ def ensure_model_sbml(
     """Ensure a single model's SBML is cached locally; return its path (or None).
 
     Cached files are structurally validated before return. A missing model is downloaded only if consented
-    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (a requested unavailable model becomes a backend error record). ~8 MB per model.
+    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (a requested unavailable model becomes a backend error record). Size varies by reconstruction; no archive download.
     """
     _validate_model_id(reconstruction_id)
     directory = Path(cache_dir) if cache_dir is not None else default_sbml_cache_dir()
