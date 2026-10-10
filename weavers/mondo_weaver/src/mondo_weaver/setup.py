@@ -74,12 +74,26 @@ def normalize_name(name: str) -> str:
 
 
 class _Term:
-    __slots__ = ("mondo_id", "name", "obsolete", "parents", "synonyms", "xref_evidence", "xrefs")
+    __slots__ = (
+        "consider",
+        "definition",
+        "mondo_id",
+        "name",
+        "obsolete",
+        "parents",
+        "replaced_by",
+        "synonyms",
+        "xref_evidence",
+        "xrefs",
+    )
 
     def __init__(self, mondo_id: str) -> None:
         self.mondo_id = mondo_id
         self.name: str | None = None
         self.obsolete = False
+        self.definition = None
+        self.replaced_by = []
+        self.consider = []
         self.parents: list[str] = []
         self.xrefs: list[tuple[str, str, bool]] = []  # (source_tag, id, is_equivalent)
         self.xref_evidence: list[tuple[str, str, str, str]] = []
@@ -87,7 +101,7 @@ class _Term:
 
 
 def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
-    """Parse an OBO stream into (data_version, [non-obsolete Term])."""
+    """Parse an OBO stream into (data_version, [current and obsolete Term])."""
     data_version: str | None = None
     terms: list[_Term] = []
     current: _Term | None = None
@@ -99,7 +113,7 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
             data_version = line.split(":", 1)[1].strip()
             continue
         if line.startswith("["):
-            if current is not None and not current.obsolete and current.name:
+            if current is not None and current.name:
                 terms.append(current)
             in_term = line == "[Term]"
             current = None
@@ -115,6 +129,20 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
             current.name = value.strip()
         elif key == "is_obsolete" and value.strip() == "true":
             current.obsolete = True
+        elif key == "def":
+            match = re.match(r'^"((?:[^"\\]|\\.)*)"', value)
+            if match is None:
+                raise ValueError("MONDO definition must be a quoted OBO string")
+            current.definition = re.sub(
+                r"\\(.)",
+                lambda match: {"n": "\n", "r": "\r", "t": "\t"}.get(match[1], match[1]),
+                match[1],
+            )
+        elif key in {"replaced_by", "consider"}:
+            target = value.split()[0] if value.split() else ""
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*:[^\s]+", target):
+                raise ValueError("MONDO history target must be a source identifier")
+            getattr(current, key).append(target)
         elif key == "is_a":
             match = _MONDO_RE.search(value)
             if match:
@@ -151,7 +179,7 @@ def _parse_obo(lines: Iterator[str]) -> tuple[str | None, list[_Term]]:
                 relation = relations[0] if len(relations) == 1 else "conflicting"
                 current.xrefs.append((norm[0], norm[1], relation == "equivalent"))
                 current.xref_evidence.append((norm[0], norm[1], relation, value))
-    if current is not None and not current.obsolete and current.name:
+    if current is not None and current.name:
         terms.append(current)
     return data_version, terms
 
@@ -182,6 +210,10 @@ def write_db(
             {
                 "id": t.mondo_id,
                 "name": t.name,
+                "definition": t.definition,
+                "obsolete": t.obsolete,
+                "replaced_by": sorted(t.replaced_by),
+                "consider": sorted(t.consider),
                 "parents": sorted(t.parents),
                 "xrefs": sorted(t.xrefs),
                 "xref_evidence": sorted(t.xref_evidence),
@@ -206,7 +238,9 @@ def write_db(
     con = sqlite3.connect(target)
     try:
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
-        con.execute("CREATE TABLE term (mondo_id TEXT PRIMARY KEY, name TEXT)")
+        con.execute(
+            "CREATE TABLE term (mondo_id TEXT PRIMARY KEY, name TEXT, definition TEXT, obsolete INTEGER NOT NULL, replaced_by TEXT NOT NULL, consider TEXT NOT NULL)"
+        )
         con.execute("CREATE TABLE isa (child TEXT, parent TEXT)")
         con.execute(
             "CREATE TABLE xref (source TEXT, xref_id TEXT, mondo_id TEXT, is_equivalent INTEGER, "
@@ -215,11 +249,23 @@ def write_db(
         # name index: normalized label/exact-synonym -> mondo id (priority 0=label, 1=synonym).
         con.execute("CREATE TABLE name (norm TEXT, mondo_id TEXT, priority INTEGER)")
         con.executemany(
-            "INSERT OR IGNORE INTO term VALUES (?, ?)",
-            [(t.mondo_id, t.name) for t in terms],
+            "INSERT INTO term VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    t.mondo_id,
+                    t.name,
+                    t.definition,
+                    int(t.obsolete),
+                    json.dumps(sorted(set(t.replaced_by))),
+                    json.dumps(sorted(set(t.consider))),
+                )
+                for t in terms
+            ],
         )
         name_rows: list[tuple[str, str, int]] = []
         for t in terms:
+            if t.obsolete:
+                continue
             if t.name:
                 name_rows.append((normalize_name(t.name), t.mondo_id, 0))
             for syn in t.synonyms:
@@ -231,6 +277,8 @@ def write_db(
         )
         xref_rows = set()
         for term in terms:
+            if term.obsolete:
+                continue
             observed = {(src, xid) for src, xid, relation, evidence in term.xref_evidence}
             for src, xid, relation, evidence in term.xref_evidence:
                 xref_rows.add(
@@ -251,7 +299,7 @@ def write_db(
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "3"),
+                ("schema_version", "4"),
                 ("build_id", uuid.uuid4().hex),
                 ("data_version", version),
                 ("release_known", str(known_version).lower()),
@@ -279,7 +327,7 @@ def db_is_valid(path: Path) -> bool:
     try:
         meta = dict(con.execute("SELECT key, value FROM meta"))
         if (
-            meta.get("schema_version") != "3"
+            meta.get("schema_version") != "4"
             or not re.fullmatch(r"[0-9a-f]{64}", meta.get("source_sha256", ""))
             or meta.get("data_version", "").lower() in {"", "unknown", "latest"}
         ):
@@ -298,6 +346,7 @@ def db_is_valid(path: Path) -> bool:
             "SELECT 1 FROM xref WHERE relation IS NULL OR is_equivalent != (relation = 'equivalent') LIMIT 1"
         ).fetchone():
             return False
+        con.execute("SELECT definition, obsolete, replaced_by, consider FROM term LIMIT 0")
         terms = []
         by_id = {}
         for identifier, name in con.execute("SELECT mondo_id, name FROM term"):

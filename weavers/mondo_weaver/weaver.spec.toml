@@ -17,7 +17,7 @@ db_name = "mondo"
 weaver_id = "mondo"
 kind = "lookup"
 title = "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
-version = "0.2.7"
+version = "0.2.8"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1101/2022.04.13.22273750"
 attribution = "Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)"
@@ -34,6 +34,12 @@ name: ulcerative colitis
 is_a: MONDO:0005292 ! colitis
 xref: MESH:D003093 {source="MONDO:equivalentTo"}
 xref: DOID:8577 {source="MONDO:equivalentTo"}
+# Observed mondo-edit.obo bounded prefix, 2026-10-10
+[Term]
+id: MONDO:0000002
+name: obsolete 46,XX sex reversal
+is_obsolete: true
+replaced_by: MONDO:0009299
 """
 
 [[capability]]
@@ -95,9 +101,39 @@ always_computed_groups = ["identity"]
   id = "ancestors"
   outputs = ["disease.ontology.ancestors"]
 
+[[capability]]
+id = "describe_disease"
+consumes = ["disease.mondo.id"]
+always_computed_groups = ["identity"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.ontology.name"]
+
+  [[capability.group]]
+  id = "definition"
+  outputs = ["disease.ontology.definition"]
+
+  [[capability.group]]
+  id = "history"
+  outputs = ["disease.ontology.history"]
+
+  [[capability.group]]
+  id = "term"
+  outputs = ["disease.ontology.parents", "disease.ontology.depth"]
+
+  [[capability.group]]
+  id = "ancestors"
+  outputs = ["disease.ontology.ancestors"]
+
 # Golden runs against the deterministic fixture (build_mondo_weaver_fixture: a tiny SQLite
 # with ulcerative colitis / colitis / IBD terms) so verify --strict is reproducible offline.
 [[golden]]
 capability = "mondo.lookup_by_mesh"
 input = { "disease.mesh.id" = "D003093" }
 expect = { "disease.mondo.id" = "MONDO:0005101", "disease.ontology.name" = "ulcerative colitis" }
+
+[[golden]]
+capability = "describe_disease"
+input = { "disease.mondo.id" = "MONDO:0005101" }
+expect = { "disease.ontology.name" = "ulcerative colitis" }

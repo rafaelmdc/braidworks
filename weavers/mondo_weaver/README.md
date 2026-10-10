@@ -163,3 +163,15 @@ asyncio.run(main())
 ### Source validation
 
 Malformed cyclic or dangling ancestry data returns an error rather than a partial match. Valid DAGs retain shortest ancestor depths.
+
+`describe_disease` consumes `disease.mondo.id` directly, including obsolete IDs.
+Requested definition/history groups report observed definitions, obsoletion,
+`replaced_by` and `consider` targets with release/source identity. Consider targets
+remain suggestions; the weaver never follows them as automatic replacements.
+Obsolete terms stay out of name and equivalence resolution indexes.
+
+Schema 4 retains obsolete terms and requires rebuilding older local databases.
+Existing name/xref ambiguity and relation review are preserved. Release-matched
+SSSOM mapping ingestion remains a separate deferred feature; this change does
+not reinterpret all cross-references as equivalence.
+Source: [MONDO obsoletion guidance](https://mondo.readthedocs.io/en/stable/editors-guide/merging-and-obsoleting/).

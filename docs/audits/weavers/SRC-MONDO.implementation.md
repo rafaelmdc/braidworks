@@ -11,3 +11,21 @@ Regression tests mutate a valid database into a cycle or dangling graph, bound S
 Package suite: **56 passed, 1 skipped**. Strict verification and repository checks are recorded with the issue closure. Other source findings remain open; this report closes only the issue named above.
 
 Repository verification: `make lint` passed; `make test` passed (2045 pytest cases, 56 opt-in skips, plus the tool unittest suite). `weaverkit verify --strict` passed for this package. All tooling used the isolated audit environment.
+
+## Approved direct identity, definition and history — #278
+
+Version 0.2.8 adds direct `describe_disease` using the existing MONDO bridge.
+OBO ingestion retains definitions and obsolete terms with separate replaced_by
+and consider targets. Only current terms enter name/xref resolution indexes.
+Requested history carries release/hash provenance and never follows a suggestion
+as an identity replacement. Schema 4 explicitly requires rebuilding old DBs;
+caller-supplied content hashes include the retained fields.
+
+A bounded source prefix confirmed the real obsolete MONDO:0000002 stanza and
+its replacement; that observed snippet is retained in the spec. Existing ambiguity
+and predicate review remain unchanged. SSSOM mapping expansion stays deferred.
+
+Verification: 57 package tests and strict passed. Tests cover current/obsolete/
+consider/no-successor/unknown IDs, escaped definitions, source identity and
+exclusion of obsolete terms from ordinary resolution. No HTTP backend changed
+and no complete ontology was downloaded.

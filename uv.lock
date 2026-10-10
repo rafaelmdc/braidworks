@@ -563,7 +563,7 @@ wheels = [
 
 [[package]]
 name = "mondo-weaver"
-version = "0.2.7"
+version = "0.2.8"
 source = { editable = "weavers/mondo_weaver" }
 dependencies = [
     { name = "braidworks-core" },

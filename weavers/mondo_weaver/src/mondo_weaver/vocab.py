@@ -14,18 +14,16 @@ from braidworks.core import (
     WeaverManifest,
 )
 
-WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.2.7"
-WEAVER_TITLE = (
-    "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
-)
+WEAVER_ID = 'mondo'
+WEAVER_VERSION = '0.2.8'
+WEAVER_TITLE = 'MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)'
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url="https://mondo.monarchinitiative.org",
-    license="CC-BY-4.0",
-    citation="https://doi.org/10.1101/2022.04.13.22273750",
-    attribution="Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)",
+    source_url='https://mondo.monarchinitiative.org',
+    license='CC-BY-4.0',
+    citation='https://doi.org/10.1101/2022.04.13.22273750',
+    attribution='Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)',
 )
 
 
@@ -38,103 +36,54 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="mondo.lookup_by_mesh",
-                consumes=frozenset({"disease.mesh.id"}),
-                produces=frozenset(
-                    {
-                        "disease.mondo.id",
-                        "disease.ontology.ancestors",
-                        "disease.ontology.depth",
-                        "disease.ontology.mapping.records",
-                        "disease.ontology.name",
-                        "disease.ontology.parents",
-                    }
-                ),
+                id='mondo.lookup_by_mesh',
+                consumes=frozenset({'disease.mesh.id'}),
+                produces=frozenset({'disease.mondo.id', 'disease.ontology.ancestors', 'disease.ontology.depth', 'disease.ontology.mapping.records', 'disease.ontology.name', 'disease.ontology.parents'}),
                 output_groups=(
-                    OutputGroup(
-                        id="identity",
-                        outputs=frozenset(
-                            {
-                                "disease.mondo.id",
-                                "disease.ontology.mapping.records",
-                                "disease.ontology.name",
-                            }
-                        ),
-                    ),
-                    OutputGroup(
-                        id="term",
-                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
-                    ),
-                    OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
+                    OutputGroup(id='identity', outputs=frozenset({'disease.mondo.id', 'disease.ontology.mapping.records', 'disease.ontology.name'})),
+                    OutputGroup(id='term', outputs=frozenset({'disease.ontology.depth', 'disease.ontology.parents'})),
+                    OutputGroup(id='ancestors', outputs=frozenset({'disease.ontology.ancestors'})),
                 ),
                 backends=backends,
-                always_computed_groups=frozenset({"identity"}),
+                always_computed_groups=frozenset({'identity'}),
             ),
             Capability(
-                id="mondo.lookup_by_meddra",
-                consumes=frozenset({"disease.meddra.id"}),
-                produces=frozenset(
-                    {
-                        "disease.mondo.id",
-                        "disease.ontology.ancestors",
-                        "disease.ontology.depth",
-                        "disease.ontology.mapping.records",
-                        "disease.ontology.name",
-                        "disease.ontology.parents",
-                    }
-                ),
+                id='mondo.lookup_by_meddra',
+                consumes=frozenset({'disease.meddra.id'}),
+                produces=frozenset({'disease.mondo.id', 'disease.ontology.ancestors', 'disease.ontology.depth', 'disease.ontology.mapping.records', 'disease.ontology.name', 'disease.ontology.parents'}),
                 output_groups=(
-                    OutputGroup(
-                        id="identity",
-                        outputs=frozenset(
-                            {
-                                "disease.mondo.id",
-                                "disease.ontology.mapping.records",
-                                "disease.ontology.name",
-                            }
-                        ),
-                    ),
-                    OutputGroup(
-                        id="term",
-                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
-                    ),
-                    OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
+                    OutputGroup(id='identity', outputs=frozenset({'disease.mondo.id', 'disease.ontology.mapping.records', 'disease.ontology.name'})),
+                    OutputGroup(id='term', outputs=frozenset({'disease.ontology.depth', 'disease.ontology.parents'})),
+                    OutputGroup(id='ancestors', outputs=frozenset({'disease.ontology.ancestors'})),
                 ),
                 backends=backends,
-                always_computed_groups=frozenset({"identity"}),
+                always_computed_groups=frozenset({'identity'}),
             ),
             Capability(
-                id="mondo.lookup_by_name",
-                consumes=frozenset({"disease.name"}),
-                produces=frozenset(
-                    {
-                        "disease.mondo.id",
-                        "disease.ontology.ancestors",
-                        "disease.ontology.depth",
-                        "disease.ontology.mapping.records",
-                        "disease.ontology.name",
-                        "disease.ontology.parents",
-                    }
-                ),
+                id='mondo.lookup_by_name',
+                consumes=frozenset({'disease.name'}),
+                produces=frozenset({'disease.mondo.id', 'disease.ontology.ancestors', 'disease.ontology.depth', 'disease.ontology.mapping.records', 'disease.ontology.name', 'disease.ontology.parents'}),
                 output_groups=(
-                    OutputGroup(
-                        id="identity",
-                        outputs=frozenset(
-                            {
-                                "disease.mondo.id",
-                                "disease.ontology.mapping.records",
-                                "disease.ontology.name",
-                            }
-                        ),
-                    ),
-                    OutputGroup(
-                        id="term",
-                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
-                    ),
-                    OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
+                    OutputGroup(id='identity', outputs=frozenset({'disease.mondo.id', 'disease.ontology.mapping.records', 'disease.ontology.name'})),
+                    OutputGroup(id='term', outputs=frozenset({'disease.ontology.depth', 'disease.ontology.parents'})),
+                    OutputGroup(id='ancestors', outputs=frozenset({'disease.ontology.ancestors'})),
                 ),
                 backends=backends,
-                always_computed_groups=frozenset({"identity"}),
+                always_computed_groups=frozenset({'identity'}),
+            ),
+            Capability(
+                id='describe_disease',
+                consumes=frozenset({'disease.mondo.id'}),
+                produces=frozenset({'disease.ontology.ancestors', 'disease.ontology.definition', 'disease.ontology.depth', 'disease.ontology.history', 'disease.ontology.name', 'disease.ontology.parents'}),
+                output_groups=(
+                    OutputGroup(id='identity', outputs=frozenset({'disease.ontology.name'})),
+                    OutputGroup(id='definition', outputs=frozenset({'disease.ontology.definition'})),
+                    OutputGroup(id='history', outputs=frozenset({'disease.ontology.history'})),
+                    OutputGroup(id='term', outputs=frozenset({'disease.ontology.depth', 'disease.ontology.parents'})),
+                    OutputGroup(id='ancestors', outputs=frozenset({'disease.ontology.ancestors'})),
+                ),
+                backends=backends,
+                always_computed_groups=frozenset({'identity'}),
             ),
         ),
     )

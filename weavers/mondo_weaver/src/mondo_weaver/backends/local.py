@@ -40,6 +40,7 @@ ANCESTORS = "disease.ontology.ancestors"
 # capability id -> (consumed type id, xref source tag). Source "NAME" resolves via the
 # label/synonym index instead of a cross-reference.
 _CAPABILITY_SOURCE = {
+    "describe_disease": ("disease.mondo.id", "MONDO"),
     "mondo.lookup_by_mesh": ("disease.mesh.id", "MESH"),
     "mondo.lookup_by_meddra": ("disease.meddra.id", "MedDRA"),
     "mondo.lookup_by_name": ("disease.name", "NAME"),
@@ -160,6 +161,9 @@ class MondoLocalBackend(BackendBase):
     def _resolve_mondo(
         self, con: sqlite3.Connection, source: str, value: str
     ) -> tuple[str | None, list[dict]]:
+        if source == "MONDO":
+            row = con.execute("SELECT mondo_id FROM term WHERE mondo_id=?", (value,)).fetchone()
+            return (row[0], [{"mondo_id": row[0], "relation": "identity"}]) if row else (None, [])
         if source == "NAME":
             rows = con.execute(
                 "SELECT DISTINCT mondo_id, priority FROM name WHERE norm = ? ORDER BY priority, mondo_id",
@@ -233,6 +237,32 @@ class MondoLocalBackend(BackendBase):
             row = con.execute("SELECT name FROM term WHERE mondo_id = ?", (mondo_id,)).fetchone()
             name = row[0] if row else None
         values = {MONDO_ID: mondo_id, NAME: name, "disease.ontology.mapping.records": evidence}
+        if "definition" in groups or "history" in groups:
+            definition, obsolete, replaced_by, consider = con.execute(
+                "SELECT definition, obsolete, replaced_by, consider FROM term WHERE mondo_id=?",
+                (mondo_id,),
+            ).fetchone()
+            if "definition" in groups:
+                values["disease.ontology.definition"] = definition
+            if "history" in groups:
+                meta = dict(con.execute("SELECT key, value FROM meta"))
+                replacements, suggestions = json.loads(replaced_by), json.loads(consider)
+                values["disease.ontology.history"] = {
+                    "id": mondo_id,
+                    "is_obsolete": bool(obsolete),
+                    "status": "current"
+                    if not obsolete
+                    else "replaced"
+                    if replacements
+                    else "consider"
+                    if suggestions
+                    else "obsolete",
+                    "replaced_by": replacements,
+                    "consider": suggestions,
+                    "data_version": meta["data_version"],
+                    "source_sha256": meta["source_sha256"],
+                    "interpretation": "observed source history; consider targets are suggestions, not automatic replacements",
+                }
         if "term" in groups:
             values[PARENTS] = sorted(
                 [
