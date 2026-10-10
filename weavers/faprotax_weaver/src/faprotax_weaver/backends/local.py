@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from copy import deepcopy
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any
@@ -88,27 +89,44 @@ class FaprotaxLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        return await asyncio.to_thread(self._fetch_sync, queries)
+        return await asyncio.to_thread(self._fetch_sync, queries, "evidence" in groups_to_compute)
 
-    def _fetch_sync(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _fetch_sync(
+        self, queries: list[dict[str, Any]], evidence: bool = False
+    ) -> list[LookupRecord]:
         matches: dict[tuple[str, ...], tuple[str, ...]] = {}
+        explanations: dict[tuple[str, ...], dict] = {}
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             names = _lineage_names(query.get("ncbi.taxon.lineage"))
             key = tuple(name.lower() for name in names)
             if key not in matches:
                 try:
-                    matches[key] = tuple(_functional_groups(names)) if names else ()
+                    if evidence and names:
+                        trace = {}
+                        matches[key] = tuple(_evaluate(_load_rules(), names, trace=trace))
+                        explanations[key] = {
+                            "source": DATA_VERSION,
+                            "interpretation": "putative taxonomic affiliation, not measured function",
+                            "trace_scope": "matched member patterns and all ordered group operations",
+                            "groups": trace,
+                        }
+                    else:
+                        matches[key] = tuple(_functional_groups(names)) if names else ()
                 except RuleError as exc:
                     records.append(
                         LookupRecord(query=query, error=f"Invalid FAPROTAX rules: {exc}")
                     )
                     continue
             groups = list(matches[key])
-            if groups:
-                records.append(
-                    LookupRecord(query=query, found=True, values={_FUNCTIONAL_GROUPS: groups})
-                )
+            if groups or (evidence and names):
+                values = {_FUNCTIONAL_GROUPS: groups}
+                if evidence:
+                    values["microbe.ecology.evidence"] = {
+                        **deepcopy(explanations[key]),
+                        "lineage_names": list(names),
+                    }
+                records.append(LookupRecord(query=query, found=True, values=values))
             else:  # no known-function clade in the lineage — a normal miss
                 records.append(LookupRecord(query=query, found=False))
         return records

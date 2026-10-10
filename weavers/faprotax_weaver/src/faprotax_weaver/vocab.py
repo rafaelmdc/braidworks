@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "faprotax"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.5"
 WEAVER_TITLE = "FAPROTAX ecological function (organism lineage -> functional groups)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,11 +38,14 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_ecology",
                 consumes=frozenset({"ncbi.taxon.lineage"}),
-                produces=frozenset({"microbe.ecology.functional_groups"}),
+                produces=frozenset(
+                    {"microbe.ecology.evidence", "microbe.ecology.functional_groups"}
+                ),
                 output_groups=(
                     OutputGroup(
                         id="ecology", outputs=frozenset({"microbe.ecology.functional_groups"})
                     ),
+                    OutputGroup(id="evidence", outputs=frozenset({"microbe.ecology.evidence"})),
                 ),
                 backends=backends,
             ),

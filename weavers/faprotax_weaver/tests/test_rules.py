@@ -104,3 +104,35 @@ async def test_invalid_bundled_rules_become_error_records(monkeypatch):
         )
     )[0]
     assert record.error and not record.found
+
+
+def test_explanation_tracks_exclusion_then_readdition_and_same_membership():
+    groups = _parse_groups(
+        "a\n*Alpha* # DOI:alpha\n\nb\nadd_group:a\nsubtract_group:a\n*Beta* # DOI:beta\n"
+    )
+    trace = {}
+    assert _evaluate(groups, ["Alpha", "Beta"], trace=trace) == _evaluate(groups, ["Alpha", "Beta"])
+    steps = trace["b"]["operations"]
+    assert [(step["before"], step["after"]) for step in steps] == [
+        (False, True),
+        (True, False),
+        (False, True),
+    ]
+    assert steps[-1]["reference"] == "DOI:beta"
+    assert steps[-1]["source_line"] > 0
+
+
+async def test_requested_evidence_explains_false_membership_and_is_detached():
+    backend = local.FaprotaxLocalBackend()
+    queries = [{"ncbi.taxon.lineage": [{"name": "Bacteria"}, {"name": "chloroplast"}]}] * 2
+    records = await backend.fetch(
+        "describe_ecology",
+        queries,
+        requested_outputs=frozenset({"microbe.ecology.evidence"}),
+        groups_to_compute=frozenset({"evidence"}),
+    )
+    assert records[0].found
+    evidence = records[0].values["microbe.ecology.evidence"]
+    assert evidence["groups"]["oxygenic_photoautotrophy"]["member"] is False
+    evidence["groups"].clear()
+    assert records[1].values["microbe.ecology.evidence"]["groups"]

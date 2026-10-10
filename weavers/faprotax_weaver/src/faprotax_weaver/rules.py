@@ -108,19 +108,47 @@ def _parse_groups(text: str) -> Mapping[str, _Group]:
     )
 
 
-def _evaluate(groups: Mapping[str, _Group], lineage_names: list[str]) -> list[str]:
+def _evaluate(
+    groups: Mapping[str, _Group], lineage_names: list[str], *, trace: dict | None = None
+) -> list[str]:
     label = ";".join(name.lower() for name in lineage_names)
     memberships: dict[str, bool] = {}
     for name, group in groups.items():
         member = False
+        operations = [] if trace is not None else None
         for rule in group.rules:
-            if rule.operation == "member":
-                member |= bool(rule.expression.search(label))
-            elif rule.operation == "add_group":
-                member |= memberships[rule.value]
+            before = member
+            operand = (
+                bool(rule.expression.search(label))
+                if rule.operation == "member"
+                else memberships[rule.value]
+            )
+            if rule.operation in {"member", "add_group"}:
+                member |= operand
             elif rule.operation == "subtract_group":
-                member &= not memberships[rule.value]
+                member &= not operand
             else:
-                member &= memberships[rule.value]
+                member &= operand
+            # Matched member patterns and every group operation explain relevant
+            # changes. Unmatched member patterns do not create enormous traces.
+            if operations is not None and (operand or rule.operation != "member"):
+                operations.append(
+                    {
+                        "operation": rule.operation,
+                        "value": rule.value,
+                        "operand": operand,
+                        "before": before,
+                        "after": member,
+                        "reference": rule.reference,
+                        "source_line": rule.line,
+                    }
+                )
         memberships[name] = member
+        if trace is not None:
+            trace[name] = {
+                "member": member,
+                "operations": operations,
+                "attributes": {key: list(values) for key, values in group.attributes},
+                "checked_member_patterns": sum(rule.operation == "member" for rule in group.rules),
+            }
     return sorted(name for name, member in memberships.items() if member)

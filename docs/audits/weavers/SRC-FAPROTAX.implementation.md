@@ -17,3 +17,12 @@ Optional public explanations/literature output is split into #297 for user scope
 Package suite: **31 passed, no skips**. Strict verification passed. Repository lint passed. Full workspace result is recorded in the batch report after completion.
 
 Repository validation: `make test` passed (2094 pytest tests, 56 opt-in skips, plus 5 tool unittest checks); `make lint` passed. Tooling used the isolated audit environment.
+
+## Approved public explanations — #297
+
+Version 0.1.5 adds requested `microbe.ecology.evidence`, computed by the same
+ordered evaluator as affiliation. Matched member patterns and all group operations
+retain before/after state, reference and source line; unmatched members are counted.
+Group attributes/source/lineage are retained. Explicit evidence can describe false
+membership; default no-affiliation remains NO_MATCH and default work stays bounded.
+33 package tests passed; strict verification passed. No source data changed.

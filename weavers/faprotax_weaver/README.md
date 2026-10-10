@@ -98,3 +98,17 @@ required), then matches bundled FAPROTAX rules locally. The CLI’s table/scalar
 input format does not directly represent a lineage list; use Python for direct
 structured lineage calls. Affiliation is a putative taxonomy-based inference,
 not proof of function in each strain.
+
+## Explain an affiliation
+
+Request `microbe.ecology.evidence` from `describe_ecology` for source identity,
+input lineage, group attributes, retained literature and membership traces. The
+same evaluator computes names and traces: matched member patterns and all ordered
+add/subtract/intersect operations show before/after states and source lines.
+Unmatched member patterns are counted rather than copied into the trace.
+
+An explicit evidence request can explain an empty membership result; ordinary
+functional-group requests still return `NO_MATCH` when no affiliation is found.
+Neither outcome proves functional absence, and literature about a clade is not
+an experimental measurement of the queried organism. Default lookups do not
+construct traces.

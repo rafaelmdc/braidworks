@@ -18,7 +18,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 1 | #264 | Disbiome compact evidence identity | Pending |
 | 1 | #296 | Disbiome exact sample/method/outcome filters | Pending |
 | 1 | #295 | Wikipedia observed monthly series/title provenance | Pending |
-| 1 | #297 | FAPROTAX ordered rule explanation group | Pending |
+| 1 | #297 | FAPROTAX ordered rule explanation group | Complete: 33 tests and strict |
 | 1 | #272 | Retain already-returned GMrepo run metadata | Pending |
 | 1 | #219 | STRING score/functional/physical/species scope | Pending |
 | 2 | #206 | QuickGO filters, raw evidence and explicit negative semantics | Pending |
