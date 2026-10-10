@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -147,6 +148,68 @@ def _participants(body: Any, pid: str, release: int) -> dict[str, Any]:
     }
 
 
+_REACTION_CLASSES = frozenset(
+    {"Reaction", "BlackBoxEvent", "FailedReaction", "Polymerisation", "Depolymerisation"}
+)
+
+
+def _contained(body):
+    """Resolve Jackson numeric identity references against observed nested objects."""
+    if not isinstance(body, list):
+        raise _InvalidResponse("Reactome contained events must be a list")
+    indexed = {}
+
+    def index(value):
+        if isinstance(value, dict):
+            identifier = value.get("dbId")
+            if (
+                isinstance(identifier, int)
+                and not isinstance(identifier, bool)
+                and value.get("stId")
+            ):
+                previous = indexed.setdefault(identifier, value)
+                if any(previous.get(key) != value.get(key) for key in ("stId", "schemaClass")):
+                    raise _InvalidResponse("Conflicting recursive Reactome identity")
+            for child in value.values():
+                index(child)
+        elif isinstance(value, list):
+            for child in value:
+                index(child)
+
+    index(body)
+    events = {}
+    for value in body:
+        if isinstance(value, int) and not isinstance(value, bool):
+            value = indexed.get(value)
+        if not isinstance(value, dict) or not isinstance(value.get("schemaClass"), str):
+            raise _InvalidResponse("Unresolved Reactome contained event identity")
+        _validated_rows([value])
+        events.setdefault(value["stId"], value)
+    return [events[key] for key in sorted(events)]
+
+
+def _evidence(obj):
+    """Expose source assertions without treating references as confidence scores."""
+    return {
+        "id": obj["stId"],
+        "versioned_id": obj.get("stIdVersion"),
+        "name": obj.get("displayName"),
+        "type": obj.get("schemaClass"),
+        "is_inferred": obj.get("isInferred"),
+        "in_disease": obj.get("isInDisease"),
+        "literature": deepcopy(obj.get("literatureReference")),
+        "summation": deepcopy(obj.get("summation")),
+        "review_status": deepcopy(obj.get("reviewStatus")),
+        "evidence_type": deepcopy(obj.get("evidenceType")),
+        "inferred_from": deepcopy(obj.get("inferredFrom")),
+        "input": deepcopy(obj.get("input")),
+        "output": deepcopy(obj.get("output")),
+        "catalysts": deepcopy(obj.get("catalystActivity")),
+        "regulation": deepcopy(obj.get("regulatedBy")),
+        "interpretation": "source curation/inference assertions and literature; absent fields unknown; no inferred confidence score",
+    }
+
+
 def _describe(obj: dict[str, Any]) -> dict[str, Any]:
     """One Reactome pathway object (/data/query/{id}) -> describe_pathway outputs."""
     return {
@@ -218,6 +281,12 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # describe_pathway drills pathway ids; list_pathways lists a protein's pathways.
+        if capability_id == "list_reactions":
+            return await self._list_reactions(queries)
+        if capability_id == "describe_reaction":
+            return await self._describe_pathways(
+                queries, groups=groups_to_compute, consumed_key="reaction.reactome.id"
+            )
         if capability_id == "describe_pathway":
             return await self._describe_pathways(queries, groups=groups_to_compute)
 
@@ -229,7 +298,11 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
         return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     async def _describe_pathways(
-        self, queries: list[dict[str, Any]], *, groups: frozenset[str] = frozenset()
+        self,
+        queries: list[dict[str, Any]],
+        *,
+        groups: frozenset[str] = frozenset(),
+        consumed_key: str = "pathway.reactome.id",
     ) -> list[LookupRecord]:
         """Pathway ids -> their details via the bulk ``POST /data/query/ids`` endpoint.
 
@@ -237,7 +310,7 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
         ``GET /data/query/{id}`` per pathway; the response is a list of objects keyed
         back by ``stId``.
         """
-        pids = [str(q.get("pathway.reactome.id", "")).strip() for q in queries]
+        pids = [str(q.get(consumed_key, "")).strip() for q in queries]
         distinct = sorted({p for p in pids if p})
         objs: dict[str, dict[str, Any]] = {}
         errors: dict[str, str] = {}
@@ -266,7 +339,9 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
         participant_values = {}
         if "participants" in groups and objs:
             try:
-                response = await self._http().get("/data/database/version", headers={"Accept": "text/plain"})
+                response = await self._http().get(
+                    "/data/database/version", headers={"Accept": "text/plain"}
+                )
                 response.raise_for_status()
                 release = int(response.text.strip())
                 if release < 1:
@@ -323,6 +398,14 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
             else:
                 values = _describe(obj)
                 try:
+                    if consumed_key == "reaction.reactome.id":
+                        if obj.get("schemaClass") not in _REACTION_CLASSES:
+                            raise _InvalidResponse(
+                                "Requested Reactome identifier is not a reaction-like event"
+                            )
+                        values = {"reaction.reactome.detail": _evidence(obj)}
+                    if "evidence" in groups and consumed_key == "pathway.reactome.id":
+                        values["pathway.reactome.evidence"] = _evidence(obj)
                     if "hierarchy" in groups:
                         values["pathway.reactome.hierarchy"] = _hierarchy(obj)
                     if "participants" in groups:
@@ -332,6 +415,48 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
                 else:
                     records.append(LookupRecord(query=query, found=True, values=values))
         return records
+
+    async def _list_reactions(self, queries):
+        async def acquire(pid):
+            try:
+                response = await self._http().get(f"/data/pathway/{pid}/containedEvents")
+                response.raise_for_status()
+                events = _contained(response.json())
+                records = [
+                    _evidence(row) for row in events if row["schemaClass"] in _REACTION_CLASSES
+                ]
+                return LookupRecord(
+                    query={},
+                    found=True,
+                    values={
+                        "reaction.reactome.id": [row["id"] for row in records],
+                        "pathway.reactome.reactions": {
+                            "pathway_id": pid,
+                            "count": len(records),
+                            "records": records[: self._limit],
+                            "display_limit": self._limit,
+                            "scope": "all recursive contained reaction-like events; full distinct fan IDs",
+                            "source": f"/data/pathway/{pid}/containedEvents",
+                        },
+                    },
+                )
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    return LookupRecord(query={}, found=False)
+                return LookupRecord(query={}, error=f"Reactome API error: {format_exc(exc)}")
+            except (httpx.HTTPError, ValueError, _InvalidResponse) as exc:
+                return LookupRecord(query={}, error=f"Reactome API error: {format_exc(exc)}")
+
+        ids = [str(q.get("pathway.reactome.id", "")).strip() for q in queries]
+        distinct = sorted(set(ids) - {""})
+        results = await map_bounded(distinct, acquire, limit=self._max_concurrency)
+        mapped = dict(zip(distinct, results))
+        return [
+            replace(mapped[pid], query=query, values=deepcopy(mapped[pid].values))
+            if pid
+            else LookupRecord(query=query, found=False)
+            for query, pid in zip(queries, ids)
+        ]
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
         if not accession:

@@ -118,3 +118,37 @@ async def test_live_requested_hierarchy_and_typed_participants():
         assert any(
             ref.get("identifier") == "Q9Y6D9" for row in records for ref in row["references"] or []
         )
+
+
+async def test_live_recursive_reactions_and_source_evidence():
+    import httpx
+    from reactome_weaver.backends.api import ReactomeApiBackend
+
+    async with httpx.AsyncClient(
+        base_url="https://reactome.org/ContentService", timeout=30
+    ) as client:
+        backend = ReactomeApiBackend(client=client, limit=5)
+        listing = (
+            await backend.fetch(
+                "list_reactions",
+                [{"pathway.reactome.id": "R-HSA-109581"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(),
+            )
+        )[0]
+        assert not listing.error, listing.error
+        ids = listing.values["reaction.reactome.id"]
+        assert "R-HSA-141159" in ids and len(ids) > 5
+        assert listing.values["pathway.reactome.reactions"]["count"] == len(ids)
+        reaction = (
+            await backend.fetch(
+                "describe_reaction",
+                [{"reaction.reactome.id": "R-HSA-141159"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"detail"}),
+            )
+        )[0]
+        assert not reaction.error, reaction.error
+        detail = reaction.values["reaction.reactome.detail"]
+        assert detail["type"] == "Reaction" and detail["is_inferred"] is False
+        assert detail["literature"] or detail["summation"]

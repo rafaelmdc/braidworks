@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.13"
+version = "0.1.14"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -38,6 +38,8 @@ source_sample = """
   "isInDisease": false,
   "releaseDate": "2004-07-06"
 }
+# GET /data/pathway/R-HSA-109581/containedEvents observed 2026-10-10
+[{"dbId":141159,"stId":"R-HSA-141159","schemaClass":"Reaction","isInferred":false}]
 # GET /data/participants/R-HSA-141409
 [{"peDbId":141433,"displayName":"MAD1L1 [cytosol]","schemaClass":"EntityWithAccessionedSequence","refEntities":[{"dbId":141442,"stId":"uniprot:Q9Y6D9","identifier":"Q9Y6D9","schemaClass":"ReferenceGeneProduct","displayName":"UniProt:Q9Y6D9 MAD1L1"}]}]
 """
@@ -85,6 +87,27 @@ max_batch_size = 25
   [[capability.group]]
   id = "participants"
   outputs = ["pathway.reactome.participants"]
+
+  [[capability.group]]
+  id = "evidence"
+  outputs = ["pathway.reactome.evidence"]
+
+[[capability]]
+id = "list_reactions"
+consumes = ["pathway.reactome.id"]
+set_outputs = ["reaction.reactome.id"]
+max_batch_size = 25
+  [[capability.group]]
+  id = "reactions"
+  outputs = ["reaction.reactome.id", "pathway.reactome.reactions"]
+
+[[capability]]
+id = "describe_reaction"
+consumes = ["reaction.reactome.id"]
+max_batch_size = 25
+  [[capability.group]]
+  id = "detail"
+  outputs = ["reaction.reactome.detail"]
 
 # Golden runs against the deterministic fixture (reactome_weaver.fixture, an
 # httpx.MockTransport serving a canned 2-pathway response for P04637 with a duplicate

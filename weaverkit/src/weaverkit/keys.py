@@ -38,6 +38,7 @@ SHARED_KEYS: dict[str, str] = {
     "go.term": "A Gene Ontology term id.",
     "enzyme.ec": "An Enzyme Commission (EC) number.",
     "chem.chebi.id": "A ChEBI chemical id.",
+    "reaction.reactome.id": "Reactome reaction-like event stable identifier; produced by recursive pathway listing and consumed by describe_reaction.",
     "reaction.vmh.id": "Observed VMH reaction abbreviation; produced by AGORA list_reactions and consumed by describe_reaction.",
     "reaction.rhea.id": "A Rhea reaction id.",
     "pathway.reactome.id": "A Reactome pathway id.",
@@ -70,6 +71,13 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
+    "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
+    "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
+    "go.term.hierarchy": "Source paths, ancestors, directional replacements and term history.",
+    "pathway.reactome.evidence": "Observed Reactome curation, literature and inference assertions.",
+    "pathway.reactome.reactions": "Recursive reaction-like event listing and display accounting.",
+    "reaction.reactome.detail": "Source reaction participants, literature, curation and inference assertions.",
     "disease.ontology.definition": "Observed MONDO definition text; absent definitions remain unknown.",
     "disease.ontology.history": "MONDO current/obsolete status with observed replacement/consider targets and source release identity.",
     "wikidata.identity": "Requested/current QID, observed redirect and scientific-name source claims.",

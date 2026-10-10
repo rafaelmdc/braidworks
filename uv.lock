@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.13"
+version = "0.21.14"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -903,7 +903,7 @@ wheels = [
 
 [[package]]
 name = "reactome-weaver"
-version = "0.1.13"
+version = "0.1.14"
 source = { editable = "weavers/reactome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.18"
+version = "0.6.19"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

@@ -52,6 +52,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "chem.chebi.id": str,
     "reaction.rhea.id": str,
     "reaction.vmh.id": str,
+    "reaction.reactome.id": str,
     "pathway.reactome.id": str,
     "pathway.kegg.id": str,
     "protein.interpro.id": str,

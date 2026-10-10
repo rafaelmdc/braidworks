@@ -42,7 +42,7 @@ From Python:
 ```python
 from reactome_weaver import build_reactome_weaver
 
-weaver = build_reactome_weaver()        # zero-config
+weaver = build_reactome_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `reactome_weaver.register(factory)` adds it as a provider.
 ```
 
@@ -129,3 +129,20 @@ IDs carry the observed database release; they are not portable global IDs.
 Summary defaults make no expansion or release request. Single-ID participant
 requests run concurrently and reuse duplicate inputs; entry summaries stay bulk.
 Source: [Reactome Content Service](https://reactome.org/dev/content-service/).
+
+### Recursive reactions and curation evidence
+
+`list_reactions` consumes a pathway stable ID and uses the provider's recursive
+`containedEvents` endpoint. It resolves numeric object references against observed
+nested identities; unresolved or conflicting identities are errors. All distinct
+reaction-like stable IDs form `reaction.reactome.id`; descriptive records use the
+configured display `limit` with the true total retained. Pathways are excluded and
+Reaction, BlackBoxEvent and the other explicit reaction-like classes stay typed.
+Repeated pathway inputs share acquisition; single-pathway requests run concurrently.
+
+Fan into `describe_reaction` for bulk-fetched reaction detail: versioned identity,
+inputs/outputs, catalysts/regulation, literature, summation, review status, evidence
+and inference links. `describe_pathway` has an optional `evidence` group as well.
+These are source assertions, not inferred confidence scores; missing fields remain
+unknown and numeric references are not treated as stable identifiers.
+[ContentService contract](https://reactome.org/ContentService/).

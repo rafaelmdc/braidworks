@@ -32,7 +32,7 @@ Registered bridge keys — what links weavers together.
 | `gene.ncbi.id` | NCBI Gene id for one gene. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_from_accession` | `ncbi:ncbi.describe_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_to_accession` |
 | `gene.symbol` | A gene's official symbol, e.g. TP53 — joins gene databases. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | `uniprot:map_to_accession` |
 | `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `agora:list_genomes`, `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `agora:list_reconstructions`, `bacdive:map_to_strain`, `ncbi:ncbi.describe_genome` |
-| `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
+| `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term`, `quickgo:list_gene_products` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
 | `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
 | `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction`, `agora:list_genomes`, `agora:list_reactions` |
@@ -44,12 +44,13 @@ Registered bridge keys — what links weavers together.
 | `nucleotide.insdc.accession` | INSDC nucleotide accession (GenBank/EMBL/DDBJ). | — | `uniprot:map_to_accession` |
 | `organism.scientific_name` | An organism's canonical scientific name — joins clade-keyed datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `bacdive:describe_traits`, `bacdive:list_strains`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `wikidata:resolve_taxon` |
 | `pathway.kegg.id` | A KEGG pathway id. | `uniprot:map_from_accession` | — |
-| `pathway.reactome.id` | A Reactome pathway id. | `reactome:list_pathways`, `uniprot:map_from_accession` | `reactome:describe_pathway` |
+| `pathway.reactome.id` | A Reactome pathway id. | `reactome:list_pathways`, `uniprot:map_from_accession` | `reactome:describe_pathway`, `reactome:list_reactions` |
 | `pdb.id` | A PDB / PDBe structure id. | `pdbe:list_structures`, `uniprot:map_from_accession` | `pdbe:describe_structure`, `uniprot:map_to_accession` |
 | `protein.ensembl.id` | Ensembl protein id for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
 | `protein.interpro.id` | An InterPro entry id. | — | — |
 | `protein.pfam.id` | A Pfam family id. | — | — |
-| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `alphafold:list_models`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
+| `protein.uniprot.accession` | UniProt accession for one protein — the main protein join key. | `quickgo:list_gene_products`, `uniprot:resolve_protein`, `uniprot:describe_protein`, `uniprot:map_to_accession` | `alphafold:describe_model`, `alphafold:list_models`, `pdbe:list_structures`, `quickgo:list_go_terms`, `reactome:list_pathways`, `string:list_interactions`, `uniprot:describe_protein`, `uniprot:map_from_accession` |
+| `reaction.reactome.id` | Reactome reaction-like event stable identifier; produced by recursive pathway listing and consumed by describe_reaction. | `reactome:list_reactions` | `reactome:describe_reaction` |
 | `reaction.rhea.id` | A Rhea reaction id. | — | — |
 | `reaction.vmh.id` | Observed VMH reaction abbreviation; produced by AGORA list_reactions and consumed by describe_reaction. | `agora:list_reactions` | `agora:describe_reaction` |
 | `refseq.protein.id` | NCBI RefSeq protein accession (NP_/XP_) for one protein. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
@@ -69,6 +70,7 @@ Descriptive payload fields; nothing joins on them.
 | `disease.ontology.ancestors` | This disease's full is-a ancestor lineage in MONDO (up to the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name`, `mondo:describe_disease` | — |
 | `disease.ontology.definition` | Observed MONDO definition text; absent definitions remain unknown. | `mondo:describe_disease` | — |
 | `disease.ontology.depth` | This disease's minimum is-a distance to a MONDO root (how specific the term is). | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name`, `mondo:describe_disease` | — |
+| `disease.ontology.external_mappings` | Release-matched typed SSSOM records and source provenance. | `mondo:describe_disease` | — |
 | `disease.ontology.history` | MONDO current/obsolete status with observed replacement/consider targets and source release identity. | `mondo:describe_disease` | — |
 | `disease.ontology.mapping.records` | Observed MONDO mapping relations and source evidence. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | — |
 | `disease.ontology.name` | The MONDO term name for this disease. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name`, `mondo:describe_disease` | — |
@@ -98,9 +100,12 @@ Descriptive payload fields; nothing joins on them.
 | `go.count` | Distinct GO terms in retrieved annotation pages; inspect coverage for completeness. | `quickgo:list_go_terms` | — |
 | `go.molecular_function` | The molecular functions this protein is annotated with. | `quickgo:list_go_terms` | — |
 | `go.records` | Deduplicated GO term inventory — GO id, name, aspect. | `quickgo:list_go_terms` | — |
+| `go.reverse.annotations` | Observed exact-term reverse annotations, including negative evidence. | `quickgo:list_gene_products` | — |
+| `go.reverse.coverage` | Bounded reverse annotation query pagination and observed product accounting. | `quickgo:list_gene_products` | — |
 | `go.term.aspect` | This GO term's aspect — molecular_function, biological_process, or cellular_component. | `quickgo:describe_go_term` | — |
 | `go.term.definition` | What this GO term means. | `quickgo:describe_go_term` | — |
 | `go.term.detail` | Full detail of this GO term — name, aspect, definition, synonyms. | `quickgo:describe_go_term` | — |
+| `go.term.hierarchy` | Source paths, ancestors, directional replacements and term history. | `quickgo:describe_go_term` | — |
 | `go.term.name` | The name of this GO term. | `quickgo:describe_go_term` | — |
 | `go.term.relations` | Observed typed term children and obsoletion; parents/replacements not inferred. | `quickgo:describe_go_term` | — |
 | `gtdb.genome.representative` | Selected species representative accession with source/release provenance; not necessarily the input strain. | `gtdb:describe_gtdb_taxonomy` | — |
@@ -158,10 +163,12 @@ Descriptive payload fields; nothing joins on them.
 | `pathway.reactome.count` | How many Reactome pathways this protein is in. | `reactome:list_pathways` | — |
 | `pathway.reactome.detail` | Full detail of one Reactome pathway — name, species, disease flag, type. | `reactome:describe_pathway` | — |
 | `pathway.reactome.display_name` | The name of one Reactome pathway. | `reactome:describe_pathway` | — |
+| `pathway.reactome.evidence` | Observed Reactome curation, literature and inference assertions. | `reactome:describe_pathway` | — |
 | `pathway.reactome.hierarchy` | Direct observed hasEvent children with distinct pathway/reaction types. | `reactome:describe_pathway` | — |
 | `pathway.reactome.in_disease` | Whether one Reactome pathway is disease-associated. | `reactome:describe_pathway` | — |
 | `pathway.reactome.names` | The Reactome pathways this protein takes part in. | `reactome:list_pathways` | — |
 | `pathway.reactome.participants` | Typed provider participant references with numeric IDs scoped to observed release. | `reactome:describe_pathway` | — |
+| `pathway.reactome.reactions` | Recursive reaction-like event listing and display accounting. | `reactome:list_reactions` | — |
 | `pathway.reactome.records` | This protein's Reactome pathways — stable id, name, in-disease flag. | `reactome:list_pathways` | — |
 | `pathway.reactome.species` | The species of one Reactome pathway. | `reactome:describe_pathway` | — |
 | `protein.annotation.records` | Structured UniProtKB comments/features/references and observed evidence/release metadata. | `uniprot:describe_protein` | — |
@@ -178,6 +185,7 @@ Descriptive payload fields; nothing joins on them.
 | `protein.sequence` | Canonical UniProtKB entry amino-acid sequence; produced by describe_protein. | `uniprot:describe_protein` | — |
 | `protein.uniprot.mapping.count` | How many ids this protein mapped to. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
 | `protein.uniprot.mapping.records` | The ids this protein mapped to — id plus reviewed/db. | `uniprot:map_to_accession`, `uniprot:map_from_accession` | — |
+| `reaction.reactome.detail` | Source reaction participants, literature, curation and inference assertions. | `reactome:describe_reaction` | — |
 | `reaction.vmh.record` | VMH reaction annotation and observed model membership with database provenance. | `agora:describe_reaction` | — |
 | `structure.alphafold.confidence` | Observed PAE/pLDDT references with model version, coverage and metric semantics. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
