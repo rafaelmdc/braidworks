@@ -23,6 +23,7 @@ Registered bridge keys — what links weavers together.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `chem.chebi.id` | A ChEBI chemical id. | — | — |
+| `culture.collection.id` | Collection-prefix and strain number (e.g. DSM 2801); BacDive produces and consumes observed references with multiplicity. | `bacdive:map_from_strain` | `bacdive:map_to_strain` |
 | `disease.disbiome.id` | Provider disease identity produced by Disbiome and consumed by exact disease describe/reverse traversal. | `disbiome:disbiome.list_diseases` | `disbiome:disbiome.list_taxa`, `disbiome:disbiome.describe_disease` |
 | `disease.mondo.id` | MONDO Disease Ontology id for one disease — the unified disease join key that harmonizes MeSH / MedDRA / DOID / OMIM identities. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | `mondo:describe_disease` |
 | `enzyme.ec` | An Enzyme Commission (EC) number. | — | — |
@@ -30,12 +31,12 @@ Registered bridge keys — what links weavers together.
 | `gene.hgnc.id` | HGNC id for one human gene. | — | `uniprot:map_to_accession` |
 | `gene.ncbi.id` | NCBI Gene id for one gene. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_from_accession` | `ncbi:ncbi.describe_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_to_accession` |
 | `gene.symbol` | A gene's official symbol, e.g. TP53 — joins gene databases. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | `uniprot:map_to_accession` |
-| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `ncbi:ncbi.list_genomes` | `ncbi:ncbi.describe_genome` |
+| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `bacdive:map_to_strain`, `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
 | `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
 | `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction` |
-| `microbe.bacdive.strain_id` | BacDive strain record integer ID; list_strains produces and describe_strain consumes it. | `bacdive:list_strains` | `bacdive:describe_strain` |
+| `microbe.bacdive.strain_id` | BacDive strain record integer ID; list_strains produces and describe_strain consumes it. | `bacdive:list_strains`, `bacdive:map_to_strain` | `bacdive:describe_strain`, `bacdive:map_from_strain` |
 | `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `disbiome:disbiome.list_taxa`, `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gmrepo:gmrepo.list_phenotypes`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
@@ -119,8 +120,9 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.agora.coverage` | AGORA crosswalk release and full observed versus display counts. | `agora:list_reconstructions` | — |
 | `microbe.agora.reconstruction` | One release-qualified model's source taxid/genome associations. | `agora:describe_reconstruction` | — |
 | `microbe.agora.reconstructions` | Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set. | `agora:list_reconstructions` | — |
+| `microbe.bacdive.identifier_evidence` | Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions. | `bacdive:map_from_strain` | — |
 | `microbe.bacdive.strain` | One exact BacDive strain's taxonomy, source traits and observed collection/genome references. | `bacdive:describe_strain` | — |
-| `microbe.bacdive.strain_coverage` | Observed full binomial strain listing scope and count. | `bacdive:list_strains` | — |
+| `microbe.bacdive.strain_coverage` | Observed full binomial strain listing scope and count. | `bacdive:list_strains`, `bacdive:map_to_strain` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.coverage` | Exact source taxid and reported rank; no ancestor or descendant inference. | `disbiome:disbiome.list_diseases` | — |

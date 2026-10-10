@@ -9,7 +9,7 @@ db_name = "bacdive"
 weaver_id = "bacdive"
 kind = "lookup"
 title = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
-version = "0.1.13"
+version = "0.1.14"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab961"
 attribution = "BacDive (DSMZ)"
@@ -43,6 +43,8 @@ source_sample = """
     }
   }
 }
+# Observed 2026-10-10 GET /v2/culturecollectionno/DSM%202801 and /v2/sequence_genome/GCA_000243275:
+# {"count":1,"next":null,"previous":null,"results":[5621]}
 # GET /v2/fetch/5621; observed collection and genome references
 {"results":{"5621":{"Literature":{"culture collection no.":"DSM 2801, ATCC 4651, IAM 14199, JCM 7458, NCTC 11036, CCUG 7321, LMG 1233, BCRC 10678, CCM 3296, CECT 998, CIP 103105, IFO 14945, NBRC 14945"},"Sequence information":{"Genome sequences":[{"INSDC accession":"GCA_000243275","assembly level":"chromosome"}]}}}}
 """
@@ -127,3 +129,23 @@ expect = { "microbe.bacdive.strain_id" = [1, 2] }
 capability = "describe_strain"
 input = { "microbe.bacdive.strain_id" = 2 }
 expect = { "microbe.trait.gram_stain" = "negative" }
+
+
+[[capability]]
+id = "map_to_strain"
+consumes = ["culture.collection.id", "genome.accession"]
+consumes_any = true
+max_batch_size = 100
+set_outputs = ["microbe.bacdive.strain_id"]
+  [[capability.group]]
+  id = "strains"
+  outputs = ["microbe.bacdive.strain_id", "microbe.bacdive.strain_coverage"]
+
+[[capability]]
+id = "map_from_strain"
+consumes = ["microbe.bacdive.strain_id"]
+max_batch_size = 100
+set_outputs = ["culture.collection.id", "genome.accession"]
+  [[capability.group]]
+  id = "identifiers"
+  outputs = ["culture.collection.id", "genome.accession", "microbe.bacdive.identifier_evidence"]

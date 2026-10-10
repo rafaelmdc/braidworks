@@ -14,16 +14,16 @@ from braidworks.core import (
     WeaverManifest,
 )
 
-WEAVER_ID = 'bacdive'
-WEAVER_VERSION = '0.1.13'
-WEAVER_TITLE = 'BacDive type-strain phenotypes (scientific name -> microbe traits)'
+WEAVER_ID = "bacdive"
+WEAVER_VERSION = "0.1.14"
+WEAVER_TITLE = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url='https://bacdive.dsmz.de',
-    license='CC-BY-4.0',
-    citation='https://doi.org/10.1093/nar/gkab961',
-    attribution='BacDive (DSMZ)',
+    source_url="https://bacdive.dsmz.de",
+    license="CC-BY-4.0",
+    citation="https://doi.org/10.1093/nar/gkab961",
+    attribution="BacDive (DSMZ)",
 )
 
 
@@ -36,42 +36,151 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id='describe_traits',
-                consumes=frozenset({'organism.scientific_name'}),
-                produces=frozenset({'microbe.trait.cell_shape', 'microbe.trait.gram_stain', 'microbe.trait.motility', 'microbe.trait.optimum_ph', 'microbe.trait.optimum_temp', 'microbe.trait.oxygen_tolerance', 'microbe.trait.records', 'microbe.trait.spore_formation'}),
+                id="describe_traits",
+                consumes=frozenset({"organism.scientific_name"}),
+                produces=frozenset(
+                    {
+                        "microbe.trait.cell_shape",
+                        "microbe.trait.gram_stain",
+                        "microbe.trait.motility",
+                        "microbe.trait.optimum_ph",
+                        "microbe.trait.optimum_temp",
+                        "microbe.trait.oxygen_tolerance",
+                        "microbe.trait.records",
+                        "microbe.trait.spore_formation",
+                    }
+                ),
                 output_groups=(
-                    OutputGroup(id='morphology', outputs=frozenset({'microbe.trait.cell_shape', 'microbe.trait.gram_stain', 'microbe.trait.motility', 'microbe.trait.spore_formation'})),
-                    OutputGroup(id='physiology', outputs=frozenset({'microbe.trait.oxygen_tolerance'})),
-                    OutputGroup(id='growth', outputs=frozenset({'microbe.trait.optimum_ph', 'microbe.trait.optimum_temp'})),
-                    OutputGroup(id='evidence', outputs=frozenset({'microbe.trait.records'})),
+                    OutputGroup(
+                        id="morphology",
+                        outputs=frozenset(
+                            {
+                                "microbe.trait.cell_shape",
+                                "microbe.trait.gram_stain",
+                                "microbe.trait.motility",
+                                "microbe.trait.spore_formation",
+                            }
+                        ),
+                    ),
+                    OutputGroup(
+                        id="physiology", outputs=frozenset({"microbe.trait.oxygen_tolerance"})
+                    ),
+                    OutputGroup(
+                        id="growth",
+                        outputs=frozenset(
+                            {"microbe.trait.optimum_ph", "microbe.trait.optimum_temp"}
+                        ),
+                    ),
+                    OutputGroup(id="evidence", outputs=frozenset({"microbe.trait.records"})),
                 ),
                 backends=backends,
                 max_batch_size=50,
             ),
             Capability(
-                id='list_strains',
-                consumes=frozenset({'organism.scientific_name'}),
-                produces=frozenset({'microbe.bacdive.strain_coverage', 'microbe.bacdive.strain_id'}),
+                id="list_strains",
+                consumes=frozenset({"organism.scientific_name"}),
+                produces=frozenset(
+                    {"microbe.bacdive.strain_coverage", "microbe.bacdive.strain_id"}
+                ),
                 output_groups=(
-                    OutputGroup(id='strains', outputs=frozenset({'microbe.bacdive.strain_coverage', 'microbe.bacdive.strain_id'})),
+                    OutputGroup(
+                        id="strains",
+                        outputs=frozenset(
+                            {"microbe.bacdive.strain_coverage", "microbe.bacdive.strain_id"}
+                        ),
+                    ),
                 ),
                 backends=backends,
                 max_batch_size=50,
-                set_outputs=frozenset({'microbe.bacdive.strain_id'}),
+                set_outputs=frozenset({"microbe.bacdive.strain_id"}),
             ),
             Capability(
-                id='describe_strain',
-                consumes=frozenset({'microbe.bacdive.strain_id'}),
-                produces=frozenset({'microbe.bacdive.strain', 'microbe.trait.cell_shape', 'microbe.trait.gram_stain', 'microbe.trait.motility', 'microbe.trait.optimum_ph', 'microbe.trait.optimum_temp', 'microbe.trait.oxygen_tolerance', 'microbe.trait.records', 'microbe.trait.spore_formation'}),
+                id="describe_strain",
+                consumes=frozenset({"microbe.bacdive.strain_id"}),
+                produces=frozenset(
+                    {
+                        "microbe.bacdive.strain",
+                        "microbe.trait.cell_shape",
+                        "microbe.trait.gram_stain",
+                        "microbe.trait.motility",
+                        "microbe.trait.optimum_ph",
+                        "microbe.trait.optimum_temp",
+                        "microbe.trait.oxygen_tolerance",
+                        "microbe.trait.records",
+                        "microbe.trait.spore_formation",
+                    }
+                ),
                 output_groups=(
-                    OutputGroup(id='identity', outputs=frozenset({'microbe.bacdive.strain'})),
-                    OutputGroup(id='morphology', outputs=frozenset({'microbe.trait.cell_shape', 'microbe.trait.gram_stain', 'microbe.trait.motility', 'microbe.trait.spore_formation'})),
-                    OutputGroup(id='physiology', outputs=frozenset({'microbe.trait.oxygen_tolerance'})),
-                    OutputGroup(id='growth', outputs=frozenset({'microbe.trait.optimum_ph', 'microbe.trait.optimum_temp'})),
-                    OutputGroup(id='evidence', outputs=frozenset({'microbe.trait.records'})),
+                    OutputGroup(id="identity", outputs=frozenset({"microbe.bacdive.strain"})),
+                    OutputGroup(
+                        id="morphology",
+                        outputs=frozenset(
+                            {
+                                "microbe.trait.cell_shape",
+                                "microbe.trait.gram_stain",
+                                "microbe.trait.motility",
+                                "microbe.trait.spore_formation",
+                            }
+                        ),
+                    ),
+                    OutputGroup(
+                        id="physiology", outputs=frozenset({"microbe.trait.oxygen_tolerance"})
+                    ),
+                    OutputGroup(
+                        id="growth",
+                        outputs=frozenset(
+                            {"microbe.trait.optimum_ph", "microbe.trait.optimum_temp"}
+                        ),
+                    ),
+                    OutputGroup(id="evidence", outputs=frozenset({"microbe.trait.records"})),
                 ),
                 backends=backends,
                 max_batch_size=100,
+            ),
+            Capability(
+                id="map_to_strain",
+                consumes=frozenset({"culture.collection.id", "genome.accession"}),
+                produces=frozenset(
+                    {"microbe.bacdive.strain_coverage", "microbe.bacdive.strain_id"}
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="strains",
+                        outputs=frozenset(
+                            {"microbe.bacdive.strain_coverage", "microbe.bacdive.strain_id"}
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=100,
+                set_outputs=frozenset({"microbe.bacdive.strain_id"}),
+                consumes_any=True,
+            ),
+            Capability(
+                id="map_from_strain",
+                consumes=frozenset({"microbe.bacdive.strain_id"}),
+                produces=frozenset(
+                    {
+                        "culture.collection.id",
+                        "genome.accession",
+                        "microbe.bacdive.identifier_evidence",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="identifiers",
+                        outputs=frozenset(
+                            {
+                                "culture.collection.id",
+                                "genome.accession",
+                                "microbe.bacdive.identifier_evidence",
+                            }
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=100,
+                set_outputs=frozenset({"culture.collection.id", "genome.accession"}),
             ),
         ),
     )

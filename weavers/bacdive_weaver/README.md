@@ -131,3 +131,24 @@ Existing `describe_traits` still selects the deterministic type-strain
 representative for an unqualified binomial. Exact strain traits do not describe
 every strain of the species. API v2 remains keyless; no provider SDK is needed.
 Collection-number resolution and new authentication flows are not introduced.
+
+
+### Culture-collection and genome bridges
+
+`map_to_strain` accepts either `culture.collection.id` (e.g. `DSM 2801`) or
+`genome.accession` and emits the full distinct `microbe.bacdive.strain_id` set.
+The collection identity wins if both alternatives are present; a miss does not
+fall back to a different input. Provider multiplicity is retained instead of
+arbitrarily picking one strain. Single-identifier upstream requests run with
+bounded concurrency and duplicate normalized inputs share a lookup.
+
+`map_from_strain` fetches up to 100 exact strains per request and emits observed
+collection identifiers and genome assembly accessions as full sets. A collection
+identifier is a prefix, one space and an observed strain token. Prefix case and
+whitespace normalize; numbers and leading zeros are preserved. Compact forms,
+qualifiers and unrecognized fragments are not guessed as aliases: they remain in
+`microbe.bacdive.identifier_evidence`. Assembly versions remain exactly as supplied;
+a versionless reference does not become a guessed versioned accession. Raw
+reference evidence and isolation information remain available in exact strain data.
+These are many-to-many source references, not a claim that strains with the same
+name or one collection reference are universally identical.

@@ -82,3 +82,29 @@ async def test_live_list_and_exact_strain_do_not_confuse_species_scope():
         detail = {s.type_id: s.value for s in results[0].strands}["microbe.bacdive.strain"]
         assert detail["strain_id"] == 5621
         assert detail["culture_collection_references"] and detail["sequence_references"]
+
+
+async def test_live_collection_and_genome_mapping_are_many_to_many():
+    from bacdive_weaver.backends.api import BacdiveApiBackend
+
+    backend = BacdiveApiBackend()
+    try:
+        records = await backend.fetch(
+            "map_to_strain",
+            [{"culture.collection.id": "DSM 2801"}, {"genome.accession": "GCA_000243275"}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset({"strains"}),
+        )
+        assert all(5621 in record.values["microbe.bacdive.strain_id"] for record in records)
+        reverse = (
+            await backend.fetch(
+                "map_from_strain",
+                [{"microbe.bacdive.strain_id": 5621}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"identifiers"}),
+            )
+        )[0]
+        assert "DSM 2801" in reverse.values["culture.collection.id"]
+        assert "GCA_000243275" in reverse.values["genome.accession"]
+    finally:
+        await backend.aclose()

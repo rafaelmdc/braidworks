@@ -28,12 +28,15 @@ import logging
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
+
+from bacdive_weaver.identifiers import collection_id, genome_id, project_identifiers
 
 logger = logging.getLogger("bacdive_weaver.api")
 
@@ -248,6 +251,25 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "map_to_strain":
+            return await self._map_to_strain(queries)
+        if capability_id == "map_from_strain":
+            results = await self._describe_strains(queries)
+            for index, result in enumerate(results):
+                if result.found:
+                    try:
+                        result = replace(
+                            result,
+                            values=deepcopy(
+                                project_identifiers(
+                                    result.values["microbe.trait.records"]["source"]
+                                )
+                            ),
+                        )
+                    except ValueError as exc:
+                        result = replace(result, found=False, values={}, error=str(exc))
+                results[index] = result
+            return results
         if capability_id == "describe_strain":
             return await self._describe_strains(queries)
         if capability_id == "list_strains":
@@ -266,6 +288,53 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
         return [
             replace(by_name[name], query=q, values=deepcopy(by_name[name].values))
             for name, q in zip(names, queries)
+        ]
+
+    async def _map_to_strain(self, queries):
+        normalized = []
+        for query in queries:
+            if query.get("culture.collection.id") is not None:
+                value = collection_id(query["culture.collection.id"])
+                normalized.append(("culturecollectionno", value))
+            else:
+                normalized.append(("sequence_genome", genome_id(query.get("genome.accession"))))
+
+        async def one(key):
+            endpoint, value = key
+            if value is None:
+                return LookupRecord(query={}, found=False)
+            try:
+                ids = await self._ids_for_path(f"/{endpoint}/{quote(value, safe='')}")
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                return LookupRecord(query={}, error=f"BacDive identifier mapping failed: {exc}")
+            return LookupRecord(
+                query={},
+                found=bool(ids),
+                values={
+                    "microbe.bacdive.strain_id": ids,
+                    "microbe.bacdive.strain_coverage": {
+                        "observed_strains": len(ids),
+                        "complete": True,
+                        "input": value,
+                        "source_endpoint": endpoint,
+                        "scope": "exact provider identifier listing; multiplicity retained",
+                    },
+                }
+                if ids
+                else {},
+            )
+
+        distinct = list(dict.fromkeys(normalized))
+        records = await map_bounded(distinct, one, limit=self._max_concurrency)
+        by_key = dict(zip(distinct, records))
+        return [
+            replace(by_key[key], query=query, values=deepcopy(by_key[key].values))
+            for key, query in zip(normalized, queries)
         ]
 
     async def _list_strains(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
@@ -377,6 +446,9 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
                     if literature is not None
                     else None,
                     "sequence_references": deepcopy(sequences),
+                    "isolation_references": deepcopy(
+                        record.get("Isolation, sampling and environmental information")
+                    ),
                     "source": deepcopy(record),
                     "scope": "this exact BacDive strain; traits do not apply to every strain of its species",
                 }
@@ -440,7 +512,9 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
         )
 
     async def _strain_ids(self, genus: str, species: str) -> list[int]:
-        path = f"/taxon/{genus}/{species}"
+        return await self._ids_for_path(f"/taxon/{genus}/{species}")
+
+    async def _ids_for_path(self, path: str) -> list[int]:
         seen_pages: set[str] = set()
         identifiers: set[int] = set()
         while path:

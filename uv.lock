@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "bacdive-weaver"
-version = "0.1.13"
+version = "0.1.14"
 source = { editable = "weavers/bacdive_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.21.11"
+version = "0.21.12"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },
@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.16"
+version = "0.6.17"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
