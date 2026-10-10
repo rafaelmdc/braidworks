@@ -1,6 +1,6 @@
 [project]
 name = "gtdb_weaver"
-version = "0.2.9"
+version = "0.2.10"
 description = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"

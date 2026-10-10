@@ -137,3 +137,13 @@ configuration, source selection and owned/borrowed HTTP clients. Use
 ### Source validation
 
 Reference trees must have complete valid Newick syntax, unique nonempty leaf labels and finite nonnegative branch lengths. Downloads are validated before replacement. Missing branch lengths retain the existing zero-length interpretation.
+
+## Representative genome evidence
+
+Request `gtdb.genome.representative` from `describe_gtdb_taxonomy` for the species
+representative's source accession and crosswalk release. This identifies the GTDB
+species representative, not necessarily the input strain's own assembly. Missing
+representatives remain unavailable. The API backend reports only a returned row
+explicitly marked representative and leaves the release unknown; it does not
+guess a release or fetch another genome. Existing taxonomy and tree outputs are
+unchanged. Genomic quality and cross-release history remain separate work.

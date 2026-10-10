@@ -366,7 +366,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "gtdb-weaver"
-version = "0.2.9"
+version = "0.2.10"
 source = { editable = "weavers/gtdb_weaver" }
 dependencies = [
     { name = "braidworks-core" },

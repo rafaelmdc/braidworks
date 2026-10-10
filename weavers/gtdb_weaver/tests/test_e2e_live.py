@@ -77,7 +77,32 @@ async def test_live_tree_placement_distances_are_sane():
 def test_live_pinned_release_manifest():
     """Probe only the small release manifests; no metadata/tree bulk download."""
     from gtdb_weaver.releases import DEFAULT_RELEASE, release_bundle
+
     bundle = release_bundle(DEFAULT_RELEASE)
     assert bundle["release"] == DEFAULT_RELEASE
     assert len(bundle["resources"]) == 4
-    assert all(len(resource["md5"]) == 32 and "latest" not in resource["url"] for resource in bundle["resources"].values())
+    assert all(
+        len(resource["md5"]) == 32 and "latest" not in resource["url"]
+        for resource in bundle["resources"].values()
+    )
+
+
+async def test_live_representative_scope_does_not_invent_release():
+    async with build_gtdb_weaver(enable_api=True) as weaver:
+        inputs = [
+            StrandSet.from_strands(
+                "taxon", [Strand("organism.scientific_name", "Escherichia coli")]
+            )
+        ]
+        result = (
+            await weaver.execute_batch(
+                "describe_gtdb_taxonomy",
+                inputs,
+                requested_outputs=frozenset({"gtdb.genome.representative"}),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        record = next(s.value for s in result.strands if s.type_id == "gtdb.genome.representative")
+        assert record["release"] is None
+        assert record["gtdb_taxon_id"] == "s__Escherichia coli"

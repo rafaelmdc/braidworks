@@ -10,7 +10,7 @@ db_name = "gtdb"
 weaver_id = "gtdb"
 kind = "lookup"
 title = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
-version = "0.2.9"
+version = "0.2.10"
 license = "CC-BY-SA-4.0"
 citation = "https://doi.org/10.1093/nar/gkab776"
 attribution = "GTDB (Genome Taxonomy Database), Parks et al."
@@ -50,6 +50,10 @@ max_batch_size = 50
   [[capability.group]]
   id = "lineage"
   outputs = ["gtdb.lineage"]
+
+  [[capability.group]]
+  id = "representative"
+  outputs = ["gtdb.genome.representative"]
 
 # One organism (taxid OR name) -> its path on the GTDB reference tree, from the root to
 # its species-representative leaf, as [node_id, cumulative_depth] steps. A per-entity,

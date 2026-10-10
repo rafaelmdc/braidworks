@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gtdb"
-WEAVER_VERSION = "0.2.9"
+WEAVER_VERSION = "0.2.10"
 WEAVER_TITLE = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,10 +38,13 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_gtdb_taxonomy",
                 consumes=frozenset({"ncbi.taxon.id", "organism.scientific_name"}),
-                produces=frozenset({"gtdb.lineage", "gtdb.taxon.id"}),
+                produces=frozenset({"gtdb.genome.representative", "gtdb.lineage", "gtdb.taxon.id"}),
                 output_groups=(
                     OutputGroup(id="core", outputs=frozenset({"gtdb.taxon.id"})),
                     OutputGroup(id="lineage", outputs=frozenset({"gtdb.lineage"})),
+                    OutputGroup(
+                        id="representative", outputs=frozenset({"gtdb.genome.representative"})
+                    ),
                 ),
                 backends=backends,
                 max_batch_size=50,

@@ -90,15 +90,21 @@ class GtdbLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if "representative" in groups_to_compute:
+            return await asyncio.to_thread(self._fetch_sync, capability_id, queries, True)
         return await asyncio.to_thread(self._fetch_sync, capability_id, queries)
 
-    def _fetch_sync(self, capability_id: str, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _fetch_sync(
+        self, capability_id: str, queries: list[dict[str, Any]], representative: bool = False
+    ) -> list[LookupRecord]:
         with self._source.session() as con:
             if capability_id == _TREE_PLACEMENT:
                 return self._fetch_tree_placement(con, queries)
-            return self._fetch_taxonomy(con, queries)
+            return self._fetch_taxonomy(con, queries, representative)
 
-    def _fetch_taxonomy(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _fetch_taxonomy(
+        self, con: Any, queries: list[dict[str, Any]], representative: bool = False
+    ) -> list[LookupRecord]:
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             try:
@@ -110,13 +116,19 @@ class GtdbLocalBackend(BackendBase):
                 records.append(LookupRecord(query=query, found=False))  # a miss is normal
                 continue
             taxon_id, lineage = taxonomy.parse_gtdb_taxonomy(gtdb_taxonomy)
-            records.append(
-                LookupRecord(
-                    query=query,
-                    found=True,
-                    values={"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage},
-                )
-            )
+            values = {"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage}
+            if representative:
+                release_row = con.execute("SELECT value FROM meta WHERE key='release'").fetchone()
+                accession = taxonomy.rep_accession(con, query)
+                values["gtdb.genome.representative"] = {
+                    "gtdb_taxon_id": taxon_id,
+                    "source_accession": accession,
+                    "release": release_row[0] if release_row else None,
+                    "relation": "representative of the resolved GTDB species, not necessarily the input strain",
+                    "source": "local crosswalk",
+                    "available": accession is not None,
+                }
+            records.append(LookupRecord(query=query, found=True, values=values))
         return records
 
     def _fetch_tree_placement(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:

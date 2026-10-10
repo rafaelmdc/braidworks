@@ -14,6 +14,7 @@ Worked example: weavers/ncbi_weaver/src/ncbi_weaver/backends/datasets_v2.py
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -83,7 +84,11 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
 
         async def search(name: str) -> LookupRecord:
             try:
-                return await self._search(name)
+                return (
+                    await self._search(name, representative=True)
+                    if "representative" in groups_to_compute
+                    else await self._search(name)
+                )
             except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as exc:
                 return LookupRecord(
                     query={"organism.scientific_name": name},
@@ -108,7 +113,7 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
             records.append(_relabel(result, query))
         return records
 
-    async def _search(self, name: str) -> LookupRecord:
+    async def _search(self, name: str, *, representative: bool = False) -> LookupRecord:
         """Resolve one GTDB species name to a record (found/miss); raises only on HTTP errors."""
         try:
             resp = await self._http().get(
@@ -131,11 +136,22 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
         taxon_id, lineage = taxonomy.parse_gtdb_taxonomy(gtdb_taxonomy)
         if taxon_id is None:
             return LookupRecord(query={"organism.scientific_name": name}, found=False)
-        return LookupRecord(
-            query={"organism.scientific_name": name},
-            found=True,
-            values={"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage},
-        )
+        values = {"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage}
+        if representative:
+            accession = (
+                (row.get("accession") or row.get("gid"))
+                if row.get("isGtdbSpeciesRep") is True
+                else None
+            )
+            values["gtdb.genome.representative"] = {
+                "gtdb_taxon_id": taxon_id,
+                "source_accession": accession,
+                "release": None,
+                "relation": "representative of the resolved GTDB species, not necessarily the input strain",
+                "source": "observed search response; release not supplied",
+                "available": accession is not None,
+            }
+        return LookupRecord(query={"organism.scientific_name": name}, found=True, values=values)
 
 
 def _query_name(query: dict[str, Any]) -> str | None:
@@ -179,7 +195,7 @@ def _best_row(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
 def _relabel(record: LookupRecord, query: dict[str, Any]) -> LookupRecord:
     """Re-key a per-name record onto the caller's original query dict."""
     if record.found:
-        return LookupRecord(query=query, found=True, values=dict(record.values))
+        return LookupRecord(query=query, found=True, values=deepcopy(record.values))
     if record.error:
         return LookupRecord(query=query, error=record.error)
     return LookupRecord(query=query, found=False)
