@@ -136,3 +136,14 @@ structures observed in that response. Chain rows in the records retain source
 entity/range evidence. Resolution and sequence coverage are useful ranking fields,
 not a complete structure-quality assessment. Additional validation, assembly and
 ligand services are not queried by these capabilities.
+
+Full chain records include observed `ranges.uniprot` and `ranges.structure`
+spans with explicit coordinate namespaces. They are not residue alignments;
+structure positions do not imply author numbering. Ranking and display/fan-out
+limits are unchanged.
+
+Request `structure.pdb.quality` on `describe_structure` for the `quality` group:
+bulk entry-level provider validation metrics, experimental method, source and
+availability. Null or absent metrics remain unknown. The group's additional
+request is skipped by default; these metrics do not define a cross-method ranking.
+Source: [PDBe model quality](https://www.ebi.ac.uk/training/online/courses/exploring-pdb-entry/pdb-entry-overview/model-quality/).

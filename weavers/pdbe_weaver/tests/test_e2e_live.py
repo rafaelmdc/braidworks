@@ -118,3 +118,21 @@ async def test_live_bulk_best_structures_match_each_accession():
         values = {s.type_id: s.value for s in result.strands}
         assert expected_structure in values["pdb.id"]
         assert values["structure.pdb.count"] == len(values["pdb.id"])
+
+
+async def test_live_requested_quality_preserves_missing_data_metrics():
+    async with build_pdbe_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_structure",
+                [StrandSet.from_strands("quality", [Strand("pdb.id", "1tup")])],
+                requested_outputs=frozenset({"structure.pdb.quality"}),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        quality = values["structure.pdb.quality"]
+        assert quality["available"] and quality["pdb_id"] == "1tup"
+        assert "X-ray diffraction" in quality["method"]
+        assert "geometry_quality" in quality["metrics"]

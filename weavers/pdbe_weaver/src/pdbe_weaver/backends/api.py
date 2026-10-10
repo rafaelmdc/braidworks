@@ -84,6 +84,19 @@ def _record(raw: dict[str, Any]) -> dict[str, Any]:
         "resolution": raw.get("resolution"),
         "coverage": raw.get("coverage"),
         "chain_id": raw.get("chain_id"),
+        "ranges": {
+            "uniprot": {
+                "start": raw.get("unp_start"),
+                "end": raw.get("unp_end"),
+                "namespace": "UniProt residue position",
+            },
+            "structure": {
+                "start": raw.get("start"),
+                "end": raw.get("end"),
+                "namespace": "PDBe best_structures reported start/end; author numbering not inferred",
+            },
+            "interpretation": "observed coverage span, not a residue alignment",
+        },
         "source": dict(raw),
     }
 
@@ -200,7 +213,7 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
     ) -> list[LookupRecord]:
         # describe_structure drills PDB ids; list_structures lists a protein's structures.
         if capability_id == "describe_structure":
-            return await self._describe_structures(queries)
+            return await self._describe_structures(queries, quality="quality" in groups_to_compute)
         return await self._list_structures(queries)
 
     async def _list_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
@@ -244,7 +257,9 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
                 records.append(LookupRecord(query=query, found=False))
         return records
 
-    async def _describe_structures(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    async def _describe_structures(
+        self, queries: list[dict[str, Any]], *, quality: bool = False
+    ) -> list[LookupRecord]:
         """PDB ids -> their summaries via the bulk ``POST /pdb/entry/summary`` endpoint.
 
         The whole batch is sent as a comma-separated id list (chunked to keep the body
@@ -277,6 +292,50 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
             ) as exc:
                 errors.update(dict.fromkeys(chunk, f"PDBe API error: {format_exc(exc)}"))
 
+        quality_rows: dict[str, dict[str, Any]] = {}
+        if quality:
+            for start in range(0, len(distinct), _SUMMARY_CHUNK):
+                chunk = distinct[start : start + _SUMMARY_CHUNK]
+                try:
+                    resp = await self._http().post(
+                        "/validation/summary_quality_scores/entry",
+                        content=",".join(chunk),
+                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    )
+                    resp.raise_for_status()
+                    body = resp.json()
+                    if not isinstance(body, dict) or any(
+                        key.lower() not in {pid.lower() for pid in chunk}
+                        or not isinstance(value, dict)
+                        for key, value in body.items()
+                    ):
+                        raise _InvalidResponse(
+                            "PDBe quality response must be keyed by requested entry"
+                        )
+                    for key, value in body.items():
+                        for field in ("geometry_quality", "data_quality", "overall_quality"):
+                            metric = value.get(field)
+                            if metric is not None and (
+                                isinstance(metric, bool)
+                                or not isinstance(metric, (float, int))
+                                or not math.isfinite(metric)
+                            ):
+                                raise _InvalidResponse(
+                                    "PDBe quality metrics must be finite numbers or null"
+                                )
+                        quality_rows[key.lower()] = value
+                except httpx.HTTPStatusError as exc:
+                    if not is_not_found_status(exc.response.status_code):
+                        errors.update(
+                            dict.fromkeys(chunk, f"PDBe quality error: {format_exc(exc)}")
+                        )
+                except (
+                    httpx.HTTPError,
+                    json.JSONDecodeError,
+                    UnicodeDecodeError,
+                    _InvalidResponse,
+                ) as exc:
+                    errors.update(dict.fromkeys(chunk, f"PDBe quality error: {format_exc(exc)}"))
         records: list[LookupRecord] = []
         for query, pid in zip(queries, pids):
             obj = summaries.get(pid.lower()) if pid else None
@@ -285,5 +344,17 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
             elif obj is None:
                 records.append(LookupRecord(query=query, found=False))
             else:
-                records.append(LookupRecord(query=query, found=True, values=_describe(pid, obj)))
+                values = _describe(pid, obj)
+                if quality:
+                    values["structure.pdb.quality"] = {
+                        "pdb_id": pid.lower(),
+                        "method": obj.get("experimental_method", []),
+                        "metrics": dict(quality_rows[pid.lower()])
+                        if pid.lower() in quality_rows
+                        else None,
+                        "available": pid.lower() in quality_rows,
+                        "source": "PDBe validation/summary_quality_scores/entry",
+                        "interpretation": "provider entry-level metrics; missing values remain unknown; not a cross-method ranking",
+                    }
+                records.append(LookupRecord(query=query, found=True, values=values))
         return records

@@ -10,7 +10,7 @@ db_name = "pdbe"
 weaver_id = "pdbe"
 kind = "lookup"
 title = "PDB experimental structures via PDBe (accession -> structures)"
-version = "0.1.12"
+version = "0.1.13"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkz990"
 attribution = "wwPDB / EMBL-EBI PDBe"
@@ -30,6 +30,8 @@ source_sample = """
       "tax_id": 9606,
       "unp_start": 1,
       "unp_end": 393,
+      "start": 25,
+      "end": 417,
       "coverage": 1.0
     }
   ]
@@ -46,6 +48,8 @@ source_sample = """
     }
   ]
 }
+# POST /validation/summary_quality_scores/entry body=1tup
+{"1tup":{"geometry_quality":1.73,"data_quality":null,"overall_quality":1.73,"experiment_data_available":false}}
 """
 
 # Distinct accessions share POST /mappings/best_structures chunks of 100, keyed
@@ -83,6 +87,10 @@ max_batch_size = 25
     "structure.pdb.release_date",
     "structure.pdb.detail",
   ]
+
+  [[capability.group]]
+  id = "quality"
+  outputs = ["structure.pdb.quality"]
 
 # Golden runs against the deterministic fixture (pdbe_weaver.fixture, an
 # httpx.MockTransport serving a canned best_structures response for P04637 with two

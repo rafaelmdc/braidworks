@@ -13,7 +13,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 |---|---|---|---|
 | 1 | #199 | Observed AlphaFold PAE/pLDDT reference group | Complete: 44 package tests, strict, 3 live |
 | 1 | #202 | API-observed model list/describe and truthful coverage | Complete: 47 package tests, strict, 4 live |
-| 1 | #193 | PDBe range normalization and optional quality summary | Pending |
+| 1 | #193 | PDBe range normalization and optional quality summary | Complete minimum: 63 tests, strict, 6 live |
 | 1 | #240 | GTDB representative accession/release group; no tree changes | Complete: 88 tests, strict, 2 live API checks |
 | 1 | #264 | Disbiome compact evidence identity | Complete minimum: 46 tests and strict |
 | 1 | #296 | Disbiome exact sample/method/outcome filters | Complete: 46 tests and strict |
