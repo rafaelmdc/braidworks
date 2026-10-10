@@ -27,7 +27,7 @@ from dataclasses import replace
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
@@ -268,93 +268,127 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
         return await self._list_annotations(queries, filters=filters)
 
     async def _hierarchy(self, records: list[LookupRecord]) -> list[LookupRecord]:
-        async def acquire(record):
-            if not record.found or record.error:
-                return record
-            term_id = record.query.get("go.term")
+        distinct = {
+            str(record.query.get("go.term", "")).strip(): record
+            for record in records
+            if record.found and not record.error
+        }
+        fetched = {}
+        ids = sorted(distinct)
+        for start in range(0, len(ids), _TERM_CHUNK):
+            chunk = ids[start : start + _TERM_CHUNK]
+            complete, ancestors, grouped_paths = {}, {}, {key: [] for key in chunk}
             try:
-                complete, ancestors = [], []
                 for suffix, target in [("complete", complete), ("ancestors", ancestors)]:
-                    response = await self._http().get(f"/ontology/go/terms/{term_id}/{suffix}")
+                    response = await self._http().get(
+                        f"/ontology/go/terms/{','.join(chunk)}/{suffix}"
+                    )
                     response.raise_for_status()
-                    target.extend(_validated_results(response.json(), annotation=False))
-                if (
-                    len(complete) != 1
-                    or len(ancestors) != 1
-                    or any(row["id"] != term_id for row in complete + ancestors)
-                ):
-                    raise _InvalidResponse("QuickGO hierarchy identity mismatch")
-                term = complete[0]
-                ancestor_ids = ancestors[0].get("ancestors")
-                if ancestor_ids is not None and (
-                    not isinstance(ancestor_ids, list)
-                    or any(not isinstance(x, str) for x in ancestor_ids)
-                ):
-                    raise _InvalidResponse("QuickGO ancestors must be identifiers")
+                    for row in _validated_results(response.json(), annotation=False):
+                        if row["id"] not in chunk or (
+                            row["id"] in target and target[row["id"]] != row
+                        ):
+                            raise _InvalidResponse("QuickGO hierarchy identity mismatch")
+                        target[row["id"]] = row
+                    if set(target) != set(chunk):
+                        raise _InvalidResponse("QuickGO hierarchy omitted a requested identity")
                 response = await self._http().get(
-                    f"/ontology/go/terms/{term_id}/paths/GO:0008150,GO:0003674,GO:0005575",
+                    f"/ontology/go/terms/{','.join(chunk)}/paths/GO:0008150,GO:0003674,GO:0005575",
                     params={"relations": "is_a,part_of"},
                 )
                 response.raise_for_status()
-                paths = response.json().get("results")
+                body = response.json()
+                if not isinstance(body, dict):
+                    raise _InvalidResponse("QuickGO paths response must be an object")
+                paths = body.get("results")
                 if not isinstance(paths, list) or any(not isinstance(path, list) for path in paths):
                     raise _InvalidResponse("QuickGO paths must be lists")
-                parents = set()
                 for path in paths:
-                    for edge in path:
-                        if not isinstance(edge, dict) or any(
-                            not isinstance(edge.get(key), str)
-                            for key in ("child", "parent", "relationship")
-                        ):
-                            raise _InvalidResponse("QuickGO paths need typed edges")
-                        if edge["child"] == term_id:
-                            parents.add((edge["parent"], edge["relationship"]))
-                for field in ("replacements", "replaces"):
-                    value = term.get(field)
-                    if value is not None and (
-                        not isinstance(value, list)
-                        or any(
-                            not isinstance(row, dict)
-                            or not isinstance(row.get("id"), str)
-                            or not isinstance(row.get("type"), str)
-                            for row in value
-                        )
-                    ):
-                        raise _InvalidResponse("QuickGO replacement history needs typed records")
-                values = deepcopy(record.values)
-                values["go.term.hierarchy"] = {
-                    "id": term_id,
-                    "parents": [
-                        {"id": identifier, "relation": relation}
-                        for identifier, relation in sorted(parents)
-                    ],
-                    "parent_scope": "observed is_a/part_of paths to the three GO aspect roots",
-                    "ancestors": sorted(set(ancestor_ids)) if ancestor_ids is not None else None,
-                    "ancestor_scope": "provider ancestor endpoint default relations, including self",
-                    "replacements": term.get("replacements"),
-                    "replaces": term.get("replaces"),
-                    "history": term.get("history"),
-                    "is_obsolete": term.get("isObsolete"),
-                    "paths": paths,
-                    "source": "QuickGO complete, ancestors and paths endpoints",
-                }
-                return replace(record, values=values)
+                    if not path:
+                        continue
+                    if not isinstance(path[0], dict) or path[0].get("child") not in grouped_paths:
+                        raise _InvalidResponse("QuickGO path origin cannot be correlated")
+                    grouped_paths[path[0]["child"]].append(path)
             except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-                return LookupRecord(
-                    query=record.query, error=f"QuickGO hierarchy error: {format_exc(exc)}"
+                fetched.update(
+                    {
+                        key: LookupRecord(
+                            query=distinct[key].query,
+                            error=f"QuickGO hierarchy error: {format_exc(exc)}",
+                        )
+                        for key in chunk
+                    }
                 )
-
-        distinct = {str(record.query.get("go.term")): record for record in records}
-        results = await map_bounded(list(distinct.values()), acquire, limit=4)
-        by_id = dict(zip(distinct, results))
+                continue
+            for term_id in chunk:
+                record = distinct[term_id]
+                paths = grouped_paths[term_id]
+                try:
+                    fetched[term_id] = self._hierarchy_record(
+                        record, term_id, complete, ancestors, paths
+                    )
+                except (ValueError, KeyError, TypeError) as exc:
+                    fetched[term_id] = LookupRecord(
+                        query=record.query, error=f"QuickGO hierarchy error: {format_exc(exc)}"
+                    )
         return [
             replace(
-                by_id[str(record.query.get("go.term"))],
+                fetched[str(record.query.get("go.term", "")).strip()],
                 query=record.query,
-                values=deepcopy(by_id[str(record.query.get("go.term"))].values),
+                values=deepcopy(fetched[str(record.query.get("go.term", "")).strip()].values),
             )
+            if record.found and not record.error
+            else record
             for record in records
         ]
+
+    @staticmethod
+    def _hierarchy_record(record, term_id, complete, ancestors, paths):
+        term = complete[term_id]
+        ancestor_ids = ancestors[term_id].get("ancestors")
+        if ancestor_ids is not None and (
+            not isinstance(ancestor_ids, list) or any(not isinstance(x, str) for x in ancestor_ids)
+        ):
+            raise _InvalidResponse("QuickGO ancestors must be identifiers")
+        parents = set()
+        for path in paths:
+            for edge in path:
+                if not isinstance(edge, dict) or any(
+                    not isinstance(edge.get(key), str)
+                    for key in ("child", "parent", "relationship")
+                ):
+                    raise _InvalidResponse("QuickGO paths need typed edges")
+                if edge["child"] == term_id:
+                    parents.add((edge["parent"], edge["relationship"]))
+        for field in ("replacements", "replaces"):
+            value = term.get(field)
+            if value is not None and (
+                not isinstance(value, list)
+                or any(
+                    not isinstance(row, dict)
+                    or not isinstance(row.get("id"), str)
+                    or not isinstance(row.get("type"), str)
+                    for row in value
+                )
+            ):
+                raise _InvalidResponse("QuickGO replacement history needs typed records")
+        values = deepcopy(record.values)
+        values["go.term.hierarchy"] = {
+            "id": term_id,
+            "parents": [
+                {"id": identifier, "relation": relation} for identifier, relation in sorted(parents)
+            ],
+            "parent_scope": "observed is_a/part_of paths to the three GO aspect roots",
+            "ancestors": sorted(set(ancestor_ids)) if ancestor_ids is not None else None,
+            "ancestor_scope": "provider ancestor endpoint default relations, including self",
+            "replacements": term.get("replacements"),
+            "replaces": term.get("replaces"),
+            "history": term.get("history"),
+            "is_obsolete": term.get("isObsolete"),
+            "paths": paths,
+            "source": "QuickGO complete, ancestors and paths endpoints",
+        }
+        return replace(record, values=values)
 
     async def _reverse_annotations(self, queries, filters):
         ids = [str(q.get("go.term", "")).strip() for q in queries]
@@ -378,7 +412,10 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                     if not selected and coverage["complete"] is True:
                         records[term_id] = LookupRecord(query={}, found=False)
                     elif not selected:
-                        records[term_id] = LookupRecord(query={}, error="QuickGO reverse coverage incomplete before any annotations for this term were retrieved")
+                        records[term_id] = LookupRecord(
+                            query={},
+                            error="QuickGO reverse coverage incomplete before any annotations for this term were retrieved",
+                        )
                     else:
                         values = {
                             "protein.uniprot.accession": products,

@@ -1,5 +1,11 @@
 # Complete non-deferred weaver findings
 
+Current status (2026-10-10): the owner subsequently approved all eleven residual
+expansions listed below. They are now complete and closed; see
+[final feature acceptance](remaining-features.plan.md). The deferral language and
+validation counts below describe the earlier checkpoint. Only #234, #142 and #143
+remain excluded from this pass.
+
 User instruction: finish the issues, at least the non-deferred ones (2026-10-10).
 This supersedes stopping after the approved minimum scopes. Complete outstanding
 acceptance work and reconcile broad historical issue titles against delivered

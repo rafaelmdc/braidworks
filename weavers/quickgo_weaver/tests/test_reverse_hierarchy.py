@@ -1,6 +1,7 @@
 """Typed ontology paths and bounded reverse correlation."""
 
 import httpx
+import pytest
 from quickgo_weaver.backends.api import QuickgoApiBackend
 
 
@@ -43,7 +44,8 @@ async def test_reverse_batches_many_into_one_request_and_keeps_negative_evidence
     assert records[1].values["go.reverse.annotations"][0]["qualifier"] == "NOT"
 
 
-async def test_hierarchy_retains_replacement_direction_and_typed_parents():
+@pytest.mark.parametrize("query_id", ["GO:0006915", " GO:0006915 "])
+async def test_hierarchy_retains_replacement_direction_and_typed_parents(query_id):
     def handler(request):
         path = request.url.path
         row = {"id": "GO:0006915", "name": "apoptotic process", "isObsolete": False}
@@ -69,7 +71,7 @@ async def test_hierarchy_retains_replacement_direction_and_typed_parents():
         result = (
             await backend.fetch(
                 "describe_go_term",
-                [{"go.term": "GO:0006915"}],
+                [{"go.term": query_id}],
                 requested_outputs=frozenset(),
                 groups_to_compute=frozenset({"hierarchy"}),
             )
@@ -78,3 +80,48 @@ async def test_hierarchy_retains_replacement_direction_and_typed_parents():
     assert hierarchy["parents"] == [{"id": "GO:0008150", "relation": "is_a"}]
     assert hierarchy["replacements"] is None
     assert hierarchy["replaces"][0]["type"] == "consider"
+
+
+async def test_hierarchy_batches_many_into_one_request_per_endpoint():
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        identifiers = request.url.path.split("/terms/")[1].split("/")[0].split(",")
+        if "/paths/" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        [{"child": identifier, "parent": "GO:0008150", "relationship": "is_a"}]
+                        for identifier in identifiers
+                    ]
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": identifier, "name": identifier, "ancestors": [identifier, "GO:0008150"]}
+                    for identifier in identifiers
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://test"
+    ) as client:
+        backend = QuickgoApiBackend(client=client)
+        records = await backend.fetch(
+            "describe_go_term",
+            [{"go.term": "GO:0006915"}, {"go.term": "GO:0012501"}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset({"hierarchy"}),
+        )
+    assert len(calls) == 4
+    assert all("GO:0006915,GO:0012501" in path for path in calls)
+    assert all(record.found and not record.error for record in records)
+    assert [record.values["go.term.hierarchy"]["id"] for record in records] == [
+        "GO:0006915",
+        "GO:0012501",
+    ]

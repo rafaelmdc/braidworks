@@ -146,8 +146,8 @@ Request `go.term.hierarchy` on `describe_go_term` for typed parents from explici
 `is_a,part_of` paths to the three GO aspect roots, the provider's ancestor list
 (including self), complete term history, `replacements` and `replaces`. Replacement
 `consider` suggestions are retained, never followed automatically. The existing
-children-only relation group keeps its original scope. Single-term supplementary
-endpoints run with bounded concurrency and repeated inputs share acquisition.
+children-only relation group keeps its original scope. Supplementary complete/ancestor/path endpoints use bulk term chunks, correlate
+source IDs/path origins, and share acquisition for repeated inputs.
 
 `list_gene_products` consumes `go.term` and produces a full sorted set of observed
 positive UniProt accessions, raw annotation evidence and `go.reverse.coverage`.

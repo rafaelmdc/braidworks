@@ -9,6 +9,7 @@ from alphafold_weaver.backends.archive import (
     ArchiveFormatError,
     index_archive,
 )
+from braidworks.core import BackendConfigurationError
 
 
 def archive(path, names):
@@ -82,6 +83,8 @@ async def test_duplicate_artifact_conflicts_and_archive_mutation_errors(tmp_path
     archive(path, ["AF-P04637-F1-model_v6.cif.gz"])
     changed = await fetch(backend, "list_models", {"protein.uniprot.accession": "Q8WZ42"})
     assert changed.error and old
+    with pytest.raises(BackendConfigurationError, match="source identity"):
+        backend.fingerprint()
     duplicate = archive(tmp_path / "duplicate.tar", ["AF-P04637-F1-model_v6.cif.gz"] * 2)
     error = await fetch(
         AlphafoldArchiveBackend([duplicate]), "list_models", {"protein.uniprot.accession": "P04637"}

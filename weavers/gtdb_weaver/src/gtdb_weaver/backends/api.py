@@ -132,8 +132,16 @@ class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
                 values = project_card(response.json(), accession)
                 if "history" in groups:
                     response = await self._http().get(f"/genome/{accession}/taxon-history")
-                    response.raise_for_status()
-                    values["gtdb.genome.history"] = project_history(response.json(), accession)
+                    if is_not_found_status(response.status_code):
+                        values["gtdb.genome.history"] = {
+                            "requested_accession": accession,
+                            "available": False,
+                            "records": None,
+                            "source": f"/genome/{accession}/taxon-history",
+                        }
+                    else:
+                        response.raise_for_status()
+                        values["gtdb.genome.history"] = project_history(response.json(), accession)
                 return LookupRecord(query={}, found=True, values=values)
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):

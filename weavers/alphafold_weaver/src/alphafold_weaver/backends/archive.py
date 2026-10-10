@@ -185,7 +185,12 @@ class AlphafoldArchiveBackend(BackendBase):
     def fingerprint(self):
         if not self.is_configured():
             return "unconfigured:alphafold-archive"
-        self._index()
+        try:
+            self._index()
+        except (ArchiveFormatError, OSError) as exc:
+            raise BackendConfigurationError(
+                f"AlphaFold archive cannot establish source identity: {exc}"
+            ) from exc
         return (
             "alphafold-archive:"
             + hashlib.sha256(json.dumps(self._sources, sort_keys=True).encode()).hexdigest()

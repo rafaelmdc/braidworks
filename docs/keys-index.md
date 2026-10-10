@@ -31,7 +31,7 @@ Registered bridge keys — what links weavers together.
 | `gene.hgnc.id` | HGNC id for one human gene. | — | `uniprot:map_to_accession` |
 | `gene.ncbi.id` | NCBI Gene id for one gene. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_from_accession` | `ncbi:ncbi.describe_gene`, `ncbi:ncbi.list_orthologs`, `uniprot:map_to_accession` |
 | `gene.symbol` | A gene's official symbol, e.g. TP53 — joins gene databases. | `ncbi:ncbi.resolve_gene`, `ncbi:ncbi.describe_gene` | `uniprot:map_to_accession` |
-| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `agora:list_genomes`, `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `agora:list_reconstructions`, `bacdive:map_to_strain`, `ncbi:ncbi.describe_genome` |
+| `genome.accession` | NCBI genome assembly accession (GCF_/GCA_) — the genome join key. | `agora:list_genomes`, `bacdive:map_from_strain`, `ncbi:ncbi.list_genomes` | `agora:list_reconstructions`, `bacdive:map_to_strain`, `gtdb:describe_genome`, `ncbi:ncbi.describe_genome` |
 | `go.term` | A Gene Ontology term id. | `quickgo:list_go_terms` | `quickgo:describe_go_term`, `quickgo:list_gene_products` |
 | `gtdb.taxon.id` | GTDB genome-based taxonomy id for one organism. | `gtdb:describe_gtdb_taxonomy` | — |
 | `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
@@ -108,7 +108,11 @@ Descriptive payload fields; nothing joins on them.
 | `go.term.hierarchy` | Source paths, ancestors, directional replacements and term history. | `quickgo:describe_go_term` | — |
 | `go.term.name` | The name of this GO term. | `quickgo:describe_go_term` | — |
 | `go.term.relations` | Observed typed term children and obsoletion; parents/replacements not inferred. | `quickgo:describe_go_term` | — |
+| `gtdb.genome.history` | Observed GTDB genome-specific history, distinct from species/tree assertions. | `gtdb:describe_genome` | — |
+| `gtdb.genome.identity` | Observed GTDB genome-specific identity, distinct from species/tree assertions. | `gtdb:describe_genome` | — |
+| `gtdb.genome.quality` | Observed GTDB genome-specific quality, distinct from species/tree assertions. | `gtdb:describe_genome` | — |
 | `gtdb.genome.representative` | Selected species representative accession with source/release provenance; not necessarily the input strain. | `gtdb:describe_gtdb_taxonomy` | — |
+| `gtdb.genome.synonyms` | Observed GTDB genome-specific synonyms, distinct from species/tree assertions. | `gtdb:describe_genome` | — |
 | `gtdb.lineage` | This organism's GTDB genome-based, rank-normalized lineage — an ordered list of {rank, name} from domain to species. | `gtdb:describe_gtdb_taxonomy` | — |
 | `gtdb.tree.rootpath` | This organism's path from the root of the GTDB reference tree to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic). | `gtdb:describe_gtdb_tree_placement` | — |
 | `microbe.abundance.associations` | This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
@@ -196,13 +200,19 @@ Descriptive payload fields; nothing joins on them.
 | `structure.alphafold.pae_image_url` | The AlphaFold model's predicted-aligned-error plot. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.records` | Full AlphaFold model metadata — id, confidence, URLs. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.version` | Which AlphaFold model version this is. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
+| `structure.pdb.assemblies` | Observed PDBe assemblies detail with provider identity and availability. | `pdbe:describe_structure` | — |
+| `structure.pdb.coordinates` | Observed PDBe coordinates detail with provider identity and availability. | `pdbe:describe_structure` | — |
 | `structure.pdb.count` | How many PDB structures cover this protein. | `pdbe:list_structures` | — |
 | `structure.pdb.detail` | Full detail of one PDB structure — title, method, dates, authors. | `pdbe:describe_structure` | — |
+| `structure.pdb.entities` | Observed PDBe entities detail with provider identity and availability. | `pdbe:describe_structure` | — |
 | `structure.pdb.ids` | Experimental PDB structures of this protein. | `pdbe:list_structures` | — |
+| `structure.pdb.ligands` | Observed PDBe ligands detail with provider identity and availability. | `pdbe:describe_structure` | — |
+| `structure.pdb.mappings` | Observed PDBe mappings detail with provider identity and availability. | `pdbe:describe_structure` | — |
 | `structure.pdb.method` | How one PDB structure was solved. | `pdbe:describe_structure` | — |
 | `structure.pdb.quality` | Observed entry-level PDBe quality metrics with method, availability and missing-value semantics. | `pdbe:describe_structure` | — |
 | `structure.pdb.records` | This protein's PDB structures — id, method, resolution, coverage. | `pdbe:list_structures` | — |
 | `structure.pdb.release_date` | When one PDB structure was released. | `pdbe:describe_structure` | — |
+| `structure.pdb.residues` | Observed PDBe residues detail with provider identity and availability. | `pdbe:describe_structure` | — |
 | `structure.pdb.title` | The title of one PDB structure. | `pdbe:describe_structure` | — |
 | `wikidata.identity` | Requested/current QID, observed redirect and scientific-name source claims. | `wikidata:describe_taxon` | — |
 | `wikidata.localized` | Localized label/description with requested and actual language plus explicit English fallback. | `wikidata:describe_taxon` | — |

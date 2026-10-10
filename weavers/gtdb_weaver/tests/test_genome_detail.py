@@ -52,3 +52,28 @@ async def test_repeated_genomes_share_requests_detach_and_keep_version():
     results[0].values["gtdb.genome.history"]["records"].clear()
     assert results[1].values["gtdb.genome.history"]["records"]
     assert results[1].values["gtdb.genome.quality"]["gene"]["checkm2_completeness"] == 100.0
+
+
+async def test_missing_history_keeps_known_genome_identity():
+    def handler(request):
+        return (
+            httpx.Response(200, json=CARD)
+            if request.url.path.endswith("/card")
+            else httpx.Response(404)
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://test"
+    ) as client:
+        backend = GtdbApiBackend(client=client)
+        result = (
+            await backend.fetch(
+                "describe_genome",
+                [{"genome.accession": "GCF_000005845.2"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"history"}),
+            )
+        )[0]
+    assert result.found and not result.error
+    assert result.values["gtdb.genome.history"]["available"] is False
+    assert result.values["gtdb.genome.history"]["records"] is None

@@ -1,8 +1,12 @@
 # Individual weaver audits
 
 Programme: [plan](../weavers.plan.md), [GitHub #147](https://github.com/rafaelmdc/braidworks/issues/147).
-Audit date: 2026-10-08. S01–S03 complete locally; S04 review pending. Branch: `audit/individual-weavers`. Implementation proposals
-are not accepted or implemented merely because an audit is complete.
+Audit baseline: 2026-10-08, branch `audit/individual-weavers`. Reports below describe
+that baseline. Review and approved remediation are complete locally on
+`feat/weaver-audit-approved-scopes`, including all eleven subsequently approved
+feature expansions. See [current acceptance and issue state](remaining-features.plan.md).
+Only #234 remains deferred within this weaver audit; remote delivery is not performed.
+Publishing #142 and durable cache/resume #143 remain outside this pass.
 
 | Order | Weaver | Status | Main findings | Documents |
 |---|---|---|---|---|
