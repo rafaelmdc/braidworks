@@ -121,3 +121,21 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+Optional annotation parameters are `evidence_code` (one ECO:nnnnnnn ID),
+`evidence_usage` (`exact`, default, or `descendants`), `aspect`, and provider
+`qualifier`. No evidence parameter means the previous unfiltered retrieval
+scope. This is filtering, not an evidence-strength ranking.
+
+Positive term IDs/counts/aspect names now exclude annotations explicitly marked
+NOT; a term with both positive and negative evidence remains in the positive
+inventory. Raw `go.annotation.records` retains both, and coverage records polarity
+counts and effective filters. This corrects negative evidence previously being
+presented as positive membership; consumers needing all evidence should use the
+raw annotation group.
+
+Request `go.term.relations` for observed typed children and obsoletion plus source
+term data. Child relation types remain distinct. Parents/replacement IDs are not
+acquired or inferred. This group reuses the term response, with no additional call.
+Sources: [QuickGO annotations](https://www.ebi.ac.uk/training/online/courses/goa-and-quickgo-quick-tour/what-is-quickgo/viewing-go-annotations/),
+[GO annotation semantics](https://www.geneontology.org/docs/go-annotations/).

@@ -21,8 +21,8 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 1 | #297 | FAPROTAX ordered rule explanation group | Complete: 33 tests, strict, 25,068 reference cases without mismatch |
 | 1 | #272 | Retain already-returned GMrepo run metadata | Complete minimum: 66 tests, strict, 3 live |
 | 1 | #219 | STRING score/functional/physical/species scope | Complete: 64 tests, strict, 4 live |
-| 2 | #206 | QuickGO filters, raw evidence and explicit negative semantics | Pending |
-| 2 | #207 | QuickGO typed relations/obsoletion group | Pending |
+| 2 | #206 | QuickGO filters, raw evidence and explicit negative semantics | Complete minimum: 75 tests, strict, 6 live |
+| 2 | #207 | QuickGO typed relations/obsoletion group | Complete minimum: 75 tests, strict, 6 live |
 | 2 | #212 | Reactome hierarchy and typed participant groups | Pending |
 | 2 | #231 | NCBI current/merged/deleted identity evidence; accurate docs | Pending |
 | 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Pending |

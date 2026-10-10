@@ -126,3 +126,46 @@ async def test_live_bulk_annotations_correlate_each_accession():
             assert coverage["total_annotations"] == len(annotations)
         else:
             assert result.warnings
+
+
+async def test_live_exact_evidence_aspect_and_qualifier_scope():
+    async with build_quickgo_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "list_go_terms",
+                [StrandSet.from_strands("scope", [Strand("protein.uniprot.accession", "P04637")])],
+                requested_outputs=frozenset({"go.annotation.records", "go.annotation.coverage"}),
+                params={
+                    "evidence_code": "ECO:0000315",
+                    "evidence_usage": "exact",
+                    "aspect": "biological_process",
+                    "qualifier": "acts_upstream_of_negative_effect",
+                },
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        rows = values["go.annotation.records"]
+        assert rows and all(row["evidenceCode"] == "ECO:0000315" for row in rows)
+        assert all(row["goAspect"] == "biological_process" for row in rows)
+        assert all(row["qualifier"] == "acts_upstream_of_negative_effect" for row in rows)
+
+
+async def test_live_typed_term_children():
+    async with build_quickgo_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_go_term",
+                [StrandSet.from_strands("relations", [Strand("go.term", "GO:0006915")])],
+                requested_outputs=frozenset({"go.term.relations"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        relations = {s.type_id: s.value for s in result.strands}["go.term.relations"]
+        assert {child["relation"] for child in relations["children"]} >= {"is_a", "part_of"}
+        assert relations["is_obsolete"] is False
+        assert relations["parents"] is None and relations["replacement_ids"] is None

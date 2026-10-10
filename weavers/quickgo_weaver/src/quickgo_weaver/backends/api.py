@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -69,6 +71,14 @@ def _validated_results(body: Any, *, annotation: bool) -> list[dict[str, Any]]:
             ):
                 raise _InvalidResponse("QuickGO definition must be an object with string text")
     if annotation:
+        for row in body["results"]:
+            qualifier = row.get("qualifier")
+            if qualifier is not None and not (
+                isinstance(qualifier, str)
+                or isinstance(qualifier, list)
+                and all(isinstance(value, str) for value in qualifier)
+            ):
+                raise _InvalidResponse("QuickGO qualifier must be a string or string list")
         info = body.get("pageInfo")
         if info is not None:
             if not isinstance(info, dict):
@@ -102,11 +112,40 @@ def _describe(term: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _negative(row: dict[str, Any]) -> bool:
+    qualifier = row.get("qualifier") or ""
+    tokens = qualifier.split("|") if isinstance(qualifier, str) else qualifier
+    return "NOT" in tokens
+
+
+def _relations(term: dict[str, Any]) -> dict[str, Any]:
+    children = term.get("children")
+    return {
+        "id": term["id"],
+        "children": sorted(
+            [
+                {"id": key[0], "relation": key[1]}
+                for key in {(child["id"], child["relation"]) for child in children or []}
+            ],
+            key=lambda child: (child["id"], child["relation"]),
+        )
+        if children is not None
+        else None,
+        "is_obsolete": term.get("isObsolete"),
+        "parents": None,
+        "replacement_ids": None,
+        "scope": "observed term children and obsoletion; parents and replacements not acquired",
+        "source": deepcopy(term),
+    }
+
+
 def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Dedup annotation rows to distinct GO terms and group by aspect (deterministically)."""
     terms: dict[str, dict[str, Any]] = {}
     for row in rows:
         go_id = row.get("goId")
+        if _negative(row):
+            continue
         if not go_id or go_id in terms:
             continue
         terms[go_id] = {
@@ -180,10 +219,41 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
     ) -> list[LookupRecord]:
         # describe_go_term drills GO ids; list_go_terms lists a protein's terms.
         if capability_id == "describe_go_term":
-            return await self._describe_terms(queries)
-        return await self._list_annotations(queries)
+            return await self._describe_terms(queries, relations="relations" in groups_to_compute)
+        options = params or {}
+        evidence = options.get("evidence_code")
+        usage = options.get("evidence_usage", "exact")
+        if (
+            evidence is not None
+            and (not isinstance(evidence, str) or not re.fullmatch(r"ECO:[0-9]{7}", evidence))
+        ) or usage not in {"exact", "descendants"}:
+            return [
+                LookupRecord(
+                    query=q,
+                    error="QuickGO evidence_code must be an ECO ID with exact/descendants usage",
+                )
+                for q in queries
+            ]
+        filters = {}
+        for source, target in [
+            ("evidence_code", "evidenceCode"),
+            ("qualifier", "qualifier"),
+            ("aspect", "aspect"),
+        ]:
+            if source in options:
+                if not isinstance(options[source], str) or not options[source]:
+                    return [
+                        LookupRecord(query=q, error="QuickGO filters must be nonempty strings")
+                        for q in queries
+                    ]
+                filters[target] = options[source]
+        if evidence is not None:
+            filters["evidenceCodeUsage"] = usage
+        return await self._list_annotations(queries, filters=filters)
 
-    async def _list_annotations(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    async def _list_annotations(
+        self, queries: list[dict[str, Any]], *, filters: dict[str, str] | None = None
+    ) -> list[LookupRecord]:
         ids = [str(q.get("protein.uniprot.accession", "")).strip().upper() for q in queries]
         distinct = sorted({accession for accession in ids if accession})
         by_id: dict[str, LookupRecord] = {}
@@ -191,22 +261,25 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
             chunk = distinct[start : start + _ACCESSION_CHUNK]
             if len(chunk) == 1:
                 query = {"protein.uniprot.accession": chunk[0]}
-                by_id[chunk[0]] = await self._resolve_one(query, chunk[0])
+                by_id[chunk[0]] = await self._resolve_one(query, chunk[0], filters=filters)
             else:
-                by_id.update(await self._resolve_batch(chunk))
+                by_id.update(await self._resolve_batch(chunk, filters=filters))
         return [
-            replace(by_id[accession], query=query)
+            replace(by_id[accession], query=query, values=deepcopy(by_id[accession].values))
             if accession
             else LookupRecord(query=query, found=False)
             for query, accession in zip(queries, ids)
         ]
 
-    async def _resolve_batch(self, accessions: list[str]) -> dict[str, LookupRecord]:
+    async def _resolve_batch(
+        self, accessions: list[str], *, filters: dict[str, str] | None = None
+    ) -> dict[str, LookupRecord]:
         queries = {accession: {"protein.uniprot.accession": accession} for accession in accessions}
         try:
             rows, source_coverage = await self._all_annotations(
                 ",".join(accessions),
                 max_pages=self._max_pages * len(accessions),
+                filters=filters,
             )
         except httpx.HTTPStatusError as exc:
             if is_not_found_status(exc.response.status_code):
@@ -244,7 +317,9 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
             records[accession] = self._annotation_record(queries[accession], selected, coverage)
         return records
 
-    async def _describe_terms(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    async def _describe_terms(
+        self, queries: list[dict[str, Any]], *, relations: bool = False
+    ) -> list[LookupRecord]:
         """GO ids -> their details via the multi-id ``/ontology/go/terms/{ids}`` endpoint.
 
         The whole batch is fetched with chunked comma-separated requests (one per
@@ -264,6 +339,21 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                     raise _InvalidResponse(
                         "QuickGO term response contains an unrequested identifier"
                     )
+                if relations:
+                    for row in rows:
+                        children = row.get("children")
+                        if children is not None and (
+                            not isinstance(children, list)
+                            or any(
+                                not isinstance(child, dict)
+                                or not isinstance(child.get("id"), str)
+                                or not isinstance(child.get("relation"), str)
+                                for child in children
+                            )
+                        ):
+                            raise _InvalidResponse(
+                                "QuickGO children must be typed relation objects"
+                            )
                 terms.update({row["id"]: row for row in rows})
             except httpx.HTTPStatusError as exc:
                 if not is_not_found_status(exc.response.status_code):
@@ -284,14 +374,19 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
             elif term is None:
                 records.append(LookupRecord(query=query, found=False))
             else:
-                records.append(LookupRecord(query=query, found=True, values=_describe(term)))
+                values = _describe(term)
+                if relations:
+                    values["go.term.relations"] = _relations(term)
+                records.append(LookupRecord(query=query, found=True, values=values))
         return records
 
-    async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:
+    async def _resolve_one(
+        self, query: dict[str, Any], accession: str, *, filters: dict[str, str] | None = None
+    ) -> LookupRecord:
         if not accession:
             return LookupRecord(query=query, found=False)
         try:
-            rows, coverage = await self._all_annotations(accession)
+            rows, coverage = await self._all_annotations(accession, filters=filters)
         except httpx.HTTPStatusError as exc:
             if is_not_found_status(exc.response.status_code):
                 return LookupRecord(query=query, found=False)
@@ -333,6 +428,9 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                 json.dumps(row, sort_keys=True),
             ),
         )
+        coverage = dict(coverage)
+        coverage["negative_annotations"] = sum(_negative(row) for row in rows)
+        coverage["positive_annotations"] = len(rows) - coverage["negative_annotations"]
         values["go.annotation.coverage"] = coverage
         warnings = ()
         if coverage["complete"] is not True:
@@ -350,6 +448,7 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
         accession: str,
         *,
         max_pages: int | None = None,
+        filters: dict[str, str] | None = None,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Collect bounded pages, retaining the source's pagination/accounting claims."""
         rows: list[dict[str, Any]] = []
@@ -367,6 +466,7 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                     "limit": str(_PAGE_SIZE),
                     "page": str(page),
                     "includeFields": "goName",
+                    **(filters or {}),
                 },
             )
             resp.raise_for_status()
@@ -374,6 +474,14 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
             page_rows = _validated_results(body, annotation=True)
             expected = set(accession.upper().split(","))
             for row in page_rows:
+                scope = filters or {}
+                if "aspect" in scope and row.get("goAspect") != scope["aspect"]:
+                    raise _InvalidResponse("QuickGO response violates requested aspect")
+                if (
+                    scope.get("evidenceCodeUsage") == "exact"
+                    and row.get("evidenceCode") != scope["evidenceCode"]
+                ):
+                    raise _InvalidResponse("QuickGO response violates exact ECO evidence filter")
                 echo = row.get("geneProductId")
                 if not echo or echo.rsplit(":", 1)[-1].upper() not in expected:
                     raise _InvalidResponse(
@@ -406,6 +514,8 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
             logger.info("QuickGO annotations for %s truncated at %d pages", accession, page_cap)
         return rows, {
             "complete": complete,
+            "filters": dict(filters or {}),
+            "summary_scope": "positive annotations only; NOT records retained in raw evidence",
             "reason": reason,
             "pages_retrieved": pages_retrieved,
             "total_pages": total_pages,

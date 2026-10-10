@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.12"
+version = "0.1.13"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -127,6 +127,7 @@ source_sample = """
       "name": "apoptotic process",
       "aspect": "biological_process",
       "definition": { "text": "A programmed cell death process which begins when a cell receives an internal or external signal..." },
+      "children": [{"id":"GO:0097194","relation":"part_of"},{"id":"GO:0097152","relation":"is_a"}],
       "isObsolete": false
     }
   ]
@@ -168,6 +169,29 @@ set_outputs = ["go.term"]
   id = "coverage"
   outputs = ["go.annotation.coverage"]
 
+  [[capability.parameter]]
+  name = "evidence_code"
+  type = "string"
+  description = "One ECO:nnnnnnn evidence ID; omitted preserves source retrieval scope"
+
+  [[capability.parameter]]
+  name = "evidence_usage"
+  type = "string"
+  enum = ["exact", "descendants"]
+  default = "exact"
+  description = "ECO matching mode, used only when evidence_code is supplied"
+
+  [[capability.parameter]]
+  name = "qualifier"
+  type = "string"
+  description = "Exact provider annotation qualifier; NOT evidence remains in raw records"
+
+  [[capability.parameter]]
+  name = "aspect"
+  type = "string"
+  enum = ["molecular_function", "biological_process", "cellular_component"]
+  description = "GO aspect filter"
+
 # The consumer of the fan dimension: one GO id -> that term's detail (QuickGO
 # /ontology/go/terms/{id}). Consumes go.term (what list_go_terms produces), so a
 # fanned term is drillable: protein -> list_go_terms -> fan -> describe_go_term.
@@ -179,6 +203,10 @@ max_batch_size = 10
   [[capability.group]]
   id = "detail"
   outputs = ["go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"]
+
+  [[capability.group]]
+  id = "relations"
+  outputs = ["go.term.relations"]
 
 # Golden runs against the deterministic fixture (quickgo_weaver.fixture, an
 # httpx.MockTransport serving a canned 3-term annotation page for P04637 plus a
