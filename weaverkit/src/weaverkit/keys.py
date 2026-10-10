@@ -66,6 +66,10 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "disease.ontology.definition": "Observed MONDO definition text; absent definitions remain unknown.",
+    "disease.ontology.history": "MONDO current/obsolete status with observed replacement/consider targets and source release identity.",
+    "wikidata.identity": "Requested/current QID, observed redirect and scientific-name source claims.",
+    "wikidata.localized": "Localized label/description with requested and actual language plus explicit English fallback.",
     "microbe.agora.reconstruction": "One release-qualified model's source taxid/genome associations.",
     "microbe.agora.reconstructions": "Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set.",
     "microbe.agora.coverage": "AGORA crosswalk release and full observed versus display counts.",

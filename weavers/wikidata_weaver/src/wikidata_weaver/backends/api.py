@@ -18,6 +18,8 @@ import json
 import math
 import re
 import time
+from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -27,12 +29,15 @@ import httpx
 from braidworks.core import (
     BackendBase,
     Candidate,
+    LookupRecord,
     MatchStatus,
     ResolverRecord,
 )
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
+
+from wikidata_weaver.entities import InvalidEntityResponse, entity_records
 
 # The Wikidata Query Service SPARQL endpoint (distinct from the www. content host).
 BASE_URL = "https://query.wikidata.org"
@@ -157,9 +162,14 @@ class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
     name = "api"
 
     def __init__(
-        self, *, base_url: str = BASE_URL, client: httpx.AsyncClient | None = None
+        self,
+        *,
+        base_url: str = BASE_URL,
+        client: httpx.AsyncClient | None = None,
+        entity_api_url: str = "https://www.wikidata.org/w/api.php",
     ) -> None:
         self._configure_client(client, base_url)
+        self._entity_api_url = entity_api_url
         self._configured = True  # keyless service — always usable
 
     def is_configured(self) -> bool:
@@ -179,6 +189,7 @@ class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
         return remote_fingerprint(
             "wikidata_weaver-api",
             self._base_url,
+            entity_api=self._entity_api_url,
             contract="wikidata-api-" + datetime.now(UTC).strftime("%Y-%m"),
         )
 
@@ -231,6 +242,61 @@ class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
                 await asyncio.sleep(delay)
         raise _ChunkFailed(last)
 
+    async def _describe_entities(
+        self, queries: list[dict[str, Any]], params: dict[str, Any]
+    ) -> list[LookupRecord]:
+        language = params.get("language", "en")
+        if not isinstance(language, str) or not re.fullmatch(
+            r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", language
+        ):
+            return [
+                LookupRecord(query=q, error="Wikidata language must be a lowercase language code")
+                for q in queries
+            ]
+        identifiers = [str(q.get("wikidata.qid", "")).strip() for q in queries]
+        distinct = sorted({qid for qid in identifiers if re.fullmatch(r"Q[1-9][0-9]*", qid)})
+        resolved = {}
+        for start in range(0, len(distinct), 50):
+            chunk = distinct[start : start + 50]
+            try:
+                response = await self._http().get(
+                    self._entity_api_url,
+                    params={
+                        "action": "wbgetentities",
+                        "ids": "|".join(chunk),
+                        "props": "labels|descriptions|sitelinks|claims",
+                        "languages": "|".join(dict.fromkeys([language, "en"])),
+                        "redirects": "yes",
+                        "format": "json",
+                    },
+                    headers={"User-Agent": _USER_AGENT},
+                )
+                response.raise_for_status()
+                resolved.update(entity_records(response.json(), chunk, language))
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                InvalidEntityResponse,
+            ) as exc:
+                resolved.update(
+                    {
+                        qid: LookupRecord(
+                            query={"wikidata.qid": qid},
+                            error=f"Wikibase entity query failed: {exc}",
+                        )
+                        for qid in chunk
+                    }
+                )
+        return [
+            replace(resolved[qid], query=query, values=deepcopy(resolved[qid].values))
+            if qid in resolved
+            else LookupRecord(
+                query=query, error="Wikidata QID must be Q followed by positive digits"
+            )
+            for qid, query in zip(identifiers, queries)
+        ]
+
     async def fetch(
         self,
         capability_id: str,
@@ -239,8 +305,15 @@ class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
         requested_outputs: frozenset[str],
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
-    ) -> list[ResolverRecord]:
-        names = [str(q.get("organism.scientific_name", "")).strip() for q in queries]
+    ) -> list[ResolverRecord] | list[LookupRecord]:
+        if capability_id == "describe_taxon":
+            return await self._describe_entities(queries, params or {})
+        consumed = (
+            "ncbi.taxon.id" if capability_id == "map_from_taxid" else "organism.scientific_name"
+        )
+        names = [str(q.get(consumed, "")).strip() for q in queries]
+        if consumed == "ncbi.taxon.id":
+            names = [str(int(n)) if n.isdigit() and int(n) > 0 else "" for n in names]
 
         # Distinct, non-empty names for the VALUES clause (dedup the wire request).
         distinct = sorted({n for n in names if n})
@@ -251,7 +324,12 @@ class WikidataApiBackend(HTTPClientLifecycle, BackendBase):
 
         for start in range(0, len(distinct), _CHUNK):
             chunk = distinct[start : start + _CHUNK]
-            query = _SPARQL.format(values=" ".join(_sparql_literal(n) for n in chunk))
+            template = (
+                _SPARQL.replace("wdt:P225 ?sname", "wdt:P685 ?sname")
+                if consumed == "ncbi.taxon.id"
+                else _SPARQL
+            )
+            query = template.format(values=" ".join(_sparql_literal(n) for n in chunk))
             try:
                 payload = await self._post_chunk(query)
                 if any(

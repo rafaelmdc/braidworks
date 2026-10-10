@@ -73,3 +73,21 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+Stable identity entry points: `map_from_taxid` consumes `ncbi.taxon.id` and
+resolves the observed P685 mapping through bulk SPARQL; duplicate items remain
+ambiguous/reviewable instead of picking one. `describe_taxon` consumes a QID
+and uses bulk `wbgetentities` (50 IDs), with explicit missing and redirect
+identity. It describes items with observed scientific-name claims.
+
+Use `--param language=pt` with the requested `wikidata.localized` group to obtain
+a label/description in Portuguese, falling back to English when absent. Requested
+and actual label/description languages are recorded separately. `wikipedia.title`
+continues to come exclusively from `enwiki`, so it remains compatible with the
+English Wikipedia weaver. The entity API requests all sitelinks before counting
+them; a filtered English-only response is never passed off as the total.
+
+Builders accept `entity_api_url` separately from the SPARQL `base_url`; both
+source settings contribute to the backend fingerprint. Existing name/rank
+resolution is unchanged. Sources: [Wikibase API](https://www.mediawiki.org/wiki/Wikibase/API),
+[language-aware presentation](https://www.mediawiki.org/wiki/API:Presenting_Wikidata_knowledge).

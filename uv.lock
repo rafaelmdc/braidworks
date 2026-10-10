@@ -1054,7 +1054,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.6.12"
+version = "0.6.13"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1084,7 +1084,7 @@ provides-extras = ["test", "serve"]
 
 [[package]]
 name = "wikidata-weaver"
-version = "0.1.8"
+version = "0.1.9"
 source = { editable = "weavers/wikidata_weaver" }
 dependencies = [
     { name = "braidworks-core" },

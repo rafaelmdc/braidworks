@@ -9,6 +9,7 @@ reproducibly. The canned payload is a real response shape for ``Ursus arctos``.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from urllib.parse import unquote_plus
 
 import httpx
@@ -23,26 +24,32 @@ _URSUS_ARCTOS = {
                 "sname": {"type": "literal", "value": "Ursus arctos"},
                 "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q36341"},
                 "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear"},
-                "sitelinks": {"type": "literal",
-                              "datatype": "http://www.w3.org/2001/XMLSchema#integer",
-                              "value": "142"},
+                "sitelinks": {
+                    "type": "literal",
+                    "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+                    "value": "142",
+                },
                 "vn": {"xml:lang": "en", "type": "literal", "value": "Brown Bear"},
             },
             {
                 "sname": {"type": "literal", "value": "Ursus arctos"},
                 "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q36341"},
                 "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Brown_bear"},
-                "sitelinks": {"type": "literal",
-                              "datatype": "http://www.w3.org/2001/XMLSchema#integer",
-                              "value": "142"},
+                "sitelinks": {
+                    "type": "literal",
+                    "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+                    "value": "142",
+                },
                 "vn": {"xml:lang": "en", "type": "literal", "value": "grizzly bear"},
             },
         ]
     },
 }
 
-_EMPTY = {"head": {"vars": ["sname", "item", "article", "sitelinks", "vn", "rankLabel"]},
-          "results": {"bindings": []}}
+_EMPTY = {
+    "head": {"vars": ["sname", "item", "article", "sitelinks", "vn", "rankLabel"]},
+    "results": {"bindings": []},
+}
 
 # A cross-code homonym: "Pholidota" is BOTH an orchid genus (botany) and the pangolin
 # order (zoology). Both carry P225 "Pholidota", so the name is ambiguous unless the
@@ -54,7 +61,10 @@ _PHOLIDOTA = {
             {
                 "sname": {"type": "literal", "value": "Pholidota"},
                 "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q1300407"},
-                "article": {"type": "uri", "value": "https://en.wikipedia.org/wiki/Pholidota_(plant)"},
+                "article": {
+                    "type": "uri",
+                    "value": "https://en.wikipedia.org/wiki/Pholidota_(plant)",
+                },
                 "rankLabel": {"xml:lang": "en", "type": "literal", "value": "genus"},
                 "vn": {"xml:lang": "en", "type": "literal", "value": "Pholidota"},
             },
@@ -71,13 +81,45 @@ _PHOLIDOTA = {
 
 
 def _handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/api.php"):
+        ids = request.url.params.get("ids", "").split("|")
+        return httpx.Response(
+            200,
+            json={
+                "entities": {
+                    qid: {
+                        "id": qid,
+                        "labels": {"en": {"language": "en", "value": "brown bear"}},
+                        "descriptions": {},
+                        "sitelinks": {"enwiki": {"site": "enwiki", "title": "Brown bear"}},
+                        "claims": {
+                            "P225": [
+                                {
+                                    "mainsnak": {
+                                        "snaktype": "value",
+                                        "datavalue": {"value": "Ursus arctos"},
+                                    }
+                                }
+                            ]
+                        },
+                    }
+                    if qid == "Q36341"
+                    else {"id": qid, "missing": ""}
+                    for qid in ids
+                }
+            },
+        )
     if request.url.path.endswith("/sparql"):
         # The query is POSTed as form data (large batches exceed a GET URL);
         # unquote_plus so "Ursus+arctos" reads back as "Ursus arctos".
         query = request.url.params.get("query", "") + unquote_plus(
             request.content.decode("utf-8", "ignore")
         )
-        if "Ursus arctos" in query:
+        if "wdt:P685" in query and "9644" in query:
+            payload = deepcopy(_URSUS_ARCTOS)
+            for row in payload["results"]["bindings"]:
+                row["sname"]["value"] = "9644"
+        elif "Ursus arctos" in query:
             payload = _URSUS_ARCTOS
         elif "Pholidota" in query:
             payload = _PHOLIDOTA

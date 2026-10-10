@@ -28,11 +28,14 @@ def build_wikidata_weaver(
     *,
     base_url: str = "https://query.wikidata.org",
     client: httpx.AsyncClient | None = None,
+    entity_api_url: str = "https://www.wikidata.org/w/api.php",
     **_config: Any,
 ) -> BaseWeaver:
     """Build with explicit source settings; injected clients remain caller-owned."""
     reject_unknown_options(_config)
-    return WikidataWeaver({"api": WikidataApiBackend(base_url=base_url, client=client)})
+    return WikidataWeaver(
+        {"api": WikidataApiBackend(base_url=base_url, client=client, entity_api_url=entity_api_url)}
+    )
 
 
 def build_wikidata_weaver_fixture() -> BaseWeaver:

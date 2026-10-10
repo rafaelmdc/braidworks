@@ -6,7 +6,7 @@ db_name = "wikidata"
 weaver_id = "wikidata"
 kind = "resolver"
 title = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
-version = "0.1.8"
+version = "0.1.9"
 license = "CC0-1.0"
 source_url = "https://www.wikidata.org/"
 citation = "Wikidata, the free knowledge base. https://www.wikidata.org/"
@@ -61,6 +61,8 @@ source_sample = """
     ]
   }
 }
+# GET wbgetentities ids=Q36341 languages=pt|en props=labels|descriptions|sitelinks|claims (observed subset)
+{"entities":{"Q36341":{"id":"Q36341","labels":{"pt":{"language":"pt","value":"Urso-pardo"},"en":{"language":"en","value":"brown bear"}},"sitelinks":{"enwiki":{"site":"enwiki","title":"Brown bear"}}}}}
 """
 
 [[capability]]
@@ -82,7 +84,51 @@ always_computed_groups = ["core"]   # name -> QID is always resolved first
   type = "string"
   description = "Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour)."
 
+[[capability]]
+id = "map_from_taxid"
+consumes = ["ncbi.taxon.id"]
+backends = ["api"]
+always_computed_groups = ["core"]
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["wikidata.qid", "wikipedia.title", "wikidata.sitelinks"]
+
+  [[capability.group]]
+  id = "names"
+  outputs = ["organism.vernacular_names"]
+
+[[capability]]
+id = "describe_taxon"
+consumes = ["wikidata.qid"]
+backends = ["api"]
+max_batch_size = 50
+
+  [[capability.group]]
+  id = "core"
+  outputs = ["wikipedia.title", "wikidata.sitelinks", "wikidata.identity"]
+
+  [[capability.group]]
+  id = "localized"
+  outputs = ["wikidata.localized"]
+
+  [[capability.parameter]]
+  name = "language"
+  type = "string"
+  default = "en"
+  description = "Localized label/description language, with explicit English fallback; Wikipedia titles remain English"
+
 [[golden]]
 capability = "resolve_taxon"
 input = { "organism.scientific_name" = "Ursus arctos" }
 expect = { "wikidata.qid" = "Q36341" }
+
+[[golden]]
+capability = "map_from_taxid"
+input = { "ncbi.taxon.id" = 9644 }
+expect = { "wikidata.qid" = "Q36341" }
+
+[[golden]]
+capability = "describe_taxon"
+input = { "wikidata.qid" = "Q36341" }
+expect = { "wikipedia.title" = "Brown_bear" }

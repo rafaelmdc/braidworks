@@ -36,3 +36,38 @@ async def test_live_known_example():
     produced = {s.type_id: s.value for s in result.strands}
     assert produced["wikidata.qid"] == "Q36341"
     assert produced["wikipedia.title"] == "Brown_bear"
+
+
+async def test_live_direct_qid_localized_labels_keep_english_article():
+    async with build_wikidata_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_taxon",
+                [StrandSet.from_strands("qid", [Strand("wikidata.qid", "Q36341")])],
+                requested_outputs=frozenset(
+                    {"wikidata.localized", "wikipedia.title", "wikidata.identity"}
+                ),
+                params={"language": "pt"},
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["wikidata.localized"]["label_language"] == "pt"
+        assert values["wikipedia.title"] == "Brown_bear"
+        assert values["wikidata.identity"]["current_qid"] == "Q36341"
+
+
+async def test_live_taxid_maps_to_known_brown_bear_qid():
+    async with build_wikidata_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "map_from_taxid",
+                [StrandSet.from_strands("taxid", [Strand("ncbi.taxon.id", 9644)])],
+                requested_outputs=frozenset({"wikidata.qid"}),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["wikidata.qid"] == "Q36341"

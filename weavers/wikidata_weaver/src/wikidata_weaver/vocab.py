@@ -15,16 +15,16 @@ from braidworks.core import (
     WeaverManifest,
 )
 
-WEAVER_ID = "wikidata"
-WEAVER_VERSION = "0.1.8"
-WEAVER_TITLE = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
+WEAVER_ID = 'wikidata'
+WEAVER_VERSION = '0.1.9'
+WEAVER_TITLE = 'Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)'
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url="https://www.wikidata.org/",
-    license="CC0-1.0",
-    citation="Wikidata, the free knowledge base. https://www.wikidata.org/",
-    attribution="Wikidata contributors (CC0)",
+    source_url='https://www.wikidata.org/',
+    license='CC0-1.0',
+    citation='Wikidata, the free knowledge base. https://www.wikidata.org/',
+    attribution='Wikidata contributors (CC0)',
 )
 
 
@@ -37,35 +37,42 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="resolve_taxon",
-                consumes=frozenset({"organism.scientific_name"}),
-                produces=frozenset(
-                    {
-                        "organism.vernacular_names",
-                        "wikidata.qid",
-                        "wikidata.sitelinks",
-                        "wikipedia.title",
-                    }
-                ),
+                id='resolve_taxon',
+                consumes=frozenset({'organism.scientific_name'}),
+                produces=frozenset({'organism.vernacular_names', 'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'}),
                 output_groups=(
-                    OutputGroup(
-                        id="core",
-                        outputs=frozenset(
-                            {"wikidata.qid", "wikidata.sitelinks", "wikipedia.title"}
-                        ),
-                    ),
-                    OutputGroup(id="names", outputs=frozenset({"organism.vernacular_names"})),
+                    OutputGroup(id='core', outputs=frozenset({'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'})),
+                    OutputGroup(id='names', outputs=frozenset({'organism.vernacular_names'})),
                 ),
-                backends=tuple(b for b in ("api",) if b in backends),
-                always_computed_groups=frozenset({"core"}),
+                backends=tuple(b for b in ('api',) if b in backends),
+                always_computed_groups=frozenset({'core'}),
                 parameters=(
-                    Parameter(
-                        name="expected_rank",
-                        type="string",
-                        enum=(),
-                        default=None,
-                        description="Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour).",
-                    ),
+                    Parameter(name='expected_rank', type='string', enum=(), default=None, description="Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour)."),
+                ),
+            ),
+            Capability(
+                id='map_from_taxid',
+                consumes=frozenset({'ncbi.taxon.id'}),
+                produces=frozenset({'organism.vernacular_names', 'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'}),
+                output_groups=(
+                    OutputGroup(id='core', outputs=frozenset({'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'})),
+                    OutputGroup(id='names', outputs=frozenset({'organism.vernacular_names'})),
+                ),
+                backends=tuple(b for b in ('api',) if b in backends),
+                always_computed_groups=frozenset({'core'}),
+            ),
+            Capability(
+                id='describe_taxon',
+                consumes=frozenset({'wikidata.qid'}),
+                produces=frozenset({'wikidata.identity', 'wikidata.localized', 'wikidata.sitelinks', 'wikipedia.title'}),
+                output_groups=(
+                    OutputGroup(id='core', outputs=frozenset({'wikidata.identity', 'wikidata.sitelinks', 'wikipedia.title'})),
+                    OutputGroup(id='localized', outputs=frozenset({'wikidata.localized'})),
+                ),
+                backends=tuple(b for b in ('api',) if b in backends),
+                max_batch_size=50,
+                parameters=(
+                    Parameter(name='language', type='string', enum=(), default='en', description='Localized label/description language, with explicit English fallback; Wikipedia titles remain English'),
                 ),
             ),
         ),

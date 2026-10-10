@@ -28,7 +28,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 2 | #246 | BacDive strain list/describe; accurate group/scope docs | Complete minimum: 64 tests, strict, 3 live |
 | 2 | #251 | AGORA reconstruction list/describe with artifact availability | Complete minimum: 46 tests and strict |
 | 2 | #278 | Direct MONDO-ID describe, definition and history | Complete minimum: 57 tests and strict |
-| 2 | #286 | Wikidata exact ID entry and localized labels; English join preserved | Pending |
+| 2 | #286 | Wikidata exact ID entry and localized labels; English join preserved | Complete minimum: 54 tests, strict, 3 live |
 
 For each change: read current implementation/tests, update spec and observed source
 samples where needed, implement with small projections/composition, add meaningful

@@ -1,9 +1,13 @@
 weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
 agora	describe_metabolic_reconstruction	lookup	none	local	ncbi.taxon.id	microbe.metabolism.reconstruction;microbe.metabolism.reactions;microbe.metabolism.sbml	
+agora	list_reconstructions	lookup	none	local	ncbi.taxon.id	microbe.agora.reconstruction_id;microbe.agora.reconstructions;microbe.agora.coverage	
+agora	describe_reconstruction	lookup	none	local	microbe.agora.reconstruction_id	microbe.agora.reconstruction;microbe.agora.artifact;microbe.metabolism.reactions;microbe.metabolism.sbml	
 alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.confidence;structure.alphafold.records	
 alphafold	list_models	lookup	none	api	protein.uniprot.accession	structure.alphafold.model_id;structure.alphafold.models;structure.alphafold.model_coverage	
 alphafold	describe_prediction	lookup	none	api	structure.alphafold.model_id	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.confidence;structure.alphafold.records	
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph;microbe.trait.records	
+bacdive	list_strains	lookup	none	api	organism.scientific_name	microbe.bacdive.strain_id;microbe.bacdive.strain_coverage	
+bacdive	describe_strain	lookup	none	api	microbe.bacdive.strain_id	microbe.bacdive.strain;microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph;microbe.trait.records	
 disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.id;ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
@@ -15,8 +19,10 @@ gtdb	describe_gtdb_tree_placement	lookup	none	local;api	ncbi.taxon.id;organism.s
 mondo	mondo.lookup_by_mesh	lookup	none	local	disease.mesh.id	disease.mondo.id;disease.ontology.name;disease.ontology.mapping.records;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
 mondo	mondo.lookup_by_meddra	lookup	none	local	disease.meddra.id	disease.mondo.id;disease.ontology.name;disease.ontology.mapping.records;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
 mondo	mondo.lookup_by_name	lookup	none	local	disease.name	disease.mondo.id;disease.ontology.name;disease.ontology.mapping.records;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
+mondo	describe_disease	lookup	none	local	disease.mondo.id	disease.ontology.name;disease.ontology.definition;disease.ontology.history;disease.ontology.parents;disease.ontology.depth;disease.ontology.ancestors	
 ncbi	ncbi.resolve_name	resolver	optional	local;api	organism.name	ncbi.taxon.id;organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.match_type;ncbi.taxon.review_required;ncbi.taxon.lineage;ncbi.taxon.species_id	
 ncbi	ncbi.describe_taxon	resolver	optional	local;api	ncbi.taxon.id	organism.scientific_name;ncbi.taxon.rank;ncbi.taxon.parent_id;ncbi.taxon.lineage;ncbi.taxon.species_id	
+ncbi	ncbi.describe_taxon_history	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.history	
 ncbi	ncbi.list_children	resolver	optional	local;api	ncbi.taxon.id	ncbi.taxon.id;ncbi.taxon.children_count;ncbi.taxon.children_records	
 ncbi	ncbi.list_genomes	resolver	optional	local;api	ncbi.taxon.id	genome.accession;genome.assembly.count;genome.assembly.records	
 ncbi	ncbi.describe_genome	resolver	optional	local;api	genome.accession	genome.assembly.title;genome.assembly.level;genome.assembly.organism;genome.assembly.detail;genome.sequence.records;genome.sequence.coverage	
@@ -26,13 +32,15 @@ ncbi	ncbi.list_orthologs	resolver	optional	local;api	gene.ncbi.id	gene.ncbi.id;g
 pdbe	list_structures	lookup	none	api	protein.uniprot.accession	pdb.id;structure.pdb.ids;structure.pdb.count;structure.pdb.records	
 pdbe	describe_structure	lookup	none	api	pdb.id	structure.pdb.title;structure.pdb.method;structure.pdb.release_date;structure.pdb.detail;structure.pdb.quality	
 quickgo	list_go_terms	lookup	none	api	protein.uniprot.accession	go.molecular_function;go.biological_process;go.cellular_component;go.term;go.count;go.records;go.annotation.records;go.annotation.coverage	
-quickgo	describe_go_term	lookup	none	api	go.term	go.term.name;go.term.aspect;go.term.definition;go.term.detail	
+quickgo	describe_go_term	lookup	none	api	go.term	go.term.name;go.term.aspect;go.term.definition;go.term.detail;go.term.relations	
 reactome	list_pathways	lookup	none	api	protein.uniprot.accession	pathway.reactome.id;pathway.reactome.names;pathway.reactome.count;pathway.reactome.records	
-reactome	describe_pathway	lookup	none	api	pathway.reactome.id	pathway.reactome.display_name;pathway.reactome.species;pathway.reactome.in_disease;pathway.reactome.detail	
+reactome	describe_pathway	lookup	none	api	pathway.reactome.id	pathway.reactome.display_name;pathway.reactome.species;pathway.reactome.in_disease;pathway.reactome.detail;pathway.reactome.hierarchy;pathway.reactome.participants	
 string	list_interactions	lookup	none	api	protein.uniprot.accession	string.id;protein.interaction.partners;protein.interaction.count;protein.interaction.coverage;protein.interaction.records	
 uniprot	resolve_protein	lookup	none	api	protein.query	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length	
 uniprot	describe_protein	lookup	none	api	protein.uniprot.accession	protein.uniprot.accession;protein.name;protein.gene;protein.organism;protein.reviewed;ncbi.taxon.id;protein.function;protein.length;protein.sequence;protein.annotation.records	
 uniprot	map_to_accession	lookup	none	api	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;gene.symbol;refseq.protein.id;gene.hgnc.id;nucleotide.insdc.accession;pdb.id;string.id	protein.uniprot.accession;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
 uniprot	map_from_accession	lookup	none	api	protein.uniprot.accession	gene.ncbi.id;gene.ensembl.id;protein.ensembl.id;pathway.kegg.id;pathway.reactome.id;refseq.protein.id;orthodb.group;eggnog.group;chembl.id;drugbank.id;pdb.id;string.id;protein.uniprot.mapping.count;protein.uniprot.mapping.records	
 wikidata	resolve_taxon	resolver	none	api	organism.scientific_name	wikidata.qid;wikipedia.title;wikidata.sitelinks;organism.vernacular_names	
+wikidata	map_from_taxid	resolver	none	api	ncbi.taxon.id	wikidata.qid;wikipedia.title;wikidata.sitelinks;organism.vernacular_names	
+wikidata	describe_taxon	resolver	none	api	wikidata.qid	wikipedia.title;wikidata.sitelinks;wikidata.identity;wikidata.localized	
 wikipedia	describe_pageviews	lookup	none	api;local	wikipedia.title	wikipedia.pageviews;wikipedia.pageviews.measurement;wikipedia.pageviews.series;wikipedia.pageviews.title	
