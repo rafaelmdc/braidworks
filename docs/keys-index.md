@@ -117,6 +117,7 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.bacdive.strain_coverage` | Observed full binomial strain listing scope and count. | `bacdive:list_strains` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.coverage` | Exact source taxid and reported rank; no ancestor or descendant inference. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.ecology.evidence` | Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence. | `faprotax:describe_ecology` | — |

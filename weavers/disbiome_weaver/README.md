@@ -86,14 +86,19 @@ joined JSON. Summary requests aggregate counts/names without reading full JSON;
 compact requests read only their columns. Full records remain unchanged. Repeated
 taxids share SQL/parsing within a single batch, with detached results.
 
-Schema-1 databases must be rebuilt using
+Schema-1 and schema-2 databases must be rebuilt using
 `build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
 Inputs match the source taxid exactly, at any recorded rank. Use `ncbi.taxon.id`
 for genus or other identities; `ncbi.taxon.species_id` remains an alternative.
 When both are present, the generic ID takes precedence, even if it has no match.
 There is no ancestor fallback or propagation of genus observations to species.
 Full records preserve the source organism identity; the provider does not supply
-an explicit rank in the fixture, so this weaver does not infer one.
+an explicit rank in the fixture, so this weaver does not infer one. The requested
+`coverage` group (`microbe.disease.coverage`) reports the matched taxid, source
+organism identities, reported rank or null, and filtered experiment count. This
+slice reads the retained source records; ordinary summary/compact requests stay
+light. A species-shaped input never relabels a genus observation as a species
+measurement. Ancestor roll-up is intentionally unsupported.
 
 ## Construction and resource lifetime
 

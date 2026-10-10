@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.3.7"
+version = "0.3.8"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -59,6 +59,11 @@ consumes_any = true
   [[capability.group]]
   id = "associations"
   outputs = ["microbe.disease.associations"]
+
+  # Exact identity and source-reported rank (unknown when absent).
+  [[capability.group]]
+  id = "coverage"
+  outputs = ["microbe.disease.coverage"]
 
   # The big blob — every joined field, for callers that want everything.
   [[capability.group]]

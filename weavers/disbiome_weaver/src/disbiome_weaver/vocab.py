@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = 'disbiome'
-WEAVER_VERSION = '0.3.7'
+WEAVER_VERSION = '0.3.8'
 WEAVER_TITLE = 'Disbiome microbe–disease associations (taxid -> diseases + direction)'
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -39,10 +39,11 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id='disbiome.list_diseases',
                 consumes=frozenset({'ncbi.taxon.id', 'ncbi.taxon.species_id'}),
-                produces=frozenset({'microbe.disease.associations', 'microbe.disease.count', 'microbe.disease.names', 'microbe.disease.records'}),
+                produces=frozenset({'microbe.disease.associations', 'microbe.disease.count', 'microbe.disease.coverage', 'microbe.disease.names', 'microbe.disease.records'}),
                 output_groups=(
                     OutputGroup(id='summary', outputs=frozenset({'microbe.disease.count', 'microbe.disease.names'})),
                     OutputGroup(id='associations', outputs=frozenset({'microbe.disease.associations'})),
+                    OutputGroup(id='coverage', outputs=frozenset({'microbe.disease.coverage'})),
                     OutputGroup(id='full', outputs=frozenset({'microbe.disease.records'})),
                 ),
                 backends=backends,

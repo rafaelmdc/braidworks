@@ -140,6 +140,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, "
     "sulfate_respiration).",
     # microbe–disease association outputs (disbiome_weaver)
+    "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
     "microbe.disease.names": "The diseases this microbe is linked to.",
     "microbe.disease.count": "How many disease-association experiments mention this microbe.",
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, "

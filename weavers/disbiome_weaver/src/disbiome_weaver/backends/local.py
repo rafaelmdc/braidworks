@@ -210,4 +210,31 @@ class DisbiomeLocalBackend(BackendBase):
             f"SELECT 1 FROM association WHERE {where} LIMIT 1", bindings
         ).fetchone():
             return LookupRecord(query=query, found=False)
+        if "coverage" in groups:
+            # Rank is source evidence, never inferred from the caller's input key.
+            rows = con.execute(
+                f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
+            ).fetchall()
+            organisms = []
+            for row in rows:
+                record = json.loads(row[0])
+                organism = record.get("organism") or {}
+                identity = {
+                    "taxid": _coerce_taxid(record.get("organism_ncbi_id")),
+                    "organism_id": _coerce_taxid(record.get("organism_id")),
+                    "name": organism.get("scientific_name") or organism.get("name"),
+                    "rank": organism.get("rank"),
+                }
+                if identity not in organisms:
+                    organisms.append(identity)
+            values["microbe.disease.coverage"] = {
+                "matched_taxid": taxid,
+                "lookup_policy": "exact",
+                "ancestor_rollup": False,
+                "propagated_to_descendants": False,
+                "organisms": organisms,
+                "rank_available": all(item["rank"] is not None for item in organisms),
+                "experiment_count": len(rows),
+            }
         return LookupRecord(query=query, found=True, values=values)

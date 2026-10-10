@@ -8,7 +8,7 @@ alphafold	describe_prediction	lookup	none	api	structure.alphafold.model_id	struc
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph;microbe.trait.records	
 bacdive	list_strains	lookup	none	api	organism.scientific_name	microbe.bacdive.strain_id;microbe.bacdive.strain_coverage	
 bacdive	describe_strain	lookup	none	api	microbe.bacdive.strain_id	microbe.bacdive.strain;microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph;microbe.trait.records	
-disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.id;ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
+disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.id;ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.coverage;microbe.disease.records	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 faprotax	describe_ecology	lookup	none	local	ncbi.taxon.lineage	microbe.ecology.functional_groups;microbe.ecology.evidence	
