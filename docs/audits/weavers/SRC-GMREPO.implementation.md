@@ -13,3 +13,17 @@ Units were checked against the [GMrepo v2 paper](https://pmc.ncbi.nlm.nih.gov/ar
 Package suite: **65 passed, 2 skipped**. Strict verification and repository checks are recorded with the issue closure. Other source findings remain open; this report closes only the issue named above.
 
 Repository verification: `make lint` passed; `make test` passed (2045 pytest cases, 56 opt-in skips, plus the tool unittest suite). `weaverkit verify --strict` passed for this package. All tooling used the isolated audit environment.
+
+## Approved retained run metadata — #272
+
+Version 0.2.8 retains observed run listing rows in the acquisition manifest,
+already covered by the local content hash. The requested metadata group reports
+source rows and selection/profile coverage without new per-run requests. Empty
+and failed profiles do not erase metadata; default profile coverage omits the
+metadata blob. Existing databases remain readable and truthfully report absent
+metadata, so no unrelated SQLite schema migration is needed. Standalone run
+drilling, new disease bridges and cohort filters remain deferred.
+
+Verification: 66 package tests passed, strict verification passed; three live
+bounded acquisition checks passed. Tests cover unchanged defaults, retained
+metadata for empty/failed profiles, cap/denominator context and request counts.

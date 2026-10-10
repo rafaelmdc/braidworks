@@ -480,6 +480,7 @@ def _fetch_run_ids(
     if isinstance(max_runs, bool) or not isinstance(max_runs, int) or max_runs < 1:
         raise ValueError("max_runs must be a positive integer")
     run_ids: list[str] = []
+    run_metadata: dict[str, dict[str, Any]] = {}
     seen: set[str] = set()
     exhausted = False
     skip = 0
@@ -504,6 +505,7 @@ def _fetch_run_ids(
                 raise _InvalidResponse("run listing contains a missing/repeated run id")
             seen.add(str(rid))
             run_ids.append(str(rid))
+            run_metadata[str(rid)] = dict(r)
         skip += len(rows)
         if len(rows) < want:
             exhausted = True
@@ -511,6 +513,7 @@ def _fetch_run_ids(
     if coverage is not None:
         coverage.update(
             {
+                "run_metadata": {rid: run_metadata[rid] for rid in run_ids[:max_runs]},
                 "selected_runs": len(run_ids[:max_runs]),
                 "cap": max_runs,
                 "listing_exhausted": exhausted,

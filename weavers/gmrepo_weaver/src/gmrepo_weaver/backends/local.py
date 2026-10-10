@@ -88,6 +88,8 @@ class GmrepoLocalBackend(BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         if capability_id == _PROFILES_CAPABILITY:
+            if "metadata" in groups_to_compute:
+                return await asyncio.to_thread(self._profiles_all, queries, groups_to_compute)
             return await asyncio.to_thread(self._profiles_all, queries)
         return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
@@ -99,9 +101,42 @@ class GmrepoLocalBackend(BackendBase):
         with self._source.session() as con:
             return [self._lookup_one(con, q, groups) for q in queries]
 
-    def _profiles_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _profiles_all(
+        self, queries: list[dict[str, Any]], groups: frozenset[str] | None = None
+    ) -> list[LookupRecord]:
+        groups = groups or frozenset({"profiles"})
         with self._source.session() as con:
-            return [self._profiles_one(con, q) for q in queries]
+            records = []
+            for query in queries:
+                scope = (
+                    _acquisition(con)
+                    .get("profiles", {})
+                    .get(str(query.get("disease.mesh.id", "")).strip())
+                )
+                if "profiles" in groups:
+                    record = self._profiles_one(con, query)
+                else:
+                    record = (
+                        LookupRecord(query=query, found=True)
+                        if scope
+                        else LookupRecord(query=query, error="GMrepo run metadata not acquired")
+                    )
+                if "metadata" in groups and record.found:
+                    metadata = scope.get("run_metadata") if scope else None
+                    record.values["microbe.abundance.run_metadata"] = {
+                        "mesh_id": str(query.get("disease.mesh.id", "")).strip(),
+                        "records": [dict(metadata[rid]) for rid in sorted(metadata)]
+                        if metadata is not None
+                        else [],
+                        "available": metadata is not None,
+                        "coverage": {k: v for k, v in scope.items() if k != "run_metadata"}
+                        if scope
+                        else None,
+                        "selection_scope": "observed run listing before bounded profile acquisition; no additional metadata requests",
+                        "interpretation": "provider metadata and units retained; unknown values not inferred",
+                    }
+                records.append(record)
+            return records
 
     def _profiles_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
         mesh_id = query.get("disease.mesh.id")
@@ -122,6 +157,8 @@ class GmrepoLocalBackend(BackendBase):
             ).fetchall()
         ]
         coverage = _acquisition(con).get("profiles", {}).get(mesh_id)
+        if coverage is not None:
+            coverage = {key: value for key, value in coverage.items() if key != "run_metadata"}
         if coverage is None:
             if not rows:
                 return LookupRecord(

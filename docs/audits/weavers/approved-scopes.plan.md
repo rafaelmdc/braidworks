@@ -19,7 +19,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 1 | #296 | Disbiome exact sample/method/outcome filters | Complete: 46 tests and strict |
 | 1 | #295 | Wikipedia observed monthly series/title provenance | Complete: 39 tests, strict, 2 live |
 | 1 | #297 | FAPROTAX ordered rule explanation group | Complete: 33 tests, strict, 25,068 reference cases without mismatch |
-| 1 | #272 | Retain already-returned GMrepo run metadata | Pending |
+| 1 | #272 | Retain already-returned GMrepo run metadata | Complete minimum: 66 tests, strict, 3 live |
 | 1 | #219 | STRING score/functional/physical/species scope | Complete: 64 tests, strict, 4 live |
 | 2 | #206 | QuickGO filters, raw evidence and explicit negative semantics | Pending |
 | 2 | #207 | QuickGO typed relations/obsoletion group | Pending |

@@ -119,3 +119,15 @@ async def test_live_sample_profiles_minibuild(tmp_path: Path):
     assert profile["mesh_id"] == mesh_id
     assert profile["n_runs"] >= 1
     assert profile["profiles"]
+
+
+async def test_live_run_listing_retains_observed_metadata():
+    scope = {}
+    post = _AcquisitionClient(_post, AcquisitionPolicy(max_calls=2))
+    ids = _fetch_run_ids(post, "D003093", max_runs=1, coverage=scope)
+    assert ids and post.calls == 1
+    row = scope["run_metadata"][ids[0]]
+    assert row["run_id"] == ids[0]
+    assert row["project_id"] and row["sample_id"]
+    assert "QCStatus" in row
+    assert scope["selected_runs"] == 1 and scope["cap"] == 1

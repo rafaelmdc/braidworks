@@ -189,3 +189,13 @@ explicit acquisition budgets and optional profile scope.
 ### Source validation
 
 Measurements use percentages in [0,100]; counts must be exact nonnegative SQLite integers. Invalid values report the field and original value. Missing measurements remain absent, and prevalence is undefined when there are no valid runs. Caller-supplied builds apply the same validation before creating a database.
+
+Request `microbe.abundance.run_metadata` on `gmrepo.sample_profiles` for the
+`metadata` group. Bounded acquisition retains the already-returned run listing
+rows, including distinct run/sample/project IDs and provider metadata with its
+original units and unknown values. No extra metadata request is issued per run.
+The output reports selected/capped/empty/failed profile coverage; listing metadata
+also survives profiles with no retained rows. Default profile output is unchanged.
+Existing databases without retained metadata report `available=false`; rebuild
+with the same bounded profile selection to acquire it. A capped subset is not a
+complete cohort, and QC labels are not reinterpreted.
