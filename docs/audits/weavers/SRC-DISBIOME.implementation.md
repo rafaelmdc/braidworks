@@ -15,3 +15,20 @@ remain covered by the unchanged behavior tests. Package suite: 33 passed,
 
 Issue #262 remains open pending explicit rank coverage/provenance in the build
 validation work (#265). Ancestor roll-up is optional and remains out of scope.
+
+## Source integrity — #265
+
+Version 0.3.6 validates table/row shapes, unique positive primary IDs, present
+foreign references, and valid positive SQLite-range experiment taxids before
+opening the destination. Nullable references are retained with explicit missing
+coverage. SQL additionally enforces unique non-null experiment identities.
+Normalized ID joins work across integer/string source representations.
+
+Build metadata retains per-table observed counts/hashes, missing-reference counts,
+completion time, and the non-frozen snapshot limitation. This does not invent a
+release identifier or claim cross-table temporal consistency. Existing schema-2
+caches remain readable; refreshed caches carry the new provenance.
+
+Eleven new regressions verify malformed source rejection without destination changes
+and truthful nullable-join coverage. Package suite: 44 passed, 1 live skipped;
+strict verification and workspace lint passed. No HTTP backend changed.

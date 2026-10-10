@@ -102,3 +102,17 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+## Snapshot validation (0.3.6)
+
+Builds validate that all four responses are arrays of objects with unique positive
+primary IDs. Present foreign IDs must resolve; absent optional IDs are retained
+as missing evidence and counted. Invalid experiment taxids are rejected. Validation
+runs before opening the destination, and normal acquisition uses the shared atomic
+publication boundary.
+
+SQLite metadata includes `source_coverage` with each response's row count and
+SHA-256, missing-join counts, and `build_completed_utc`. These identify the observed
+responses; independent table requests do **not** constitute a frozen upstream
+snapshot. Full joined records preserve provider fields. Existing valid schema-2
+caches remain readable; refresh to obtain the new build provenance.

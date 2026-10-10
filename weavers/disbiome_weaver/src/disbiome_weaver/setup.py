@@ -24,9 +24,11 @@ import sqlite3
 import urllib.request
 import uuid
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from braidworks.core import BackendConfigurationError
 from braidworks.core.localdb import ProgressCallback, default_db_path, ensure_local_db
 
 API_BASE = "https://disbiome.ugent.be:8080"
@@ -81,9 +83,13 @@ def join_record(
     def _clean_row(row: dict | None) -> dict | None:
         return {k: _clean(v) for k, v in row.items()} if row else None
 
-    record["disease"] = _clean_row(diseases.get(str(experiment.get("disease_id"))))
-    record["organism"] = _clean_row(organisms.get(str(experiment.get("organism_id"))))
-    record["publication"] = _clean_row(publications.get(str(experiment.get("publication_id"))))
+    record["disease"] = _clean_row(diseases.get(str(_coerce_taxid(experiment.get("disease_id")))))
+    record["organism"] = _clean_row(
+        organisms.get(str(_coerce_taxid(experiment.get("organism_id"))))
+    )
+    record["publication"] = _clean_row(
+        publications.get(str(_coerce_taxid(experiment.get("publication_id"))))
+    )
     return record
 
 
@@ -92,6 +98,48 @@ def _content_hash(*collections: Any) -> str:
     for coll in collections:
         digest.update(json.dumps(coll, sort_keys=True, ensure_ascii=False).encode("utf-8"))
     return digest.hexdigest()
+
+
+def _validate_tables(**tables: Any) -> tuple[dict[str, dict[str, dict]], dict[str, Any]]:
+    """Validate source identity before opening the destination; never overwrite duplicates."""
+    indexes = {}
+    coverage = {}
+    for name, rows in tables.items():
+        if not isinstance(rows, list):
+            raise BackendConfigurationError(f"Disbiome {name}: expected a JSON array")
+        index = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                raise BackendConfigurationError(f"Disbiome {name}: expected object rows")
+            identity = _coerce_taxid(row.get(f"{name}_id"))
+            if identity is None or not 0 < identity <= 2**63 - 1:
+                raise BackendConfigurationError(f"Disbiome {name}: invalid primary identity")
+            key = str(identity)
+            if key in index:
+                raise BackendConfigurationError(f"Disbiome {name}: duplicate identity {key}")
+            index[key] = row
+        indexes[name] = index
+        coverage[name] = {"rows": len(rows), "sha256": _content_hash(rows)}
+    missing = {name: 0 for name in ("disease", "organism", "publication")}
+    for row in tables["experiment"]:
+        for name in missing:
+            raw = _clean(row.get(f"{name}_id"))
+            if raw is None:
+                missing[name] += 1
+                continue
+            identity = _coerce_taxid(raw)
+            if identity is None or str(identity) not in indexes[name]:
+                raise BackendConfigurationError(
+                    f"Disbiome experiment {row['experiment_id']}: dangling {name} identity {raw!r}"
+                )
+        raw = _clean(row.get("organism_ncbi_id"))
+        if raw is not None:
+            identity = _coerce_taxid(raw)
+            if identity is None or not 0 < identity <= 2**63 - 1:
+                raise BackendConfigurationError("Disbiome experiment: invalid NCBI taxid")
+    coverage["missing_foreign_identity"] = missing
+    coverage["snapshot_consistency"] = "independent table responses; not a frozen snapshot"
+    return indexes, coverage
 
 
 def write_db(
@@ -108,9 +156,12 @@ def write_db(
     join live in one place. One row per experiment; ``ncbi_id`` is the join key the
     backend queries on (NULL when an experiment has no NCBI taxid).
     """
-    diseases_by_id = {str(d["disease_id"]): d for d in diseases}
-    organisms_by_id = {str(o["organism_id"]): o for o in organisms}
-    publications_by_id = {str(p["publication_id"]): p for p in publications}
+    indexes, coverage = _validate_tables(
+        experiment=experiments, disease=diseases, organism=organisms, publication=publications
+    )
+    diseases_by_id = indexes["disease"]
+    organisms_by_id = indexes["organism"]
+    publications_by_id = indexes["publication"]
 
     content = _content_hash(
         sorted(experiments, key=lambda e: int(e["experiment_id"])),
@@ -123,7 +174,7 @@ def write_db(
     try:
         con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
         con.execute(
-            "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER, full_json TEXT, "
+            "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER UNIQUE NOT NULL, full_json TEXT, "
             "disease_name, meddra_id, meddra_level, qualitative_outcome, "
             "sample_name, host_type, method_name)"
         )
@@ -165,6 +216,8 @@ def write_db(
                 ("n_experiments", str(len(experiments))),
                 ("n_with_taxid", str(n_with_taxid)),
                 ("source", API_BASE),
+                ("build_completed_utc", datetime.now(UTC).isoformat()),
+                ("source_coverage", json.dumps(coverage, sort_keys=True)),
             ],
         )
         con.commit()

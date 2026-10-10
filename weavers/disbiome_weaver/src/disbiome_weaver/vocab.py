@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.3.5"
+WEAVER_VERSION = "0.3.6"
 WEAVER_TITLE = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
