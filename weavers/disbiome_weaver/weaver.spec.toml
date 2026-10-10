@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.3.6"
+version = "0.3.7"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -68,6 +68,21 @@ consumes_any = true
 # Golden runs against the deterministic fixture (build_disbiome_weaver_fixture: a tiny
 # SQLite built from canned records for Lactobacillus, taxid 1591) so verify --strict is
 # reproducible offline.
+  [[capability.parameter]]
+  name = "sample"
+  type = "string"
+  description = "Exact provider sample name; missing context is excluded when filtering"
+
+  [[capability.parameter]]
+  name = "method"
+  type = "string"
+  description = "Exact provider detection method; omitted means unfiltered"
+
+  [[capability.parameter]]
+  name = "outcome"
+  type = "string"
+  description = "Exact provider qualitative outcome, such as Elevated or Reduced"
+
 [[golden]]
 capability = "disbiome.list_diseases"
 input = { "ncbi.taxon.id" = 1591 }

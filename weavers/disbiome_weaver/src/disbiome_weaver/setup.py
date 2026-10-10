@@ -176,7 +176,7 @@ def write_db(
         con.execute(
             "CREATE TABLE association (ncbi_id INTEGER, experiment_id INTEGER UNIQUE NOT NULL, full_json TEXT, "
             "disease_name, meddra_id, meddra_level, qualitative_outcome, "
-            "sample_name, host_type, method_name)"
+            "sample_name, host_type, method_name, publication_id, organism_id, disease_id)"
         )
         rows = []
         n_with_taxid = 0
@@ -200,17 +200,22 @@ def write_db(
                             "sample_name",
                             "host_type",
                             "method_name",
+                            "publication_id",
+                            "organism_id",
+                            "disease_id",
                         )
                     ),
                 )
             )
-        con.executemany("INSERT INTO association VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        con.executemany(
+            "INSERT INTO association VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+        )
         con.execute("CREATE INDEX ix_association_ncbi ON association(ncbi_id)")
         con.execute("CREATE INDEX ix_association_summary ON association(ncbi_id, disease_name)")
         con.executemany(
             "INSERT INTO meta VALUES (?, ?)",
             [
-                ("schema_version", "2"),
+                ("schema_version", "3"),
                 ("build_id", uuid.uuid4().hex),
                 ("content_sha256", content),
                 ("n_experiments", str(len(experiments))),
@@ -235,10 +240,10 @@ def db_is_valid(path: Path) -> bool:
         return False
     try:
         schema = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
-        if schema != ("2",):
+        if schema != ("3",):
             return False
         con.execute(
-            "SELECT disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name FROM association LIMIT 0"
+            "SELECT disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name, publication_id, organism_id, disease_id FROM association LIMIT 0"
         )
         has_hash = con.execute("SELECT value FROM meta WHERE key = 'content_sha256'").fetchone()
         count = con.execute("SELECT COUNT(*) FROM association").fetchone()[0]

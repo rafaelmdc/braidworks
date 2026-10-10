@@ -10,20 +10,21 @@ from __future__ import annotations
 from braidworks.core import (
     Capability,
     OutputGroup,
+    Parameter,
     Provenance,
     WeaverManifest,
 )
 
-WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.3.6"
-WEAVER_TITLE = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
+WEAVER_ID = 'disbiome'
+WEAVER_VERSION = '0.3.7'
+WEAVER_TITLE = 'Disbiome microbe–disease associations (taxid -> diseases + direction)'
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url="https://disbiome.ugent.be",
-    license="Open",
-    citation="https://doi.org/10.1186/s12866-018-1197-5",
-    attribution="Disbiome (Janssens et al., 2018)",
+    source_url='https://disbiome.ugent.be',
+    license='Open',
+    citation='https://doi.org/10.1186/s12866-018-1197-5',
+    attribution='Disbiome (Janssens et al., 2018)',
 )
 
 
@@ -36,28 +37,21 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="disbiome.list_diseases",
-                consumes=frozenset({"ncbi.taxon.id", "ncbi.taxon.species_id"}),
-                produces=frozenset(
-                    {
-                        "microbe.disease.associations",
-                        "microbe.disease.count",
-                        "microbe.disease.names",
-                        "microbe.disease.records",
-                    }
-                ),
+                id='disbiome.list_diseases',
+                consumes=frozenset({'ncbi.taxon.id', 'ncbi.taxon.species_id'}),
+                produces=frozenset({'microbe.disease.associations', 'microbe.disease.count', 'microbe.disease.names', 'microbe.disease.records'}),
                 output_groups=(
-                    OutputGroup(
-                        id="summary",
-                        outputs=frozenset({"microbe.disease.count", "microbe.disease.names"}),
-                    ),
-                    OutputGroup(
-                        id="associations", outputs=frozenset({"microbe.disease.associations"})
-                    ),
-                    OutputGroup(id="full", outputs=frozenset({"microbe.disease.records"})),
+                    OutputGroup(id='summary', outputs=frozenset({'microbe.disease.count', 'microbe.disease.names'})),
+                    OutputGroup(id='associations', outputs=frozenset({'microbe.disease.associations'})),
+                    OutputGroup(id='full', outputs=frozenset({'microbe.disease.records'})),
                 ),
                 backends=backends,
                 consumes_any=True,
+                parameters=(
+                    Parameter(name='sample', type='string', enum=(), default=None, description='Exact provider sample name; missing context is excluded when filtering'),
+                    Parameter(name='method', type='string', enum=(), default=None, description='Exact provider detection method; omitted means unfiltered'),
+                    Parameter(name='outcome', type='string', enum=(), default=None, description='Exact provider qualitative outcome, such as Elevated or Reduced'),
+                ),
             ),
         ),
     )

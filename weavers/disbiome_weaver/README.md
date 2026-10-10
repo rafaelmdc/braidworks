@@ -116,3 +116,13 @@ SHA-256, missing-join counts, and `build_completed_utc`. These identify the obse
 responses; independent table requests do **not** constitute a frozen upstream
 snapshot. Full joined records preserve provider fields. Existing valid schema-2
 caches remain readable; refresh to obtain the new build provenance.
+
+Compact associations retain integer experiment, publication, organism and disease
+IDs (null when absent), linking each observation to its full joined record.
+Database schema 3 requires rebuilding older local databases.
+
+Optional per-query `sample`, `method` and `outcome` parameters match provider
+strings exactly, before summary counts or output projections. Omitted filters
+retain all observations; missing context does not match an explicit filter.
+Sample names are provider sample categories, not inferred anatomical sites.
+Counts remain experiment counts and cannot establish causal disease effects.

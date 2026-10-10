@@ -38,3 +38,18 @@ five tool unittest checks. Workspace lint and strict verification passed.
 
 Five additional source-identity regressions passed in the final 44-test Disbiome
 package run; they were added after the workspace run reached Disbiome.
+
+## Approved compact identity and filters — #264 / #296
+
+Version 0.3.7 preserves source experiment/publication/organism/disease identities
+in compact evidence. IDs normalize to integers while full source JSON remains
+unchanged. Schema 3 retains SQL projection benefits and explicitly rejects old
+schema databases for rebuild. Exact sample/method/outcome filters use bound SQL
+parameters before every output slice and count. Missing values stay unknown.
+Unfiltered counts and generic taxid routing are unchanged; disease reverse
+traversal remains deferred.
+
+Verification: 46 package tests passed, one opt-in skip; strict verification passed.
+Tests cover slice parity, conflicting study observations, missing publication
+and sample context, SQL quoting, old-schema rejection and unchanged defaults.
+No HTTP backend was modified.

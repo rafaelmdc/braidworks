@@ -38,6 +38,10 @@ RECORDS = "microbe.disease.records"
 def _association_row(record: dict[str, Any]) -> dict[str, Any]:
     """The compact per-experiment view (the association signal + minimal context)."""
     return {
+        "experiment_id": _coerce_taxid(record.get("experiment_id")),
+        "publication_id": _coerce_taxid(record.get("publication_id")),
+        "organism_id": _coerce_taxid(record.get("organism_id")),
+        "disease_id": _coerce_taxid(record.get("disease_id")),
         "disease_name": record.get("disease_name"),
         "meddra_id": record.get("meddra_id"),
         "meddra_level": record.get("meddra_level"),
@@ -78,10 +82,21 @@ class DisbiomeLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        options = params or {}
+        if any(not isinstance(value, str) or not value for value in options.values()):
+            return [
+                LookupRecord(query=q, error="Disbiome filters must be nonempty strings")
+                for q in queries
+            ]
+        if options:
+            return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute, options)
         return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
     def _lookup_all(
-        self, queries: list[dict[str, Any]], groups: frozenset[str]
+        self,
+        queries: list[dict[str, Any]],
+        groups: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         # Per-call work reuse, bounded by this batch; results remain detached.
         with self._source.session() as con:
@@ -97,7 +112,7 @@ class DisbiomeLocalBackend(BackendBase):
                 )
                 taxid = _coerce_taxid(query.get(key))
                 if taxid not in resolved:
-                    resolved[taxid] = self._lookup_one(con, query, taxid, groups)
+                    resolved[taxid] = self._lookup_one(con, query, taxid, groups, params)
                 records.append(
                     replace(resolved[taxid], query=query, values=deepcopy(resolved[taxid].values))
                 )
@@ -109,14 +124,27 @@ class DisbiomeLocalBackend(BackendBase):
         query: dict[str, Any],
         taxid: int | None,
         groups: frozenset[str],
+        params: dict[str, Any] | None = None,
     ) -> LookupRecord:
         if taxid is None:
             return LookupRecord(query=query, found=False)
+        filters = params or {}
+        columns = {
+            "sample": "sample_name",
+            "method": "method_name",
+            "outcome": "qualitative_outcome",
+        }
+        where = "ncbi_id = ?"
+        bindings = [taxid]
+        for name, column in columns.items():
+            if name in filters:
+                where += f" AND {column} = ?"
+                bindings.append(filters[name])
         values: dict[str, Any] = {}
         if "full" in groups:
             rows = con.execute(
-                "SELECT full_json FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
-                (taxid,),
+                f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
             ).fetchall()
             records = [json.loads(row[0]) for row in rows]
             if not records:
@@ -135,13 +163,17 @@ class DisbiomeLocalBackend(BackendBase):
                 values[ASSOCIATIONS] = [_association_row(record) for record in records]
         elif "associations" in groups:
             rows = con.execute(
-                "SELECT disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name "
-                "FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
-                (taxid,),
+                "SELECT experiment_id, publication_id, organism_id, disease_id, disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name "
+                f"FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
             ).fetchall()
             if not rows:
                 return LookupRecord(query=query, found=False)
             keys = (
+                "experiment_id",
+                "publication_id",
+                "organism_id",
+                "disease_id",
                 "disease_name",
                 "meddra_id",
                 "meddra_level",
@@ -163,8 +195,8 @@ class DisbiomeLocalBackend(BackendBase):
                 )
         elif "summary" in groups:
             rows = con.execute(
-                "SELECT disease_name, COUNT(*) FROM association WHERE ncbi_id = ? GROUP BY disease_name",
-                (taxid,),
+                f"SELECT disease_name, COUNT(*) FROM association WHERE {where} GROUP BY disease_name",
+                bindings,
             ).fetchall()
             if not rows:
                 return LookupRecord(query=query, found=False)
@@ -175,7 +207,7 @@ class DisbiomeLocalBackend(BackendBase):
                 }
             )
         elif not con.execute(
-            "SELECT 1 FROM association WHERE ncbi_id = ? LIMIT 1", (taxid,)
+            f"SELECT 1 FROM association WHERE {where} LIMIT 1", bindings
         ).fetchone():
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=values)
