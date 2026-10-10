@@ -1110,7 +1110,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "wikipedia-weaver"
-version = "0.1.7"
+version = "0.1.8"
 source = { editable = "weavers/wikipedia_weaver" }
 dependencies = [
     { name = "braidworks-core" },

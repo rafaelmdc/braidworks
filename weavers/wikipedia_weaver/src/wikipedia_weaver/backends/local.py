@@ -20,7 +20,7 @@ from typing import Any
 from braidworks.core import BackendBase, LookupRecord
 from braidworks.core.source_identity import SourceBinding
 
-from ..measurement import InvalidScope, measurement, month_window
+from ..measurement import InvalidScope, measurement, month_window, title_provenance
 from ..setup import db_is_valid
 
 
@@ -59,7 +59,22 @@ class WikipediaLocalBackend(BackendBase):
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
         titles = [str(q.get("wikipedia.title", "")).strip() for q in queries]
-        return await asyncio.to_thread(self._lookup, titles, params or {})
+        records = await asyncio.to_thread(self._lookup, titles, params or {})
+        if "series" in groups_to_compute:
+            for record in records:
+                if record.found:
+                    record.values["wikipedia.pageviews.series"] = [
+                        {
+                            "month": record.values["wikipedia.pageviews.measurement"][
+                                "start_month"
+                            ],
+                            "views": record.values["wikipedia.pageviews"],
+                        }
+                    ]
+                    record.values["wikipedia.pageviews.title"] = title_provenance(
+                        record.query["wikipedia.title"]
+                    )
+        return records
 
     def _lookup(self, titles: list[str], params: dict[str, Any]) -> list[LookupRecord]:
         with self._source.session() as con:

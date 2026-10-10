@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "wikipedia"
-WEAVER_VERSION = "0.1.7"
+WEAVER_VERSION = "0.1.8"
 WEAVER_TITLE = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -39,12 +39,25 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_pageviews",
                 consumes=frozenset({"wikipedia.title"}),
-                produces=frozenset({"wikipedia.pageviews", "wikipedia.pageviews.measurement"}),
+                produces=frozenset(
+                    {
+                        "wikipedia.pageviews",
+                        "wikipedia.pageviews.measurement",
+                        "wikipedia.pageviews.series",
+                        "wikipedia.pageviews.title",
+                    }
+                ),
                 output_groups=(
                     OutputGroup(
                         id="core",
                         outputs=frozenset(
                             {"wikipedia.pageviews", "wikipedia.pageviews.measurement"}
+                        ),
+                    ),
+                    OutputGroup(
+                        id="series",
+                        outputs=frozenset(
+                            {"wikipedia.pageviews.series", "wikipedia.pageviews.title"}
                         ),
                     ),
                 ),

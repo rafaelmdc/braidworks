@@ -45,3 +45,13 @@ def measurement(
         "observed_bins": observed,
         "complete": complete,
     }
+
+
+def title_provenance(title: str) -> dict[str, Any]:
+    """Document the supplied title; pageviews are not redirect aggregation."""
+    return {
+        "project": "en.wikipedia",
+        "requested_title": title,
+        "article_key": title.replace(" ", "_"),
+        "redirect_policy": "supplied title only; redirects are not resolved or aggregated",
+    }

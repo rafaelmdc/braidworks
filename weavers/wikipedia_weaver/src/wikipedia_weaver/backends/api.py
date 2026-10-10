@@ -27,7 +27,7 @@ from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
 
-from wikipedia_weaver.measurement import InvalidScope, measurement, month_window
+from wikipedia_weaver.measurement import InvalidScope, measurement, month_window, title_provenance
 
 BASE_URL = "https://wikimedia.org/api/rest_v1/"
 _USER_AGENT = "Braidworks (https://github.com/rafaelmdc/braidworks)"
@@ -158,7 +158,8 @@ class WikipediaApiBackend(HTTPClientLifecycle, BackendBase):
             try:
                 resp = await self._http().get(path, headers={"User-Agent": _USER_AGENT})
                 resp.raise_for_status()
-                total, observed = _pageviews(resp.json(), months=months, title=title, agent=agent)
+                body = resp.json()
+                total, observed = _pageviews(body, months=months, title=title, agent=agent)
             except httpx.HTTPStatusError as exc:
                 if is_not_found_status(exc.response.status_code):
                     return LookupRecord(query=query, found=False)  # no data for this title
@@ -179,15 +180,22 @@ class WikipediaApiBackend(HTTPClientLifecycle, BackendBase):
                     error=f"No monthly bins acquired for {months[0]}..{months[-1]}; "
                     "measurement completeness is not established.",
                 )
+            values = {
+                "wikipedia.pageviews": total,
+                "wikipedia.pageviews.measurement": measurement(
+                    months, agent, observed, complete=observed == len(months)
+                ),
+            }
+            if "series" in groups_to_compute:
+                values["wikipedia.pageviews.series"] = [
+                    {"month": item["timestamp"][:6], "views": item["views"]}
+                    for item in sorted(body["items"], key=lambda item: item["timestamp"])
+                ]
+                values["wikipedia.pageviews.title"] = title_provenance(title)
             return LookupRecord(
                 query=query,
                 found=True,
-                values={
-                    "wikipedia.pageviews": total,
-                    "wikipedia.pageviews.measurement": measurement(
-                        months, agent, observed, complete=observed == len(months)
-                    ),
-                },
+                values=values,
                 warnings=(
                     (
                         f"Pageviews: {months[0]}..{months[-1]}, {agent}, all-access; "

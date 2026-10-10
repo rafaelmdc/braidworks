@@ -17,7 +17,7 @@ No environment/global installation is needed. Use the isolated audit venv.
 | 1 | #240 | GTDB representative accession/release group; no tree changes | Complete: 88 tests, strict, 2 live API checks |
 | 1 | #264 | Disbiome compact evidence identity | Pending |
 | 1 | #296 | Disbiome exact sample/method/outcome filters | Pending |
-| 1 | #295 | Wikipedia observed monthly series/title provenance | Pending |
+| 1 | #295 | Wikipedia observed monthly series/title provenance | Complete: 39 tests, strict, 2 live |
 | 1 | #297 | FAPROTAX ordered rule explanation group | Complete: 33 tests, strict, 25,068 reference cases without mismatch |
 | 1 | #272 | Retain already-returned GMrepo run metadata | Pending |
 | 1 | #219 | STRING score/functional/physical/species scope | Pending |

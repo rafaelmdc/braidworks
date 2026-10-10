@@ -6,7 +6,7 @@ db_name = "wikipedia"
 weaver_id = "wikipedia"
 kind = "lookup"
 title = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
-version = "0.1.7"
+version = "0.1.8"
 license = "CC0-1.0"
 source_url = "https://wikimedia.org/api/rest_v1/"
 citation = "Wikimedia REST API — pageviews. https://wikimedia.org/api/rest_v1/"
@@ -42,6 +42,10 @@ backends = ["api", "local"]
   [[capability.group]]
   id = "core"
   outputs = ["wikipedia.pageviews", "wikipedia.pageviews.measurement"]
+
+  [[capability.group]]
+  id = "series"
+  outputs = ["wikipedia.pageviews.series", "wikipedia.pageviews.title"]
 
   [[capability.parameter]]
   name = "months"

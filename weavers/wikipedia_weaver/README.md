@@ -127,3 +127,10 @@ Supported builder options are explicit; unknown options raise
 See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.
+
+Request `wikipedia.pageviews.series` for ordered observed `{month, views}` bins
+and `wikipedia.pageviews.title` for title provenance (the `series` group).
+Missing months are not zero-filled; the existing measurement output reports
+completeness. The API supports the existing window/agent parameters; a local dump
+provides its one acquired user-traffic month. Titles remain English Wikipedia
+titles, with no automatic redirect resolution or traffic aggregation.
