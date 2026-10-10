@@ -92,3 +92,29 @@ async def test_live_describe_pathway():
     assert produced["pathway.reactome.display_name"] == "Stabilization of p53"
     assert produced["pathway.reactome.species"] == "Homo sapiens"
     assert produced["pathway.reactome.detail"]["st_id"] == "R-HSA-69541"
+
+
+async def test_live_requested_hierarchy_and_typed_participants():
+    async with build_reactome_weaver() as weaver:
+        results = await weaver.execute_batch(
+            "describe_pathway",
+            [
+                StrandSet.from_strands(pid, [Strand("pathway.reactome.id", pid)])
+                for pid in ["R-HSA-69541", "R-HSA-141409"]
+            ],
+            requested_outputs=frozenset(
+                {"pathway.reactome.hierarchy", "pathway.reactome.participants"}
+            ),
+            backend="api",
+        )
+        for result in results:
+            skip_if_transient(result)
+            assert result.status is WeaveStatus.OK
+        pathway = {s.type_id: s.value for s in results[0].strands}
+        assert pathway["pathway.reactome.hierarchy"]["children"]
+        reaction = {s.type_id: s.value for s in results[1].strands}
+        records = reaction["pathway.reactome.participants"]["records"]
+        assert records and all(r["observed_release"] > 0 and r["type"] for r in records)
+        assert any(
+            ref.get("identifier") == "Q9Y6D9" for row in records for ref in row["references"] or []
+        )

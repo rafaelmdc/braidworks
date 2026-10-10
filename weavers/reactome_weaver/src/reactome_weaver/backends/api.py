@@ -91,6 +91,62 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     }
 
 
+def _hierarchy(obj: dict[str, Any]) -> dict[str, Any]:
+    events = obj.get("hasEvent")
+    if events is not None:
+        events = _validated_rows(events)
+    return {
+        "id": obj["stId"],
+        "type": obj.get("schemaClass"),
+        "children": sorted(
+            [
+                {"id": row["stId"], "type": row.get("schemaClass"), "name": row.get("displayName")}
+                for row in {row["stId"]: row for row in events or []}.values()
+            ],
+            key=lambda row: row["id"],
+        )
+        if events is not None
+        else None,
+        "scope": "direct hasEvent children only; no recursive expansion or inferred parents",
+    }
+
+
+def _participants(body: Any, pid: str, release: int) -> dict[str, Any]:
+    if not isinstance(body, list):
+        raise _InvalidResponse("Reactome participants must be a list")
+    rows = {}
+    for row in body:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("schemaClass"), str)
+            or isinstance(row.get("peDbId"), bool)
+            or not isinstance(row.get("peDbId"), int)
+        ):
+            raise _InvalidResponse("Reactome participant must have a typed provider ID")
+        references = row.get("refEntities")
+        if references is not None and (
+            not isinstance(references, list) or any(not isinstance(ref, dict) for ref in references)
+        ):
+            raise _InvalidResponse("Reactome participant references must be objects")
+        key = row["peDbId"]
+        if key in rows and rows[key]["source"] != row:
+            raise _InvalidResponse("Conflicting Reactome participant identity")
+        rows[key] = {
+            "physical_entity_id": key,
+            "observed_release": release,
+            "type": row["schemaClass"],
+            "name": row.get("displayName"),
+            "references": deepcopy(references) if references is not None else None,
+            "source": deepcopy(row),
+        }
+    return {
+        "event_id": pid,
+        "observed_release": release,
+        "records": [rows[key] for key in sorted(rows)],
+        "scope": "provider event participants; numeric IDs are scoped to the observed release, entity types retained",
+    }
+
+
 def _describe(obj: dict[str, Any]) -> dict[str, Any]:
     """One Reactome pathway object (/data/query/{id}) -> describe_pathway outputs."""
     return {
@@ -163,7 +219,7 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
     ) -> list[LookupRecord]:
         # describe_pathway drills pathway ids; list_pathways lists a protein's pathways.
         if capability_id == "describe_pathway":
-            return await self._describe_pathways(queries)
+            return await self._describe_pathways(queries, groups=groups_to_compute)
 
         async def resolve(query: dict[str, Any]) -> LookupRecord:
             return await self._resolve_one(
@@ -172,7 +228,9 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
 
         return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
-    async def _describe_pathways(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    async def _describe_pathways(
+        self, queries: list[dict[str, Any]], *, groups: frozenset[str] = frozenset()
+    ) -> list[LookupRecord]:
         """Pathway ids -> their details via the bulk ``POST /data/query/ids`` endpoint.
 
         The whole batch is sent as a comma-separated id list (chunked) instead of one
@@ -205,6 +263,56 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
             ) as exc:
                 errors.update(dict.fromkeys(chunk, f"Reactome API error: {format_exc(exc)}"))
 
+        participant_values = {}
+        if "participants" in groups and objs:
+            try:
+                response = await self._http().get("/data/database/version", headers={"Accept": "text/plain"})
+                response.raise_for_status()
+                release = int(response.text.strip())
+                if release < 1:
+                    raise ValueError("nonpositive release")
+            except (httpx.HTTPError, ValueError) as exc:
+                errors.update(
+                    dict.fromkeys(objs, f"Reactome release unavailable: {format_exc(exc)}")
+                )
+            else:
+
+                async def fetch_participants(
+                    pid: str,
+                ) -> tuple[str, dict[str, Any] | None, str | None]:
+                    try:
+                        response = await self._http().get(f"/data/participants/{pid}")
+                        response.raise_for_status()
+                        return pid, _participants(response.json(), pid, release), None
+                    except httpx.HTTPStatusError as exc:
+                        if is_not_found_status(exc.response.status_code):
+                            return (
+                                pid,
+                                {
+                                    "event_id": pid,
+                                    "observed_release": release,
+                                    "records": None,
+                                    "available": False,
+                                },
+                                None,
+                            )
+                        return pid, None, f"Reactome participants error: {format_exc(exc)}"
+                    except (
+                        httpx.HTTPError,
+                        json.JSONDecodeError,
+                        UnicodeDecodeError,
+                        _InvalidResponse,
+                    ) as exc:
+                        return pid, None, f"Reactome participants error: {format_exc(exc)}"
+
+                results = await map_bounded(
+                    sorted(objs), fetch_participants, limit=self._max_concurrency
+                )
+                for pid, value, error in results:
+                    if error:
+                        errors[pid] = error
+                    else:
+                        participant_values[pid] = value
         records: list[LookupRecord] = []
         for query, pid in zip(queries, pids):
             obj = objs.get(pid) if pid else None
@@ -213,7 +321,16 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
             elif not obj:
                 records.append(LookupRecord(query=query, found=False))
             else:
-                records.append(LookupRecord(query=query, found=True, values=_describe(obj)))
+                values = _describe(obj)
+                try:
+                    if "hierarchy" in groups:
+                        values["pathway.reactome.hierarchy"] = _hierarchy(obj)
+                    if "participants" in groups:
+                        values["pathway.reactome.participants"] = deepcopy(participant_values[pid])
+                except _InvalidResponse as exc:
+                    records.append(LookupRecord(query=query, error=str(exc)))
+                else:
+                    records.append(LookupRecord(query=query, found=True, values=values))
         return records
 
     async def _resolve_one(self, query: dict[str, Any], accession: str) -> LookupRecord:

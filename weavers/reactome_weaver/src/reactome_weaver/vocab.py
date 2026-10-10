@@ -14,16 +14,16 @@ from braidworks.core import (
     WeaverManifest,
 )
 
-WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.12"
-WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
+WEAVER_ID = 'reactome'
+WEAVER_VERSION = '0.1.13'
+WEAVER_TITLE = 'Reactome pathways (accession -> pathways)'
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url="https://reactome.org",
-    license="CC0-1.0",
-    citation="https://doi.org/10.1093/nar/gkab1028",
-    attribution="Reactome",
+    source_url='https://reactome.org',
+    license='CC0-1.0',
+    citation='https://doi.org/10.1093/nar/gkab1028',
+    attribution='Reactome',
 )
 
 
@@ -36,56 +36,25 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         provenance=PROVENANCE,
         capabilities=(
             Capability(
-                id="list_pathways",
-                consumes=frozenset({"protein.uniprot.accession"}),
-                produces=frozenset(
-                    {
-                        "pathway.reactome.count",
-                        "pathway.reactome.id",
-                        "pathway.reactome.names",
-                        "pathway.reactome.records",
-                    }
-                ),
+                id='list_pathways',
+                consumes=frozenset({'protein.uniprot.accession'}),
+                produces=frozenset({'pathway.reactome.count', 'pathway.reactome.id', 'pathway.reactome.names', 'pathway.reactome.records'}),
                 output_groups=(
-                    OutputGroup(
-                        id="summary",
-                        outputs=frozenset(
-                            {
-                                "pathway.reactome.count",
-                                "pathway.reactome.id",
-                                "pathway.reactome.names",
-                            }
-                        ),
-                    ),
-                    OutputGroup(id="full", outputs=frozenset({"pathway.reactome.records"})),
+                    OutputGroup(id='summary', outputs=frozenset({'pathway.reactome.count', 'pathway.reactome.id', 'pathway.reactome.names'})),
+                    OutputGroup(id='full', outputs=frozenset({'pathway.reactome.records'})),
                 ),
                 backends=backends,
                 max_batch_size=25,
-                set_outputs=frozenset({"pathway.reactome.id"}),
+                set_outputs=frozenset({'pathway.reactome.id'}),
             ),
             Capability(
-                id="describe_pathway",
-                consumes=frozenset({"pathway.reactome.id"}),
-                produces=frozenset(
-                    {
-                        "pathway.reactome.detail",
-                        "pathway.reactome.display_name",
-                        "pathway.reactome.in_disease",
-                        "pathway.reactome.species",
-                    }
-                ),
+                id='describe_pathway',
+                consumes=frozenset({'pathway.reactome.id'}),
+                produces=frozenset({'pathway.reactome.detail', 'pathway.reactome.display_name', 'pathway.reactome.hierarchy', 'pathway.reactome.in_disease', 'pathway.reactome.participants', 'pathway.reactome.species'}),
                 output_groups=(
-                    OutputGroup(
-                        id="detail",
-                        outputs=frozenset(
-                            {
-                                "pathway.reactome.detail",
-                                "pathway.reactome.display_name",
-                                "pathway.reactome.in_disease",
-                                "pathway.reactome.species",
-                            }
-                        ),
-                    ),
+                    OutputGroup(id='detail', outputs=frozenset({'pathway.reactome.detail', 'pathway.reactome.display_name', 'pathway.reactome.in_disease', 'pathway.reactome.species'})),
+                    OutputGroup(id='hierarchy', outputs=frozenset({'pathway.reactome.hierarchy'})),
+                    OutputGroup(id='participants', outputs=frozenset({'pathway.reactome.participants'})),
                 ),
                 backends=backends,
                 max_batch_size=25,

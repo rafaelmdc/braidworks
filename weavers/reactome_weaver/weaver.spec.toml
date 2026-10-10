@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.12"
+version = "0.1.13"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -38,6 +38,8 @@ source_sample = """
   "isInDisease": false,
   "releaseDate": "2004-07-06"
 }
+# GET /data/participants/R-HSA-141409
+[{"peDbId":141433,"displayName":"MAD1L1 [cytosol]","schemaClass":"EntityWithAccessionedSequence","refEntities":[{"dbId":141442,"stId":"uniprot:Q9Y6D9","identifier":"Q9Y6D9","schemaClass":"ReferenceGeneProduct","displayName":"UniProt:Q9Y6D9 MAD1L1"}]}]
 """
 
 # One accession -> one mapping/pathways call. Reactome has no batch endpoint that
@@ -75,6 +77,14 @@ max_batch_size = 25
     "pathway.reactome.in_disease",
     "pathway.reactome.detail",
   ]
+
+  [[capability.group]]
+  id = "hierarchy"
+  outputs = ["pathway.reactome.hierarchy"]
+
+  [[capability.group]]
+  id = "participants"
+  outputs = ["pathway.reactome.participants"]
 
 # Golden runs against the deterministic fixture (reactome_weaver.fixture, an
 # httpx.MockTransport serving a canned 2-pathway response for P04637 with a duplicate

@@ -117,3 +117,15 @@ The live service can change between calls: the endpoint fingerprint identifies c
 not a frozen release. `releaseDate`, if present, is a source field, not proof of the whole
 database release; absent release metadata is not invented. Retaining observed evidence
 adds no version request or extra upstream calls.
+
+`describe_pathway` has requested `hierarchy` (`pathway.reactome.hierarchy`) and
+`participants` (`pathway.reactome.participants`) groups. Hierarchy reports direct
+observed `hasEvent` children, preserving Pathway/Reaction types, without recursive
+expansion or inferred parents. Absent hierarchy information stays null.
+
+Participants use the current `/data/participants/{id}` route and preserve complex,
+set and molecule types plus source reference entities. Numeric physical entity
+IDs carry the observed database release; they are not portable global IDs.
+Summary defaults make no expansion or release request. Single-ID participant
+requests run concurrently and reuse duplicate inputs; entry summaries stay bulk.
+Source: [Reactome Content Service](https://reactome.org/dev/content-service/).
