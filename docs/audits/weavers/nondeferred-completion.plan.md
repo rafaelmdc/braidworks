@@ -55,3 +55,10 @@ code and tests, not re-counted as outstanding defects. An optional scope questio
 asks whether to bring those research-separated expansions into implementation;
 existing deferrals remain in force pending steering. Older standalone product
 backlog issues are separate from this weaver-audit completion pass.
+
+Final verification: full workspace test run passed (2,153 pytest cases, 69
+opt-in skips, five tool unittests). Subsequent endpoint-configuration validation
+passed the complete 52-test AGORA suite; its three model-workflow checks, including
+the live download, passed after the endpoint option was added. Workspace lint and
+all 17 strict weaver gates passed. Final local commits: 8401ea7 (Disbiome) and
+270accc (AGORA). No push.
