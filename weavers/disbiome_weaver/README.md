@@ -12,7 +12,7 @@ the organism layer; chains straight behind `ncbi_weaver`.
 
 | Capability | Consumes | Produces (by group) |
 |---|---|---|
-| `disbiome.list_diseases` | `ncbi.taxon.species_id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
+| `disbiome.list_diseases` | `ncbi.taxon.id` or `ncbi.taxon.species_id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
 
 Output slices, light → heavy (the mapper emits only the requested group):
 
@@ -84,11 +84,16 @@ licenses. The source license in a weaver manifest describes its data, not this c
 Schema 2 keeps indexed summary and compact evidence columns alongside the complete
 joined JSON. Summary requests aggregate counts/names without reading full JSON;
 compact requests read only their columns. Full records remain unchanged. Repeated
-species IDs share SQL/parsing within a single batch, with detached results.
+taxids share SQL/parsing within a single batch, with detached results.
 
 Schema-1 databases must be rebuilt using
 `build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
-The input is `ncbi.taxon.species_id`; resolve species-level identity before chaining.
+Inputs match the source taxid exactly, at any recorded rank. Use `ncbi.taxon.id`
+for genus or other identities; `ncbi.taxon.species_id` remains an alternative.
+When both are present, the generic ID takes precedence, even if it has no match.
+There is no ancestor fallback or propagation of genus observations to species.
+Full records preserve the source organism identity; the provider does not supply
+an explicit rank in the fixture, so this weaver does not infer one.
 
 ## Construction and resource lifetime
 

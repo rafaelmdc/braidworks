@@ -89,3 +89,35 @@ async def test_non_integer_taxid_misses_cleanly():
 async def test_string_taxid_resolves_like_int():
     r = await _resolve(build_disbiome_weaver_fixture(), "1591", {COUNT})
     assert _strands(r)[COUNT] == 1
+
+
+async def test_generic_genus_taxid_is_reachable_without_species_label():
+    weaver = build_disbiome_weaver_fixture()
+    inputs = [StrandSet.from_strands("genus", [Strand("ncbi.taxon.id", 1350)])]
+    result = (
+        await weaver.execute_batch(
+            CAP, inputs, requested_outputs=frozenset({COUNT, RECORDS}), backend="local"
+        )
+    )[0]
+    assert result.status is WeaveStatus.OK
+    values = _strands(result)
+    assert values[COUNT] == 2
+    assert all(record["organism"]["ncbi_id"] == "1350" for record in values[RECORDS])
+    assert all(
+        record["organism"]["scientific_name"] == "Enterococcus" for record in values[RECORDS]
+    )
+
+
+async def test_generic_identity_has_no_species_fallback():
+    weaver = build_disbiome_weaver_fixture()
+    inputs = [
+        StrandSet.from_strands(
+            "exact", [Strand("ncbi.taxon.id", 562), Strand("ncbi.taxon.species_id", 1591)]
+        )
+    ]
+    result = (
+        await weaver.execute_batch(
+            CAP, inputs, requested_outputs=frozenset({COUNT}), backend="local"
+        )
+    )[0]
+    assert result.status is WeaveStatus.NO_MATCH

@@ -2,7 +2,8 @@ weaver	capability	kind	api_key	backends	consumes	produces	unmet_inputs
 agora	describe_metabolic_reconstruction	lookup	none	local	ncbi.taxon.id	microbe.metabolism.reconstruction;microbe.metabolism.reactions;microbe.metabolism.sbml	
 alphafold	describe_model	lookup	none	api	protein.uniprot.accession	structure.alphafold.entry_id;structure.alphafold.mean_plddt;structure.alphafold.model_url;structure.alphafold.pae_image_url;structure.alphafold.version;structure.alphafold.records	
 bacdive	describe_traits	lookup	none	api	organism.scientific_name	microbe.trait.gram_stain;microbe.trait.cell_shape;microbe.trait.motility;microbe.trait.spore_formation;microbe.trait.oxygen_tolerance;microbe.trait.optimum_temp;microbe.trait.optimum_ph;microbe.trait.records	
-disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
+disbiome	disbiome.list_diseases	lookup	none	local	ncbi.taxon.id;ncbi.taxon.species_id	microbe.disease.names;microbe.disease.count;microbe.disease.associations;microbe.disease.records	
+example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 example	describe_traits	lookup	none	local	ncbi.taxon.id	microbe.trait.gram_stain;microbe.trait.optimum_temp	
 faprotax	describe_ecology	lookup	none	local	ncbi.taxon.lineage	microbe.ecology.functional_groups	
 gmrepo	gmrepo.list_abundances	lookup	none	local	ncbi.taxon.id	microbe.abundance.overview;microbe.abundance.phenotype_names;microbe.abundance.count;microbe.abundance.coverage;microbe.abundance.associations;microbe.abundance.records	

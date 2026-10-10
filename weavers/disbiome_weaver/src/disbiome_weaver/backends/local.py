@@ -1,7 +1,7 @@
 """The local backend for disbiome_weaver.
 
 Serves microbe→disease lookups from the small SQLite built by ``setup.py`` (one
-row per Disbiome experiment, keyed by NCBI species taxid). Summary queries aggregate
+row per Disbiome experiment, keyed by exact NCBI taxid). Summary queries aggregate
 indexed light columns; compact queries read projected columns. Full JSON is parsed
 only for the full group. Distinct inputs share work within one batch:
 
@@ -88,7 +88,14 @@ class DisbiomeLocalBackend(BackendBase):
             resolved: dict[int | None, LookupRecord] = {}
             records = []
             for query in queries:
-                taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))
+                # A generic identity is authoritative when both alternatives occur.
+                # Never fall back to a different species/ancestor after an exact miss.
+                key = (
+                    "ncbi.taxon.id"
+                    if query.get("ncbi.taxon.id") is not None
+                    else "ncbi.taxon.species_id"
+                )
+                taxid = _coerce_taxid(query.get(key))
                 if taxid not in resolved:
                     resolved[taxid] = self._lookup_one(con, query, taxid, groups)
                 records.append(
