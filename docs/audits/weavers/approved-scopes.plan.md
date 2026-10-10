@@ -47,3 +47,10 @@ Pack 1 registry verification corrected a missing canonical string declaration fo
 and weaverkit 0.6.10 include those declarations; no scientific logic was added to
 core. Core's 541 tests and weaverkit's 291 tests pass with the existing contracts.
 Full workspace validation is running; its result will be recorded separately.
+
+Workspace checkpoint after pack 1 and QuickGO's initial pack-2 changes:
+`make lint` passed; `make test` passed with **2,129 pytest cases, 63 opt-in skips,
+and five tool unittests**. Index regenerated without uncataloged pack-1 outputs.
+The full test run includes QuickGO's initial code; its six opt-in live checks
+were run separately and passed. Pack-2 changes after this checkpoint require
+fresh final workspace validation.
