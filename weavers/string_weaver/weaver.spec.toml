@@ -10,7 +10,7 @@ db_name = "string"
 weaver_id = "string"
 kind = "lookup"
 title = "STRING protein-protein interactions (accession -> partners + scores)"
-version = "0.1.12"
+version = "0.1.13"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1000"
 attribution = "STRING (Szklarczyk et al.)"
@@ -50,6 +50,23 @@ set_outputs = ["string.id"]
   [[capability.group]]
   id = "full"
   outputs = ["protein.interaction.records"]
+
+  [[capability.parameter]]
+  name = "required_score"
+  type = "int"
+  description = "Upstream confidence threshold 0..1000; omitted preserves provider default"
+
+  [[capability.parameter]]
+  name = "network_type"
+  type = "string"
+  enum = ["functional", "physical"]
+  default = "functional"
+  description = "Functional association or physical interaction network"
+
+  [[capability.parameter]]
+  name = "species"
+  type = "int"
+  description = "Optional positive NCBI taxon constraint applied to mapping and partners"
 
 # Golden runs against the deterministic fixture (string_weaver.fixture, an
 # httpx.MockTransport serving a canned 2-partner response for P04637) so

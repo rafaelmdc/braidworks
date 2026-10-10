@@ -11,3 +11,14 @@ Live E2E: all three known-truth, miss and pinned-release tests passed. New tests
 Package suite: **58 passed, 3 opt-in skips**. Strict verification passed. Repository lint passed. Full workspace result is recorded in the batch report after completion.
 
 Repository validation: `make test` passed (2094 pytest tests, 56 opt-in skips, plus 5 tool unittest checks); `make lint` passed. Tooling used the isolated audit environment.
+
+## Approved interaction scope — #219
+
+Version 0.1.13 adds validated score, network type and species parameters.
+Both acquisition stages remain bulk requests; conflicting returned species is
+an error rather than silently mixing taxa. Coverage states effective settings
+and score units. Default functional behavior and retrieval limits are preserved.
+
+Verification: 64 package tests passed, four opt-in skips; strict verification
+and four live checks passed, including physical TP53 interactions at threshold
+700 and species 9606.

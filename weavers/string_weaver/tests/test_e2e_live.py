@@ -77,3 +77,30 @@ async def test_live_pinned_service_reports_expected_release():
     assert response.json()[0]["string_version"] == "12.5"
     assert response.json()[0]["stable_address"] == "https://version-12-5.string-db.org"
     await backend._client.aclose()
+
+
+async def test_live_physical_scope_with_score_and_species():
+    async with build_string_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "list_interactions",
+                [
+                    StrandSet.from_strands(
+                        "physical", [Strand("protein.uniprot.accession", "P04637")]
+                    )
+                ],
+                requested_outputs=frozenset(
+                    {"protein.interaction.coverage", "protein.interaction.records"}
+                ),
+                params={"network_type": "physical", "required_score": 700, "species": 9606},
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["protein.interaction.coverage"]["network_type"] == "physical"
+        assert all(
+            r["score"] >= 0.7 and r["taxon_id"] == 9606
+            for r in values["protein.interaction.records"]
+        )

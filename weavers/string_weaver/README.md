@@ -149,3 +149,10 @@ async def main():
 
 asyncio.run(main())
 ```
+
+Per-query parameters: `required_score` is an upstream integer threshold 0..1000
+(omitted retains the provider default); `network_type` is `functional` (default)
+or `physical`; `species` is an optional positive NCBI taxon constraint applied
+to both bulk mapping and partner acquisition. Coverage records effective scope
+and distinguishes threshold units from returned 0..1 scores. Retrieval limits
+still bound the observed network; regulatory/directed networks are not added.

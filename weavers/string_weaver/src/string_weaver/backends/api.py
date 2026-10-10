@@ -194,12 +194,33 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         # interaction_partners call per accession. STRING resolves each identifier's
         # species on its own, so a single mixed-species batch is safe; partner edges are
         # grouped back to each query by their ``stringId_A``.
+        options = params or {}
+        score = options.get("required_score")
+        species = options.get("species")
+        network_type = options.get("network_type", "functional")
+        if (
+            score is not None
+            and (isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 1000)
+            or species is not None
+            and (isinstance(species, bool) or not isinstance(species, int) or species < 1)
+            or network_type not in {"functional", "physical"}
+        ):
+            return [
+                LookupRecord(query=q, error="Invalid STRING score/network/species scope")
+                for q in queries
+            ]
+        mapping_options = {"species": str(species)} if species is not None else {}
+        partner_options = {**mapping_options, "network_type": network_type}
+        if score is not None:
+            partner_options["required_score"] = str(score)
         accs = [str(q.get("protein.uniprot.accession", "")).strip() for q in queries]
         distinct = sorted({a for a in accs if a})
         if not distinct:
             return [LookupRecord(query=q, found=False) for q in queries]
-        idmap, mapping_errors = await self._string_ids(distinct)
-        partners, partner_errors = await self._partners(sorted(set(idmap.values())))
+        idmap, mapping_errors = await self._string_ids(distinct, **mapping_options)
+        partners, partner_errors = await self._partners(
+            sorted(set(idmap.values())), **partner_options
+        )
 
         records: list[LookupRecord] = []
         for query, acc in zip(queries, accs):
@@ -227,6 +248,11 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                 values = _extract(edges)
                 values["protein.interaction.coverage"] = {
                     "scope": "retrieved_interaction_partners",
+                    "network_type": network_type,
+                    "required_score": score,
+                    "species": species,
+                    "score_scale": [0, 1],
+                    "required_score_scale": [0, 1000],
                     "request_limit": self._limit,
                     "observed_edges": values["protein.interaction.count"],
                     "observed_partners": len(values["string.id"]),
@@ -250,7 +276,9 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                 )
         return records
 
-    async def _string_ids(self, accessions: list[str]) -> tuple[dict[str, str], dict[str, str]]:
+    async def _string_ids(
+        self, accessions: list[str], **options: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
         """Bulk-resolve accessions to STRING ids, keyed by the echoed ``queryItem``."""
         out: dict[str, str] = {}
         errors: dict[str, str] = {}
@@ -259,7 +287,9 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
             if not chunk:
                 continue
             try:
-                rows = await self._get("/json/get_string_ids", "\r".join(chunk), echo_query="1")
+                rows = await self._get(
+                    "/json/get_string_ids", "\r".join(chunk), echo_query="1", **options
+                )
             except (
                 httpx.HTTPError,
                 json.JSONDecodeError,
@@ -267,6 +297,11 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                 _InvalidResponse,
             ) as exc:
                 errors.update(dict.fromkeys(chunk, f"STRING API error: {format_exc(exc)}"))
+                continue
+            if "species" in options and any(
+                row["stringId"].split(".", 1)[0] != options["species"] for row in rows
+            ):
+                errors.update(dict.fromkeys(chunk, "STRING mapping violates requested species"))
                 continue
             matches: dict[str, set[str]] = {}
             for row in rows:
@@ -279,7 +314,7 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         return out, errors
 
     async def _partners(
-        self, string_ids: list[str]
+        self, string_ids: list[str], **options: str
     ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
         """Bulk-fetch interaction partners, grouped by the query protein (``stringId_A``)."""
         out: dict[str, list[dict[str, Any]]] = {}
@@ -290,7 +325,10 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                 continue
             try:
                 rows = await self._get(
-                    "/json/interaction_partners", "\r".join(chunk), limit=str(self._limit)
+                    "/json/interaction_partners",
+                    "\r".join(chunk),
+                    limit=str(self._limit),
+                    **options,
                 )
             except (
                 httpx.HTTPError,
@@ -299,6 +337,11 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                 _InvalidResponse,
             ) as exc:
                 errors.update(dict.fromkeys(chunk, f"STRING API error: {format_exc(exc)}"))
+                continue
+            if "species" in options and any(
+                row["stringId_A"].split(".", 1)[0] != options["species"] for row in rows
+            ):
+                errors.update(dict.fromkeys(chunk, "STRING partners violate requested species"))
                 continue
             for row in rows:
                 out.setdefault(row["stringId_A"], []).append(row)
