@@ -1,5 +1,11 @@
 # Weaver audit decision stack
 
+The [2026-10-10 research review](recommendation-research.md) evaluates all 19
+decision issues against current code and primary sources. Its narrower recommendations
+and risk boundaries supersede the preliminary recommendations below. In particular,
+Wikipedia already has window/agent parameters, GMrepo already has disease input,
+and localized Wikidata titles cannot reuse the English Wikipedia join key.
+
 Settled correctness and documentation issues proceed in batches. This stack collects scope/API choices for review after that work; it is not a claim that every other open issue needs a decision.
 
 | Issue | Context | Recommendation | Decision needed |

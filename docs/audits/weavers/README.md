@@ -41,3 +41,7 @@ Implementation progress: shared group #152 (atomic database replacement) and
 #150 (validated responses and isolated failure values) are complete locally.
 See [SH-03 implementation evidence](SH-03.implementation.md) for #150's fifteen
 findings, migration notes and validation. Remaining groups retain their own scope.
+
+[Research ratings for all 19 remaining decision issues](recommendation-research.md):
+usefulness, problem coverage, external impact, primary sources and bounded probes
+(2026-10-10). These judgments do not approve or implement new features.
