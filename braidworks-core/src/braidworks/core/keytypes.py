@@ -60,6 +60,9 @@ CANONICAL_TYPES: dict[str, type] = {
     "genome.accession": str,
     "metagenome.run_id": str,
     "disease.mondo.id": str,
+    "disease.disbiome.id": int,
+    "disease.mesh.id": str,
+    "disease.meddra.id": str,
 }
 
 

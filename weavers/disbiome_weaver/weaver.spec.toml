@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.3.8"
+version = "0.3.9"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -49,6 +49,7 @@ id = "disbiome.list_diseases"
 # an alternative for existing callers. No inferred ancestor roll-up.
 consumes = ["ncbi.taxon.id", "ncbi.taxon.species_id"]
 consumes_any = true
+set_outputs = ["disease.disbiome.id", "disease.meddra.id"]
 
   # Lightest slice — "what diseases is this microbe linked to, and how many records?"
   [[capability.group]]
@@ -65,6 +66,9 @@ consumes_any = true
   id = "coverage"
   outputs = ["microbe.disease.coverage"]
 
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.disbiome.id", "disease.meddra.id", "microbe.disease.identities"]
   # The big blob — every joined field, for callers that want everything.
   [[capability.group]]
   id = "full"
@@ -92,3 +96,37 @@ consumes_any = true
 capability = "disbiome.list_diseases"
 input = { "ncbi.taxon.id" = 1591 }
 expect = { "microbe.disease.count" = 1, "microbe.disease.names" = ["Autism"] }
+
+
+[[capability]]
+id = "disbiome.list_taxa"
+consumes = ["disease.disbiome.id", "disease.meddra.id"]
+consumes_any = true
+set_outputs = ["ncbi.taxon.id"]
+  [[capability.group]]
+  id = "taxa"
+  outputs = ["ncbi.taxon.id", "microbe.disease.taxa"]
+  [[capability.parameter]]
+  name = "sample"
+  type = "string"
+  description = "Exact source sample name; missing context excluded"
+  [[capability.parameter]]
+  name = "method"
+  type = "string"
+  description = "Exact source detection method"
+  [[capability.parameter]]
+  name = "outcome"
+  type = "string"
+  description = "Exact source qualitative outcome"
+
+[[capability]]
+id = "disbiome.describe_disease"
+consumes = ["disease.disbiome.id"]
+  [[capability.group]]
+  id = "disease"
+  outputs = ["disease.disbiome.record"]
+
+[[golden]]
+capability = "disbiome.list_taxa"
+input = { "disease.meddra.id" = "10011401" }
+expect = { "ncbi.taxon.id" = [1350] }

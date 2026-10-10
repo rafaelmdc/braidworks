@@ -86,7 +86,7 @@ joined JSON. Summary requests aggregate counts/names without reading full JSON;
 compact requests read only their columns. Full records remain unchanged. Repeated
 taxids share SQL/parsing within a single batch, with detached results.
 
-Schema-1 and schema-2 databases must be rebuilt using
+Schema-1, schema-2 and schema-3 databases must be rebuilt using
 `build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
 Inputs match the source taxid exactly, at any recorded rank. Use `ncbi.taxon.id`
 for genus or other identities; `ncbi.taxon.species_id` remains an alternative.
@@ -131,3 +131,22 @@ strings exactly, before summary counts or output projections. Omitted filters
 retain all observations; missing context does not match an explicit filter.
 Sample names are provider sample categories, not inferred anatomical sites.
 Counts remain experiment counts and cannot establish causal disease effects.
+
+
+### Exact disease and reverse taxon workflows
+
+The requested `identity` group on `disbiome.list_diseases` emits full distinct
+`disease.disbiome.id` and `disease.meddra.id` sets plus code/level/name evidence.
+A provider disease ID is not a MedDRA code, and sharing a name does not merge IDs.
+`disbiome.describe_disease` describes one provider ID's retained disease records.
+`disbiome.list_taxa` takes either provider ID or MedDRA code (provider ID wins if
+both are present). A code lookup preserves all distinct provider disease records
+linked to that exact code. It emits the full sorted generic `ncbi.taxon.id` set,
+not species IDs, with up to ten experiment/source organism/publication evidence
+records and the true counts. Publication evidence preserves provider quality
+reporting without deriving a study-quality score. Missing taxids stay out of the
+fan set but remain evidence rows. Sample/method/outcome filters apply before counts.
+
+Schema 4 adds reverse disease/code indexes; older databases require rebuilding.
+Reverse traversal is exact observed evidence, with no ancestor propagation and
+no causal or species-level claim inferred from a genus association.

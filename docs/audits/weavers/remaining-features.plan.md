@@ -9,8 +9,8 @@ remain excluded. No pushing, release tags or publication.
 |---|---|---|---|
 | 1 | #231 | NCBI local descendant parity | Complete: 231 tests and strict |
 | 2 | #272 | GMrepo standalone run/cohort/phenotype workflows | Complete: 69 tests, strict, four live checks |
-| 3 | #264 | Disbiome reverse disease bridge with exact observed taxa | Pending |
-| 4 | #246 | BacDive culture/genome identifiers with multiplicity | Pending |
+| 3 | #264 | Disbiome reverse disease bridge with exact observed taxa | Complete: 48 tests and strict |
+| 4 | #246 | BacDive culture/genome identifiers with multiplicity | Implementation |
 | 5 | #251 | AGORA genome/reaction routing bridges | Pending |
 | 6 | #278 | MONDO release-matched typed SSSOM ingestion | Pending |
 | 7 | #207 | QuickGO hierarchy/replacements and bounded reverse annotations | Pending |

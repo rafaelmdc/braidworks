@@ -88,9 +88,92 @@ class DisbiomeLocalBackend(BackendBase):
                 LookupRecord(query=q, error="Disbiome filters must be nonempty strings")
                 for q in queries
             ]
+        if capability_id in {"disbiome.list_taxa", "disbiome.describe_disease"}:
+            return await asyncio.to_thread(self._disease_queries, capability_id, queries, options)
         if options:
             return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute, options)
         return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
+
+    def _disease_queries(self, capability, queries, filters):
+        with self._source.session() as con:
+            results = []
+            for query in queries:
+                provider_id = _coerce_taxid(query.get("disease.disbiome.id"))
+                has_provider = query.get("disease.disbiome.id") is not None
+                code = query.get("disease.meddra.id")
+                value = provider_id if has_provider else _coerce_taxid(code)
+                if value is None:
+                    results.append(LookupRecord(query=query, found=False))
+                    continue
+                column = "disease_id" if has_provider else "meddra_id"
+                where = f"({column}=? OR {column}=?)"
+                bindings = [value, str(value)]
+                for name, col in {
+                    "sample": "sample_name",
+                    "method": "method_name",
+                    "outcome": "qualitative_outcome",
+                }.items():
+                    if name in filters:
+                        where += f" AND {col}=?"
+                        bindings.append(filters[name])
+                rows = [
+                    json.loads(row[0])
+                    for row in con.execute(
+                        f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                        bindings,
+                    )
+                ]
+                if not rows:
+                    results.append(LookupRecord(query=query, found=False))
+                    continue
+                if capability == "disbiome.describe_disease":
+                    diseases = []
+                    for row in rows:
+                        disease = row.get("disease")
+                        if disease is not None and disease not in diseases:
+                            diseases.append(disease)
+                    values = {
+                        "disease.disbiome.record": {
+                            "id": provider_id,
+                            "source_records": diseases,
+                            "observed_experiments": len(rows),
+                        }
+                    }
+                else:
+                    ids = sorted(
+                        {
+                            taxid
+                            for row in rows
+                            if (taxid := _coerce_taxid(row.get("organism_ncbi_id"))) is not None
+                        }
+                    )
+                    values = {
+                        "ncbi.taxon.id": ids,
+                        "microbe.disease.taxa": {
+                            "records": [
+                                {
+                                    **_association_row(row),
+                                    "taxid": _coerce_taxid(row.get("organism_ncbi_id")),
+                                    "organism": row.get("organism"),
+                                    "publication": row.get("publication"),
+                                }
+                                for row in rows[:10]
+                            ],
+                            "observed_taxon_count": len(ids),
+                            "experiment_count": len(rows),
+                            "matched_disease_ids": sorted(
+                                {
+                                    did
+                                    for row in rows
+                                    if (did := _coerce_taxid(row.get("disease_id"))) is not None
+                                }
+                            ),
+                            "scope": "exact provider disease/code; all code-linked disease records retained; no ancestor propagation",
+                            "effective_filters": dict(filters),
+                        },
+                    }
+                results.append(LookupRecord(query=query, found=True, values=values))
+            return results
 
     def _lookup_all(
         self,
@@ -210,6 +293,27 @@ class DisbiomeLocalBackend(BackendBase):
             f"SELECT 1 FROM association WHERE {where} LIMIT 1", bindings
         ).fetchone():
             return LookupRecord(query=query, found=False)
+        if "identity" in groups:
+            rows = con.execute(
+                f"SELECT DISTINCT disease_id,meddra_id,meddra_level,disease_name FROM association WHERE {where} ORDER BY disease_id,meddra_id",
+                bindings,
+            ).fetchall()
+            identities = [
+                {
+                    "provider_id": _coerce_taxid(row[0]),
+                    "meddra_id": str(row[1]) if row[1] is not None else None,
+                    "meddra_level": row[2],
+                    "name": row[3],
+                }
+                for row in rows
+            ]
+            values["disease.disbiome.id"] = sorted(
+                {r["provider_id"] for r in identities if r["provider_id"] is not None}
+            )
+            values["disease.meddra.id"] = sorted(
+                {r["meddra_id"] for r in identities if r["meddra_id"]}
+            )
+            values["microbe.disease.identities"] = identities
         if "coverage" in groups:
             # Rank is source evidence, never inferred from the caller's input key.
             rows = con.execute(

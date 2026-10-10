@@ -10,7 +10,7 @@ Supplied by the user at the start of a braid.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
-| `disease.meddra.id` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_meddra` |
+| `disease.meddra.id` | The text you start from — an organism name or a gene/protein query. | `disbiome:disbiome.list_diseases` | `disbiome:disbiome.list_taxa`, `mondo:mondo.lookup_by_meddra` |
 | `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | `gmrepo:gmrepo.list_phenotypes` | `gmrepo:gmrepo.sample_profiles`, `gmrepo:gmrepo.list_runs`, `mondo:mondo.lookup_by_mesh` |
 | `disease.name` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_name` |
 | `organism.name` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_name` |
@@ -23,6 +23,7 @@ Registered bridge keys — what links weavers together.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `chem.chebi.id` | A ChEBI chemical id. | — | — |
+| `disease.disbiome.id` | Provider disease identity produced by Disbiome and consumed by exact disease describe/reverse traversal. | `disbiome:disbiome.list_diseases` | `disbiome:disbiome.list_taxa`, `disbiome:disbiome.describe_disease` |
 | `disease.mondo.id` | MONDO Disease Ontology id for one disease — the unified disease join key that harmonizes MeSH / MedDRA / DOID / OMIM identities. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name` | `mondo:describe_disease` |
 | `enzyme.ec` | An Enzyme Commission (EC) number. | — | — |
 | `gene.ensembl.id` | Ensembl gene id for one gene. | `uniprot:map_from_accession` | `uniprot:map_to_accession` |
@@ -35,7 +36,7 @@ Registered bridge keys — what links weavers together.
 | `metagenome.run_id` | Observed sequencing run accession; produced and consumed by GMrepo run workflows. | `gmrepo:gmrepo.list_runs` | `gmrepo:gmrepo.describe_run` |
 | `microbe.agora.reconstruction_id` | Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it. | `agora:list_reconstructions` | `agora:describe_reconstruction` |
 | `microbe.bacdive.strain_id` | BacDive strain record integer ID; list_strains produces and describe_strain consumes it. | `bacdive:list_strains` | `bacdive:describe_strain` |
-| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gmrepo:gmrepo.list_phenotypes`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
+| `ncbi.taxon.id` | NCBI Taxonomy id for one organism — the main organism join key. | `disbiome:disbiome.list_taxa`, `ncbi:ncbi.resolve_name`, `ncbi:ncbi.list_children`, `uniprot:resolve_protein`, `uniprot:describe_protein` | `agora:describe_metabolic_reconstruction`, `agora:list_reconstructions`, `disbiome:disbiome.list_diseases`, `example:describe_traits`, `example:describe_traits`, `gmrepo:gmrepo.list_abundances`, `gmrepo:gmrepo.list_phenotypes`, `gtdb:describe_gtdb_taxonomy`, `gtdb:describe_gtdb_tree_placement`, `ncbi:ncbi.describe_taxon`, `ncbi:ncbi.describe_taxon_history`, `ncbi:ncbi.list_children`, `ncbi:ncbi.list_genomes`, `wikidata:map_from_taxid` |
 | `ncbi.taxon.lineage` | An organism's ranked lineage, from species up to root. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `faprotax:describe_ecology` |
 | `ncbi.taxon.rank` | An organism's taxonomic rank, e.g. species or genus. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | — |
 | `ncbi.taxon.species_id` | The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets. | `ncbi:ncbi.resolve_name`, `ncbi:ncbi.describe_taxon` | `disbiome:disbiome.list_diseases` |
@@ -62,6 +63,7 @@ Descriptive payload fields; nothing joins on them.
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
 | `chembl.id` | This protein's ChEMBL target id. | `uniprot:map_from_accession` | — |
+| `disease.disbiome.record` | One provider disease identity with retained source records. | `disbiome:disbiome.describe_disease` | — |
 | `disease.ontology.ancestors` | This disease's full is-a ancestor lineage in MONDO (up to the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis. | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name`, `mondo:describe_disease` | — |
 | `disease.ontology.definition` | Observed MONDO definition text; absent definitions remain unknown. | `mondo:describe_disease` | — |
 | `disease.ontology.depth` | This disease's minimum is-a distance to a MONDO root (how specific the term is). | `mondo:mondo.lookup_by_mesh`, `mondo:mondo.lookup_by_meddra`, `mondo:mondo.lookup_by_name`, `mondo:describe_disease` | — |
@@ -122,8 +124,10 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.coverage` | Exact source taxid and reported rank; no ancestor or descendant inference. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.identities` | Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.taxa` | Exact reverse disease association evidence, publications, rank and full observed taxid fan. | `disbiome:disbiome.list_taxa` | — |
 | `microbe.ecology.evidence` | Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence. | `faprotax:describe_ecology` | — |
 | `microbe.ecology.functional_groups` | FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration). | `faprotax:describe_ecology` | — |
 | `microbe.metabolism.reactions` | The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}. | `agora:describe_metabolic_reconstruction`, `agora:describe_reconstruction` | — |

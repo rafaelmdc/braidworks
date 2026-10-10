@@ -50,6 +50,7 @@ SHARED_KEYS: dict[str, str] = {
     # Disease layer (mondo_weaver) — entry points + the unified disease join key
     "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point "
     "for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
+    "disease.disbiome.id": "Provider disease identity produced by Disbiome and consumed by exact disease describe/reverse traversal.",
     "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for "
     "disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
     "disease.name": "A disease name (e.g. 'ulcerative colitis') — a free-text entry point that "
@@ -144,6 +145,9 @@ OUTPUT_KEYS: dict[str, str] = {
     "groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, "
     "sulfate_respiration).",
     # microbe–disease association outputs (disbiome_weaver)
+    "microbe.disease.identities": "Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence.",
+    "microbe.disease.taxa": "Exact reverse disease association evidence, publications, rank and full observed taxid fan.",
+    "disease.disbiome.record": "One provider disease identity with retained source records.",
     "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
     "microbe.disease.names": "The diseases this microbe is linked to.",
     "microbe.disease.count": "How many disease-association experiments mention this microbe.",
