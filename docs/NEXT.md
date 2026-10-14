@@ -39,10 +39,10 @@ partially addressed them; inspect before planning or closing them.
 reorganizes onboarding and current guides. The [accuracy follow-up (#300)](https://github.com/rafaelmdc/braidworks/issues/300)
 reconciles active source summaries and generated catalogues; see the
 [accuracy findings](audits/documentation-accuracy.md). The [Diátaxis map](audits/documentation-diataxis.md)
-identifies remaining organization work. The first
-[researcher tutorial](tutorials/protein-structures.md) covers protein-to-structure lookup,
-interpretation and export. Two more researcher workflows and joint reader testing
-remain; see the [first-pass findings](audits/documentation-readability.md).
+identifies remaining organization work. Three [researcher tutorials](index.md#learn-through-a-tutorial)
+cover protein structures, microbial functional evidence and disease associations.
+Result/storage reference is separate from tasks and explanation. Joint reader testing
+and source/toolkit organization work remain; see the [first-pass findings](audits/documentation-readability.md).
 
 For release checks use [release rehearsal](releasing.md). For evidence of delivered
 work use [weaver acceptance](audits/weavers/remaining-features.plan.md) and

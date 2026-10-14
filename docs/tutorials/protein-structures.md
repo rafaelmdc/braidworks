@@ -5,10 +5,8 @@ choosing entries for further inspection. In this lesson, you will identify two p
 through UniProt, retrieve their PDBe structure listings, inspect two related structures,
 and save a table with coverage information.
 
-You will learn how one source's identifier feeds another source, how to follow related
-entities, and how to distinguish a useful result from a complete result. This lookup
-does not assess whether a structure covers your region of interest or is suitable for
-an experiment; that requires inspecting its sequence coverage and experimental context.
+You will finish with a protein-level CSV and an observation archive. Structure
+selection for an experiment still requires checking sequence coverage and context.
 
 ## Prepare your environment
 
@@ -69,11 +67,10 @@ set. You should see up to two terminal rows with structure titles and methods, a
 source's order determines the selection; it is not a statement that these are the
 best structures for your research question.
 
-This is a bounded inspection, not the complete inventory. Later you can use
-`--expand all`, subject to the run's expansion budget, and check truncation metadata
-when completeness matters. Titles and methods describe PDB entries; a protein mapping
-alone does not establish full-length sequence coverage or biological assembly relevance.
-See [related-entity usage](../usage.md#follow-related-entities) for expansion controls.
+Check that the two rows have titles and methods. You have inspected a bounded
+selection, not the full inventory. A protein mapping alone does not establish
+full-length sequence coverage or biological assembly relevance. Further expansion
+controls belong in [related-entity usage](../usage.md#follow-related-entities).
 
 ## Prepare a two-protein batch
 
@@ -85,9 +82,8 @@ P04637
 P38398
 ```
 
-These accessions identify human p53 and BRCA1. Using accessions avoids the species and
-representative-selection questions of gene-symbol search. For your own symbols, specify
-an organism and check UniProt's selection rules; see [UniProt guidance](../../weavers/uniprot_weaver/README.md).
+These accessions identify human p53 and BRCA1. Keep the accession column as shown
+so both rows use the same input identity convention.
 
 Run the batch, saving both a spreadsheet table and an inspectable run archive:
 
@@ -122,9 +118,9 @@ report rather than dropping them as empty data. For this small example you shoul
 normally obtain two resolved rows with names and structure information, but current
 source availability governs the actual outcomes.
 
-The archive preserves inputs, settings, observations and citations. It does not copy
-provider databases or freeze the live APIs; it is separate from a resumable checkpoint.
-For its exact contents and limitations, see [archive reference](../results.md#save-a-run-archive).
+Check that `protein-run.json` exists and contains `inputs`, `records` and `references`
+within its records. The archive preserves observations and citations; it does not freeze
+live APIs. Exact contents are in [archive reference](../reference/results.md#run-archives).
 
 ## Use the result for the next research step
 

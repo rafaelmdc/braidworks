@@ -11,6 +11,18 @@ facts, and explanation connects concepts and reasons. The
 [documentation map](audits/documentation-diataxis.md) classifies existing pages and
 records the next edits. Improve a reader path before creating new folders.
 
+Apply the guidance for the chosen type:
+
+- [Tutorials](https://diataxis.fr/tutorials/): choose one concrete exercise, show visible
+  results at each stage, and guide the reader through observations. Link alternatives
+  and long explanations rather than interrupting the lesson.
+- [How-to guides](https://diataxis.fr/how-to-guides/): state the task and prerequisites,
+  then provide steps and relevant branches for someone already using the tool.
+- [Reference](https://diataxis.fr/reference/): organize facts by the interface they
+  describe. Keep exact defaults, fields and constraints findable and consistent.
+- [Explanation](https://diataxis.fr/explanation/): connect concepts, consequences and
+  reasons. Link instructions and exact contracts rather than embedding full workflows.
+
 The README answers what the tool does, how its sources connect, and how to try it.
 The index routes readers to tasks. Usage guides show working steps; architecture
 explains relationships; reference pages hold exact contracts and options. Keep audit

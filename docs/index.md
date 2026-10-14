@@ -6,9 +6,11 @@ choose the sources your analysis needs, then scale to a batch. The
 
 ## Learn through a tutorial
 
-[Find experimental structures for a protein list](tutorials/protein-structures.md)
-takes you through a connected lookup, related-entity inspection and a batch export,
-including checks on coverage and interpretation.
+| Exercise | What you will produce |
+|---|---|
+| [Protein structures](tutorials/protein-structures.md) | A structure listing, related-entry inspection and batch export |
+| [Microbial functions](tutorials/microbial-functions.md) | An ecological annotation with its supporting rule trace |
+| [Disease–microbe associations](tutorials/disease-associations.md) | Observations with provider identity, sample context and publications |
 
 ## Complete a task
 
@@ -22,6 +24,8 @@ Use the [source catalogue](sources.md), [key index](keys-index.md),
 [core contracts](core-contracts.md) and [builder configuration](weaver-configuration.md)
 for exact capabilities, connections and construction rules. Command help provides
 CLI option reference; source READMEs link their specs and interpretation notes.
+The [reference index](reference/index.md) brings these lookup paths together,
+including [result shapes](reference/results.md) and [storage contracts](reference/persistence.md).
 
 ## More tasks for your data
 
@@ -43,6 +47,7 @@ parameters, and interpretation notes live in the package READMEs linked from the
 ## Understand or extend Braidworks
 
 For the overall model, start with [how Braidworks fits together](architecture.md).
+For scientific interpretation, read [what a lookup result establishes](explanation/result-meaning.md).
 The links below support understanding the framework and contributing to it.
 
 | Task | Documentation |

@@ -174,3 +174,47 @@ passed a dry run without changing the environment. A scratch scaffold from the t
 fixture confirmed the shared-runtime layout and Python parsing; the implemented Example
 weaver passed strict verification. Local links/anchors and whitespace were checked.
 Human readability still needs a walkthrough.
+
+## Second implementation increment
+
+The type-specific guidance comes from Diátaxis's [tutorial](https://diataxis.fr/tutorials/),
+[how-to](https://diataxis.fr/how-to-guides/), [reference](https://diataxis.fr/reference/)
+and [explanation](https://diataxis.fr/explanation/) pages. We apply it here by guiding
+one exercise at a time, keeping relevant task branches in how-to pages, organizing
+exact contracts for lookup, and placing interpretation/reasons in explanation.
+
+Three researcher lessons now cover proteins/structures, microbial functional-rule
+traces and disease–microbe publication evidence. The protein lesson has fewer option
+and explanation detours. Each lesson retains setup side effects, observable results
+and scientific interpretation limits. These are working examples, not evidence that
+researchers have completed a usability review.
+
+Result and persistence details moved into [result reference](../reference/results.md)
+and [storage reference](../reference/persistence.md). Retained facts include terminal
+row identity/order, structured metadata, Python outcome distinctions, archive permissions,
+schema and failure guarantees, cache identity/TTLs/eviction/physical size, run ownership,
+lease expiry, atomic snapshots, repeated reads, schema compatibility, local-disk and
+retention rules. The configured Python persistence task remains executable in the
+how-to guide. A [reference index](../reference/index.md) links these and existing
+interface authorities. Old results/persistence task headings remain available for links.
+
+[Result meaning](../explanation/result-meaning.md) connects coverage, review,
+representative selection, expansion and reproducibility. The practical result guide
+now helps readers inspect coverage and save exports rather than mixing in whole schemas.
+Spreadsheet rendering was checked against the CLI: requested list values use semicolon
+separators; metadata JSON and `strands` retain structured values.
+
+Validation: selected ecology and disease package installs passed dry runs without
+changing the isolated environment. The exact ecology commands and inspection script
+ran through live NCBI and bundled FAPROTAX; membership and matched-rule evidence were
+checked. Real Disbiome tables were acquired into an ignored scratch database (about
+45 MB SQLite); the exact lesson script reused it, checked provider disease identity,
+retained faecal-sample observations/publications and exported coverage/references.
+Acquisition and subsequent lookup were verified separately; this does not freeze the
+provider snapshot. The relocated managed persistence script ran with PDBe. Local links
+and whitespace checks passed. No runtime implementation or contract tests changed.
+
+Remaining organization work: toolkit/source README structure, local-data and pacing
+reference separation where useful, and joint researcher walkthroughs. The tutorials
+are ready for that reader review; reliability against future live source changes
+remains a maintenance task.

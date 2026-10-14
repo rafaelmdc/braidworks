@@ -45,9 +45,11 @@ is not an inventory of every matching protein or isoform.
 
 ## Choose your interface
 
-For a complete researcher walkthrough, follow
-[find experimental structures for a protein list](docs/tutorials/protein-structures.md).
-It includes related-structure inspection, batch export and coverage checks.
+Start with a researcher walkthrough:
+
+- [Find experimental structures for a protein list](docs/tutorials/protein-structures.md): connect sources, inspect structures and export a batch.
+- [Trace a microbial functional annotation](docs/tutorials/microbial-functions.md): follow a taxonomy-based affiliation back to its rule evidence.
+- [Inspect disease–microbe associations](docs/tutorials/disease-associations.md): retain provider identity, study context and publication evidence.
 
 | You want to… | Start here |
 |---|---|
