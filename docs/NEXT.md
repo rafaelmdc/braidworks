@@ -1,6 +1,6 @@
 # Current project decisions and backlog
 
-Updated 2026-10-10. Completed readiness/refactoring and approved weaver work have
+Updated 2026-10-14. Completed readiness/refactoring and approved weaver work have
 been pushed to the review branch; they have not been merged or published. Historical
 plans remain in [design history](history.md). This page summarizes the open queue,
 not the instructions for using Braidworks.
@@ -18,6 +18,12 @@ The [GTDB parent (#165)](https://github.com/rafaelmdc/braidworks/issues/165) and
 open for the deferred GTDB finding.
 
 ## Standalone ideas awaiting reconciliation
+
+Next: [backend availability diagnostics (#132)](https://github.com/rafaelmdc/braidworks/issues/132).
+The [focused spec](audits/backend-availability.spec.md) records the current reproduction;
+the [implementation plan](audits/backend-availability.plan.md) is ready. The original
+local-descendant case works now, but omitted API-only operations still receive misleading
+absence messages. Runtime implementation is pending on `feat/backend-availability-diagnostics`.
 
 These older issues remain open. Their titles do not establish whether later work
 partially addressed them; inspect before planning or closing them.
@@ -43,7 +49,8 @@ identifies remaining organization work. Three [researcher tutorials](index.md#le
 cover protein structures, microbial functional evidence and disease associations.
 Result/storage reference is separate from tasks and explanation. Toolkit/core/source
 entry pages and pacing/local-data guides now link their detailed reference homes.
-Joint reader testing of the three lessons remains; see the
+The three lessons remain provisional. Final researcher examples and joint reader
+testing are deferred until platform work settles; see the
 [Diátaxis implementation record](audits/documentation-diataxis.md#third-implementation-increment).
 
 For release checks use [release rehearsal](releasing.md). For evidence of delivered
