@@ -11,7 +11,8 @@ and are not research reference data.
 ## Source catalogue
 
 This checkout contains 17 weaver packages. Each linked README gives the source's
-capabilities, filters, coverage rules, and citations. `braidworks weavers` lists only
+query entry points and scientific scope, with exact capability tables and coverage
+contracts in its linked source reference. `braidworks weavers` lists only
 the packages installed in your environment; the [key index](keys-index.md) shows
 connections across the repository.
 

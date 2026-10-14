@@ -43,9 +43,9 @@ uv run --no-sync ncbi-weaver build-db \
 - `--dump` is where the `.tar.gz` is written/read; `--db` is the SQLite output.
 - `--report-json PATH` optionally writes a build report (counts, build version).
 
-The build prints a summary including the **taxonomy build version** — that string
-is the `local` backend's cache fingerprint, so rebuilding from a newer taxdump
-automatically invalidates stale cache entries.
+The build prints a summary including the taxonomy build version. The local backend's
+fingerprint combines source/build metadata with artifact-generation identity. Reopen
+the weaver after rebuilding so new lookups use the new generation and cache identity.
 
 ## Use it
 
@@ -80,42 +80,21 @@ the network and logs (INFO) that it is doing so. Decisions behind this:
 
 ## Reader generations and build ownership
 
-Local SQLite backends bind to one generation of the artifact. Fingerprints include
-source metadata and local file-generation stamps; GTDB also includes its tree files.
-If the database/tree changes, reopen the weaver instead of reusing a backend whose
-fingerprint describes another generation. Legacy file stamps are local replacement
-guards, not portable checksums. New builders record schema/build identity alongside
-available release/content metadata. No large-file hash is computed per lookup.
-Batch connections close when work completes. Synchronous batch work runs in threads;
-cancellation stops awaiting it but does not terminate an already-running thread.
-
-Builds use local OS advisory locks (POSIX/Windows) and atomic publication. The small
-`.lock` file intentionally remains after release; the kernel owns the active lock.
-Do not delete it while builds may be running. BuildLock accepts a bounded acquisition
-timeout and optional wait callback. Process exit releases ownership automatically.
+Reopen a weaver after replacing its database or related tree files. Its backend is
+bound to the source generation it opened. Do not remove lock files while builders
+may run. Exact generation, cancellation and locking rules are in
+[local-data reference](reference/local-data.md#reader-generations-and-build-ownership).
 
 ## NCBI reviewed decisions (from ncbi_weaver 0.2.4)
 
-TaxonomyResolverService opens reference data read-only. Its default reviewed-history
-path is `<taxonomy filename>.reviews.sqlite` beside the reference database. Pass
-`cache_db_path` to choose another writable local location. This is user-authored
-history, independent of the executor's lookup cache.
-
-On open, legacy colocated reviewed_mappings are copied transactionally to the separate
-store. Repeated migration does not duplicate rows; failed imports roll back and leave
-the original untouched. Copies retain the existing conservative reference-build/name/
-level matching rules. Reference refresh keeps the separate history file; decisions from
-another build remain stored but are not automatically reused.
-
-For rollback to older software, retain the original reference/history artifact. New
-reviews live in the separate file and can be used by older constructors via explicit
-`cache_db_path`; do not delete either copy. An explicit same-reference cache path remains
-a legacy compatibility option, but writes then invalidate a pinned local backend and
-require reopening. Shared read-only reference installations should provide a writable
-review path explicitly. Neither file belongs in git.
+Shared read-only taxonomy installations need a separate writable reviewed-history
+path. Reference refresh preserves that history, but decisions from another reference
+build are not reused automatically. Before migration or rollback, retain both artifacts.
+See [reviewed-history reference](reference/local-data.md#ncbi-reviewed-history-storage)
+for default paths, migration guarantees and legacy compatibility.
 
 ## Other saved data
 
-The taxonomy database is reference data. Executor lookup caches, saved runs, and
+The taxonomy database is reference data. Executor lookup caches, saved runs and
 observation archives have different purposes and lifetimes. See
-[cache and saved runs](persistence.md) for those options.
+[cache and saved runs](persistence.md).

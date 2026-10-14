@@ -1,45 +1,25 @@
 # disbiome_weaver
 
-Microbe ↔ disease associations from **[Disbiome](https://disbiome.ugent.be)** (Ghent
-University): given an organism by NCBI taxid, the diseases where its abundance is reported
-**Elevated/Reduced** vs healthy controls (human host, MedDRA-coded). The reverse
-lookup lists recorded taxa for a provider disease ID or MedDRA code. Taxon IDs and
-provider disease IDs connect those observations to downstream lookups.
+Retrieve observed microbe–disease associations in either direction, then inspect disease
+identity, sample context and publication evidence. Build a local SQLite database from the source
+tables before querying. Counts describe experiments, and associations do not establish
+causation. Provider disease IDs and MedDRA codes are distinct.
 
 - **Source:** https://disbiome.ugent.be (keyless JSON API on port 8080) · **License:** Open · **Cite:** https://doi.org/10.1186/s12866-018-1197-5 — Janssens et al., 2018
 - **Backend:** `local` (a small SQLite built from the API; see below) · **Discoverable as** `disbiome`
 
 ## Capabilities
 
-| Capability | Input types | Output groups / expandable keys | Backends | Parameters |
-|---|---|---|---|---|
-| `disbiome.list_diseases` | `ncbi.taxon.id` or `ncbi.taxon.species_id` | `summary`, `associations`, `coverage`, `identity`, `full`; expands `disease.disbiome.id`, `disease.meddra.id` | `local` | `sample`, `method`, `outcome` |
-| `disbiome.list_taxa` | `disease.disbiome.id` or `disease.meddra.id` | `taxa`; expands `ncbi.taxon.id` | `local` | `sample`, `method`, `outcome` |
-| `disbiome.describe_disease` | `disease.disbiome.id` | `disease` | `local` | — |
-
-These are the current declared capabilities. Output groups select fields computed
-together; expandable keys identify related entities you can follow. See
-[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
-`braidworks weavers` for the installed inventory. Backend declarations do not imply
-that optional local data are already configured.
-
-Output slices, light → heavy (the mapper emits only the requested group):
-
-| Group | What you get |
+| Capability | Use it to |
 |---|---|
-| `summary` | distinct disease names + how many records |
-| `associations` | one compact row per experiment: disease, direction, method, sample, host |
-| `full` | the complete joined blob — every experiment/disease/organism/publication field, incl. the ~16 study-quality flags |
+| `disbiome.list_diseases` | List disease observations for an exact taxid |
+| `disbiome.list_taxa` | List observed taxa for a disease ID or MedDRA code |
+| `disbiome.describe_disease` | Inspect an exact provider disease ID |
 
-## The local backend (no dump file needed)
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-Disbiome publishes no dump file, but its API returns each table whole in one GET and the
-whole dataset is ~7 MB. The `local` backend builds a small SQLite **once** — fetch
-`/experiment` + `/disease` + `/organism` + `/publication`, join in-memory, index by NCBI
-taxid — via the shared `braidworks.core.localdb` plumbing. The cache fingerprint is a
-content hash of the fetched tables (Disbiome has no release tag).
-
-## Use it
+## Run a query
 
 Build the DB once, then it chains straight off `ncbi_weaver`
 (`organism.name → ncbi.taxon.id → microbe.disease.*`):
@@ -47,7 +27,7 @@ Build the DB once, then it chains straight off `ncbi_weaver`
 ```python
 from disbiome_weaver import build_disbiome_weaver_configured
 
-# Builds the ~7 MB DB on first use with explicit auto_setup consent (or
+# Acquires the source tables on first use with explicit auto_setup consent (or
 # BRAIDWORKS_AUTO_DOWNLOAD=1); no terminal prompt is implemented.
 # Override the database location with db_path=.
 weaver = build_disbiome_weaver_configured(auto_setup=True)
@@ -62,100 +42,22 @@ builder only inspects that cache; it does not build it. Then run:
 braidworks run disbiome disbiome.list_diseases --have ncbi.taxon.id=816
 ```
 
-## Develop
+Follow the [researcher lesson](../../docs/tutorials/disease-associations.md) for a complete exercise.
 
-```bash
-make verify     # spec ↔ manifest, reachability, fingerprints (--strict adds golden vs the fixture)
-make test       # conformance + contract + behavior, offline (live E2E self-skips)
-make test-live  # opt-in: build the real DB from the API and resolve a known taxid
-```
+## Setup, interpretation and contribution
 
-Extend it using [CONTRIBUTING.md](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/CONTRIBUTING.md).
-Reverse disease→taxon lookup already exists as `disbiome.list_taxa`. Build loop & boundaries: [AGENTS.md](https://github.com/rafaelmdc/braidworks/blob/main/AGENTS.md).
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-## Installation and documentation
-
-Install this package together with a compatible core in a virtual environment.
-See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
-[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
-and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
-Current release instructions use this checkout or built wheels; package-index
-availability is not assumed.
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
 
 ## Software license
 
-This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/weavers/disbiome_weaver/LICENSE). Upstream biological data,
-bundled source samples and provider content retain their separately declared source
-licenses. The source license in a weaver manifest describes its data, not this code.
-
-## Group-aware local reads (0.3.3)
-
-Schema 2 keeps indexed summary and compact evidence columns alongside the complete
-joined JSON. Summary requests aggregate counts/names without reading full JSON;
-compact requests read only their columns. Full records remain unchanged. Repeated
-taxids share SQL/parsing within a single batch, with detached results.
-
-Schema-1, schema-2 and schema-3 databases must be rebuilt using
-`build_disbiome_weaver_configured(db_path=..., refresh=True, auto_setup=True)`.
-Inputs match the source taxid exactly, at any recorded rank. Use `ncbi.taxon.id`
-for genus or other identities; `ncbi.taxon.species_id` remains an alternative.
-When both are present, the generic ID takes precedence, even if it has no match.
-There is no ancestor fallback or propagation of genus observations to species.
-Full records preserve the source organism identity; the provider does not supply
-an explicit rank in the fixture, so this weaver does not infer one. The requested
-`coverage` group (`microbe.disease.coverage`) reports the matched taxid, source
-organism identities, reported rank or null, and filtered experiment count. This
-slice reads the retained source records; ordinary summary/compact requests stay
-light. A species-shaped input never relabels a genus observation as a species
-measurement. Ancestor roll-up is intentionally unsupported.
-
-## Construction and resource lifetime
-
-Supported builder options are explicit; unknown options raise
-`BackendConfigurationError`. Empty construction remains safe for discovery.
-See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
-configuration, source selection and owned/borrowed HTTP clients. Use
-`async with weaver:` or `await weaver.aclose()` after requests finish.
-
-## Snapshot validation (0.3.6)
-
-Builds validate that all four responses are arrays of objects with unique positive
-primary IDs. Present foreign IDs must resolve; absent optional IDs are retained
-as missing evidence and counted. Invalid experiment taxids are rejected. Validation
-runs before opening the destination, and normal acquisition uses the shared atomic
-publication boundary.
-
-SQLite metadata includes `source_coverage` with each response's row count and
-SHA-256, missing-join counts, and `build_completed_utc`. These identify the observed
-responses; independent table requests do **not** constitute a frozen upstream
-snapshot. Full joined records preserve provider fields. Existing valid schema-2
-caches remain readable; refresh to obtain the new build provenance.
-
-Compact associations retain integer experiment, publication, organism and disease
-IDs (null when absent), linking each observation to its full joined record.
-Database schema 3 requires rebuilding older local databases.
-
-Optional per-query `sample`, `method` and `outcome` parameters match provider
-strings exactly, before summary counts or output projections. Omitted filters
-retain all observations; missing context does not match an explicit filter.
-Sample names are provider sample categories, not inferred anatomical sites.
-Counts remain experiment counts and cannot establish causal disease effects.
-
-
-### Exact disease and reverse taxon workflows
-
-The requested `identity` group on `disbiome.list_diseases` emits full distinct
-`disease.disbiome.id` and `disease.meddra.id` sets plus code/level/name evidence.
-A provider disease ID is not a MedDRA code, and sharing a name does not merge IDs.
-`disbiome.describe_disease` describes one provider ID's retained disease records.
-`disbiome.list_taxa` takes either provider ID or MedDRA code (provider ID wins if
-both are present). A code lookup preserves all distinct provider disease records
-linked to that exact code. It emits the full sorted generic `ncbi.taxon.id` set,
-not species IDs, with up to ten experiment/source organism/publication evidence
-records and the true counts. Publication evidence preserves provider quality
-reporting without deriving a study-quality score. Missing taxids stay out of the
-fan set but remain evidence rows. Sample/method/outcome filters apply before counts.
-
-Schema 4 adds reverse disease/code indexes; older databases require rebuilding.
-Reverse traversal is exact observed evidence, with no ancestor propagation and
-no causal or species-level claim inferred from a genus association.
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

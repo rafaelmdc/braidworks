@@ -41,8 +41,10 @@ reconciles active source summaries and generated catalogues; see the
 [accuracy findings](audits/documentation-accuracy.md). The [Diátaxis map](audits/documentation-diataxis.md)
 identifies remaining organization work. Three [researcher tutorials](index.md#learn-through-a-tutorial)
 cover protein structures, microbial functional evidence and disease associations.
-Result/storage reference is separate from tasks and explanation. Joint reader testing
-and source/toolkit organization work remain; see the [first-pass findings](audits/documentation-readability.md).
+Result/storage reference is separate from tasks and explanation. Toolkit/core/source
+entry pages and pacing/local-data guides now link their detailed reference homes.
+Joint reader testing of the three lessons remains; see the
+[Diátaxis implementation record](audits/documentation-diataxis.md#third-implementation-increment).
 
 For release checks use [release rehearsal](releasing.md). For evidence of delivered
 work use [weaver acceptance](audits/weavers/remaining-features.plan.md) and

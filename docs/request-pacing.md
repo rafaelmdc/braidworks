@@ -1,35 +1,34 @@
-# HTTP request pacing
+# Set HTTP request rates
 
-Set `BRAIDWORKS_RATE_LIMITS` before running the CLI, Python API or browser:
+Set explicit request rates when running the CLI, Python API or browser. Rates apply
+to HTTP requests, not identifiers; one bulk request can serve many inputs.
+
+## Set source rates
+
+Set the environment variable in the shell that will run Braidworks:
 
 ```bash
 export BRAIDWORKS_RATE_LIMITS='ncbi:api=3,uniprot:api=2'
 ```
 
-Values are HTTP requests per second, not identifiers per second. Each configured
-source/backend has a capacity-one bucket: the first request can run immediately,
-then requests wait for tokens. Bulk lookups cost one token per upstream request;
-pagination, polling, redirects and HTTP retries each cost another token. Failed
-request attempts are charged. Existing client hooks and injected test clients work.
+This allows three NCBI API requests and two UniProt API requests per second, shared
+across clients in that process. The first request can proceed immediately. Prefer
+`weaver:api` rules so a local backend does not inherit an HTTP budget. Run your query
+from the same shell. Choose rates according to the provider's policy and your account;
+project defaults do not discover those limits.
 
-Local execution shares its budget across clients, threads and event loops in one
-process. Independent processes need a shared worker service: `braidworks-arq` uses
-Redis server time and one shared bucket per source/backend. Workers with conflicting
-rate/capacity configurations fail explicitly; coordinate configuration changes across
-the fleet and let previous bucket keys expire before changing the shared rate.
+Executor budgets take precedence over environment rules, which override source defaults.
+Without an explicit rule, BacDive defaults to 2 requests/second, STRING to 1, and
+NCBI/GTDB/Wikipedia to 5; other shipped API backends have no default rate. Setup/download
+utilities outside backend execution are outside this budget.
 
-All eleven shipped API backend families support this seam. Third-party backends must
-set `supports_request_pacing = True` and send every request through
-`braidworks.core.http_pacing.PacedHTTPClient(client, weaver_id, backend)`; the keyless
-HTTP scaffold includes this wiring. A matching rule for an unsupported backend raises
-`BackendConfigurationError`. Prefer `weaver:api` rules so local database backends do
-not accidentally inherit an HTTP budget.
+## Coordinate worker processes
 
-Without an explicit rule, API backends may apply their own defaults: BacDive uses
-2 requests/second, STRING 1, and NCBI/GTDB/Wikipedia 5. Other shipped API backends
-have no default rate. An executor budget takes precedence over environment rules;
-environment rules override source defaults. These project defaults do not discover
-provider limits. Choose explicit rates according to the provider's policy and account. Setup/download utilities
-outside backend execution are outside this budget. Cancellation interrupts pending
-waits without sending another request. Separate local processes and external tools
-are not coordinated by local pacing.
+Local pacing does not coordinate separate processes or external tools. For distributed
+workers, configure explicit rules consistently through the experimental
+[arq adapter](../braidworks-arq/README.md). Its Redis buckets coordinate source/backend
+budgets; conflicting rate/capacity settings fail. Coordinate fleet changes and allow
+previous bucket keys to expire before changing shared rates.
+
+For exact retry/redirect/polling accounting, cancellation, backend support and integration
+contracts, see [pacing reference](reference/request-pacing.md).

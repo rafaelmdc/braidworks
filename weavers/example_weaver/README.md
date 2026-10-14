@@ -18,8 +18,8 @@ and deliberate removal of the discovery entry point. It passes the full `--stric
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See
-[the spec](weaver.spec.toml) for exact output fields and parameter defaults, or
-`braidworks weavers` for the installed inventory. Backend declarations do not imply
+[the spec](weaver.spec.toml) for exact output fields and parameter defaults, This teaching package is deliberately absent from CLI discovery; inspect its
+manifest directly. Backend declarations do not imply
 that optional local data are already configured.
 
 ## The files to copy
@@ -37,7 +37,6 @@ import asyncio
 from braidworks.core import Strand, StrandSet
 from example_weaver import build_example_weaver
 
-
 async def main():
     inputs = [
         StrandSet.from_strands(f"sample-{i}", [Strand("ncbi.taxon.id", taxid)])
@@ -52,7 +51,6 @@ async def main():
         )
         for result in results:
             print(result.to_json())
-
 
 asyncio.run(main())
 ```

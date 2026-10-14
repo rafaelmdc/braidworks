@@ -18,6 +18,8 @@ choose the sources your analysis needs, then scale to a batch. The
 2. [Run a query](usage.md): use the CLI, Python, or browser, then process a batch.
 3. [Read the results](results.md): check coverage, review matches, and export your data.
 
+For interactive work, [build and run a query in the browser](browser.md).
+
 ## Look up sources and interfaces
 
 Use the [source catalogue](sources.md), [key index](keys-index.md),

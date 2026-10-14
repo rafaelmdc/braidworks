@@ -206,6 +206,8 @@ fields let you regroup children; see [result exports](results.md).
 
 ## Use the browser
 
+The [browser task guide](browser.md) covers batches, recipes, exports and saved reviews.
+
 Install `weaverkit` with its `serve` extra as described in
 [installation](installation.md#add-the-browser), then start:
 

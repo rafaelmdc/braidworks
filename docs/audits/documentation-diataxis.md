@@ -218,3 +218,65 @@ Remaining organization work: toolkit/source README structure, local-data and pac
 reference separation where useful, and joint researcher walkthroughs. The tutorials
 are ready for that reader review; reliability against future live source changes
 remains a maintenance task.
+
+## Third implementation increment
+
+The remaining mapped organization changes are implemented. Toolkit and core READMEs
+now route readers by purpose. Toolkit spec fields and scaffold Python contracts have
+reference pages; browser users have a task guide and endpoint/artifact reference.
+Generic plugin-discovery contracts have their own reference rather than living under
+browser instructions. Pacing/local NCBI setup retain practical steps and point to the
+full request-accounting, source-generation, lock and reviewed-history rules.
+
+All 17 source README entry paths were reviewed. The 16 production sources now lead
+with what they retrieve, accepted identity/scope, scientific limits, capability purposes
+and query/setup entry points. Their `REFERENCE.md` pages retain exact input/output-group/
+backend/parameter inventories plus selection, evidence, coverage, failure and resource
+contracts. The small Example teaching package stays together and explicitly distinguishes
+its lack of CLI discovery. Source licensing and citation metadata remain accessible;
+FAPROTAX's custom license notices remain in its overview.
+
+Shared install/configuration facts link their canonical guides. The old implementation
+examples remain in reference or task sections; offline MONDO/GMrepo fixture examples
+are labelled synthetic. Incidental version suffixes and patch narratives were removed
+where they did not explain a current constraint. Migration thresholds, source release
+identities, request budgets, dataset limits and deferred GTDB semantics remain.
+
+### Corrections supported by current code
+
+| Claim corrected | Evidence | Current guidance |
+|---|---|---|
+| FAPROTAX evidence is still a proposal | Spec declares `evidence`; backend constructs `microbe.ecology.evidence` | Request the implemented trace output. |
+| Disbiome schema-2 caches remain readable / schema 3 is current | `setup.db_is_valid` requires schema 4 | Rebuild schema-1/2/3 databases; retain snapshot/identity caveats. |
+| Disbiome's transfer estimate is the SQLite size | Real third-party data acquisition in the prior increment produced about 45 MB SQLite | Sizes vary; do not present the old transfer estimate as DB size. |
+| Wikipedia local parser completeness is unknown / identity is only window month | Local backend reads `parser_coverage.complete` and uses `SourceBinding`; API identity includes effective source/scope | Distinguish artifact parsing completeness from upstream collection completeness and retain effective identity. |
+| BacDive collection mapping is unimplemented | Spec/backend expose `map_to_strain` | Document collection/genome-to-strain mapping and its identity limits. |
+| PDBe has no additional validation/assembly/ligand services | `describe_structure` declares and implements optional detail groups | The listing example does not invoke those optional groups; they remain available when requested. |
+| NCBI's fingerprint is only the printed taxonomy build string | Local backend returns `SourceBinding.fingerprint()` | Identity includes source/build metadata and artifact generation; reopen after rebuilding. |
+
+### Preservation and validation
+
+The old texts are retained only in ignored scratch for comparison. Twenty-seven original
+fenced source Python examples were compared through their parsed executable statements;
+all remain in the new overview/reference pages. All 28 current fenced Python blocks in
+the checked source/toolkit/reference set compile, including fragments with top-level await.
+This is syntax/preservation evidence, not live execution of every source example.
+
+All 17 weavers pass fixture-backed strict verification. All 58 exact capability rows
+match runtime inputs, groups, expandable keys, backends and parameters; the 58 overview
+capability names also match. Sixty-seven active CLI commands parse against current help,
+and direct calls reference existing capabilities/outputs/parameters. The generated
+catalogue still has 58 unique rows with accurate per-capability backends. The new AGORA
+bundled-crosswalk command runs without model acquisition. Public scaffold generation,
+validation and writing were exercised in a temporary ignored directory, preserving raw
+spec text. Local links/anchors and whitespace checks pass.
+
+The edits change Markdown only. No runtime code, dependency, schema, generated vocab,
+contract test or source data artifact is changed. No production browser service or worker
+fleet was deployed. No full live rerun of every provider or new legal/scientific review
+is claimed. Strict fixtures validate declared behavior, not upstream availability.
+
+The initial mapped organization queue is complete. Joint researcher testing remains:
+follow each lesson from setup to interpreting the result, observe where context is
+missing or excessive, and refine those pages from that evidence. Historical audit/plan
+records retain their dated status rather than becoming current usage guarantees.
