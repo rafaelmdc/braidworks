@@ -45,6 +45,10 @@ is not an inventory of every matching protein or isoform.
 
 ## Choose your interface
 
+For a complete researcher walkthrough, follow
+[find experimental structures for a protein list](docs/tutorials/protein-structures.md).
+It includes related-structure inspection, batch export and coverage checks.
+
 | You want to… | Start here |
 |---|---|
 | Run queries or export a batch to a spreadsheet | [CLI usage](docs/usage.md#query-from-the-command-line) |

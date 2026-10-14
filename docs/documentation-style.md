@@ -5,6 +5,12 @@ records the research and repository findings behind these conventions.
 
 ## Give each page one job
 
+Use [Diátaxis](https://diataxis.fr/start-here/) to choose that job: a tutorial teaches
+through a guided exercise, a how-to guide completes a task, reference supplies exact
+facts, and explanation connects concepts and reasons. The
+[documentation map](audits/documentation-diataxis.md) classifies existing pages and
+records the next edits. Improve a reader path before creating new folders.
+
 The README answers what the tool does, how its sources connect, and how to try it.
 The index routes readers to tasks. Usage guides show working steps; architecture
 explains relationships; reference pages hold exact contracts and options. Keep audit
@@ -26,6 +32,11 @@ missing data, representative selections, source evidence, and ambiguity where th
 affect interpretation. Preserve coverage rows in analysis examples.
 
 ## Keep guidance maintainable
+
+Keep details that affect a choice, action, interpretation or recovery. Move useful
+facts to the appropriate page and link them; remove filler and obsolete claims after
+checking their replacements. Preserve prerequisites, defaults, limitations and side
+effects. Reducing length is useful only when the reader can still complete the task.
 
 Use `uv run --no-sync` after selected workspace installs. Check current command help,
 public signatures, and generated catalogues before documenting behavior. Link to the

@@ -4,13 +4,26 @@ Braidworks connects lookups across biological data sources. Start with a small q
 choose the sources your analysis needs, then scale to a batch. The
 [README](../README.md) introduces the tool and includes a first command.
 
-## Get started
+## Learn through a tutorial
+
+[Find experimental structures for a protein list](tutorials/protein-structures.md)
+takes you through a connected lookup, related-entity inspection and a batch export,
+including checks on coverage and interpretation.
+
+## Complete a task
 
 1. [Install Braidworks](installation.md): choose packages and create a local environment.
 2. [Run a query](usage.md): use the CLI, Python, or browser, then process a batch.
 3. [Read the results](results.md): check coverage, review matches, and export your data.
 
-## Work with your data
+## Look up sources and interfaces
+
+Use the [source catalogue](sources.md), [key index](keys-index.md),
+[core contracts](core-contracts.md) and [builder configuration](weaver-configuration.md)
+for exact capabilities, connections and construction rules. Command help provides
+CLI option reference; source READMEs link their specs and interpretation notes.
+
+## More tasks for your data
 
 | Task | Guide |
 |---|---|
@@ -29,6 +42,9 @@ parameters, and interpretation notes live in the package READMEs linked from the
 
 ## Understand or extend Braidworks
 
+For the overall model, start with [how Braidworks fits together](architecture.md).
+The links below support understanding the framework and contributing to it.
+
 | Task | Documentation |
 |---|---|
 | Understand planning, execution, and package boundaries | [Architecture](architecture.md) |
@@ -41,6 +57,10 @@ parameters, and interpretation notes live in the package READMEs linked from the
 | Use the experimental distributed adapter | [braidworks-arq](../braidworks-arq/README.md) |
 
 ## Upgrade notes and project history
+
+For documentation contributors, the [Diátaxis map](audits/documentation-diataxis.md)
+records current page roles, gaps and proposed edits; [writing conventions](documentation-style.md)
+explain how to preserve useful detail during a rewrite.
 
 For older workflows, see [core 0.12 ambiguity changes](migrating-to-0.12.md) and
 [core 0.13 batching and pacing changes](migrating-to-0.13.md).

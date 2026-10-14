@@ -1,474 +1,194 @@
 # Implement a weaver
 
-This is a build manual for an AI agent (or human) implementing a new Braidworks
-weaver. It is prescriptive: follow the steps in order, change only what's marked,
-and run the verification commands at each gate. When in doubt, **read the
-corresponding file in `weavers/ncbi_weaver/src/ncbi_weaver/` — it is the source of truth,
-this guide just orients you.**
+A weaver connects one biological source to Braidworks through shared identifiers.
+Start with the source's real data and a spec, generate the package, then implement
+its backends. The scaffold supplies the manifest, dispatch and mapping structure;
+your work is to retrieve observations and normalize them into the declared outputs.
 
-> **Don't start by copying files by hand.** The deterministic path is
-> `make new-weaver SPEC=… DEST=…`, which stamps the whole package from a
-> `weaver.spec.toml` (see [weaverkit](../weaverkit/README.md)). This guide explains
-> what the generated files *are* and what you must fill in; §2 covers the loop.
-> The boundaries you must respect are in [AGENTS.md](../AGENTS.md).
+This guide is for contributors adding a source. Follow [repository rules](../AGENTS.md)
+and use the generated `IMPLEMENTATION.md` as the package's worklist. For the design
+behind the shared runtime, read [architecture](architecture.md) and
+[toolkit decisions](../weaverkit/docs/decisions.md).
 
-- *Boundaries & the Spec→Scaffold→Implement→Verify loop* → [AGENTS.md](../AGENTS.md)
-- *What to build next & why* → [weaver-roadmap.md](weaver-roadmap.md)
-- *Mechanical recipe (short)* → [CONTRIBUTING.md](../CONTRIBUTING.md) §"Adding a new weaver"
-- *Core abstractions & rationale* → [architecture.md](architecture.md)
-- *The guardrail toolkit (spec/scaffold/conformance)* → [weaverkit/README.md](../weaverkit/README.md)
-- *Local DB auto-setup design* → [local-db-setup-plan.md](local-db-setup-plan.md)
-- *This guide* → the long version: what each generated file is + checklists.
+## Define the source contract
 
----
+Before scaffolding, answer these questions in `weaver.spec.toml`:
 
-## 0. Orient: the five things a weaver is
-
-> **Shared runtime (read first):** the *records*, *mapper*, *dispatch*, and *backend
-> ABC* now live in `braidworks-core` (`LookupRecord`/`ResolverRecord`, `map_lookup`/
-> `map_resolver`, `BackendDispatchWeaver`, `BackendBase`). A scaffolded weaver
-> **imports** them — it does not generate `intermediate.py` / `mapper.py` /
-> `dispatch.py` / `backends/base.py`. The numbered concepts below still describe what
-> each piece *does* (and match `ncbi_weaver`, which keeps its own hand-tuned versions
-> as the "bring your own plumbing" reference) — but for a new weaver, items 2 and 4
-> are just `from braidworks.core import ...`.
-
-1. A **`vocab.py`** — the strand `type_id`s, `Capability`s, and `WeaverManifest` (generated).
-2. A **neutral record** every backend fills — `LookupRecord` / `ResolverRecord` (from core).
-3. One or more **backends** (`backends/*.py`) — one per data source (local DB, REST API). *You write these.*
-4. One **mapper** (`record → WeaveResult`, the single source of strand shape) — `map_lookup` / `map_resolver` (from core).
-5. **Assembly + factory glue** — a `BackendDispatchWeaver` subclass (sets `MAPPER` + `MANIFEST`), a zero-config `build_<package>()` introspection builder (verify's target) + a configured builder (the two-builder convention), and a `WeaverProvider`.
-
-Plus, around it: a **per-weaver `Makefile`**, **tests** (unit + contract mixins + opt-in live E2E), and — if the source ships a bulk file — a **`setup.py`** with `ensure_<db>_db(...)`.
-
-A weaver is reachable when a caller supplies its input type or an upstream weaver
-produces it. Choose registered **shared key types** from the
-[registry](../weaverkit/src/weaverkit/keys.py) so it can connect to other sources.
-Check the [key index](keys-index.md) for current producers and consumers. Entry keys
-such as `protein.query` and `organism.name` are valid registered inputs; conjunctions
-needing multiple inputs are not projected as ordinary graph edges.
-
----
-
-## 1. Decide before coding (write these down)
-
-| Decision | Question | Example (madin_weaver) |
-|---|---|---|
-| DB name | What's the source? Name the package `<db>_weaver`. | `madin_weaver` (bacteria-archaea-traits) |
-| Consumes | Which **shared key** identifies a record? | `ncbi.taxon.id` |
-| Produces | Which `type_id`s + how do they group? | `microbe.trait.*` in `traits.core` / `traits.growth` |
-| Backends | Bulk file → `local`; REST → `api`; both? | `local` (CC BY bulk CSV) |
-| Identity/fingerprint | What versions the data? (never `"unknown"`) | dataset release tag / file checksum |
-| License | Attribution / redistribution constraints? | CC BY — record in README |
-| Terminal vs intermediate | Does it also emit cross-ref IDs others consume? | terminal (traits only) |
-
-Prefer keys with existing producers. An input without an upstream producer is
-still usable directly; document that entry point rather than inventing a private key.
-
----
-
-## 2. Scaffold the package
-
-Write the decisions above into a `weaver.spec.toml`, then generate the package:
-
-```bash
-make verify-weaver SPEC=path/to/weaver.spec.toml          # validate the spec first
-make new-weaver    SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
-```
-
-`weaverkit new` stamps the layout below, generating `vocab.py` so the manifest
-already matches the spec (conformance passes by construction) and wiring up the
-conformance test. The root `pyproject.toml` globs `members = ["weavers/*"]`, so the
-new package is picked up by `make sync` automatically — no manual `members` edit.
-(Keep the spec **outside** `weavers/` until you scaffold: the glob makes `uv` treat
-any dir there as a member, so a spec-only `weavers/<db>_weaver/` breaks `uv run`.)
-The only files you edit are the `# TODO` spots in the backend
-stubs (§4/§6). The generated structure (created under `weavers/`) — note that the
-*record / mapper / dispatch / backend ABC* are **imported from `braidworks-core`**,
-not generated (see §0), so a scaffolded weaver is thin:
-
-```
-weavers/<db>_weaver/
-  pyproject.toml
-  Makefile
-  weaver.spec.toml     # the contract — vocab is regenerated from it
-  src/<db>_weaver/
-    __init__.py        # re-export build_<db>_weaver, vocab, the weaver class, register()
-    vocab.py           # generated from the spec — don't hand-edit
-    factory.py         # build_<db>_weaver() introspection + configured builder + provider
-    weaver.py          # thin subclass of core's BackendDispatchWeaver (sets MAPPER + MANIFEST)
-    setup.py           # only if there's a local bulk DB ([bulk] in the spec)
-    fixture.py         # only if --strict golden needs a synthetic dataset
-    backends/
-      __init__.py
-      local.py         # the # TODO spots: is_configured / fingerprint / fetch
-      api.py           # if applicable
-  tests/
-    conftest.py
-    test_<db>_weaver.py
-    test_e2e_live.py   # opt-in live E2E (self-skips without BRAIDWORKS_RUN_LIVE)
-```
-
-> The numbered sections below (§4 intermediate, §6 dispatch, §7 mapper) describe what
-> each concept *does* and match `ncbi_weaver`, the "bring your own plumbing"
-> reference that keeps hand-tuned copies. For a **scaffolded** weaver those pieces are
-> just `from braidworks.core import ...` — you only write the backends.
-
-**`pyproject.toml`** (copy `weavers/ncbi_weaver/pyproject.toml`, change name/packages/deps):
-
-```toml
-[project]
-name = "<db>_weaver"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = ["braidworks-core", "httpx>=0.27"]   # local-DB plumbing (+platformdirs) comes via braidworks-core
-[project.optional-dependencies]
-test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
-[project.scripts]
-<db>-weaver = "<db>_tools.cli:main"                  # only if you add a CLI
-[tool.uv.sources]
-braidworks-core = { workspace = true }
-[tool.hatch.build.targets.wheel]
-packages = ["src/<db>_weaver"]
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-pythonpath = ["."]
-testpaths = ["tests"]
-```
-
-The **root** `pyproject.toml` `[tool.uv.workspace] members` already globs
-`weavers/*`, so just run `uv sync --all-extras` (or `make sync`) and confirm it
-imports — no manual member entry needed.
-
----
-
-## 3. `vocab.py` — type IDs, capabilities, manifest
-
-Pattern: define `type_id` constants, group them, build one `Capability` per
-operation, and a `build_manifest(*, backends)` that takes the wired backends.
-Reference: `weavers/ncbi_weaver/src/ncbi_weaver/vocab.py`.
-
-```python
-from braidworks.core import Capability, OutputGroup, WeaverManifest
-
-# consumes a SHARED key (see weaver-roadmap §1) — do not invent a private input
-TAXON_ID = "ncbi.taxon.id"
-
-OXYGEN = "microbe.trait.oxygen"
-METABOLISM = "microbe.trait.metabolism"
-TEMP_OPTIMUM = "microbe.trait.temperature_optimum"
-
-CORE_OUTPUTS = frozenset({OXYGEN, METABOLISM})
-GROWTH_OUTPUTS = frozenset({TEMP_OPTIMUM})
-
-WEAVER_ID = "madin"
-WEAVER_VERSION = "1.0.0"
-RESOLVE_TRAITS = "madin.resolve_traits"
-MAX_BATCH_SIZE = None  # local DB handles any size; set the API page limit otherwise
-
-def resolve_traits_capability(*, backends: tuple[str, ...]) -> Capability:
-    return Capability(
-        id=RESOLVE_TRAITS,
-        consumes=frozenset({TAXON_ID}),
-        produces=CORE_OUTPUTS | GROWTH_OUTPUTS,
-        output_groups=(
-            OutputGroup(id="core", outputs=CORE_OUTPUTS),
-            OutputGroup(id="growth", outputs=GROWTH_OUTPUTS),
-        ),
-        backends=backends,
-        max_batch_size=MAX_BATCH_SIZE,
-    )
-
-def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
-    return WeaverManifest(
-        weaver_id=WEAVER_ID, version=WEAVER_VERSION,
-        capabilities=(resolve_traits_capability(backends=backends),),
-    )
-```
-
-**Rules:**
-- **Output groups** are how partial computation caches. Requesting any output in a
-  group triggers the whole group (`Capability.triggered_groups`); the mapper emits
-  only `Capability.outputs_to_compute(requested)`. Group outputs that are computed
-  by the same underlying operation.
-- `consumes` is a **single type for the MVP** — the copied `dispatch.py` does
-  `(input_type,) = tuple(cap.consumes)`. Multi-input needs more work; don't unless required.
-- Add a one-line row to the interface table in [weaver-roadmap.md §1](weaver-roadmap.md).
-
----
-
-## 4. `intermediate.py` — the neutral dataclass
-
-One dataclass your backends fill and the mapper reads. It is **backend-neutral**
-and must never be imported by `braidworks-core`. Include a status enum mirroring
-`WeaveStatus` outcomes (resolved / ambiguous / no_match / error) and a `score`
-for confidence. Reference: `weavers/ncbi_weaver/src/ncbi_weaver/intermediate.py`.
-
-```python
-from dataclasses import dataclass, field
-from enum import Enum
-
-class TraitMatchStatus(Enum):
-    RESOLVED = "resolved"; AMBIGUOUS = "ambiguous"; NO_MATCH = "no_match"; ERROR = "error"
-
-@dataclass
-class TraitMatch:
-    query: object
-    status: TraitMatchStatus
-    values: dict = field(default_factory=dict)   # {type_id: value}
-    score: float | None = None
-    requires_review: bool = False
-    warnings: list[str] = field(default_factory=list)
-    error: str | None = None
-```
-
----
-
-## 5. `backends/` — one per data source
-
-Copy `backends/base.py` and retype `resolve()` to return your intermediate. The
-backend implements core's `BackendStrategy` (`name`, `is_configured()`,
-`fingerprint()`) plus the one domain `resolve()`.
-
-```python
-class TraitBackend(ABC):
-    name: str
-    @abstractmethod
-    def is_configured(self) -> bool: ...
-    @abstractmethod
-    def fingerprint(self) -> str: ...          # NEVER "unknown" — it keys the cache
-    @abstractmethod
-    async def resolve(self, capability_id, queries, *, groups: frozenset[str]) -> list[TraitMatch]:
-        """One TraitMatch per input, in input order."""
-```
-
-**`local.py`** (bulk → SQLite). Mirror `backends/local.py`: **construct cheap and
-never raise for a missing DB** — set `self._configured = db_is_valid(path)` and have
-`is_configured()` return it (the dispatch gates on it; the actionable "build it"
-error lives in the configured builder / `ensure_*` path, not `__init__`). One
-connection per thread via `threading.local`, run sync queries off the loop with
-`asyncio.to_thread`, derive `fingerprint()` from a stored dataset version (only ever
-called when configured).
-
-**`api.py`** (REST). Mirror `backends/datasets_v2.py`: an **injectable**
-`httpx.AsyncClient` (tests pass an `httpx.MockTransport`), `api_key`/registration
-where required, batched + paged requests, `logging.getLogger("<db>_weaver.api")`
-INFO line on network use, a fixed `fingerprint()` like `"<db>-live"`.
-
-**Fingerprint rule (critical):** versioned dataset → version string
-(`"madin-2020-r1"`); live service → explicit `"<db>-live"`. Returning `"unknown"`
-silently disables cache invalidation.
-
----
-
-## 6. `dispatch.py` + `weaver.py` — assembly
-
-Copy `dispatch.py`. It: looks up the capability, selects the backend (raising
-`BackendUnavailable` if absent/unconfigured), extracts the single consumed value
-per input, calls `backend.resolve(...)`, and runs the mapper. **Adapt the
-"what does the backend need" line:** ncbi_weaver computes
-`need_lineage = "lineage" in cap.triggered_groups(requested_outputs)`. Generalize to
-pass the triggered optional groups:
-
-```python
-groups = cap.triggered_groups(requested_outputs)
-matches = await strategy.resolve(capability_id, queries, groups=groups)
-```
-
-`weaver.py` is tiny — subclass the dispatch weaver and set `MANIFEST` from the
-wired backends (copy `weavers/ncbi_weaver/src/ncbi_weaver/weaver.py`):
-
-```python
-class MadinWeaver(BackendDispatchWeaver):
-    def __init__(self, backends):
-        if not backends: raise ValueError("MadinWeaver requires at least one backend")
-        super().__init__(backends)
-        self.MANIFEST = vocab.build_manifest(backends=tuple(sorted(backends)))
-```
-
-> `BackendDispatchWeaver` currently lives in the taxon package. Copy it for now;
-> it will be promoted to a shared `weaverkit` once a second weaver confirms the
-> abstraction. Keep your copy minimal-diff so that promotion is clean.
-
----
-
-## 7. `mapper.py` — the single strand-shape source
-
-The mapper is the contract: **all backends route through it, so all backends emit
-identical strands.** Reference: `weavers/ncbi_weaver/src/ncbi_weaver/mapper.py`.
-
-```python
-def map_trait_match(match, *, capability, requested_outputs, backend, weaver_version) -> WeaveResult:
-    triggered = capability.triggered_groups(requested_outputs)
-    computed_groups = frozenset(triggered | {"core"})          # if core is always computed
-    allowed = capability.outputs_to_compute(requested_outputs) # emit EXACTLY these
-    status = _STATUS[match.status]                              # intermediate status -> WeaveStatus
-    conf = confidence_from_score(match.score)
-    provenance = (f"{vocab.WEAVER_ID}:{backend}",)
-    strands = [
-        Strand(t, v, confidence=conf, provenance=provenance)
-        for t, v in match.values.items() if t in allowed and v is not None
-    ]
-    return WeaveResult(
-        capability_id=capability.id, weaver_version=weaver_version, backend_used=backend,
-        computed_groups=computed_groups, status=status, strands=tuple(strands),
-        warnings=tuple(match.warnings), requires_review=match.requires_review,
-    )
-```
-
-**Rules:**
-- Emit only `outputs_to_compute(requested)`; report everything computed in
-  `computed_groups` (lets the cache satisfy a later subset request).
-- **Failures are values:** map "not found" → `WeaveStatus.NO_MATCH` (empty strands),
-  multiple candidates → `WeaveStatus.AMBIGUOUS` (+ `candidates`, `requires_review=True`),
-  per-record backend failure → `WeaveStatus.ERROR` (+ `errors`). Only *structural*
-  problems raise (`BackendConfigurationError`, `BackendUnavailable`).
-- Low confidence / fuzzy / ambiguous → set `requires_review=True` so it lands in the
-  executor's `review_queue` rather than asserting silently.
-
----
-
-## 8. `factory.py` + `provider.py` — the two-layer factory
-
-`build_<db>_weaver(...)` (Layer 2) is the only place that knows how to construct
-your backends. The `WeaverProvider` (Layer 1) is a thin wrapper for
-`WeaverFactory`. Reference: `factory.py` + `provider.py`.
-
-```python
-def build_madin_weaver(*, db_path=None, auto_setup=False, refresh=False, enable_api=False, ...):
-    backends = {}
-    want_local = db_path is not None or auto_setup
-    if want_local:
-        resolved = _ensure_local_db(db_path, auto_setup=auto_setup, refresh=refresh)  # see §9
-        backends["local"] = MadinLocalBackend(resolved)
-    if enable_api:
-        backends["api"] = MadinApiBackend(...)
-    if not backends:
-        raise BackendConfigurationError("configure at least one backend")
-    return MadinWeaver(backends)
-
-class MadinWeaverProvider:
-    weaver_id = vocab.WEAVER_ID
-    def build(self, config): return build_madin_weaver(**dict(config))
-```
-
-If you have a local DB, copy ncbi_weaver's `factory._ensure_local_db` +
-`_interactive` + `_prompt_for_setup` (interactive prompt vs actionable error vs
-consent). Otherwise omit.
-
----
-
-## 9. `setup.py` — local DB acquisition (only if bulk file)
-
-If the source ships a bulk file, the generic acquisition plumbing — default-path
-resolution (`BRAIDWORKS_DATA_DIR` / platformdirs cache), consent gate (`auto=` /
-`BRAIDWORKS_AUTO_DOWNLOAD`), download, checksum verify, disk precheck, cross-process
-lock, atomic temp→`os.replace`, idempotent reuse — lives in
-**`braidworks.core.localdb.ensure_local_db`**. Your `setup.py` supplies only the
-domain pieces: `db_is_valid(path)`, `_build(target)` (download + parse into the DB,
-recording the source version), and the consent message; then delegate to
-`ensure_local_db`. The `[bulk]` spec table makes the scaffold stamp this shape plus
-a `<db>-ensure` CLI for you. `weavers/ncbi_weaver/src/ncbi_weaver/setup.py` is the worked
-example (it adds `check_for_update` on top).
-
-**Reuse shortcut:** if the source is already in **NCBI taxdump format** (e.g.
-GTDB via gtdb-taxdump), call `taxonomy_resolver.build.build_taxonomy_database`
-directly instead of writing a parser.
-
-Design rationale and the full decision log are in
-[local-db-setup-plan.md](local-db-setup-plan.md).
-
----
-
-## 10. Tests — three layers
-
-1. **Unit / behavior** (per backend): exact match, no-match, ambiguous, group
-   selection (core-only vs +optional), batch order/length. Local: build a tiny
-   synthetic DB in a fixture (see `weavers/ncbi_weaver/tests/conftest.py`). API: drive an
-   `httpx.MockTransport` (see `tests/test_ncbi_weaver_api.py`).
-2. **Contract mixins** (per backend): subclass `WeaverOrderContractTests` and
-   `CacheFingerprintTests` from `braidworks.testing.contract`. Provide ≥5 distinct
-   samples. See `tests/test_ncbi_weaver_local.py`.
-3. **Opt-in live E2E**: gate with
-   `pytest.mark.skipif(not os.environ.get("BRAIDWORKS_RUN_LIVE"), …)`; ensure the
-   real DB, run a large/real batch, assert exact resolution + known-truth rows.
-   Copy `tests/test_e2e_live.py`. It must **self-skip** without the env var.
-
-`conftest.py` note: ncbi_weaver tests import `from tests....`; that only resolves
-with `pythonpath = ["."]` + running from the package dir — keep both.
-
----
-
-## 11. `Makefile` — weaver-specific macros
-
-Copy `weavers/ncbi_weaver/Makefile`: `test`, `test-live` (the `BRAIDWORKS_RUN_LIVE` E2E),
-`ensure` (if there's a local DB), `lint`, `fmt`, `help`. Then make the **root**
-`test-weaver` (or a per-weaver target) delegate: `$(MAKE) -C <path> test`. Add the
-package's `src`/`tests` to the root `LINT_PATHS`.
-
----
-
-## 12. Verify (run at each gate, and before declaring done)
-
-```bash
-uv sync --all-extras
-make -C <db>_weaver test       # unit + contract mixins; live E2E self-skips
-make lint                     # ruff over all packages (add your paths to LINT_PATHS)
-# once, to prove the real path:
-make -C <db>_weaver test-live  # BRAIDWORKS_RUN_LIVE=1 — real download/build/resolve
-```
-
-Then plan an end-to-end chain to confirm reachability, e.g.:
-`organism.name → [ncbi_weaver] → ncbi.taxon.id → [<db>_weaver] → microbe.trait.*`.
-
----
-
-## 13. The checklist (done = all checked)
-
-- [ ] DB-named package under `weavers/` (auto-included by the `weavers/*` glob); own `Makefile`; `uv sync` clean.
-- [ ] `vocab.py`: type_ids + capabilities + output groups; **`consumes` a shared key**
-      (roadmap §1), not raw input; interface-table row added to weaver-roadmap.md.
-- [ ] Neutral intermediate; never imported by `braidworks-core`.
-- [ ] Backend(s) implement `name`/`is_configured`/`fingerprint`/`resolve`;
-      `fingerprint` is version-specific, never `"unknown"`.
-- [ ] One mapper = single strand-shape source across all backends.
-- [ ] `execute_batch` returns one result per input, in input order.
-- [ ] Failures are values (`NO_MATCH`/`AMBIGUOUS`/`ERROR`); low confidence →
-      `requires_review`; only structural problems raise.
-- [ ] Dataclasses on the public boundary round-trip `to_json`/`from_json`.
-- [ ] `build_<db>_weaver` + `WeaverProvider`; at least one backend required.
-- [ ] Local DB (if any): `ensure_<db>_db` + `<db>-weaver ensure`; default path is
-      DB-named; DB artifacts git-ignored (never commit multi-GB data).
-- [ ] Tests: unit + contract mixins per backend + opt-in live E2E that self-skips.
-- [ ] `make -C <path> test` and `make lint` green; live E2E passes once.
-- [ ] License/attribution recorded in the weaver README.
-
----
-
-## 14. Common pitfalls
-
-- **Consuming raw input instead of a shared key** → the weaver is an island; the
-  braider can't chain it. Consume `ncbi.taxon.id` / `…lineage` / `uniprot.accession`.
-- **`fingerprint()` returning `"unknown"` or a constant for versioned data** →
-  stale cache hits across data updates.
-- **Mapper emitting more than `outputs_to_compute`** → leaks ungrouped outputs and
-  corrupts cache group accounting.
-- **Raising on "not found"** → breaks the result-bucket contract; return `NO_MATCH`.
-- **Committing the DB** → it's multi-GB and git-ignored; ship `ensure_*` instead.
-- **Forgetting `pythonpath=["."]`** → `from tests....` imports fail under pytest.
-- **Not adding paths to root `LINT_PATHS`** → CI lint silently skips your package.
-
----
-
-## 15. Reference index
-
-| Need | Read |
+| Decision | What to establish |
 |---|---|
-| What/why to build next | [weaver-roadmap.md](weaver-roadmap.md) |
-| Short mechanical recipe | [CONTRIBUTING.md](../CONTRIBUTING.md) |
-| Core abstractions, two-layer factory | [architecture.md](architecture.md) |
-| Local DB auto-setup decisions | [local-db-setup-plan.md](local-db-setup-plan.md) |
-| Building the NCBI DB | [database.md](database.md) |
-| Reference implementation | `weavers/ncbi_weaver/src/ncbi_weaver/` (every file maps to a §above) |
-| Core types | `braidworks-core/src/braidworks/core/` — `capability.py`, `weaver.py`, `result.py`, `strand.py` |
-| Shipped test mixins | `braidworks-core/src/braidworks/testing/contract.py` |
+| Source and provenance | Name, title, source URL, data license, citation and attribution. Include an observed `source_sample`, not an invented schema. |
+| Inputs | Registered keys that identify or resolve source records. Check the [key index](keys-index.md) for producers and consumers. |
+| Outputs | Useful fields and identifier bridges. Group outputs computed by the same source operation. |
+| Lookup shape | `lookup` for clean identifier lookup; `resolver` for fuzzy or ambiguous matching with candidates and review. |
+| Backends | Local data, API, or both; declare capability-specific availability when they differ. |
+| Parameters | Filters, thresholds and other per-query controls with deterministic defaults. |
+| Source identity | Release, dump date, content checksum or effective API contract/scope used for cache invalidation. |
+| Verification | Known input/output examples, an offline fixture and, for an API, a live known-truth test. |
+
+Choose inputs from the [shared-key registry](../weaverkit/src/weaverkit/keys.py).
+Entry keys such as `organism.name` are valid. Prefer connections to existing
+producers; an unmet input remains usable when callers supply it directly. Add a
+new bridge key deliberately in the same change if the registry lacks a suitable key.
+
+Name capabilities by their lookup shape: `resolve_*` for ambiguous matching,
+`list_*` for related sets, `describe_*` for one entity, and `map_to_*`/`map_from_*`
+for identifier cross-references. A list's expandable identifier should be consumed
+by its describe capability or another source.
+
+Multiple `consumes` keys normally mean all are required; the planner does not route
+such conjunctions as ordinary graph edges. Set `consumes_any = true` for alternative
+inputs and dispatch on the supplied key. Declare fan dimensions in `set_outputs`;
+these must be produced shared keys. Use parameters for how a lookup operates, output
+groups for which fields it computes, and separate capabilities for distinct lookups.
+See the [spec field reference](../weaverkit/README.md#weaverspectoml-field-reference).
+
+## Validate and scaffold
+
+Run from the repository root after [contributor setup](../CONTRIBUTING.md).
+Replace `your_source` and the spec path with your chosen names:
+
+```bash
+make verify-weaver SPEC=path/to/weaver.spec.toml
+make new-weaver SPEC=path/to/weaver.spec.toml DEST=weavers/your_source_weaver
+make sync
+```
+
+Keep the draft spec outside `weavers/` until scaffolding. The workspace treats each
+child there as a package, so a spec-only directory breaks workspace resolution.
+Scaffolding copies the spec into the destination. Workspace membership and root lint
+paths already include weaver packages; no manual root additions are needed.
+
+The package starts with this division of responsibilities:
+
+| Location | Your work |
+|---|---|
+| `weaver.spec.toml` | Maintain capabilities, provenance, parameters and golden expectations. |
+| `src/<package>/vocab.py` | Generated manifest. Change the spec and use [safe regeneration](../weaverkit/docs/safe-regeneration.md), rather than editing it by hand. |
+| `src/<package>/weaver.py` | Thin assembly over core's dispatch and mapper. Keep shared behavior in core. |
+| `src/<package>/backends/` | Implement configuration checks, source identity and batch fetches. |
+| `src/<package>/factory.py` | Keep discovery construction cheap; add configured construction and fixture wiring as needed. |
+| `src/<package>/setup.py` | Generated for a bulk source: implement building and artifact validation. |
+| `src/<package>/fixture.py` | Present for applicable scaffolds, or add it for deterministic golden execution. |
+| `tests/` | Complete backend behavior, conformance, contract and opt-in live checks. |
+| `IMPLEMENTATION.md`, `CONTRIBUTING.md` | Track initial completion; document source-specific extension rules and limitations. |
+
+The scaffold also supplies package metadata, a Makefile and the discovery entry point.
+Preserve `[project.entry-points."braidworks.weavers"]`. Do not regenerate over an
+implemented package with `--force`: it replaces files, including backends and tests.
+
+## Implement the backend
+
+Implement `BackendBase` through the generated backend stub. Core's
+[backend contract](../braidworks-core/src/braidworks/core/backend.py) defines `fetch`:
+it receives a batch of input dictionaries, requested outputs, resolved groups to
+compute, and effective parameters when declared. Return exactly one record per query
+in input order, including misses and errors. Internal deduplication must restore the
+original positions, including duplicate inputs.
+
+Use core `LookupRecord` or `ResolverRecord` values keyed by produced type IDs.
+The shared mapper converts them into strands and filters output coverage; shared
+dispatch selects the backend and computes groups. Gate expensive work on
+`groups_to_compute`, and read validated/defaulted query controls from `params`.
+Keep source-specific types and normalization in the weaver; core stays domain-neutral.
+
+The [backend implementation reference](../weaverkit/docs/implementing-backends.md)
+contains the field contracts and fetch patterns. Start with the
+[example backend](../weavers/example_weaver/src/example_weaver/backends/local.py)
+for a small offline implementation. Preserve these behaviors:
+
+- Construct backends cheaply. Missing local data means `is_configured()` is false;
+  an explicit configured builder can report an actionable configuration error.
+- Return a stable source identity from `fingerprint()`, never an empty string or
+  `unknown`. Local identities must change with the served artifact. Live API identity
+  describes its contract and effective scope; it does not freeze provider contents.
+- Represent per-input misses and failures as records. HTTP 400/404 are no-match under
+  the project's fetch convention; 5xx/network failures are errors. Use
+  `is_not_found_status` and preserve source-specific interpretation where needed.
+  Structural faults use the documented configuration/capability/backend exceptions.
+- Order candidates deterministically with an identifier tiebreak. Deduplicate, sort
+  and cap display lists while reporting true totals. Expandable set keys retain the
+  full distinct ordered set, not the display cap. Preserve review requirements for
+  ambiguous or low-confidence resolution.
+- Use upstream bulk endpoints in chunks rather than one request per input. For
+  single-ID APIs, use bounded concurrent work. Map responses back by stable identity
+  or echoed query and test request counts/order. Honor pacing through the scaffold's
+  shared HTTP seam; see [request pacing](request-pacing.md).
+
+## Configure data and resource ownership
+
+Keep a zero-argument `build_<package>()` that exposes the complete manifest without
+network acquisition, even when local data are unconfigured. Add a configured builder
+for database paths, endpoint/client settings or credentials. A fixture builder provides
+small deterministic data for strict goldens; fixtures are not research reference data.
+
+Entry-point discovery and registering a built instance in `BraidRegistry` support
+execution. `register(factory)` registers a provider with the optional `WeaverFactory`;
+it is not required to make an installed package discoverable. Validate builder options
+and document where configured helpers are imported. See
+[configuration and client ownership](weaver-configuration.md) for borrowed clients,
+closing owned resources and effective endpoint identity.
+
+For bulk data, implement the generated build/validation hooks over
+[core local acquisition](../braidworks-core/src/braidworks/core/localdb.py). Preserve
+consent, path selection, locking, validation and atomic publication. Store source and
+build identity in the artifact. Keep databases/dumps/archives out of git. Document
+required space, refresh behavior and the need to reopen a backend after replacing its
+pinned data generation. A tiny bundled teaching fixture is a separate case.
+
+[NCBI setup](database.md) shows an implemented acquisition workflow. Reuse a compatible
+parser only after checking the actual source format; a source's name alone does not
+establish compatibility with NCBI taxdump.
+
+## Verify the complete source path
+
+Add real `[[golden]]` examples whose inputs and expectations are supported by your
+fixture. Populate mock API responses with observed schemas. Keep ordinary tests
+independent of network/data acquisition; supply a fixture builder to conformance and
+contract tests. Replace `TODO-real-input` in the opt-in live test.
+
+Run these from the repository root, substituting the actual package name:
+
+```bash
+make verify-weaver SPEC=weavers/your_source_weaver/weaver.spec.toml PACKAGE=your_source_weaver
+make -C weavers/your_source_weaver test
+uv run weaverkit verify --spec weavers/your_source_weaver/weaver.spec.toml \
+    --package your_source_weaver --strict
+make lint
+make test
+```
+
+Plain verification checks structure; it can skip goldens. Strict verification requires
+completed implementation and executable goldens. Include tests for exact/missing/error
+results, ambiguity when supported, output groups/parameters, batch length/order and
+fingerprint identity. Preserve conformance/contract checks; fix implementation failures
+rather than weakening the tests. Public boundary dataclasses must round-trip through
+`to_json()`/`from_json()`. Package suites depend on their working directory, so use
+Makefile targets.
+
+After touching an API backend, also run its known-truth live check:
+
+```bash
+BRAIDWORKS_RUN_LIVE=1 make -C weavers/your_source_weaver test-live
+```
+
+Mocked checks cannot establish that today's upstream schema still matches. Diagnose
+live failures by comparing an observed response to the mock. Document validation limits
+if the live source cannot be reached.
+
+Finally, rebuild the catalogue with `make index`, inspect producers/consumers and test
+a route from supplied input to a useful output. Keep the three weaver version sites
+(spec, package metadata and generated `WEAVER_VERSION`) consistent. Behavior/manifest
+changes need the appropriate bump and minimum core version; depend on a floor without
+a ceiling. Tags follow the automated release workflow.
+
+## Extend handwritten machinery only when needed
+
+NCBI retains domain-specific intermediate records, mapping and dispatch. Those files
+are a reference for extending an existing handwritten implementation, not a template
+for duplicating core in a new package. Its custom `vocab.py` is the documented exception
+to generation; replacing it with scaffold output loses constants.
+
+If a source needs richer internal records, keep one backend-neutral mapping boundary,
+maintain the same batch/status/group/review guarantees, and justify the extra machinery
+with a source requirement. Consult [core contracts](core-contracts.md) and the
+[NCBI source](../weavers/ncbi_weaver/src/ncbi_weaver/) before changing that boundary.
