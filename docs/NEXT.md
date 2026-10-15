@@ -34,6 +34,7 @@ publication. Each later branch includes the preceding changes.
 | [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Not planned after reviewing current vocabulary storage | [Decision](audits/declaration-storage-decisions.md#64--key-database-not-planned) |
 
 The final branch, `docs/declaration-storage-decisions`, contains the full loop.
+See the [final acceptance record](audits/platform-loop-acceptance.md) for complete verification.
 No runtime decorator or key-database feature was added for the two rejected ideas.
 They can be reopened with a concrete workflow that changes the assessment.
 
