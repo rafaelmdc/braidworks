@@ -21,8 +21,9 @@ open for the deferred GTDB finding.
 
 Backend availability diagnostics [#132](https://github.com/rafaelmdc/braidworks/issues/132)
 are implemented and verified; see the [acceptance record](audits/backend-availability.plan.md#acceptance-record).
-Next is acquisition progress (#131), followed by the error-system, fan-out and documentation
-issues. The three smaller design ideas will receive a usefulness review before implementation.
+Acquisition progress (#131) is also verified; see its
+[implementation record](audits/acquisition-progress.md). Next are the error-system,
+fan-out and documentation issues. The three smaller design ideas will receive a usefulness review before implementation.
 
 These older issues remain open. Their titles do not establish whether later work
 partially addressed them; inspect before planning or closing them.
@@ -31,7 +32,6 @@ partially addressed them; inspect before planning or closing them.
 |---|---|
 | [#135](https://github.com/rafaelmdc/braidworks/issues/135) | Prune expansion using downstream availability |
 | [#133](https://github.com/rafaelmdc/braidworks/issues/133) | Error-system refactor |
-| [#131](https://github.com/rafaelmdc/braidworks/issues/131) | Acquisition progress |
 | [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Strand declaration decorators |
 | [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Workflow consolidation |
 | [#67](https://github.com/rafaelmdc/braidworks/issues/67) | Generated capability documentation |

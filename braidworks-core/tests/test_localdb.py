@@ -163,13 +163,126 @@ def test_download_sends_braidworks_user_agent(monkeypatch, tmp_path):
         def read(self, _n):
             return self._chunks.pop(0)
 
-    def _fake_urlopen(request):
+    def _fake_urlopen(request, *, timeout):
         captured["ua"] = request.get_header("User-agent")
+        captured["timeout"] = timeout
         return _FakeResponse()
 
     monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
     destination = tmp_path / "f.bin"
     download("https://example.test/f.bin", destination)
 
+    assert captured["timeout"] == 30.0
     assert captured["ua"] == USER_AGENT
     assert destination.read_bytes() == b"abc"
+
+
+def test_download_reports_before_network_and_preserves_timeout(monkeypatch, tmp_path, capsys):
+    from braidworks.core.localdb import download
+
+    events = []
+
+    def stalled(request, *, timeout):
+        assert events == [("download", "Downloading", 0, None, False)]
+        assert timeout == 2
+        raise TimeoutError("signed URL must not be printed")
+
+    monkeypatch.setattr("urllib.request.urlopen", stalled)
+    with pytest.raises(TimeoutError):
+        download(
+            "https://example.test/?secret=token",
+            tmp_path / "file",
+            progress=lambda *e: events.append(e),
+            timeout=2,
+        )
+    assert events[-1] == ("failed", "Downloading", 0, None, True)
+    assert capsys.readouterr().err == ""
+
+
+def test_default_progress_reports_stall_without_exposing_url(monkeypatch, tmp_path, capsys):
+    from braidworks.core.localdb import download
+
+    def stalled(request, **kwargs):
+        assert "in progress" in capsys.readouterr().err
+        raise TimeoutError("secret")
+
+    monkeypatch.setattr("urllib.request.urlopen", stalled)
+    with pytest.raises(TimeoutError):
+        download("https://example.test/?secret=token", tmp_path / "file")
+    stderr = capsys.readouterr().err
+    assert "failed" in stderr
+    assert "secret" not in stderr
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+def test_invalid_download_timeout_has_no_side_effects(tmp_path, timeout):
+    from braidworks.core.localdb import download
+
+    target = tmp_path / "absent" / "file"
+    with pytest.raises(ValueError):
+        download("https://example.test/", target, timeout=timeout)
+    assert not target.parent.exists()
+
+
+def test_progress_throttles_unknown_length(monkeypatch, capsys):
+    from braidworks.core.localdb import _stderr_progress
+
+    moments = iter([0, 1, 11, 12])
+    monkeypatch.setattr("braidworks.core.localdb.time.monotonic", lambda: next(moments))
+    report = _stderr_progress()
+    report("download", "data", 0, None, False)
+    report("download", "data", 10, None, False)
+    report("download", "data", 20, None, False)
+    report("download", "data", 30, None, True)
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 3
+    assert "(20 bytes)" in lines[1] and "[done]" in lines[-1]
+
+
+def test_build_failure_reports_and_keeps_old_artifact(tmp_path):
+    target = tmp_path / "data.sqlite"
+    target.write_text("old")
+    events = []
+
+    def fail(path):
+        path.write_text("partial")
+        raise RuntimeError("bad build")
+
+    with pytest.raises(RuntimeError):
+        ensure_local_db(
+            target,
+            is_valid=lambda p: p.exists(),
+            build=fail,
+            consent_message="consent",
+            auto=True,
+            refresh=True,
+            min_free_bytes=0,
+            progress=lambda *e: events.append(e),
+        )
+    assert target.read_text() == "old"
+    assert events[-1][0] == "failed"
+
+
+def test_valid_artifact_stays_silent(tmp_path, capsys):
+    target = tmp_path / "data.sqlite"
+    target.write_text("valid")
+    ensure_local_db(
+        target,
+        is_valid=lambda p: p.exists(),
+        build=lambda p: pytest.fail("must not build"),
+        consent_message="consent",
+    )
+    assert capsys.readouterr().err == ""
+
+
+def test_checksum_request_is_bounded_and_redacts_failure(monkeypatch, caplog):
+    from braidworks.core.localdb import fetch_remote_md5
+
+    def stalled(url, *, timeout):
+        assert timeout == 30
+        raise TimeoutError("secret=token")
+
+    monkeypatch.setattr("urllib.request.urlopen", stalled)
+    assert fetch_remote_md5("https://example.test/?secret=token") is None
+    assert "TimeoutError" in caplog.text
+    assert "secret" not in caplog.text

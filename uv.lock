@@ -180,7 +180,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.22.0"
+version = "0.22.1"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "networkx" },

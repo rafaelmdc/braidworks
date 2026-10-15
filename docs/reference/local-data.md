@@ -43,3 +43,20 @@ review path explicitly. Neither file belongs in git.
 
 Implementation: [source binding](../../braidworks-core/src/braidworks/core/source_identity.py),
 [acquisition and locks](../../braidworks-core/src/braidworks/core/localdb.py).
+
+## Acquisition progress and network waits
+
+Shared local-data setup reports acquisition/build stages and lock waits to stderr.
+Downloads without a progress callback announce the request before connecting, then
+report byte counts at most once every ten seconds and on completion or failure.
+Existing valid artifacts remain silent. stdout stays available for query results.
+
+`braidworks.core.localdb.download(..., progress=callback, timeout=30)` accepts a
+replacement callback; use `progress=lambda *event: None` for quiet downloads.
+`ensure_local_db(..., progress=callback)` similarly replaces its stage/lock events;
+a source build callback controls progress for downloads it calls separately.
+The download timeout must be finite and positive. It bounds socket inactivity,
+including connection/read waits, rather than the total duration of a large transfer.
+Optional checksum requests use the same 30-second socket limit. There are no automatic
+retries in these helpers. Build-lock waits have their own finite timeout; a source's
+parsing/build callback has no imposed total deadline.
