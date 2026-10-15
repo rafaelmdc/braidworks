@@ -17,24 +17,25 @@ The [GTDB parent (#165)](https://github.com/rafaelmdc/braidworks/issues/165) and
 [weaver programme (#147)](https://github.com/rafaelmdc/braidworks/issues/147) remain
 open for the deferred GTDB finding.
 
-## Standalone ideas awaiting reconciliation
+## Platform cleanup loop
 
-Backend availability diagnostics [#132](https://github.com/rafaelmdc/braidworks/issues/132)
-are implemented and verified; see the [acceptance record](audits/backend-availability.plan.md#acceptance-record).
-Acquisition progress (#131) is also verified; see its
-[implementation record](audits/acquisition-progress.md). The error-system review (#133) is also complete; see the
-[boundary review](audits/error-boundaries.md). The explicit-source option for #135 is implemented; see the
-[coverage decision](audits/explicit-source-coverage.md). Generated inventories (#67) are implemented and checked in CI; see the
-[generation record](audits/generated-capability-docs.md). Workflow consolidation (#86) is complete; see its
-[validation record](audits/workflow-consolidation.md). Remaining are the two declaration/storage ideas. The three smaller design ideas will receive a usefulness review before implementation.
+The eight-issue loop is resolved. Work is on pushed branches, without merge or
+publication. Each later branch includes the preceding changes.
 
-These older issues remain open. Their titles do not establish whether later work
-partially addressed them; inspect before planning or closing them.
+| Issue | Resolution | Branch / record |
+|---|---|---|
+| [#132](https://github.com/rafaelmdc/braidworks/issues/132) | Implemented backend diagnostics | `feat/backend-availability-diagnostics`; [acceptance](audits/backend-availability.plan.md#acceptance-record) |
+| [#131](https://github.com/rafaelmdc/braidworks/issues/131) | Implemented acquisition progress/socket limits | `fix/acquisition-progress`; [record](audits/acquisition-progress.md) |
+| [#133](https://github.com/rafaelmdc/braidworks/issues/133) | Fixed status classification; retained existing error boundaries | `fix/error-classification`; [review](audits/error-boundaries.md) |
+| [#135](https://github.com/rafaelmdc/braidworks/issues/135) | Implemented explicit AGORA universe; automatic pruning rejected | `feat/agora-taxid-universe`; [decision](audits/explicit-source-coverage.md) |
+| [#67](https://github.com/rafaelmdc/braidworks/issues/67) | Generated exact inventories and CI drift checks | `feat/generated-capability-docs`; [record](audits/generated-capability-docs.md) |
+| [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Consolidated validation; gated automatic tags | `ci/consolidate-validation`; [record](audits/workflow-consolidation.md) |
+| [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Not planned after reviewing current declarations | [Decision](audits/declaration-storage-decisions.md#112--strand-decorators-not-planned) |
+| [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Not planned after reviewing current vocabulary storage | [Decision](audits/declaration-storage-decisions.md#64--key-database-not-planned) |
 
-| Issue | Topic |
-|---|---|
-| [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Strand declaration decorators |
-| [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Shared-key registry storage |
+The final branch, `docs/declaration-storage-decisions`, contains the full loop.
+No runtime decorator or key-database feature was added for the two rejected ideas.
+They can be reopened with a concrete workflow that changes the assessment.
 
 ## Documentation review
 
