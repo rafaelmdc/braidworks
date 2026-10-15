@@ -280,7 +280,7 @@ def test_bulk_pyproject_wires_core_and_script(tmp_path):
     pyproject = (dest / "pyproject.toml").read_text()
     # Local-DB plumbing (and platformdirs) come from braidworks-core now.
     # Generated factories now use the explicit configuration/lifecycle API.
-    assert "braidworks-core>=0.21.5" in pyproject
+    assert "braidworks-core>=0.22.0" in pyproject
     assert "bulkdemo_weaver-ensure" in pyproject
     assert "uv run bulkdemo_weaver-ensure" in (dest / "Makefile").read_text()
 
@@ -848,3 +848,24 @@ def test_formatter_unavailable_is_best_effort(tmp_path, monkeypatch):
     monkeypatch.setattr("shutil.which", lambda _: None)
     written = write_files({Path("ok.py"): "pass\n"}, tmp_path / "out")
     assert written[0].read_text() == "pass\n"
+
+
+def test_generated_subset_keeps_full_declaration(tmp_path):
+    from dataclasses import replace
+
+    from braidworks.core.registry import BraidRegistry
+
+    spec = load_spec(FIXTURE)
+    spec = replace(spec, backends=("local", "api"))
+    spec = replace(spec, capabilities=(replace(spec.capabilities[0], backends=("api",)),))
+    dest = tmp_path / "out"
+    scaffold(spec, dest, spec_toml=FIXTURE.read_text())
+    mod = _import_generated(dest, spec.package)
+    full = mod.build_madin_weaver()
+    weaver = type(full)({"local": full._backends["local"]})
+    reg = BraidRegistry()
+    reg.register(weaver)
+    assert weaver.MANIFEST.capabilities == ()
+    assert weaver.declared_manifest().capabilities[0].backends == ("api",)
+    assert not reg.build_graph().edges
+    assert reg.build_graph(declared=True).edges

@@ -15,11 +15,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import pairwise
+from typing import NoReturn
 
 import networkx as nx
 
+from braidworks.core.availability import require_capability
 from braidworks.core.braid import BackendPolicy, Braid, CapabilityInvocation
-from braidworks.core.exceptions import NoPathError, NoPlanError
+from braidworks.core.exceptions import BackendUnavailable, NoPathError, NoPlanError
 from braidworks.core.registry import BraidRegistry
 
 
@@ -81,8 +83,7 @@ class Braider:
         if exclude:
             graph = _without(graph, exclude)
         # Policy constrains routing, not just the backend assigned after a path
-        # has been chosen. Keep the unfiltered graph for meaningful diagnostics.
-        unrestricted = graph
+        # has been chosen. Full declarations are consulted only if routing fails.
         allowed = frozenset(backend_policy.preference_order)
         unsupported = frozenset(
             (manifest.weaver_id, cap.id)
@@ -102,14 +103,7 @@ class Braider:
             try:
                 path = self._route(graph, sources, target)
             except NoPathError:
-                # Preserve NoPathError when even the unrestricted graph cannot
-                # connect the types; otherwise the backend policy blocks it.
-                self._route(
-                    unrestricted, frozenset(t for t in available_types if t in unrestricted), target
-                )
-                raise NoPlanError(
-                    f"policy {backend_policy.value} permits no route from available types to {target!r}"
-                ) from None
+                self._explain_blocked_route(available_types, target, backend_policy, exclude)
             for u, v in pairwise(path):
                 data = _best_edge(graph, u, v)
                 key = (data["weaver_id"], data["capability_id"], u)
@@ -149,7 +143,10 @@ class Braider:
         directly, so this constructs its invocation without going through Dijkstra.
         Requires a single-input capability (every fan capability is single-input).
         """
-        cap = self._registry.get_capability(weaver_id, capability_id)
+        try:
+            cap = require_capability(self._registry.get_weaver(weaver_id), capability_id)
+        except BackendUnavailable as exc:
+            raise NoPlanError(str(exc)) from None
         if len(cap.consumes) != 1:
             raise NoPlanError(
                 f"{weaver_id}.{capability_id}: traversal needs a single-input "
@@ -164,13 +161,51 @@ class Braider:
             to_types=frozenset(cap.produces),
         )
 
-    def _route(self, graph: nx.MultiDiGraph, sources: frozenset[str], target: str) -> list[str]:
+    def _explain_blocked_route(
+        self,
+        available: frozenset[str],
+        target: str,
+        policy: BackendPolicy,
+        exclude: frozenset[tuple[str, str]],
+    ) -> NoReturn:
+        graph = self._registry.build_graph(declared=True)
+        if exclude:
+            graph = _without(graph, exclude)
+        path = self._route(
+            graph, frozenset(t for t in available if t in graph), target, stable=True
+        )
+        blockers = []
+        for u, v in pairwise(path):
+            data = _best_edge(graph, u, v)
+            wid, cid = data["weaver_id"], data["capability_id"]
+            full = self._registry.get_declared_manifest(wid).capability(cid)
+            active = self._registry.get_manifest(wid).capability(cid)
+            enabled = active.backends if active else ()
+            if not set(enabled).intersection(policy.preference_order):
+                disabled = sorted(set(full.backends) - set(enabled))
+                context = f"{wid} / {cid}: supported backends {', '.join(full.backends)}"
+                if disabled:
+                    context += f"; not enabled: {', '.join(disabled)}"
+                if enabled:
+                    context += f"; enabled: {', '.join(enabled)}"
+                blockers.append(context)
+        raise NoPlanError(
+            f"Cannot plan to {target!r} under policy {policy.value}: "
+            + "; ".join(dict.fromkeys(blockers))
+            + ". Enable a supported backend or choose a policy that permits it."
+        )
+
+    def _route(
+        self, graph: nx.MultiDiGraph, sources: frozenset[str], target: str, *, stable: bool = False
+    ) -> list[str]:
         if target not in graph:
             raise NoPathError(f"no capability produces {target!r}")
         if not sources:
             raise NoPathError(f"no available type can reach {target!r} (no source types in graph)")
         try:
-            _, path = nx.multi_source_dijkstra(graph, set(sources), target=target, weight="cost")
+            _, path = nx.multi_source_dijkstra(
+                graph, sorted(sources) if stable else set(sources), target=target, weight="cost"
+            )
         except nx.NetworkXNoPath:
             raise NoPathError(f"no route from available types to {target!r}") from None
         return path

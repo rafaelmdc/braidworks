@@ -123,3 +123,23 @@ See [repository structure](repo-structure.md) to locate code. Framework invarian
 and source contracts are documented in [core contracts](core-contracts.md) and
 [AGENTS.md](../AGENTS.md). Historical roadmaps describe proposals at their recorded
 dates; [history](history.md) keeps them separate from current behavior.
+
+### Supported operations and enabled backends
+
+`BaseWeaver.MANIFEST` describes the capabilities and backends enabled in that instance.
+It remains the source for routing, discovery and saved source metadata.
+`declared_manifest()` describes the implementation's full catalogue for diagnostics;
+its default returns `MANIFEST`, so existing plugins need no override. An override must
+return metadata without opening sources, creating backends or checking readiness.
+
+Registration validates both manifests. Identity/version must agree, active capabilities
+must have the same contract as their full declaration, and active backends must be a
+subset of the declared backends. A capability with no enabled backends is omitted from
+the active manifest; empty backend declarations remain invalid.
+
+When routing fails, the planner checks whether a declared route was blocked by disabled
+backends or the selected policy. These failures raise `NoPlanError` with the relevant
+source/capability/backend context. Unknown outputs and disconnected or excluded routes
+raise `NoPathError`. An enabled backend whose data or credentials are unavailable is
+still checked at execution, preserving fallback behavior. Diagnostics never enable a
+backend or acquire data.

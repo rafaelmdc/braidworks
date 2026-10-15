@@ -8,6 +8,7 @@ built. Only single-input capabilities are projected into the MVP graph
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -29,9 +30,7 @@ def validate_manifest(manifest: WeaverManifest) -> None:
     seen_capability_ids: set[str] = set()
     for cap in manifest.capabilities:
         if cap.id in seen_capability_ids:
-            raise InvalidManifestError(
-                f"{manifest.weaver_id}: duplicate capability id {cap.id!r}"
-            )
+            raise InvalidManifestError(f"{manifest.weaver_id}: duplicate capability id {cap.id!r}")
         seen_capability_ids.add(cap.id)
         _validate_capability(manifest.weaver_id, cap)
 
@@ -80,18 +79,32 @@ class BraidRegistry:
     def __init__(self) -> None:
         self._weavers: dict[str, BaseWeaver] = {}
         self._manifests: dict[str, WeaverManifest] = {}
+        self._declared: dict[str, WeaverManifest] = {}
         self._graph: nx.MultiDiGraph | None = None
 
     def register(self, weaver: BaseWeaver) -> None:
         """Validate and register a weaver instance. Raises ``InvalidManifestError``."""
         manifest = weaver.MANIFEST
         validate_manifest(manifest)
+        declaration = weaver.declared_manifest()
+        validate_manifest(declaration)
+        if (manifest.weaver_id, manifest.version) != (declaration.weaver_id, declaration.version):
+            raise InvalidManifestError("active and declared manifest identity/version differ")
+        for cap in manifest.capabilities:
+            full = declaration.capability(cap.id)
+            if (
+                full is None
+                or not set(cap.backends).issubset(full.backends)
+                or replace(cap, backends=full.backends) != full
+            ):
+                raise InvalidManifestError(
+                    f"{manifest.weaver_id}.{cap.id}: active declaration differs"
+                )
         if manifest.weaver_id in self._weavers:
-            raise InvalidManifestError(
-                f"weaver_id {manifest.weaver_id!r} is already registered"
-            )
+            raise InvalidManifestError(f"weaver_id {manifest.weaver_id!r} is already registered")
         self._weavers[manifest.weaver_id] = weaver
         self._manifests[manifest.weaver_id] = manifest
+        self._declared[manifest.weaver_id] = declaration
         self._graph = None  # invalidate cached projection
 
     def get_weaver(self, weaver_id: str) -> BaseWeaver:
@@ -99,6 +112,14 @@ class BraidRegistry:
 
     def manifests(self) -> tuple[WeaverManifest, ...]:
         return tuple(self._manifests.values())
+
+    def declared_manifests(self) -> tuple[WeaverManifest, ...]:
+        """Implementation catalogues for diagnostics; never used for execution."""
+        return tuple(self._declared.values())
+
+    def get_declared_manifest(self, weaver_id: str) -> WeaverManifest:
+        """Return the validated declaration captured during registration."""
+        return self._declared[weaver_id]
 
     def get_manifest(self, weaver_id: str) -> WeaverManifest | None:
         return self._manifests.get(weaver_id)
@@ -109,7 +130,7 @@ class BraidRegistry:
             raise KeyError(f"{weaver_id} has no capability {capability_id!r}")
         return cap
 
-    def build_graph(self) -> nx.MultiDiGraph:
+    def build_graph(self, *, declared: bool = False) -> nx.MultiDiGraph:
         """Project single-input capabilities into a directed type→type graph.
 
         Each single-input capability ``consumes={A}, produces={B, C}`` adds edges
@@ -126,21 +147,28 @@ class BraidRegistry:
         source fails. (A single source is the common case; this is free until a second
         producer of the same edge appears.)
         """
-        if self._graph is not None:
+        if not declared and self._graph is not None:
             return self._graph
 
         graph = nx.MultiDiGraph()
-        for weaver_id, manifest in self._manifests.items():
-            for cap in manifest.capabilities:
+        manifests = self._declared if declared else self._manifests
+        entries = sorted(manifests.items()) if declared else manifests.items()
+        for weaver_id, manifest in entries:
+            capabilities = (
+                sorted(manifest.capabilities, key=lambda cap: cap.id)
+                if declared
+                else manifest.capabilities
+            )
+            for cap in capabilities:
                 # consumes_any => each consumed type is an independent edge source
                 # (alternatives); a plain multi-input capability is conjunctive and not
                 # routed by the type→type graph.
                 if cap.consumes_any or len(cap.consumes) == 1:
-                    sources = tuple(cap.consumes)
+                    sources = sorted(cap.consumes) if declared else tuple(cap.consumes)
                 else:
                     continue
                 for source in sources:
-                    for target in cap.produces:
+                    for target in sorted(cap.produces) if declared else cap.produces:
                         graph.add_edge(
                             source,
                             target,
@@ -148,5 +176,6 @@ class BraidRegistry:
                             capability_id=cap.id,
                             cost=cap.cost,
                         )
-        self._graph = graph
+        if not declared:
+            self._graph = graph
         return graph

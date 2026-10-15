@@ -666,10 +666,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if manifest is None:
         _err(f"unknown weaver {args.weaver!r}. Try `braidworks weavers`.")
         return 1
-    cap = next((c for c in manifest.capabilities if c.id == args.capability), None)
-    if cap is None:
-        ids = ", ".join(c.id for c in manifest.capabilities)
-        _err(f"weaver {args.weaver!r} has no capability {args.capability!r}. Has: {ids}")
+    from braidworks.core.availability import require_capability
+    from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+
+    try:
+        cap = require_capability(registry.get_weaver(args.weaver), args.capability)
+    except (BackendUnavailable, UnsupportedCapability) as exc:
+        _err(str(exc))
         return 1
 
     backend = args.backend

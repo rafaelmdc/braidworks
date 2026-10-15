@@ -225,3 +225,19 @@ def test_run_stream_emits_sse_done_event():
         params={"have": '{"protein.query": "P04637"}', "want": "protein.query"},
     ).text
     assert '"event": "done"' in body and '"ok": true' in body
+
+
+def test_plan_disabled_backend_context():
+    from dataclasses import replace
+
+    weaver = _weaver("disabled", "describe", {"a"}, {"b"})
+    full = replace(
+        weaver.MANIFEST, capabilities=(replace(weaver.MANIFEST.capabilities[0], backends=("api",)),)
+    )
+    weaver.MANIFEST = replace(full, capabilities=())
+    weaver.declared_manifest = lambda: full
+    reg = BraidRegistry()
+    reg.register(weaver)
+    response = plan_response(reg, ["a"], ["b"])
+    assert response["ok"] is False
+    assert "not enabled: api" in response["error"]

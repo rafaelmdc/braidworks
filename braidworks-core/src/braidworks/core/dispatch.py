@@ -15,8 +15,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, ClassVar
 
+from braidworks.core.availability import require_capability
 from braidworks.core.backend import BackendBase
-from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+from braidworks.core.exceptions import BackendUnavailable
 from braidworks.core.http_pacing import validate_request_pacing
 from braidworks.core.lifecycle import close_backends
 from braidworks.core.result import WeaveResult
@@ -83,12 +84,8 @@ class BackendDispatchWeaver(BaseWeaver):
         backend,
         params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
+        cap = require_capability(self, capability_id, backend)
         validate_request_pacing(self, backend)
-        cap = self.MANIFEST.capability(capability_id)
-        if cap is None:
-            raise UnsupportedCapability(
-                f"{self.MANIFEST.weaver_id!r} has no capability {capability_id!r}"
-            )
         strategy = self._strategy(backend)  # raises BackendUnavailable
         # Resolve params against the declaration (defaults + validation). The executor
         # normally does this, but a direct execute_batch caller (e.g. the CLI's `run`)

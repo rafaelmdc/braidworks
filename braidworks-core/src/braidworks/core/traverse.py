@@ -29,10 +29,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from braidworks.core.availability import require_capability
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.cache import StrandCache
 from braidworks.core.capability import Capability
-from braidworks.core.exceptions import NoPathError, NoPlanError
+from braidworks.core.exceptions import BackendUnavailable, NoPathError, NoPlanError
 from braidworks.core.executor import (
     ErrorPolicy,
     ExecutionResult,
@@ -81,6 +82,21 @@ def resolve_traversal(registry: BraidRegistry, token: str) -> tuple[str, str]:
         if token == rel or token == cid or token == f"{wid}.{cid}"
     ]
     if not matches:
+        declared = [
+            (manifest.weaver_id, cap.id)
+            for manifest in registry.declared_manifests()
+            for cap in manifest.capabilities
+            if cap.set_outputs
+            and token in (relationship_name(cap.id), cap.id, f"{manifest.weaver_id}.{cap.id}")
+        ]
+        if len(declared) > 1:
+            raise NoPlanError(f"relationship {token!r} is ambiguous: {sorted(declared)}")
+        if declared:
+            wid, cid = declared[0]
+            try:
+                require_capability(registry.get_weaver(wid), cid)
+            except BackendUnavailable as exc:
+                raise NoPlanError(str(exc)) from None
         # Distinguish "names a real capability but it doesn't fan" from "unknown".
         for manifest in registry.manifests():
             cap = manifest.capability(token)

@@ -44,6 +44,14 @@ class BaseWeaver(ABC):
 
     MANIFEST: ClassVar[WeaverManifest]
 
+    def declared_manifest(self) -> WeaverManifest:
+        """Full implementation catalogue, without constructing or probing backends.
+
+        Override when ``MANIFEST`` omits disabled backends/capabilities. Routing,
+        discovery and persistence continue to use the active ``MANIFEST``.
+        """
+        return self.MANIFEST
+
     async def aclose(self) -> None:
         """Release owned resources; resource-free weavers need no override."""
 

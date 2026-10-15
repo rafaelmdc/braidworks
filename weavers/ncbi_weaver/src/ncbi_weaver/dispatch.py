@@ -18,6 +18,7 @@ from braidworks.core import (
     WeaveResult,
     map_lookup,
 )
+from braidworks.core.availability import require_capability
 from braidworks.core.http_pacing import validate_request_pacing
 from braidworks.core.lifecycle import close_backends
 
@@ -74,12 +75,8 @@ class BackendDispatchWeaver(BaseWeaver):
     ) -> list[WeaveResult]:
         # Today's taxonomy capabilities take no parameters; accepted for the uniform
         # runner contract and ignored. Genome/gene capabilities will thread it to resolve.
+        cap = require_capability(self, capability_id, backend)
         validate_request_pacing(self, backend)
-        cap = self.MANIFEST.capability(capability_id)
-        if cap is None:
-            raise UnsupportedCapability(
-                f"{self.MANIFEST.weaver_id!r} has no capability {capability_id!r}"
-            )
         strategy = self._strategy(backend)  # raises BackendUnavailable
 
         # The list_/describe_ capabilities have a set-of-ids / detail output shape that

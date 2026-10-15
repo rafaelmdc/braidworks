@@ -1,6 +1,6 @@
 # Current project decisions and backlog
 
-Updated 2026-10-14. Completed readiness/refactoring and approved weaver work have
+Updated 2026-10-15. Completed readiness/refactoring and approved weaver work have
 been pushed to the review branch; they have not been merged or published. Historical
 plans remain in [design history](history.md). This page summarizes the open queue,
 not the instructions for using Braidworks.
@@ -19,11 +19,10 @@ open for the deferred GTDB finding.
 
 ## Standalone ideas awaiting reconciliation
 
-Next: [backend availability diagnostics (#132)](https://github.com/rafaelmdc/braidworks/issues/132).
-The [focused spec](audits/backend-availability.spec.md) records the current reproduction;
-the [implementation plan](audits/backend-availability.plan.md) is ready. The original
-local-descendant case works now, but omitted API-only operations still receive misleading
-absence messages. Runtime implementation is pending on `feat/backend-availability-diagnostics`.
+Backend availability diagnostics [#132](https://github.com/rafaelmdc/braidworks/issues/132)
+are implemented and verified; see the [acceptance record](audits/backend-availability.plan.md#acceptance-record).
+Next is acquisition progress (#131), followed by the error-system, fan-out and documentation
+issues. The three smaller design ideas will receive a usefulness review before implementation.
 
 These older issues remain open. Their titles do not establish whether later work
 partially addressed them; inspect before planning or closing them.
@@ -32,7 +31,6 @@ partially addressed them; inspect before planning or closing them.
 |---|---|
 | [#135](https://github.com/rafaelmdc/braidworks/issues/135) | Prune expansion using downstream availability |
 | [#133](https://github.com/rafaelmdc/braidworks/issues/133) | Error-system refactor |
-| [#132](https://github.com/rafaelmdc/braidworks/issues/132) | Planner diagnostics for disabled backends |
 | [#131](https://github.com/rafaelmdc/braidworks/issues/131) | Acquisition progress |
 | [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Strand declaration decorators |
 | [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Workflow consolidation |

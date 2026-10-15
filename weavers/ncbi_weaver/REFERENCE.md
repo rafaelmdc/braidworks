@@ -152,3 +152,10 @@ rank. The queried node is excluded, the fan key contains the full distinct sorte
 ID set, and display records are capped at 200, matching the API. It reads only the current dump;
 historical IDs are not silently followed. Empty/unknown subtrees are NO_MATCH.
 Traversal uses the parent index off the event loop and terminates on cyclic input.
+
+## Disabled backends
+
+A local-only instance keeps taxonomy operations, including `ncbi.list_children`,
+available locally. Gene and genome operations require the API backend. Their support
+metadata remains available through `declared_manifest()` so planning reports the missing
+API backend. This hook neither creates an API client nor downloads local data.

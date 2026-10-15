@@ -1105,6 +1105,8 @@ _WEAVER = '''\
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from braidworks.core import BackendBase, BackendDispatchWeaver, WeaverManifest, {{MAPPER}}
 
 from {{DBWEAVER}} import vocab
@@ -1120,6 +1122,15 @@ class {{CLASS}}Weaver(BackendDispatchWeaver):
         self.MANIFEST: WeaverManifest = vocab.build_manifest(
             backends=tuple(sorted(backends))
         )
+        self.MANIFEST = replace(
+            self.MANIFEST,
+            capabilities=tuple(cap for cap in self.MANIFEST.capabilities if cap.backends),
+        )
+
+    def declared_manifest(self) -> WeaverManifest:
+        """Full source declaration, independent of enabled backends."""
+        return vocab.build_manifest(backends={{ALL_BACKENDS}})
+
 '''
 
 _FACTORY = '''\
@@ -1306,6 +1317,7 @@ def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
         "SOURCE_URL": spec.source_url,
         "FINGERPRINT_SOURCE": spec.fingerprint_source,
         "FIRST_BACKEND": first_backend,
+        "ALL_BACKENDS": repr(tuple(spec.backends)),
         "DB": spec.db_name,
     }
 
@@ -1326,7 +1338,7 @@ def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
     # making every api-weaver author add it by hand.
     has_api = "api" in spec.backends
     # New scaffolds target the runtime verified with this toolkit release.
-    deps = ['"braidworks-core>=0.21.5"']
+    deps = ['"braidworks-core>=0.22.0"']
     if has_api:
         deps.append('"httpx>=0.27"')
     tokens["DEPS"] = ", ".join(deps)

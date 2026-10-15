@@ -497,3 +497,17 @@ unknown names with reject_unknown_options. New scaffolds do this for their empty
 configuration contract. Raise the core floor to 0.21.5 when using this API.
 See [configuration and lifetime](../../docs/weaver-configuration.md) for closing
 weavers, injected clients and effective endpoint identity.
+
+### Keep support metadata when disabling backends
+
+Generated weavers expose `declared_manifest()` using all backend names from the spec.
+Their active `MANIFEST` contains only enabled backends and omits capabilities with none.
+Keep this distinction when extending the constructor: the full declaration lets callers
+understand that an operation needs a disabled backend instead of appearing unsupported.
+The declaration hook must perform no I/O. Handwritten adapters can keep the default hook
+when their active manifest already describes their entire implementation.
+
+Shared dispatch checks capability/backend compatibility before pacing or fetching.
+An unknown capability raises `UnsupportedCapability`; a known operation with a disabled
+or incompatible backend raises `BackendUnavailable`. Backend readiness remains a separate
+execution check, so an enabled but unconfigured backend can trigger ordinary fallback.

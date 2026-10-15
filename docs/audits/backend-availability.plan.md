@@ -2,7 +2,7 @@
 
 Implements [the focused specification](backend-availability.spec.md) for
 [issue #132](https://github.com/rafaelmdc/braidworks/issues/132).
-Status: planned; audit/reproduction complete, runtime implementation pending.
+Status: implemented and verified on 2026-10-15.
 Branch: `feat/backend-availability-diagnostics`.
 
 ## P1 — Declaration contract and registration
@@ -80,3 +80,18 @@ Do not add readiness-aware routing, global backend probes, automatic enabling/do
 source-specific configuration hints in core, mandatory catalogue adoption for legacy plugins,
 or a broad error-system redesign. If validation exposes a separate runtime bug, record
 its evidence and decide its scope before folding it into this implementation.
+
+## Acceptance record
+
+Implemented the declaration hook, registry consistency checks, failed-route diagnostics,
+shared/NCBI dispatch preflight, CLI/browser/traversal diagnostics, and scaffold subset
+handling. Successful routing and saved manifests continue to use active metadata.
+No backend fetching code changed and no source/data acquisition was performed.
+
+Workspace lint and all package suites passed (2,214 pytest passes, 75 skips, plus five
+release-tool unit tests). After final traversal/stable-diagnostic review, core passed
+558 tests and toolkit passed 295 tests. NCBI passed 236 tests with 13 live tests skipped;
+its strict conformance/golden gate passed. Documentation validation checked 1,283 local
+links/anchors in 239 documents; whitespace checks passed. The isolated reproduction now
+reports disabled API operations as configuration-blocked while keeping unknown outputs,
+local child routing and unconfigured-backend behavior distinct.

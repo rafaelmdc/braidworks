@@ -312,3 +312,13 @@ def test_resolver_error_does_not_claim_requested_or_always_computed_groups():
     )
     assert result.status is WeaveStatus.ERROR
     assert result.computed_groups == frozenset()
+
+
+async def test_dispatch_rejects_backend_not_supported_by_capability():
+    class NeverFetch(_StubBackend):
+        async def fetch(self, *args, **kwargs):
+            raise AssertionError("unsupported backend must not fetch")
+
+    weaver = _Weaver({"local": NeverFetch(), "api": NeverFetch()})
+    with pytest.raises(BackendUnavailable, match="not supported"):
+        await weaver.execute_batch("resolve", [], requested_outputs=frozenset(), backend="api")

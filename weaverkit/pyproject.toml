@@ -1,12 +1,12 @@
 [project]
 name = "weaverkit"
-version = "0.6.20"
+version = "0.6.21"
 description = "Guardrails for building Braidworks weavers: spec, scaffold, and conformance."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.21.5"]
+dependencies = ["braidworks-core>=0.22.0"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"
