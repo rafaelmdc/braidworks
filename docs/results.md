@@ -62,3 +62,6 @@ An archive is an observation export, separate from the checkpoint store used by
 `resume`. For archive contents, permissions, loading and reproducibility limits,
 see [archive reference](reference/results.md#run-archives). To continue interrupted
 work, use [saved runs](persistence.md).
+
+For exception types, fallback boundaries and diagnostic categories, see the
+[failure contract](reference/failures.md).

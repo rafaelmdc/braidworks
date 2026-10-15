@@ -10,6 +10,7 @@ For task instructions, use [the documentation index](../index.md).
 | Installed capabilities and parameters | `braidworks weavers`; source READMEs/specs linked from [the catalogue](../sources.md) |
 | Source purposes and setup requirements | [Source catalogue](../sources.md) |
 | Inputs, outputs and producer/consumer connections | [Generated key index](../keys-index.md) |
+| Exceptions, failure values and diagnostic categories | [Failure contract](failures.md) |
 | Machine exports, Python result objects and run archives | [Result reference](results.md) |
 | Cache defaults, storage schemas, leases and retention | [Storage reference](persistence.md) |
 | Local source generations, locks and NCBI reviewed history | [Local-data reference](local-data.md) |
