@@ -28,7 +28,7 @@ members = [
 
 [[package]]
 name = "agora-weaver"
-version = "0.2.10"
+version = "0.2.11"
 source = { editable = "weavers/agora_weaver" }
 dependencies = [
     { name = "braidworks-core" },

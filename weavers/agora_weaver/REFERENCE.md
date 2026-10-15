@@ -163,3 +163,15 @@ annotations and observed model memberships with database release/content identit
 Missing annotations remain null, not guessed KEGG/Rhea equivalence. Unprocessed
 model coverage is an error, not an empty repertoire. These routes require no new
 HTTP calls or model acquisition; missing reaction databases remain explicit errors.
+
+## Exact taxid universe
+
+`agora_weaver.crosswalk_taxids()` returns an immutable `frozenset[int]` of exact
+NCBI taxids in the bundled reconstruction crosswalk. It uses the same index as
+reconstruction lookup, performs no downloads and does not require a reaction DB.
+The release identifier is `agora_weaver.dataset.CROSSWALK_RELEASE`.
+
+This is reconstruction-crosswalk membership. It does not guarantee reactions or an
+SBML artifact, and it does not expand genera, normalize strains to species, or infer
+ancestry. Keep the observed IDs when reporting what was filtered. Unknown coverage
+from another source is not an empty set and must not be used to discard inputs.

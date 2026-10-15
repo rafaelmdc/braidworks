@@ -198,3 +198,14 @@ complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
 - How a caller asks for a fan dimension: explicit per-type policy map, or inferred from
   requesting a `set` output? Lean explicit (`ExpandPolicy` map keyed by type).
 - Cross-product of two `ALL` dimensions reuses the same `max_expansion` cap.
+
+## Explicit source filtering
+
+AGORA exposes `agora_weaver.crosswalk_taxids()` for callers that already have a
+collection of related taxids and want to construct only AGORA-relevant inputs.
+Intersect before passing that collection to downstream queries; see
+[AGORA's filtering instructions](../weavers/agora_weaver/README.md#filter-an-existing-taxid-collection).
+This is an explicit caller decision. The executor does not automatically prune
+children based on a downstream source's coverage, and ordinary expansion semantics
+remain unchanged. Exact crosswalk membership does not establish reaction/model
+availability or coverage of ancestor/descendant taxa.

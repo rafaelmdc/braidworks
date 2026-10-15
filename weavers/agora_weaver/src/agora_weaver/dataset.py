@@ -55,6 +55,16 @@ def _crosswalk_index() -> Mapping[str, tuple[tuple[str, str], ...]]:
     return MappingProxyType({key: tuple(sorted(rows)) for key, rows in table.items()})
 
 
+def crosswalk_taxids() -> frozenset[int]:
+    """Exact taxids in the bundled release, not reaction/SBML availability.
+
+    Derived from the same index as reconstruction lookups. Membership makes no
+    ancestry/species inference and performs no acquisition. Integer values match
+    core's canonical ``ncbi.taxon.id`` representation.
+    """
+    return frozenset(int(taxid) for taxid in _crosswalk_index())
+
+
 def reconstructions_for(taxid: str) -> list[dict[str, str]]:
     """Detached, deterministically ordered reconstructions for one taxid."""
     return [

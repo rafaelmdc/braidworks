@@ -56,3 +56,20 @@ this package directory. Current installation does not assume package-index publi
 
 The software uses [MIT](LICENSE). Provider data retain their source licenses and
 attribution requirements above; the manifest data license does not license this code.
+
+## Filter an existing taxid collection
+
+When you already have taxids from a related-organism query, intersect them with the
+bundled crosswalk before constructing AGORA inputs:
+
+```python
+from agora_weaver import crosswalk_taxids
+
+# related_taxids is your observed collection, before executor fan-out.
+selected_taxids = sorted({int(value) for value in related_taxids} & crosswalk_taxids())
+```
+
+Keep `related_taxids` alongside the selected collection so excluded IDs remain
+inspectable. This explicit filter leaves ordinary braid execution unchanged. It
+identifies reconstruction crosswalk hits, not reaction/SBML readiness; see
+[exact taxid universe](REFERENCE.md#exact-taxid-universe).
