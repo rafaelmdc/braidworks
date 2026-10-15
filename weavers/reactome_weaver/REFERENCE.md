@@ -5,12 +5,14 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `list_pathways` | `protein.uniprot.accession` | `summary`, `full`; expands `pathway.reactome.id` | `api` | — |
 | `describe_pathway` | `pathway.reactome.id` | `detail`, `hierarchy`, `participants`, `evidence` | `api` | — |
 | `list_reactions` | `pathway.reactome.id` | `reactions`; expands `reaction.reactome.id` | `api` | — |
 | `describe_reaction` | `reaction.reactome.id` | `detail` | `api` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

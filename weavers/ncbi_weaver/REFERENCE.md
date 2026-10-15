@@ -5,6 +5,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `ncbi.resolve_name` | `organism.name` | `core`, `lineage` | `local`, `api` | — |
@@ -16,6 +17,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 | `ncbi.resolve_gene` | `protein.query` | `gene` | `api` | `taxon` |
 | `ncbi.describe_gene` | `gene.ncbi.id` | `summary`, `products` | `api` | — |
 | `ncbi.list_orthologs` | `gene.ncbi.id` | `orthologs`; expands `gene.ncbi.id` | `api` | `taxon_filter` |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

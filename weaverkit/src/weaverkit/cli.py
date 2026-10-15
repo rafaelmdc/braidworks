@@ -420,9 +420,29 @@ def cmd_references(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capability_docs(args: argparse.Namespace) -> int:
+    from weaverkit.capability_docs import update_capability_docs
+
+    try:
+        changed = update_capability_docs(Path(args.root), check=args.check)
+    except (SpecError, OSError, ValueError) as exc:
+        print(f"capability docs: {exc}", file=sys.stderr)
+        return 1
+    for path in changed:
+        print(f"{'stale' if args.check else 'updated'}: {path}")
+    return 1 if args.check and changed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="weaverkit", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_docs = sub.add_parser(
+        "capability-docs", help="update marked capability inventories from specs"
+    )
+    p_docs.add_argument("--root", default=".", help="workspace or package directory")
+    p_docs.add_argument("--check", action="store_true", help="fail on drift without writing")
+    p_docs.set_defaults(func=cmd_capability_docs)
 
     p_new = sub.add_parser("new", help="scaffold a weaver package from a spec")
     p_new.add_argument("--spec", required=True, help="path to weaver.spec.toml")

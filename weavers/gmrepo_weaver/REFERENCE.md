@@ -5,6 +5,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities and output groups
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `gmrepo.list_abundances` | `ncbi.taxon.id` | `summary`, `associations`, `full` | `local` | — |
@@ -12,6 +13,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 | `gmrepo.list_runs` | `disease.mesh.id` | `runs`; expands `metagenome.run_id` | `local` | `country`, `sex`, `project_id`, `QCStatus` |
 | `gmrepo.describe_run` | `metagenome.run_id` | `run` | `local` | — |
 | `gmrepo.list_phenotypes` | `ncbi.taxon.id` | `phenotypes`; expands `disease.mesh.id` | `local` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

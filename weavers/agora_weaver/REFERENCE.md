@@ -5,14 +5,16 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `describe_metabolic_reconstruction` | `ncbi.taxon.id` | `core`, `reactions`, `model` | `local` | — |
-| `list_reconstructions` | `genome.accession` or `ncbi.taxon.id` | `reconstructions`; expands `microbe.agora.reconstruction_id` | `local` | — |
+| `list_reconstructions` | `ncbi.taxon.id` or `genome.accession` | `reconstructions`; expands `microbe.agora.reconstruction_id` | `local` | — |
 | `describe_reconstruction` | `microbe.agora.reconstruction_id` | `identity`, `artifact`, `reactions`, `model` | `local` | — |
 | `list_genomes` | `microbe.agora.reconstruction_id` | `genomes`; expands `genome.accession` | `local` | — |
 | `list_reactions` | `microbe.agora.reconstruction_id` | `reactions`; expands `reaction.vmh.id` | `local` | — |
 | `describe_reaction` | `reaction.vmh.id` | `reaction` | `local` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

@@ -5,11 +5,13 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `list_go_terms` | `protein.uniprot.accession` | `aspects`, `summary`, `full`, `annotations`, `coverage`; expands `go.term` | `api` | `evidence_code`, `evidence_usage`, `qualifier`, `aspect` |
 | `describe_go_term` | `go.term` | `detail`, `relations`, `hierarchy` | `api` | — |
 | `list_gene_products` | `go.term` | `products`; expands `protein.uniprot.accession` | `api` | `taxon_id`, `evidence_code`, `evidence_usage` |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

@@ -24,7 +24,8 @@ are implemented and verified; see the [acceptance record](audits/backend-availab
 Acquisition progress (#131) is also verified; see its
 [implementation record](audits/acquisition-progress.md). The error-system review (#133) is also complete; see the
 [boundary review](audits/error-boundaries.md). The explicit-source option for #135 is implemented; see the
-[coverage decision](audits/explicit-source-coverage.md). Next is generated documentation. The three smaller design ideas will receive a usefulness review before implementation.
+[coverage decision](audits/explicit-source-coverage.md). Generated inventories (#67) are implemented and checked in CI; see the
+[generation record](audits/generated-capability-docs.md). Remaining are the three smaller design ideas. The three smaller design ideas will receive a usefulness review before implementation.
 
 These older issues remain open. Their titles do not establish whether later work
 partially addressed them; inspect before planning or closing them.
@@ -33,7 +34,6 @@ partially addressed them; inspect before planning or closing them.
 |---|---|
 | [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Strand declaration decorators |
 | [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Workflow consolidation |
-| [#67](https://github.com/rafaelmdc/braidworks/issues/67) | Generated capability documentation |
 | [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Shared-key registry storage |
 
 ## Documentation review

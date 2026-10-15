@@ -5,12 +5,14 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `resolve_protein` | `protein.query` | `identity`, `taxonomy`, `function` | `api` | `organism` |
 | `describe_protein` | `protein.uniprot.accession` | `identity`, `sequence`, `annotations` | `api` | — |
-| `map_to_accession` | `gene.ensembl.id` or `gene.hgnc.id` or `gene.ncbi.id` or `gene.symbol` or `nucleotide.insdc.accession` or `pdb.id` or `protein.ensembl.id` or `refseq.protein.id` or `string.id` | `mapping`; expands `protein.uniprot.accession` | `api` | — |
+| `map_to_accession` | `gene.ncbi.id` or `gene.ensembl.id` or `protein.ensembl.id` or `gene.symbol` or `refseq.protein.id` or `gene.hgnc.id` or `nucleotide.insdc.accession` or `pdb.id` or `string.id` | `mapping`; expands `protein.uniprot.accession` | `api` | — |
 | `map_from_accession` | `protein.uniprot.accession` | `gene_ncbi_id`, `gene_ensembl_id`, `protein_ensembl_id`, `pathway_kegg_id`, `pathway_reactome_id`, `refseq_protein_id`, `orthodb_group`, `eggnog_group`, `chembl_id`, `drugbank_id`, `pdb_id`, `string_id`, `summary`; expands `chembl.id`, `drugbank.id`, `eggnog.group`, `gene.ensembl.id`, `gene.ncbi.id`, `orthodb.group`, `pathway.kegg.id`, `pathway.reactome.id`, `pdb.id`, `protein.ensembl.id`, `refseq.protein.id`, `string.id` | `api` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

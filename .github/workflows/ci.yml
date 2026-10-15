@@ -23,6 +23,8 @@ jobs:
         run: uv sync --all-extras
       - name: Lint
         run: make lint
+      - name: Capability documentation
+        run: make docs-check
       - name: Test
         run: make test
 

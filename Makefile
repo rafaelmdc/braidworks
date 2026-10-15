@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+.PHONY: capability-docs docs-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -91,3 +91,9 @@ tags-check:  ## List release tags missing for current package versions (nonzero 
 
 tags:  ## Create + push any missing <name>-v<version> release tags (CI does this on merge)
 	python tools/release_tags.py create
+
+capability-docs:  ## Regenerate marked source capability tables
+	uv run weaverkit capability-docs --root .
+
+docs-check:  ## Reject capability documentation drift without writing
+	uv run weaverkit capability-docs --root . --check

@@ -5,11 +5,13 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `describe_model` | `protein.uniprot.accession` | `model`, `confidence`, `full` | `api`, `archive` | — |
 | `list_models` | `protein.uniprot.accession` | `models`; expands `structure.alphafold.model_id` | `api`, `archive` | — |
 | `describe_prediction` | `structure.alphafold.model_id` | `model`, `confidence`, `full` | `api`, `archive` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

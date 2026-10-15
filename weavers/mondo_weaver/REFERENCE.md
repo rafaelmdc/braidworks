@@ -5,12 +5,14 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities and output groups
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `mondo.lookup_by_mesh` | `disease.mesh.id` | `identity`, `term`, `ancestors` | `local` | — |
 | `mondo.lookup_by_meddra` | `disease.meddra.id` | `identity`, `term`, `ancestors` | `local` | — |
 | `mondo.lookup_by_name` | `disease.name` | `identity`, `term`, `ancestors` | `local` | — |
 | `describe_disease` | `disease.mondo.id` | `identity`, `definition`, `history`, `term`, `ancestors`, `mappings` | `local` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

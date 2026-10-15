@@ -64,3 +64,7 @@ pending toolkit changes; it is separate from current usage instructions.
 
 The software uses [MIT](LICENSE). Provider data and source samples retain their own
 licenses and attribution requirements as declared by each weaver.
+
+Refresh spec-owned capability tables with `weaverkit capability-docs --root .`; add
+`--check` to detect drift without writing. See [inventory generation](docs/scaffold-reference.md#generated-capability-inventories)
+for marker ownership and workspace commands.

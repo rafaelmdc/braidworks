@@ -5,11 +5,13 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `disbiome.list_diseases` | `ncbi.taxon.id` or `ncbi.taxon.species_id` | `summary`, `associations`, `coverage`, `identity`, `full`; expands `disease.disbiome.id`, `disease.meddra.id` | `local` | `sample`, `method`, `outcome` |
 | `disbiome.list_taxa` | `disease.disbiome.id` or `disease.meddra.id` | `taxa`; expands `ncbi.taxon.id` | `local` | `sample`, `method`, `outcome` |
 | `disbiome.describe_disease` | `disease.disbiome.id` | `disease` | `local` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

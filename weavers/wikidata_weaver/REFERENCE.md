@@ -5,11 +5,13 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `resolve_taxon` | `organism.scientific_name` | `core`, `names` | `api` | `expected_rank` |
 | `map_from_taxid` | `ncbi.taxon.id` | `core`, `names` | `api` | — |
 | `describe_taxon` | `wikidata.qid` | `core`, `localized` | `api` | `language` |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

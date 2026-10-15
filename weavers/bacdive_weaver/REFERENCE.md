@@ -5,6 +5,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `describe_traits` | `organism.scientific_name` | `morphology`, `physiology`, `growth`, `evidence` | `api` | — |
@@ -12,6 +13,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 | `describe_strain` | `microbe.bacdive.strain_id` | `identity`, `morphology`, `physiology`, `growth`, `evidence` | `api` | — |
 | `map_to_strain` | `culture.collection.id` or `genome.accession` | `strains`; expands `microbe.bacdive.strain_id` | `api` | — |
 | `map_from_strain` | `microbe.bacdive.strain_id` | `identifiers`; expands `culture.collection.id`, `genome.accession` | `api` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See

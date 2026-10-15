@@ -5,11 +5,13 @@ Exact source outputs, coverage and implementation constraints. Start with
 
 ## Capabilities
 
+<!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
 | `describe_gtdb_taxonomy` | `ncbi.taxon.id` or `organism.scientific_name` | `core`, `lineage`, `representative` | `local`, `api` | — |
 | `describe_gtdb_tree_placement` | `ncbi.taxon.id` or `organism.scientific_name` | `core` | `local` | — |
 | `describe_genome` | `genome.accession` | `identity`, `quality`, `synonyms`, `history` | `api` | — |
+<!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
 together; expandable keys identify related entities you can follow. See
