@@ -29,7 +29,7 @@ The current release baseline is not ready to call green. The available Ruff 0.16
 - CI runs lint and all package suites on pushes to main and pull requests ([ci.yml](../../../.github/workflows/ci.yml)). A separate scheduled/on-demand live workflow keeps external API calls out of required CI ([live.yml](../../../.github/workflows/live.yml)).
 - `weaverkit` makes the spec → scaffold → implement → strict verify lifecycle explicit, and generated packages include both one-time implementation steps and ongoing contribution guidance ([scaffold.py](../../../weaverkit/src/weaverkit/scaffold.py), [scaffold.py](../../../weaverkit/src/weaverkit/scaffold.py)).
 - CI syncs the locked workspace before testing. Dependency bot updates GitHub Actions weekly; this is useful maintenance, though Python dependencies are not included in its update configuration ([ci.yml](../../../.github/workflows/ci.yml), [dependabot.yml](../../../.github/dependabot.yml)).
-- Release-tag automation has narrow `contents: write` permissions and derives independent package tags from project versions ([release-tags.yml](../../../.github/workflows/release-tags.yml)). It is tag automation, not package publishing.
+- Release-tag automation has narrow `contents: write` permissions and derives independent package tags from project versions ([release-tags.yml](../../../.github/workflows/ci.yml)). It is tag automation, not package publishing.
 
 ## Findings
 
@@ -74,7 +74,7 @@ The current release baseline is not ready to call green. The available Ruff 0.16
 - **Category:** first-release improvement
 - **Severity:** medium
 - **Confidence:** confirmed from the checked-in workflow inventory
-- **Evidence:** the only release workflow is [release-tags.yml](../../../.github/workflows/release-tags.yml), which configures git and runs `tools/release_tags.py create`; it does not build or upload distributions. The checked-in `.github/workflows` inventory contains CI, CodeQL, live tests, and tag creation, with no release/publish workflow. Package versions are independent as described in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+- **Evidence:** the only release workflow is [release-tags.yml](../../../.github/workflows/ci.yml), which configures git and runs `tools/release_tags.py create`; it does not build or upload distributions. The checked-in `.github/workflows` inventory contains CI, CodeQL, live tests, and tag creation, with no release/publish workflow. Package versions are independent as described in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 - **Impact:** after a version bump, a tag is created but no wheel/sdist is produced or published by repository automation. A first release therefore needs a separate documented/manual publishing procedure, including per-package dependency/source handling and credentials.
 - **Reproduction/reasoning:** inspect all tracked workflow files and the release tag script; no build, PyPI upload, or trusted-publishing step exists.
 - **Smallest useful remedy:** document the manual release/build/publish procedure before the first public release, or add a narrowly scoped tag-triggered publishing workflow after validating clean artifacts. Keep credentials in GitHub OIDC/trusted publishing or scoped secrets, not repository files.
@@ -118,3 +118,6 @@ The current release baseline is not ready to call green. The available Ruff 0.16
 - Are the Ruff 0.16.10 diagnostics current CI's exact set? `make lint` could not be run, and the Makefile resolves `uvx ruff` without a version pin.
 - Which minimum `braidworks-core` release introduced all APIs each existing weaver uses? This audit confirmed documented `consumes_any` mismatches, but did not execute every package against historical core releases.
 - Whether source assets are included in distributions remains unverified because no wheel or sdist was built in this constrained environment.
+
+Release tagging subsequently moved into the CI `tag` job under #86; historical
+references above now link to that maintained workflow.

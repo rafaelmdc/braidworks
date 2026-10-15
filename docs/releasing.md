@@ -74,9 +74,10 @@ publication, settle the distribution channel, exact package set and version
 availability, credentials or trusted publisher setup, and release notes. A publisher
 should use the same validated artifacts and require an explicit release trigger.
 
-Do not create tags manually. After an authorized merge/push to main, the existing
-release-tags workflow creates package-version tags automatically. make tags-check
-is a read-only check for missing tags. Successful tagging does not publish packages.
+Do not create tags manually. After an authorized merge/push to main, the CI workflow's
+`tag` job creates package-version tags after tests, artifact checks and CodeQL succeed.
+`make tags-check` is a read-only check for missing tags. Successful tagging does not
+publish packages.
 
 
 ## Manual package workflow

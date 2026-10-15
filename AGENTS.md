@@ -186,7 +186,7 @@ description = "Assembly completeness filter"
   change a weaver's manifest/behaviour, patch-bump all three. If a backend now needs a
   newer core API, raise its `braidworks-core>=` floor in the same change.
 - **Do NOT create git tags by hand.** Tagging is automated:
-  `.github/workflows/release-tags.yml` runs on every push to `main` and creates+pushes
+  `.github/workflows/ci.yml` runs on every push to `main` and, after validation succeeds, creates+pushes
   `<package>-v<version>` for any package whose current version isn't tagged yet. So:
   bump the version in your PR, merge, and the tag appears on its own. Locally,
   `make tags-check` lists missing tags; `make tags` creates them.
