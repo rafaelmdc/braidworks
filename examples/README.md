@@ -15,7 +15,7 @@ From the repo root:
 # What each gene does + who it interacts with -> a TSV for your spreadsheet.
 # `uv run` runs the command inside the project env; or `source .venv/bin/activate`
 # once and drop the prefix.
-uv run --no-sync braidworks weave --in-file examples/genes.txt --in-type protein.query \
+uv run braidworks weave --in-file examples/genes.txt --in-type protein.query \
     --param organism=9606 --want go.biological_process,protein.interaction.partners \
     --format tsv > out.tsv
 ```

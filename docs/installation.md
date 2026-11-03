@@ -1,63 +1,59 @@
 # Install Braidworks
 
 Use Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-Choose the weavers your analysis needs. Packages install into a virtual environment;
-biological database acquisition is a separate step.
+Packages install into a virtual environment; biological database acquisition is a
+separate step.
 
 These instructions use the checkout or locally built wheels. They do not assume
 that current package versions have been published to PyPI.
 
-## Install two sources for a first query
+## Install everything
 
 ```bash
 git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
-uv sync --package uniprot-weaver --package pdbe-weaver
-uv run --no-sync braidworks weavers
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv sync --all-extras
+uv run braidworks doctor
+uv run braidworks weave --have protein.query=P04637 \
     --want protein.name,structure.pdb.ids
 ```
 
-`uv` creates a project-local `.venv` containing core and these two weavers. Use
-`uv run --no-sync` from the checkout so subsequent commands preserve that selection.
-Alternatively, run `source .venv/bin/activate` and use bare commands.
+`uv` creates a project-local `.venv` containing core, every source, and the browser
+interface (about 60 MB; no biological data). Run commands with `uv run` from the
+checkout, or run `source .venv/bin/activate` and use bare commands. `uv run` keeps the
+environment in step with the checkout, so after a `git pull` it installs any new
+source on the next command.
 
-To add sources, repeat `uv sync` with **all packages you want to keep**. For example,
-add QuickGO and STRING for GO terms and functional associations:
+`braidworks doctor` lists the installed sources, which inputs they accept, and which
+ones need a local database or credentials before they can answer. Run it whenever a
+query reports "no route".
 
-```bash
-uv sync --package uniprot-weaver --package pdbe-weaver \
-    --package quickgo-weaver --package string-weaver
-```
+Installing a local-data source does not acquire its database; see the
+[source catalogue](sources.md). AGORA's archive dependency may require a C compiler
+when a compatible wheel is unavailable.
 
-A new selection can remove previously installed workspace packages. See the
-[source catalogue](sources.md) for package names and local-data requirements.
-
-## Add the browser
-
-Keep your source selection and include the toolkit's server extra:
+## Start the browser
 
 ```bash
-uv sync --package uniprot-weaver --package pdbe-weaver --package weaverkit --extra serve
-uv run --no-sync weaverkit serve
+uv run weaverkit serve
 ```
 
 Open the localhost address printed by the server. The browser accepts single inputs,
 pasted identifier lists, and CSV/TSV batches. Continue with [usage](usage.md).
 
-## Install the complete workspace
+## Install only some sources
 
-For development or access to all sources:
+Most users should install everything. If you need a smaller environment, note that
+`uv sync --package …` is an *exact* selection: it **removes** every workspace package
+you do not name, including sources a previous tutorial installed. Name all the sources
+you want to keep in one command, and run commands with `uv run --no-sync` so `uv` does
+not reinstall the rest:
 
 ```bash
-uv sync --all-extras
-uv run --no-sync braidworks weavers
+uv sync --package uniprot-weaver --package pdbe-weaver \
+    --package quickgo-weaver --package string-weaver
+uv run --no-sync braidworks doctor
 ```
-
-This includes contributor/test extras and every weaver. Installing a local-data
-package does not acquire its database. AGORA's archive dependency may require a C
-compiler when a compatible wheel is unavailable; a selected installation avoids
-unneeded dependencies.
 
 ## Install built wheels outside the checkout
 

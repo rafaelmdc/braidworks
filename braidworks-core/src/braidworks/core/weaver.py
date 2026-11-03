@@ -65,6 +65,16 @@ class BaseWeaver(ABC):
         """Whether every HTTP request on this backend uses the pacing seam."""
         return False
 
+    def backend_ready(self, backend: str) -> bool:
+        """Whether ``backend`` is set up to answer queries (for diagnostics only).
+
+        Defaults to the shared convention that an unconfigured backend fingerprints as
+        ``"unconfigured:<backend>"``. Weavers with a cheaper or more precise check may
+        override it. The executor never consults this; it is what ``braidworks
+        doctor`` reports.
+        """
+        return not self.backend_fingerprint(backend).startswith("unconfigured:")
+
     @abstractmethod
     def backend_fingerprint(self, backend: str) -> str:
         """Fingerprint of the named backend's data state. Used in the cache key.

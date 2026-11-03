@@ -52,7 +52,7 @@ BRAIDWORKS_RUN_LIVE=1 make test   # also run the live GTDB-API E2E
 
 Use [checkout or wheel installation](../../docs/installation.md) with core and the
 sources needed for your route. From the checkout, prefix commands above with
-`uv run --no-sync`; a bare command assumes the environment is activated.
+`uv run`; a bare command assumes the environment is activated.
 Source installation does not acquire optional biological databases.
 
 [Source reference](REFERENCE.md) retains coverage, selection, failure and resource

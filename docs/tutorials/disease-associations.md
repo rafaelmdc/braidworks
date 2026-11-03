@@ -9,11 +9,11 @@ You will save the result with coverage and references for later inspection.
 From your Braidworks checkout, run:
 
 ```bash
-uv sync --package disbiome-weaver
+uv sync --all-extras
 ```
 
-Use Python 3.12+ and uv, as in [installation](../installation.md). This selection
-updates the local `.venv` and can remove previously selected packages. Disbiome requires
+Use Python 3.12+ and uv, as in [installation](../installation.md). This installs every
+source, including Disbiome. Disbiome requires
 a separately acquired local database; the next script downloads its real source tables
 on first use, then reuses the database. Network access is needed for that first build.
 The SQLite database occupied about 45 MB in our verification; provider size can change.
@@ -71,7 +71,7 @@ asyncio.run(main())
 ignored by git; keep it on local disk. Run the script:
 
 ```bash
-uv run --no-sync python inspect_disease.py
+uv run python inspect_disease.py
 ```
 
 First, check the printed disease identity: provider disease ID `1` described `Autism`

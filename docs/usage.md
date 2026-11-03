@@ -5,7 +5,7 @@ browser to build a query visually. Each uses installed weavers to connect the in
 you have to the outputs you request.
 
 Complete the [installation guide](installation.md) first. Commands below run from
-the checkout with `uv run --no-sync`; after activating `.venv/bin/activate`, you can
+the checkout with `uv run`; after activating `.venv/bin/activate`, you can
 use the bare `braidworks` command. See [sources](sources.md) for local-data setup.
 
 ## Query from the command line
@@ -13,7 +13,7 @@ use the bare `braidworks` command. See [sources](sources.md) for local-data setu
 Start with a known accession:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want protein.name,structure.pdb.ids
 ```
 
@@ -24,7 +24,7 @@ These sources must be installed and network-accessible.
 For a gene symbol, set the species:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=TP53 --param organism=9606 \
+uv run braidworks weave --have protein.query=TP53 --param organism=9606 \
     --want protein.name,structure.pdb.ids
 ```
 
@@ -32,12 +32,24 @@ uv run --no-sync braidworks weave --have protein.query=TP53 --param organism=960
 an accession is more specific. Check the source's selection rules when interpreting
 name-based queries.
 
+### Check your installation
+
+```bash
+uv run braidworks doctor
+```
+
+`doctor` lists each installed source and whether it is ready, partly ready, or needs a
+local database first. It also names sources in the checkout that are not installed.
+When a query reports "no route", the error names the input or output that nothing
+installed handles, suggests close type names, and says which missing source would
+handle it.
+
 ### Find fields and preview a route
 
 ```bash
-uv run --no-sync braidworks weavers
-uv run --no-sync braidworks keys --produces structure.pdb.ids
-uv run --no-sync braidworks path --from protein.query --to structure.pdb.ids
+uv run braidworks weavers
+uv run braidworks keys --produces structure.pdb.ids
+uv run braidworks path --from protein.query --to structure.pdb.ids
 ```
 
 `weavers` lists installed capabilities and their parameters. `keys` shows which
@@ -49,7 +61,7 @@ The [key index](keys-index.md) covers the repository's full catalogue.
 Use `run` when you already know the capability you need:
 
 ```bash
-uv run --no-sync braidworks run pdbe describe_structure --have pdb.id=1tup \
+uv run braidworks run pdbe describe_structure --have pdb.id=1tup \
     --want structure.pdb.title,structure.pdb.method
 ```
 
@@ -60,7 +72,7 @@ uv run --no-sync braidworks run pdbe describe_structure --have pdb.id=1tup \
 For a text file containing one accession per line:
 
 ```bash
-uv run --no-sync braidworks weave --in-file accessions.txt --in-type protein.query \
+uv run braidworks weave --in-file accessions.txt --in-type protein.query \
     --want protein.name,structure.pdb.ids --format tsv > structures.tsv
 ```
 
@@ -80,7 +92,7 @@ P04637,
 Save it as `inputs.csv`, then run:
 
 ```bash
-uv run --no-sync braidworks weave --in-file inputs.csv \
+uv run braidworks weave --in-file inputs.csv \
     --want structure.pdb.ids --format csv > structures.csv
 ```
 
@@ -179,7 +191,7 @@ Listing structure IDs gives a collection. To retrieve the title and method of
 each structure, expand the IDs into separate child queries:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want structure.pdb.title,structure.pdb.method --expand all --format tsv
 ```
 
@@ -193,7 +205,7 @@ For relationships that return the same type they consume, use an explicit traver
 With `ncbi_weaver` installed, this follows TP53's primate orthologs:
 
 ```bash
-uv run --no-sync braidworks weave --have gene.ncbi.id=7157 --for-each orthologs \
+uv run braidworks weave --have gene.ncbi.id=7157 --for-each orthologs \
     --param taxon_filter=9443 --want gene.symbol,gene.organism --format tsv
 ```
 
@@ -212,7 +224,7 @@ Install `weaverkit` with its `serve` extra as described in
 [installation](installation.md#add-the-browser), then start:
 
 ```bash
-uv run --no-sync weaverkit serve
+uv run weaverkit serve
 ```
 
 Open the localhost address printed by the server. Choose the input and target fields,

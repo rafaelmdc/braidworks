@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: capability-docs docs-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+.PHONY: capability-docs docs-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -85,6 +85,9 @@ fmt:  ## Auto-format with ruff
 clean:  ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache
+
+quickstart-check:  ## Run the README quickstart offline (LIVE=1 runs the real queries)
+	python3 tools/check_quickstart.py $(if $(LIVE),--live)
 
 tags-check:  ## List release tags missing for current package versions (nonzero if any)
 	@python tools/release_tags.py missing

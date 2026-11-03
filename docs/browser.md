@@ -6,7 +6,7 @@ need. Their API or local-data prerequisites still apply.
 
 ## Run a query
 
-1. From the checkout, start `uv run --no-sync weaverkit serve`.
+1. From the checkout, start `uv run weaverkit serve`.
 2. Open the localhost address printed by the server.
 3. Choose the input type and target fields, inspect the route, then enter values and run.
 4. Inspect coverage, review and error information before exporting JSON, CSV or TSV.

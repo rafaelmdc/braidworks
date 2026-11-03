@@ -33,7 +33,12 @@ from typing import Any
 from braidworks.core.archive import begin_archive, write_archive
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.cache_policy import CachePolicy
-from braidworks.core.discovery import build_registry_from_entry_points
+from braidworks.core.diagnose import INSTALL_ALL, explain_no_route, workspace_weavers
+from braidworks.core.discovery import (
+    DiscoveryPolicy,
+    build_registry_from_entry_points,
+    discover_registry,
+)
 from braidworks.core.errors import classify_error, explain_error
 from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
 from braidworks.core.executor import (
@@ -142,12 +147,23 @@ def _load_registry(only: str | None) -> BraidRegistry:
     names = frozenset(_split_types(only)) if only else None
     registry = build_registry_from_entry_points(only=names)
     if not registry.manifests():
-        _err(
-            "no weavers installed (nothing advertises the 'braidworks.weavers' entry "
-            "point). Install a weaver package, e.g. `uv pip install -e weavers/pdbe_weaver`."
-        )
+        _err("no sources installed: Braidworks has nothing to query yet.")
+        _err(f"  From the checkout, install every source with: {INSTALL_ALL}")
+        _err("  Then check the installation with: braidworks doctor")
         raise SystemExit(1)
     return registry
+
+
+def _report_no_route(
+    registry: BraidRegistry, have: Sequence[str], want: Sequence[str], exc: Exception
+) -> None:
+    """Explain a failed plan in the user's terms, with the next thing to try."""
+    if isinstance(exc, NoPlanError):
+        _err(f"no route: {exc}")
+        return
+    _err(f"no route from {', '.join(sorted(set(have)))} to {', '.join(want)}.")
+    for line in explain_no_route(registry, have, want):
+        _err(line)
 
 
 # --------------------------------------------------------------------------- #
@@ -536,8 +552,8 @@ def _cmd_weave(args: argparse.Namespace) -> int:
             ),
         )
     except (NoPathError, NoPlanError) as exc:
-        _err(f"no route: {exc}")
-        _err("try `braidworks keys` to see what is produced, or `braidworks path --from … --to …`.")
+        have = sorted({t for ss in sets for t in ss.available_types()})
+        _report_no_route(registry, have, want, exc)
         return 1
     except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
@@ -878,7 +894,7 @@ def _cmd_path(args: argparse.Namespace) -> int:
             backend_policy=BackendPolicy(args.policy),
         )
     except (NoPathError, NoPlanError) as exc:
-        _err(f"no route from {frm} to {to}: {exc}")
+        _report_no_route(registry, frm, to, exc)
         return 1
     print(f"{', '.join(frm)}  →  {', '.join(to)}   ({len(braid.steps)} step(s))")
     for i, step in enumerate(braid.steps, start=1):
@@ -888,6 +904,83 @@ def _cmd_path(args: argparse.Namespace) -> int:
             f"  {i}. {step.weaver_id}.{step.capability_id} [{step.primary_backend}]: {ins} → {outs}"
         )
     return 0
+
+
+def _backend_gaps(registry: BraidRegistry, weaver_id: str) -> tuple[list[str], list[str]]:
+    """``(ready, not_set_up)`` backends for one weaver, across its capabilities."""
+    weaver = registry.get_weaver(weaver_id)
+    active = registry.get_manifest(weaver_id)
+    ready: list[str] = []
+    not_set_up: list[str] = []
+    declared = registry.get_declared_manifest(weaver_id).capabilities
+    for backend in sorted({b for cap in declared for b in cap.backends}):
+        enabled = active is not None and any(backend in c.backends for c in active.capabilities)
+        try:
+            ok = enabled and weaver.backend_ready(backend)
+        except Exception:  # noqa: BLE001 - a broken backend reads as "not set up", never a crash
+            ok = False
+        (ready if ok else not_set_up).append(backend)
+    return ready, not_set_up
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Check the installation and say, in plain words, what to do next."""
+    import platform
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        core_version = version("braidworks-core")
+    except PackageNotFoundError:  # pragma: no cover - running from an uninstalled tree
+        core_version = "unknown"
+    report = discover_registry(policy=DiscoveryPolicy.TOLERANT)
+    registry = report.registry
+    manifests = sorted(registry.declared_manifests(), key=lambda m: m.weaver_id)
+    print(f"Braidworks core {core_version} · Python {platform.python_version()} · {sys.prefix}")
+    print()
+
+    problems = len(report.failures)
+    print(f"{len(manifests)} source(s) installed")
+    width = max(
+        [len(m.weaver_id) for m in manifests] + [len(f.name) for f in report.failures] + [1]
+    )
+    for manifest in manifests:
+        enabled, not_set_up = _backend_gaps(registry, manifest.weaver_id)
+        label = f"  {{mark}} {manifest.weaver_id:<{width}}  v{manifest.version:<8} "
+        if not not_set_up:
+            print(label.format(mark="✓") + f"ready ({', '.join(enabled)})")
+        elif enabled:
+            print(
+                label.format(mark="!")
+                + f"ready via {', '.join(enabled)}; not set up: {', '.join(not_set_up)}"
+                + " (see the source's README)"
+            )
+        else:
+            print(
+                label.format(mark="○")
+                + f"needs setup: {', '.join(not_set_up)} (see the source's README)"
+            )
+    for failure in report.failures:
+        print(
+            f"  ✗ {failure.name:<{width}}  failed to {failure.stage}: "
+            f"{failure.exception_type}: {failure.message}"
+        )
+
+    installed = {m.weaver_id for m in manifests} | {f.name for f in report.failures}
+    absent = [w for w in workspace_weavers() if w.weaver_id not in installed]
+    if absent:
+        print()
+        print(f"Not installed from this checkout: {', '.join(w.weaver_id for w in absent)}")
+        print(f"  Install every source with: {INSTALL_ALL}")
+
+    print()
+    if not manifests:
+        print("Nothing to query yet. From the checkout, run: " + INSTALL_ALL)
+        return 1
+    print("Next:")
+    print("  braidworks keys                              what you can start from and ask for")
+    print("  braidworks path --from TYPE --to TYPE        preview a route without fetching")
+    print("  braidworks weave --have TYPE=VALUE --want TYPE")
+    return 1 if problems else 0
 
 
 def _cmd_references(args: argparse.Namespace) -> int:
@@ -1119,6 +1212,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="backend policy (default: local_first).",
     )
     pa.set_defaults(func=_cmd_path)
+
+    # doctor
+    dr = sub.add_parser("doctor", help="check the installation and suggest fixes.")
+    dr.set_defaults(func=_cmd_doctor)
 
     # references
     rf = sub.add_parser("references", help="print source citations for installed weavers.")

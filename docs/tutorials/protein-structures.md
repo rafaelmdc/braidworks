@@ -17,21 +17,18 @@ If you already have a checkout, start from its root instead of cloning again.
 ```bash
 git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
-uv sync --package uniprot-weaver --package pdbe-weaver
+uv sync --all-extras
 ```
 
-This creates a local `.venv` and installs these sources with core. It does not download
-biological databases. The selection can remove other workspace packages from this
-venv; include all packages you want to retain if you already use the checkout.
-Keep `uv run --no-sync` in the commands below to preserve the selected installation.
-See [installation](../installation.md) for other environments.
+This creates a local `.venv` with core and every source, including UniProt and PDBe.
+It does not download biological databases. See [installation](../installation.md) for other environments.
 
 ## Connect one protein to its structure listing
 
 Begin with UniProt accession `P04637`, the human p53 entry:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want protein.name,structure.pdb.ids,structure.pdb.count --only uniprot,pdbe
 ```
 
@@ -56,7 +53,7 @@ coverage and review outcomes.
 Now ask for each structure's title and experimental method:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want structure.pdb.title,structure.pdb.method --only uniprot,pdbe \
     --expand top:2 --format tsv
 ```
@@ -88,7 +85,7 @@ so both rows use the same input identity convention.
 Run the batch, saving both a spreadsheet table and an inspectable run archive:
 
 ```bash
-uv run --no-sync braidworks weave --in-file proteins.csv \
+uv run braidworks weave --in-file proteins.csv \
     --want protein.name,structure.pdb.ids,structure.pdb.count --only uniprot,pdbe \
     --format csv --archive protein-run.json > protein-structures.csv
 ```

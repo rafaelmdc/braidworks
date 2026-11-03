@@ -1040,3 +1040,58 @@ def test_archive_refuses_overwrite_and_cleans_temporary_files(tmp_path, capsys):
     assert archive.read_text() == "keep me"
     assert "could not write run archive" in capsys.readouterr().err
     assert list(tmp_path.iterdir()) == [archive]
+
+
+# --- plain-language "no route" errors and `doctor` ----------------------------------
+
+
+def test_weave_typo_in_want_suggests_the_real_type(capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)  # outside a checkout: no install hints, only suggestions
+    code = _run("weave", "--have", "protein.query=P1", "--want", "protein.nam")
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "No installed source provides `protein.nam`" in err
+    assert "`protein.name`" in err
+
+
+def test_weave_input_nothing_accepts_is_named(capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    code = _run(
+        "weave", "--have", "protein.query=P1", "--want", "structure.pdb.ids", "--only", "pdbe"
+    )
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "Nothing installed accepts `protein.query`" in err
+
+
+def test_path_no_route_explains(capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    assert _run("path", "--from", "protein.query", "--to", "pdb") == 1
+    err = capsys.readouterr().err
+    assert "`pdb.id`" in err and "`structure.pdb.ids`" in err
+
+
+def _doctor_report(failures=()):
+    from braidworks.core.discovery import DiscoveryReport
+
+    return lambda **_: DiscoveryReport(_make_registry(), tuple(failures))
+
+
+def test_doctor_lists_sources_and_next_steps(capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "discover_registry", _doctor_report())
+    assert _run("doctor") == 0
+    out = capsys.readouterr().out
+    assert "2 source(s) installed" in out
+    assert "✓ pdbe" in out and "✓ uniprot" in out
+    assert "braidworks weave" in out
+
+
+def test_doctor_fails_on_a_broken_plugin(capsys, monkeypatch, tmp_path):
+    from braidworks.core.discovery import DiscoveryFailure
+
+    monkeypatch.chdir(tmp_path)
+    failure = DiscoveryFailure("broken", "broken:build", "load", "ImportError", "no module")
+    monkeypatch.setattr(cli, "discover_registry", _doctor_report([failure]))
+    assert _run("doctor") == 1
+    assert "✗ broken" in capsys.readouterr().out
