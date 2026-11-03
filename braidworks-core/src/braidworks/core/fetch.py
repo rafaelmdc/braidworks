@@ -23,6 +23,7 @@ events), drop down to ``Braider``/``LocalExecutor`` directly — ``fetch`` is th
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -164,7 +165,24 @@ async def async_fetch(
         A :class:`FetchResult` bucketing every input id into ``resolved`` / ``unresolved``.
     """
     want_types = _as_list(want)
-    reg = registry if registry is not None else build_registry_from_entry_points(only=only)
+    if registry is None:
+        # We built these sources, so we close their network clients; a caller's registry
+        # stays open for reuse.
+        reg = build_registry_from_entry_points(only=only)
+        try:
+            return await async_fetch(
+                want,
+                ids,
+                have=have,
+                params=params,
+                registry=reg,
+                review_policy=review_policy,
+                confidence_threshold=confidence_threshold,
+            )
+        finally:
+            for manifest in reg.manifests():
+                await reg.get_weaver(manifest.weaver_id).aclose()
+    reg = registry
 
     strand_sets = [StrandSet.from_strands(i, [Strand(have, i)]) for i in dict.fromkeys(ids)]
     prepared = prepare_query(
@@ -216,9 +234,10 @@ def fetch(
 ) -> FetchResult:
     """Batch-resolve ``want`` for ``ids`` of type ``have`` — the one-call data path.
 
-    Synchronous wrapper over :func:`async_fetch` (runs its own event loop via
-    ``asyncio.run``). Call :func:`async_fetch` instead if you are already inside a
-    running loop. See :func:`async_fetch` for the full argument reference.
+    Synchronous wrapper over :func:`async_fetch`. Inside a running event loop (e.g.
+    Jupyter) it runs on a worker thread. New code should prefer :func:`braidworks.get`,
+    which returns a table and reuses sources across calls. See :func:`async_fetch` for
+    the full argument reference.
 
     Example::
 
@@ -228,15 +247,20 @@ def fetch(
         res.get("853")["microbe.metabolism.reactions"]   # -> [ {abbreviation: …}, … ]
         res.unresolved                                    # -> ids with no AGORA2 model
     """
-    return asyncio.run(
-        async_fetch(
-            want,
-            ids,
-            have=have,
-            params=params,
-            registry=registry,
-            only=only,
-            review_policy=review_policy,
-            confidence_threshold=confidence_threshold,
-        )
+    coro = async_fetch(
+        want,
+        ids,
+        have=have,
+        params=params,
+        registry=registry,
+        only=only,
+        review_policy=review_policy,
+        confidence_threshold=confidence_threshold,
     )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # Already inside an event loop (e.g. Jupyter): run on a worker thread's own loop.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()

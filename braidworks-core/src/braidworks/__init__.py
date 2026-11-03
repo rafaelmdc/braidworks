@@ -1,10 +1,29 @@
-"""Braidworks: a composable network of typed biological data resolvers.
+"""Braidworks: retrieve and connect biological data across databases.
 
-The high-level convenience surface is re-exported here so a consumer can write
-``braidworks.fetch(want, ids)`` without reaching into ``braidworks.core``. The full
-planning/execution API stays available under ``braidworks.core``.
+    import braidworks as bw
+
+    result = bw.get(["P04637", "TP53"], have="protein.query",
+                    want=["protein.name", "structure.pdb.ids"], organism="9606")
+    result.to_pandas()
+
+``get`` routes through the installed sources and returns a :class:`Result` table.
+:class:`Session` reuses sources and settings across queries. ``braidworks.weaver`` is
+the import for weaver authors; ``braidworks.core`` is the full engine. ``fetch`` remains
+for existing code.
 """
 
+from braidworks._result import Result
+from braidworks._session import Session, async_get, get, path, sources
 from braidworks.core.fetch import FetchResult, async_fetch, fetch
 
-__all__ = ["FetchResult", "async_fetch", "fetch"]
+__all__ = [
+    "FetchResult",
+    "Result",
+    "Session",
+    "async_fetch",
+    "async_get",
+    "fetch",
+    "get",
+    "path",
+    "sources",
+]

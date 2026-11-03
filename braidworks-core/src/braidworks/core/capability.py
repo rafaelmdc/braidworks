@@ -56,8 +56,7 @@ class Parameter:
             )
         if self.enum and self.default is not None and self.default not in self.enum:
             raise ValueError(
-                f"parameter {self.name!r}: default {self.default!r} not in enum "
-                f"{list(self.enum)}"
+                f"parameter {self.name!r}: default {self.default!r} not in enum {list(self.enum)}"
             )
 
     def coerce(self, value: Any) -> Any:
@@ -84,8 +83,7 @@ class Parameter:
         coerced = self.coerce(value)
         if self.enum and coerced not in self.enum:
             raise ValueError(
-                f"parameter {self.name!r}: {coerced!r} not in allowed values "
-                f"{list(self.enum)}"
+                f"parameter {self.name!r}: {coerced!r} not in allowed values {list(self.enum)}"
             )
         return coerced
 
@@ -148,15 +146,11 @@ class Capability:
     def __post_init__(self) -> None:
         extra = self.set_outputs - self.produces
         if extra:
-            raise ValueError(
-                f"set_outputs must be a subset of produces; unknown: {sorted(extra)}"
-            )
+            raise ValueError(f"set_outputs must be a subset of produces; unknown: {sorted(extra)}")
         names = [p.name for p in self.parameters]
         dupes = {n for n in names if names.count(n) > 1}
         if dupes:
-            raise ValueError(
-                f"capability {self.id!r}: duplicate parameter names: {sorted(dupes)}"
-            )
+            raise ValueError(f"capability {self.id!r}: duplicate parameter names: {sorted(dupes)}")
 
     def resolve_params(self, given: dict[str, Any] | None) -> dict[str, Any]:
         """Validate caller params against the declaration and overlay defaults.
@@ -183,9 +177,7 @@ class Capability:
 
     def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
         """Group ids containing at least one of the requested outputs."""
-        return frozenset(
-            g.id for g in self.output_groups if g.outputs & requested
-        )
+        return frozenset(g.id for g in self.output_groups if g.outputs & requested)
 
     def outputs_to_compute(self, requested: frozenset[str]) -> frozenset[str]:
         """Union of every triggered group's outputs, intersected with ``produces``.
