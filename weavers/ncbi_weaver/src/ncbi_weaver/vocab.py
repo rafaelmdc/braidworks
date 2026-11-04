@@ -65,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.14"
+WEAVER_VERSION = "0.2.15"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -290,6 +290,45 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
     )
 
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning. Hand-maintained
+# here (ncbi vocab is handwritten); `weaverkit verify` checks it against the spec.
+TYPE_DESCRIPTIONS = {
+    "gene.detail": "Full record of this gene — symbol, description, type, chromosomes, synonyms, xrefs.",
+    "gene.name": "The full name of this gene.",
+    "gene.ncbi.id": "NCBI Gene id for one gene.",
+    "gene.organism": "The source organism of this gene.",
+    "gene.ortholog.count": "How many orthologs this gene has across organisms.",
+    "gene.ortholog.records": "This gene's orthologs — gene id, symbol, organism.",
+    "gene.product.coverage": "Completion and observed/returned transcript counts for NCBI product reports.",
+    "gene.product.records": "The transcripts and proteins this gene makes — accessions and names.",
+    "gene.symbol": "A gene's official symbol, e.g. TP53 — joins gene databases.",
+    "gene.type": "What kind of gene this is — protein_coding, ncRNA, pseudo, …",
+    "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    "genome.assembly.count": "How many genome assemblies exist for this organism.",
+    "genome.assembly.detail": "Full detail of one assembly — submitter, dates, length/GC/N50, gene counts.",
+    "genome.assembly.level": "How complete one assembly is — Complete Genome, Chromosome, Scaffold, or Contig.",
+    "genome.assembly.organism": "The source organism of one genome assembly.",
+    "genome.assembly.records": "Genome assemblies for this organism — accession, organism, level, RefSeq category.",
+    "genome.assembly.title": "The name of one genome assembly.",
+    "genome.sequence.coverage": "Completion and observed/returned record counts for NCBI sequence reports.",
+    "genome.sequence.records": "The sequences in one genome — name, role, length, RefSeq/GenBank accession.",
+    "ncbi.taxon.children_count": "How many child taxa this organism has at the requested rank.",
+    "ncbi.taxon.children_records": "This organism's child taxa — taxid, name, rank.",
+    "ncbi.taxon.history": "Requested/current taxid, merge chain, deletion and dump history availability.",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "ncbi.taxon.lineage": "An organism's ranked lineage, from species up to root.",
+    "ncbi.taxon.match_type": "How the name resolved to this taxid — exact, synonym, fuzzy, or taxid.",
+    "ncbi.taxon.parent_id": "The parent taxon of this organism.",
+    "ncbi.taxon.rank": "An organism's taxonomic rank, e.g. species or genus.",
+    "ncbi.taxon.review_required": "Flag: the name match was ambiguous.",
+    "ncbi.taxon.species_id": "The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets.",
+    "organism.name": "The text you start from — an organism name.",
+    "organism.scientific_name": "An organism's canonical scientific name — joins clade-keyed datasets.",
+    "protein.query": "The text you start from — a gene symbol, protein name, or accession.",
+}
+
+
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """The NCBI weaver manifest, declaring each capability for the wired backends.
 
@@ -325,5 +364,6 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=tuple(capabilities),
     )

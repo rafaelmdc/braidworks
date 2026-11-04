@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "pdbe"
-WEAVER_VERSION = "0.1.14"
+WEAVER_VERSION = "0.1.15"
 WEAVER_TITLE = "PDB experimental structures via PDBe (accession -> structures)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,27 @@ PROVENANCE = Provenance(
     attribution="wwPDB / EMBL-EBI PDBe",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "pdb.id": "A PDB / PDBe structure id.",
+    "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "structure.pdb.assemblies": "Observed PDBe assemblies detail with provider identity and availability.",
+    "structure.pdb.coordinates": "Observed PDBe coordinates detail with provider identity and availability.",
+    "structure.pdb.count": "How many PDB structures cover this protein.",
+    "structure.pdb.detail": "Full detail of one PDB structure — title, method, dates, authors.",
+    "structure.pdb.entities": "Observed PDBe entities detail with provider identity and availability.",
+    "structure.pdb.ids": "Experimental PDB structures of this protein.",
+    "structure.pdb.ligands": "Observed PDBe ligands detail with provider identity and availability.",
+    "structure.pdb.mappings": "Observed PDBe mappings detail with provider identity and availability.",
+    "structure.pdb.method": "How one PDB structure was solved.",
+    "structure.pdb.quality": "Observed entry-level PDBe quality metrics with method, availability and missing-value semantics.",
+    "structure.pdb.records": "This protein's PDB structures — id, method, resolution, coverage.",
+    "structure.pdb.release_date": "When one PDB structure was released.",
+    "structure.pdb.residues": "Observed PDBe residues detail with provider identity and availability.",
+    "structure.pdb.title": "The title of one PDB structure.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +55,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="list_structures",

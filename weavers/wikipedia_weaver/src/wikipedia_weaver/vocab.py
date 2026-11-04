@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "wikipedia"
-WEAVER_VERSION = "0.1.8"
+WEAVER_VERSION = "0.1.9"
 WEAVER_TITLE = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -27,6 +27,16 @@ PROVENANCE = Provenance(
     attribution="Wikimedia Foundation",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "wikipedia.pageviews": "English-Wikipedia pageview subtotal; compare only matching measurement scopes.",
+    "wikipedia.pageviews.measurement": "Pageview period, project, access, agent and observed/requested monthly-bin coverage.",
+    "wikipedia.pageviews.series": "Ordered observed monthly bins; absent months are not measured zero.",
+    "wikipedia.pageviews.title": "Supplied English Wikipedia article key and explicit redirect policy.",
+    "wikipedia.title": "English Wikipedia article title for one taxon — the pageviews join key.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -35,6 +45,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_pageviews",

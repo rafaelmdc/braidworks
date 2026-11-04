@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.2.9"
+WEAVER_VERSION = "0.2.10"
 WEAVER_TITLE = (
     "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
 )
@@ -28,6 +28,23 @@ PROVENANCE = Provenance(
     attribution="Mondo Disease Ontology (Vasilevsky et al., Monarch Initiative)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
+    "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
+    "disease.mondo.id": "MONDO Disease Ontology id for one disease — the unified disease join key that harmonizes MeSH / MedDRA / DOID / OMIM identities.",
+    "disease.name": "A disease name (e.g. 'ulcerative colitis') — a free-text entry point that resolves to a disease ontology term via label/synonym matching.",
+    "disease.ontology.ancestors": "This disease's full is-a ancestor lineage in MONDO (up to the root), a list of {mondo_id, name} — the disease-hierarchy feature / similarity basis.",
+    "disease.ontology.definition": "Observed MONDO definition text; absent definitions remain unknown.",
+    "disease.ontology.depth": "This disease's minimum is-a distance to a MONDO root (how specific the term is).",
+    "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
+    "disease.ontology.history": "MONDO current/obsolete status with observed replacement/consider targets and source release identity.",
+    "disease.ontology.mapping.records": "Observed MONDO mapping relations and source evidence.",
+    "disease.ontology.name": "The MONDO term name for this disease.",
+    "disease.ontology.parents": "This disease's direct is-a parents in MONDO — a list of {mondo_id, name}.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -36,6 +53,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="mondo.lookup_by_mesh",

@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.3.9"
+WEAVER_VERSION = "0.3.10"
 WEAVER_TITLE = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -27,6 +27,23 @@ PROVENANCE = Provenance(
     attribution="Disbiome (Janssens et al., 2018)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "disease.disbiome.id": "Provider disease identity produced by Disbiome and consumed by exact disease describe/reverse traversal.",
+    "disease.disbiome.record": "One provider disease identity with retained source records.",
+    "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
+    "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, method, sample, host.",
+    "microbe.disease.count": "How many disease-association experiments mention this microbe.",
+    "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
+    "microbe.disease.identities": "Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence.",
+    "microbe.disease.names": "The diseases this microbe is linked to.",
+    "microbe.disease.records": "Full Disbiome experiment rows linking this microbe to diseases.",
+    "microbe.disease.taxa": "Exact reverse disease association evidence, publications, rank and full observed taxid fan.",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "ncbi.taxon.species_id": "The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -35,6 +52,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="disbiome.list_diseases",
