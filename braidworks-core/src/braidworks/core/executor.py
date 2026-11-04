@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Callable
+from itertools import islice, product
+from math import prod
+from typing import TYPE_CHECKING, Any
 
 from braidworks.core.braid import (
     BackendPolicy,
@@ -29,8 +32,11 @@ from braidworks.core.exceptions import (
 from braidworks.core.references import Reference, references_for_braid
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
-from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner
-from braidworks.core.strand import MergePolicy, Strand, StepOutcome, StrandSet
+from braidworks.core.runner import InProcessStepRunner, WeaveStepRunner, validate_batch_size
+from braidworks.core.strand import MergePolicy, StepOutcome, Strand, StrandSet, entity_key
+
+if TYPE_CHECKING:
+    from braidworks.core.execution_state import ExecutionState
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +85,17 @@ class ExpandPolicy:
         return n  # ALL
 
 
+_DEFAULT_EXPAND_POLICY = ExpandPolicy()
+
+
 class ReviewPolicy(Enum):
     """What the executor does on ``OK + requires_review`` or a low-confidence result.
 
-    ``AMBIGUOUS`` always halts or raises regardless of this — ``ALLOW_CONTINUE``
-    never applies to it (there are no strands to merge).
+    ``HALT`` queues ambiguity before any candidate selection or expansion.
+    ``ALLOW_CONTINUE`` explicitly permits selection while preserving review flags.
+    An explicit confidence threshold still pauses below-threshold results.
+    ``RAISE`` rejects ambiguity or review immediately. Candidate-free ambiguity
+    queues unless RAISE is selected.
     """
 
     HALT = "halt"  # stop the chain, queue with remaining steps (default)
@@ -105,12 +117,14 @@ class ReviewQueueItem:
     strand_set: StrandSet
     triggering_result: WeaveResult
     remaining_steps: tuple[CapabilityInvocation, ...]
+    continuation: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         return {
             "strand_set": self.strand_set.to_json(),
             "triggering_result": self.triggering_result.to_json(),
             "remaining_steps": [s.to_json() for s in self.remaining_steps],
+            **({"continuation": self.continuation} if self.continuation else {}),
         }
 
     @classmethod
@@ -121,6 +135,7 @@ class ReviewQueueItem:
             remaining_steps=tuple(
                 CapabilityInvocation.from_json(s) for s in data["remaining_steps"]
             ),
+            continuation=dict(data.get("continuation", {})),
         )
 
 
@@ -165,9 +180,99 @@ class ExecutionError:
         )
 
 
+@dataclass(frozen=True)
+class ExpansionTruncation:
+    """A bounded fork's omitted alternatives, before downstream expansion.
+
+    Counts describe this capability's selected fan, not hypothetical final leaves.
+    Labels may repeat; source_row identifies a supplied input ordinal when present.
+    """
+
+    entity_id: str
+    source_row: int | None
+    capability_id: str
+    requested: int
+    kept: int
+    limit: int
+
+    @property
+    def omitted(self) -> int:
+        return self.requested - self.kept
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "entity_id": self.entity_id,
+            "source_row": self.source_row,
+            "capability_id": self.capability_id,
+            "requested": self.requested,
+            "kept": self.kept,
+            "omitted": self.omitted,
+            "limit": self.limit,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> ExpansionTruncation:
+        return cls(
+            data["entity_id"],
+            data.get("source_row"),
+            data["capability_id"],
+            data["requested"],
+            data["kept"],
+            data["limit"],
+        )
+
+
+@dataclass
+class _ExpansionBudget:
+    """Reserved leaf slots shared by chunks, traversal phases and reroutes."""
+
+    limit: int
+    leaves: int
+    next_identity: int = 0
+
+    def identify(self, ss: StrandSet) -> None:
+        if ss.execution_key is None:
+            ss.execution_key = f"node:{self.next_identity}"
+            self.next_identity += 1
+        elif ss.execution_key.startswith("node:"):
+            self.next_identity = max(self.next_identity, int(ss.execution_key.split(":", 1)[1]) + 1)
+
+    def __post_init__(self) -> None:
+        if type(self.limit) is not int or self.limit < 1:
+            raise ValueError("max_expansion must be a positive integer")
+        if (
+            type(self.leaves) is not int
+            or self.leaves < 0
+            or type(self.next_identity) is not int
+            or self.next_identity < 0
+        ):
+            raise ValueError("Invalid expansion/identity counters")
+
+    def reserve(
+        self, requested: int, ss: StrandSet, capability_id: str, result: ExecutionResult
+    ) -> int:
+        # The parent's slot is replaced, so at least one successor always fits.
+        kept = min(requested, max(1, self.limit - self.leaves + 1))
+        self.leaves += kept - 1
+        if kept < requested:
+            truncation = ExpansionTruncation(
+                ss.entity_id, ss.source_row, capability_id, requested, kept, self.limit
+            )
+            result.truncations.append(truncation)
+            ss.warnings.append(
+                f"expansion limit {self.limit}: kept {kept} of {requested} successors at {capability_id}"
+            )
+        return kept
+
+
 @dataclass
 class ExecutionResult:
-    """The four mutually exclusive, exhaustive outcome buckets for a batch."""
+    """Terminal entity outcomes and branch diagnostics for a batch.
+
+    ``errors`` includes diagnostics for otherwise-resolved entities as well as
+    fatal failures. JSON carries result-scoped entity references so these links
+    survive serialization without assuming user-supplied IDs are unique.
+    """
 
     resolved: list[StrandSet] = field(default_factory=list)
     unresolved: list[tuple[StrandSet, WeaveResult]] = field(default_factory=list)
@@ -176,59 +281,116 @@ class ExecutionResult:
     # Citations for the sources this run drew on, ordered by weaver_id (issue #1).
     # Derived from the executed braid's weavers; empty when none carry provenance.
     references: list[Reference] = field(default_factory=list)
+    truncations: list[ExpansionTruncation] = field(default_factory=list)
 
     def total(self) -> int:
-        return (
-            len(self.resolved)
-            + len(self.unresolved)
-            + len(self.review_queue)
-            + len(self.errors)
+        """Count distinct terminal entities (fan-out leaves, not input roots).
+
+        Several branch errors can describe one failed entity; recovered errors
+        are diagnostics, not additional terminal outcomes.
+        """
+        terminal = (
+            self.resolved
+            + [ss for ss, _ in self.unresolved]
+            + [item.strand_set for item in self.review_queue]
+            + [error.strand_set for error in self.errors if not error.recovered]
         )
+        return len({entity_key(ss) for ss in terminal})
+
+    def _entity_buckets(self) -> dict[str, list[StrandSet]]:
+        return {
+            "resolved": self.resolved,
+            "unresolved": [ss for ss, _ in self.unresolved],
+            "review_queue": [item.strand_set for item in self.review_queue],
+            "errors": [error.strand_set for error in self.errors],
+        }
 
     def fatal_errors(self) -> list[ExecutionError]:
         """Errors that actually blocked an entity — i.e. were not recovered by a reroute
         and whose entity reached none of its targets. A failure on one branch of an
         otherwise-resolved entity (partial success) is reported but *not* fatal, so a
         caller can exit non-zero only when the request truly could not be met."""
-        resolved_ids = {id(ss) for ss in self.resolved}
+        resolved_ids = {entity_key(ss) for ss in self.resolved}
         return [
-            e for e in self.errors
-            if not e.recovered and id(e.strand_set) not in resolved_ids
+            e
+            for e in self.errors
+            if not e.recovered and entity_key(e.strand_set) not in resolved_ids
         ]
 
     def to_json(self) -> dict[str, Any]:
+        # References encode object relationships, not entity_id labels. Their
+        # deterministic numbering is local to this result, without global IDs.
+        references: dict[int, int] = {}
+        entity_refs: dict[str, list[int]] = {}
+        for bucket, entities in self._entity_buckets().items():
+            entity_refs[bucket] = [
+                references.setdefault(id(ss), len(references)) for ss in entities
+            ]
         return {
             "resolved": [ss.to_json() for ss in self.resolved],
-            "unresolved": [
-                [ss.to_json(), wr.to_json()] for ss, wr in self.unresolved
-            ],
+            "unresolved": [[ss.to_json(), wr.to_json()] for ss, wr in self.unresolved],
             "review_queue": [item.to_json() for item in self.review_queue],
             "errors": [e.to_json() for e in self.errors],
             "references": [r.to_json() for r in self.references],
+            "entity_refs": entity_refs,
+            "truncations": [item.to_json() for item in self.truncations],
         }
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ExecutionResult:
-        return cls(
+        result = cls(
             resolved=[StrandSet.from_json(ss) for ss in data.get("resolved", [])],
             unresolved=[
                 (StrandSet.from_json(ss), WeaveResult.from_json(wr))
                 for ss, wr in data.get("unresolved", [])
             ],
-            review_queue=[
-                ReviewQueueItem.from_json(item) for item in data.get("review_queue", [])
-            ],
+            review_queue=[ReviewQueueItem.from_json(item) for item in data.get("review_queue", [])],
             errors=[ExecutionError.from_json(e) for e in data.get("errors", [])],
             references=[Reference.from_json(r) for r in data.get("references", [])],
+            truncations=[
+                ExpansionTruncation.from_json(item) for item in data.get("truncations", [])
+            ],
         )
+        if "entity_refs" not in data:
+            # Legacy snapshots did not preserve aliases. Keep them readable;
+            # guessing links by label/content would conflate duplicate inputs.
+            return result
+        entity_refs = data["entity_refs"]
+        if not isinstance(entity_refs, dict):
+            raise TypeError("entity_refs must be a mapping of buckets to references")
+        entities_by_ref: dict[int, StrandSet] = {}
+        buckets: dict[str, list[StrandSet]] = {}
+        for bucket, entities in result._entity_buckets().items():
+            refs = entity_refs.get(bucket)
+            if not isinstance(refs, list) or len(refs) != len(entities):
+                raise ValueError(f"entity_refs.{bucket} must match its bucket length")
+            restored: list[StrandSet] = []
+            for ref, ss in zip(refs, entities, strict=True):
+                if type(ref) is not int or ref < 0:
+                    raise ValueError("entity references must be non-negative integers")
+                existing = entities_by_ref.setdefault(ref, ss)
+                if existing != ss:
+                    raise ValueError(f"conflicting entity snapshots for reference {ref}")
+                restored.append(existing)
+            buckets[bucket] = restored
+        result.resolved = buckets["resolved"]
+        result.unresolved = [
+            (ss, wr) for ss, (_, wr) in zip(buckets["unresolved"], result.unresolved, strict=True)
+        ]
+        for ss, item in zip(buckets["review_queue"], result.review_queue, strict=True):
+            item.strand_set = ss
+        for ss, error in zip(buckets["errors"], result.errors, strict=True):
+            error.strand_set = ss
+        return result
 
 
 class LocalExecutor:
     """Runs a Braid against a list of StrandSets in-process with asyncio.
 
-    Every input entity lands in exactly one bucket of the returned
-    ``ExecutionResult`` (resolved / unresolved / review_queue / errors), unless a
-    RAISE policy or ``BackendConfigurationError`` aborts the whole run.
+    Terminal entities appear in resolved, unresolved, review_queue or fatal
+    errors. Branch diagnostics can also accompany successful entities. Fan-out
+    counts terminal children rather than their input roots. A RAISE policy or
+    ``BackendConfigurationError`` can abort the whole run.
     """
 
     def __init__(
@@ -257,7 +419,7 @@ class LocalExecutor:
         review_policy: ReviewPolicy = ReviewPolicy.HALT,
         error_policy: ErrorPolicy = ErrorPolicy.RECORD_AND_CONTINUE,
         merge_policy: MergePolicy = MergePolicy.HIGHEST_CONFIDENCE,
-        expand_policy: ExpandPolicy = ExpandPolicy(),
+        expand_policy: ExpandPolicy = _DEFAULT_EXPAND_POLICY,
         expand_by_type: dict[str, ExpandPolicy] | None = None,
         params: dict[str, dict[str, Any]] | None = None,
         confidence_threshold: float = 0.0,
@@ -266,115 +428,187 @@ class LocalExecutor:
         backend_policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
         reroute: bool = True,
         on_event: Callable[[dict], None] | None = None,
+        _expansion_budget: _ExpansionBudget | None = None,
+        on_checkpoint: Callable[[Any], None] | None = None,
     ) -> ExecutionResult:
-        result = ExecutionResult()
-        # Citations for every source this braid draws on (issue #1). Computed from the
-        # plan up front so the result carries its references regardless of outcome.
-        result.references = list(references_for_braid(braid, self._registry))
-
-        # Preflight (once): entities missing the braid's starting types fail here.
-        survivors: list[StrandSet] = []
-        for ss in strand_sets:
-            missing = braid.from_types - ss.available_types()
-            if missing:
-                result.errors.append(
-                    ExecutionError(
-                        strand_set=ss,
-                        error_type="MissingInputError",
-                        message=f"missing required input types: {sorted(missing)}",
-                        step_index=None,
-                        capability_id=None,
-                        category=ErrorCategory.INPUT,
-                    )
-                )
-            else:
-                survivors.append(ss)
-
-        # Entities that errored mid-braid and still miss a target — candidates for a
-        # one-shot reroute around the failed node(s). Collected only when reroute is on.
-        reroute_out: list[tuple[StrandSet, frozenset[tuple[str, str]]]] | None = (
-            [] if reroute else None
+        state = self.start_state(
+            braid,
+            strand_sets,
+            review_policy=review_policy,
+            error_policy=error_policy,
+            merge_policy=merge_policy,
+            expand_policy=expand_policy,
+            expand_by_type=expand_by_type,
+            params=params,
+            confidence_threshold=confidence_threshold,
+            chunk_size=chunk_size,
+            max_expansion=max_expansion,
+            backend_policy=backend_policy,
+            reroute=reroute,
+            _expansion_budget=_expansion_budget,
         )
+        return await self.continue_state(state, on_event=on_event, on_checkpoint=on_checkpoint)
 
-        # Chunked processing: each chunk runs through all steps before the next.
-        for start in range(0, len(survivors), chunk_size):
-            chunk = survivors[start : start + chunk_size]
-            await self._run_chunk(
-                braid,
-                chunk,
-                result,
-                review_policy=review_policy,
-                error_policy=error_policy,
-                merge_policy=merge_policy,
-                expand_policy=expand_policy,
-                expand_by_type=expand_by_type or {},
-                params=params or {},
-                confidence_threshold=confidence_threshold,
-                max_expansion=max_expansion,
-                reroute_out=reroute_out,
-                on_event=on_event,
-            )
-
-        if reroute_out:
-            await self._reroute(
-                braid,
-                reroute_out,
-                result,
-                review_policy=review_policy,
-                error_policy=error_policy,
-                merge_policy=merge_policy,
-                expand_policy=expand_policy,
-                expand_by_type=expand_by_type or {},
-                params=params or {},
-                confidence_threshold=confidence_threshold,
-                max_expansion=max_expansion,
-                backend_policy=backend_policy,
-            )
-        return result
-
-    async def _reroute(
+    def start_state(
         self,
-        braid: Braid,
-        candidates: list[tuple[StrandSet, frozenset[tuple[str, str]]]],
-        result: ExecutionResult,
+        braid,
+        strand_sets,
         *,
-        backend_policy: BackendPolicy,
-        **run_kwargs: Any,
-    ) -> None:
-        """One bounded re-plan per error-stranded entity, around its failed node(s).
+        review_policy=ReviewPolicy.HALT,
+        error_policy=ErrorPolicy.RECORD_AND_CONTINUE,
+        merge_policy=MergePolicy.HIGHEST_CONFIDENCE,
+        expand_policy=_DEFAULT_EXPAND_POLICY,
+        expand_by_type=None,
+        params=None,
+        confidence_threshold=0.0,
+        chunk_size=10_000,
+        max_expansion=10_000,
+        backend_policy=BackendPolicy.LOCAL_FIRST,
+        reroute=True,
+        _expansion_budget=None,
+    ):
+        """Create a serializable state without source I/O; execute remains the legacy facade."""
+        from braidworks.core.execution_state import ExecutionState
 
-        For each entity that errored mid-braid and still misses a target, re-plan from
-        what it *currently has* to the missing targets with the failed capabilities
-        excluded. If the graph offers an alternate route (e.g. a second producer of an
-        intermediate type), run it and the entity joins ``resolved`` — its original
-        error stays in ``result.errors`` but flagged ``recovered``. If no route exists,
-        the entity stays reported by its existing error (a clean "else, just report").
-        """
+        if not 0 <= confidence_threshold <= 1:
+            raise ValueError("confidence_threshold must be between 0 and 1")
+        if type(chunk_size) is not int or chunk_size < 1:
+            raise ValueError("chunk_size must be a positive integer")
+        budget = _expansion_budget or _ExpansionBudget(max_expansion, len(strand_sets))
+        for ss in strand_sets:
+            budget.identify(ss)
+        settings = {
+            "review_policy": review_policy.value,
+            "error_policy": error_policy.value,
+            "merge_policy": merge_policy.value,
+            "expand": expand_policy.mode.value,
+            "k": expand_policy.k,
+            "expand_by_type": {
+                key: {"mode": value.mode.value, "k": value.k}
+                for key, value in (expand_by_type or {}).items()
+            },
+            "params": params or {},
+            "confidence_threshold": confidence_threshold,
+            "chunk_size": chunk_size,
+            "backend_policy": backend_policy.value,
+            "reroute": reroute,
+        }
+        return ExecutionState(braid, strand_sets, settings, budget)
+
+    async def continue_state(
+        self, state: ExecutionState, *, on_event=None, on_checkpoint=None
+    ) -> ExecutionResult:
+        """Continue a value snapshot after fully applied waves; no source replay before its cursor."""
+        from braidworks.core.execution_state import ExecutionState
         from braidworks.core.planner import Braider
 
-        braider = Braider(self._registry)
-        for ss, failed_caps in candidates:
-            missing = braid.to_types - ss.available_types()
-            if not missing:
-                result.resolved.append(ss)  # nothing left to route; targets already met
-                _flag_recovered(result, ss)
-                continue
-            try:
-                alt = braider.plan(
-                    ss.available_types(), missing,
-                    backend_policy=backend_policy, exclude=failed_caps,
+        if state.in_wave:
+            raise ValueError("Load the last checkpoint after an interrupted/unapplied wave")
+        settings = state.settings
+        options = {
+            "review_policy": ReviewPolicy(settings["review_policy"]),
+            "error_policy": ErrorPolicy(settings["error_policy"]),
+            "merge_policy": MergePolicy(settings["merge_policy"]),
+            "expand_policy": ExpandPolicy(ExpandMode(settings["expand"]), settings["k"]),
+            "expand_by_type": {
+                key: ExpandPolicy(ExpandMode(value["mode"]), value["k"])
+                for key, value in settings["expand_by_type"].items()
+            },
+            "params": settings["params"],
+            "confidence_threshold": settings["confidence_threshold"],
+            "expansion_budget": state.budget,
+            "on_event": on_event,
+        }
+
+        def checkpoint():
+            if on_checkpoint is not None:
+                on_checkpoint(state)
+
+        if not state.initialized:
+            state.result.references = list(references_for_braid(state.braid, self._registry))
+            for ss in state.inputs:
+                missing = state.braid.from_types - ss.available_types()
+                if missing:
+                    state.result.errors.append(
+                        ExecutionError(
+                            ss,
+                            "MissingInputError",
+                            f"missing required input types: {sorted(missing)}",
+                            category=ErrorCategory.INPUT,
+                        )
+                    )
+                else:
+                    state.survivors.append(ss)
+            state.initialized = True
+            checkpoint()
+        if state.stage == "chunks":
+            while state.chunk_start < len(state.survivors):
+                chunk = state.survivors[
+                    state.chunk_start : state.chunk_start + settings["chunk_size"]
+                ]
+                await self._run_chunk(
+                    state.braid,
+                    chunk,
+                    state.result,
+                    reroute_out=state.reroute_candidates if settings["reroute"] else None,
+                    state=state,
+                    checkpoint=checkpoint,
+                    **options,
                 )
-            except (NoPathError, NoPlanError):
-                continue  # no alternate path → entity stays reported via its error
-            sub = await self.execute(
-                alt, [ss], backend_policy=backend_policy, reroute=False, **run_kwargs
-            )
-            result.resolved.extend(sub.resolved)
-            result.unresolved.extend(sub.unresolved)
-            result.review_queue.extend(sub.review_queue)
-            result.errors.extend(sub.errors)
-            if sub.resolved:
-                _flag_recovered(result, ss)
+                state.chunk_start += len(chunk)
+                state.chunk_active = False
+                state.live = []
+                checkpoint()
+            state.stage = "reroute"
+            checkpoint()
+        if state.stage == "reroute":
+            while state.reroute_index < len(state.reroute_candidates):
+                ss, failed = state.reroute_candidates[state.reroute_index]
+                missing = state.braid.to_types - ss.available_types()
+                if not missing:
+                    state.result.resolved.append(ss)
+                    _flag_recovered(state.result, ss)
+                else:
+                    if state.reroute_state is None:
+                        try:
+                            alt = Braider(self._registry).plan(
+                                ss.available_types(),
+                                missing,
+                                backend_policy=BackendPolicy(settings["backend_policy"]),
+                                exclude=failed,
+                            )
+                        except (NoPathError, NoPlanError):
+                            alt = None
+                        if alt is not None:
+                            state.reroute_state = ExecutionState(
+                                alt, [ss], {**settings, "reroute": False}, state.budget
+                            )
+                    if state.reroute_state is not None:
+                        sub = await self.continue_state(
+                            state.reroute_state,
+                            on_event=on_event,
+                            on_checkpoint=lambda _: checkpoint(),
+                        )
+                        for bucket in (
+                            "resolved",
+                            "unresolved",
+                            "review_queue",
+                            "errors",
+                            "truncations",
+                        ):
+                            getattr(state.result, bucket).extend(getattr(sub, bucket))
+                        refs = {
+                            ref.weaver_id: ref for ref in state.result.references + sub.references
+                        }
+                        state.result.references = [refs[key] for key in sorted(refs)]
+                        if sub.resolved:
+                            _flag_recovered(state.result, ss)
+                state.reroute_state = None
+                state.reroute_index += 1
+                checkpoint()
+            state.stage = "done"
+            checkpoint()
+        return state.result
 
     async def _run_chunk(
         self,
@@ -389,94 +623,70 @@ class LocalExecutor:
         expand_by_type: dict[str, ExpandPolicy],
         params: dict[str, dict[str, Any]],
         confidence_threshold: float,
-        max_expansion: int,
+        expansion_budget: _ExpansionBudget,
         reroute_out: list[tuple[StrandSet, frozenset[tuple[str, str]]]] | None = None,
         on_event: Callable[[dict], None] | None = None,
+        state: ExecutionState,
+        checkpoint=None,
     ) -> None:
-        live = list(chunk)  # entities still progressing (not terminally bucketed)
-        terminal: set[int] = set()  # id(entity) already placed in errors/review_queue
-        representative: dict[int, WeaveResult] = {}  # a NO_MATCH to attach if unresolved
-        # id(entity) -> the (weaver, capability) it errored on. A step error is
-        # branch-local (the entity keeps flowing through its other branches); this records
-        # the failed node(s) so a fully-blocked entity can be rerouted around them.
-        errored: dict[int, set[tuple[str, str]]] = {}
+        if not state.chunk_active:
+            state.live = list(chunk)
+            state.terminal = set()
+            state.representative = {}
+            state.errored = {
+                entity_key(ss): {
+                    tuple(pair)
+                    for pair in state.settings.get("prior_errors", {}).get(entity_key(ss), [])
+                }
+                for ss in chunk
+                if state.settings.get("prior_errors", {}).get(entity_key(ss))
+            }
+            state.wave_index = 0
+            state.chunk_active = True
+        live = state.live
+        representative = state.representative
+        errored = state.errored
         waves = braid.waves()
 
-        for wi, wave in enumerate(waves):
+        for wi in range(state.wave_index, len(waves)):
+            wave = waves[wi]
             if not live:
                 break
             # Children spawned by fan-out this wave; folded into ``live`` afterwards so
             # they flow through the remaining waves alongside un-forked entities.
-            spawned: list[StrandSet] = []
             # Steps in a wave are independent → run them concurrently. Each job only
             # awaits I/O and never mutates an entity, so results are merged afterwards
             # in deterministic step order (no shared-state hazard across the gather).
+            state.in_wave = True
             jobs = [self._run_step_over(braid, si, live, params) for si in wave]
             wave_results = await asyncio.gather(*jobs)
             # Live progress hook (e.g. weaverkit serve's light-up): one event per wave as
             # its steps finish, naming the capabilities that ran. Off by default.
             if on_event is not None:
-                on_event({
-                    "wave": wi,
-                    "capabilities": [inv.capability_id for _si, inv, _outs in wave_results],
-                })
-            remaining_steps = tuple(
-                braid.steps[si] for later in waves[wi + 1 :] for si in later
-            )
-
-            for step_index, invocation, outs in sorted(wave_results, key=lambda t: t[0]):
-                cap = self._registry.get_capability(
-                    invocation.weaver_id, invocation.capability_id
+                on_event(
+                    {
+                        "wave": wi,
+                        "capabilities": [inv.capability_id for _si, inv, _outs in wave_results],
+                    }
                 )
-                for ss, kind, payload in outs:
-                    if id(ss) in terminal:
-                        continue
-                    if kind == "skipped":
-                        ss.completion.append(
-                            StepOutcome(invocation.capability_id, "", "skipped")
-                        )
-                        continue
-                    if kind == "satisfied":
-                        produced = tuple(
-                            sorted(invocation.output_types & ss.available_types())
-                        )
-                        ss.completion.append(
-                            StepOutcome(invocation.capability_id, "", "ok", produced)
-                        )
-                        continue
-                    self._apply_result(
-                        ss,
-                        payload,
-                        step_index,
-                        invocation,
-                        cap.set_outputs,
-                        remaining_steps,
-                        result,
-                        terminal,
-                        representative,
-                        spawned,
-                        errored,
-                        review_policy=review_policy,
-                        error_policy=error_policy,
-                        merge_policy=merge_policy,
-                        expand_policy=expand_policy,
-                        expand_by_type=expand_by_type,
-                        confidence_threshold=confidence_threshold,
-                    )
-
-            if terminal:
-                live = [ss for ss in live if id(ss) not in terminal]
-            if spawned:
-                room = max_expansion - len(live)
-                if room < len(spawned):
-                    logger.warning(
-                        "fan-out cap %d reached: dropping %d of %d expanded entities",
-                        max_expansion,
-                        len(spawned) - max(room, 0),
-                        len(spawned),
-                    )
-                    spawned = spawned[: max(room, 0)]
-                live.extend(spawned)
+            remaining_steps = tuple(braid.steps[si] for later in waves[wi + 1 :] for si in later)
+            self._apply_wave(
+                state,
+                wave_results,
+                remaining_steps,
+                review_policy=review_policy,
+                error_policy=error_policy,
+                merge_policy=merge_policy,
+                expand_policy=expand_policy,
+                expand_by_type=expand_by_type,
+                confidence_threshold=confidence_threshold,
+                expansion_budget=expansion_budget,
+            )
+            live = state.live
+            state.wave_index = wi + 1
+            state.in_wave = False
+            if checkpoint is not None:
+                checkpoint()
 
         # Survivors: resolved if any requested target type was produced (branches are
         # best-effort enrichment — empty branches are recorded in completion, not a
@@ -486,13 +696,84 @@ class LocalExecutor:
         for ss in live:
             if braid.to_types & ss.available_types():
                 result.resolved.append(ss)  # may carry a reported error on a failed branch
-            elif id(ss) in errored:
+            elif entity_key(ss) in errored:
                 if reroute_out is not None:
-                    reroute_out.append((ss, frozenset(errored[id(ss)])))
+                    reroute_out.append((ss, frozenset(errored[entity_key(ss)])))
                 # else already reported via its ExecutionError(s) in result.errors
             else:
-                rep = representative.get(id(ss)) or self._synth_no_match(braid)
+                rep = representative.get(entity_key(ss)) or self._synth_no_match(braid)
                 result.unresolved.append((ss, rep))
+
+    def _apply_wave(
+        self,
+        state,
+        wave_results,
+        remaining_steps,
+        *,
+        review_policy,
+        error_policy,
+        merge_policy,
+        expand_policy,
+        expand_by_type,
+        confidence_threshold,
+        expansion_budget,
+    ):
+        """Deterministic transition over fetched values; performs no source/cache I/O."""
+        live = state.live
+        result = state.result
+        terminal = state.terminal
+        representative = state.representative
+        errored = state.errored
+        spawned = []
+        ordered = sorted(wave_results, key=lambda t: t[0])
+        for step_index, invocation, outs in ordered:
+            cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
+            for ss, kind, payload in outs:
+                if entity_key(ss) in terminal:
+                    continue
+                if kind == "skipped":
+                    ss.completion.append(StepOutcome(invocation.capability_id, "", "skipped"))
+                    continue
+                if kind == "satisfied":
+                    produced = tuple(sorted(invocation.output_types & ss.available_types()))
+                    ss.completion.append(StepOutcome(invocation.capability_id, "", "ok", produced))
+                    continue
+                review_count = len(result.review_queue)
+                pending = tuple(inv for si, inv, _ in ordered if si > step_index) + remaining_steps
+                self._apply_result(
+                    ss,
+                    payload,
+                    step_index,
+                    invocation,
+                    cap.set_outputs,
+                    pending,
+                    result,
+                    terminal,
+                    representative,
+                    spawned,
+                    errored,
+                    review_policy=review_policy,
+                    error_policy=error_policy,
+                    merge_policy=merge_policy,
+                    expand_policy=expand_policy,
+                    expand_by_type=expand_by_type,
+                    confidence_threshold=confidence_threshold,
+                    expansion_budget=expansion_budget,
+                )
+                for item in result.review_queue[review_count:]:
+                    item.continuation.update(
+                        invocation=invocation.to_json(),
+                        to_types=sorted(state.braid.to_types),
+                        prior_errors=[
+                            list(pair) for pair in sorted(errored.get(entity_key(ss), set()))
+                        ],
+                    )
+
+        if terminal:
+            live = [ss for ss in live if entity_key(ss) not in terminal]
+        if spawned:
+            live.extend(spawned)
+        state.live = live
 
     async def _run_step_over(
         self,
@@ -544,11 +825,27 @@ class LocalExecutor:
                 misses.append(ss)
 
         if misses:
-            miss_results = await self._resolve_misses(
-                cap, invocation, misses, effective_params
-            )
+            miss_results = await self._resolve_misses(cap, invocation, misses, effective_params)
             for ss, r in zip(misses, miss_results):
                 if r.status is not WeaveStatus.ERROR:
+                    # Internal computation alone does not make a group reusable:
+                    # shared mappers deliberately omit unrequested group strands.
+                    # Keep triggered groups even when optional values are absent,
+                    # and retain richer groups actually emitted by custom weavers.
+                    payloads = [r.strands]
+                    if r.status is WeaveStatus.AMBIGUOUS and r.candidates:
+                        payloads = [candidate.strands for candidate in r.candidates]
+                    emitted_groups = frozenset(
+                        group.id
+                        for group in cap.output_groups
+                        if all(
+                            any(strand.type_id in group.outputs for strand in payload)
+                            for payload in payloads
+                        )
+                    )
+                    cached_result = replace(
+                        r, computed_groups=r.computed_groups & (triggered | emitted_groups)
+                    )
                     # Cache every non-error result (incl. NO_MATCH/AMBIGUOUS), keyed by
                     # the backend that produced it, so a second pass is a hit.
                     self._cache.put(
@@ -561,7 +858,7 @@ class LocalExecutor:
                             backend_fingerprint=weaver.backend_fingerprint(r.backend_used),
                             params=effective_params,
                         ),
-                        r,
+                        cached_result,
                     )
                 outs.append((ss, "result", r))
         return (step_index, invocation, outs)
@@ -607,14 +904,10 @@ class LocalExecutor:
                 break
 
             next_pending: list[int] = []
-            for i, r in zip(pending_idx, batch_results):
+            for i, r in zip(pending_idx, batch_results, strict=True):
                 retryable = (
-                    r.status is WeaveStatus.NO_MATCH
-                    and FallbackCondition.NO_MATCH in fallback_on
-                ) or (
-                    r.status is WeaveStatus.ERROR
-                    and FallbackCondition.ERROR in fallback_on
-                )
+                    r.status is WeaveStatus.NO_MATCH and FallbackCondition.NO_MATCH in fallback_on
+                ) or (r.status is WeaveStatus.ERROR and FallbackCondition.ERROR in fallback_on)
                 if retryable and not is_last:
                     next_pending.append(i)  # only affected entities move on
                 else:
@@ -640,16 +933,20 @@ class LocalExecutor:
             sub_batches = [entities[i : i + size] for i in range(0, len(entities), size)]
         out: list[WeaveResult] = []
         for sb in sub_batches:
-            out.extend(
-                await self._runner.run_step(
-                    invocation.weaver_id,
-                    invocation.capability_id,
-                    backend,
-                    sb,
-                    requested,
-                    params=params,
-                )
+            batch = await self._runner.run_step(
+                invocation.weaver_id,
+                invocation.capability_id,
+                backend,
+                sb,
+                requested,
+                params=params,
             )
+            validate_batch_size(
+                len(sb),
+                len(batch),
+                context=f"{invocation.weaver_id}.{invocation.capability_id} [{backend}] runner",
+            )
+            out.extend(batch)
         return out
 
     def _apply_result(
@@ -661,10 +958,10 @@ class LocalExecutor:
         set_outputs: frozenset[str],
         remaining_steps: tuple[CapabilityInvocation, ...],
         result: ExecutionResult,
-        terminal: set[int],
-        representative: dict[int, WeaveResult],
+        terminal: set[str | int],
+        representative: dict[str | int, WeaveResult],
         spawned: list[StrandSet],
-        errored: dict[int, set[tuple[str, str]]],
+        errored: dict[str | int, set[tuple[str, str]]],
         *,
         review_policy: ReviewPolicy,
         error_policy: ErrorPolicy,
@@ -672,6 +969,7 @@ class LocalExecutor:
         expand_policy: ExpandPolicy,
         expand_by_type: dict[str, ExpandPolicy],
         confidence_threshold: float,
+        expansion_budget: _ExpansionBudget,
     ) -> None:
         """Fold one step's result into an entity and record its completion outcome.
 
@@ -679,15 +977,15 @@ class LocalExecutor:
         going, so a failed branch (e.g. one DB that 5xx'd) never discards the data its
         sibling branches already produced. An ERROR additionally classifies the failure
         and notes the failed node so a fully-blocked entity can be rerouted; only
-        ``ErrorPolicy.RAISE`` makes it abort. AMBIGUOUS is governed by ``expand_policy``:
-        with candidates it collapses (``TOP``) or forks (``TOP_K``/``ALL``); with none it
-        falls back to the review/raise path. OK + review is entity-terminal under HALT.
+        ``ErrorPolicy.RAISE`` makes it abort. AMBIGUOUS pauses under HALT; an explicit
+        ALLOW_CONTINUE permits TOP selection or TOP_K/ALL expansion, subject to the
+        confidence floor. OK + review is entity-terminal under HALT.
         """
         cap_id = invocation.capability_id
 
         if r.status is WeaveStatus.NO_MATCH:
             ss.completion.append(StepOutcome(cap_id, r.backend_used, "no_match"))
-            representative.setdefault(id(ss), r)
+            representative.setdefault(entity_key(ss), r)
             return
 
         if r.status is WeaveStatus.ERROR:
@@ -710,37 +1008,62 @@ class LocalExecutor:
             ss.completion.append(StepOutcome(cap_id, r.backend_used, "error"))
             # Branch-local: record the failed node and keep the entity live so its other
             # branches still run; a fully-blocked entity is rerouted after the chunk.
-            errored.setdefault(id(ss), set()).add(
-                (invocation.weaver_id, cap_id)
-            )
+            errored.setdefault(entity_key(ss), set()).add((invocation.weaver_id, cap_id))
             return
 
         if r.status is WeaveStatus.AMBIGUOUS:
+            if review_policy is ReviewPolicy.RAISE:
+                raise ReviewRequired(f"ambiguous result at step {step_index} ({cap_id})")
+            if review_policy is ReviewPolicy.HALT:
+                result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
+                terminal.add(entity_key(ss))
+                return
             # Cardinality fan-out: when the result carries candidates, ``ExpandPolicy``
             # decides how many successors continue — TOP collapses to the best one,
             # TOP_K/ALL fork the entity into independent children. With no candidates
             # there is nothing to pick or fork, so fall back to today's review/raise.
             if r.candidates:
+                selected = _rank_candidates(r.candidates)[
+                    : expand_policy.fork_count(len(r.candidates))
+                ]
+                below_threshold = confidence_threshold > 0 and any(
+                    candidate.confidence < confidence_threshold
+                    or any(strand.confidence < confidence_threshold for strand in candidate.strands)
+                    for candidate in selected
+                )
+                if below_threshold:
+                    result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
+                    terminal.add(entity_key(ss))
+                    return
+                # Auto-selection must not erase that the source was ambiguous.
+                ss.requires_review = True
+                ss.warnings.extend(r.warnings)
+                ss.errors.extend(r.errors)
                 self._expand_candidates(
-                    ss, r, cap_id, spawned, terminal, expand_policy, merge_policy
+                    ss,
+                    r,
+                    cap_id,
+                    spawned,
+                    terminal,
+                    expand_policy,
+                    merge_policy,
+                    expansion_budget,
+                    result,
                 )
                 return
-            if review_policy is ReviewPolicy.RAISE:
-                raise ReviewRequired(f"ambiguous result at step {step_index} ({cap_id})")
             result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
-            terminal.add(id(ss))
+            terminal.add(entity_key(ss))
             return
 
         # status is OK.
-        needs_review = r.requires_review or self._below_threshold(r, confidence_threshold)
+        below_threshold = self._below_threshold(r, confidence_threshold)
+        needs_review = r.requires_review or below_threshold
         if needs_review:
             if review_policy is ReviewPolicy.RAISE:
-                raise ReviewRequired(
-                    f"result requires review at step {step_index} ({cap_id})"
-                )
-            if review_policy is ReviewPolicy.HALT:
+                raise ReviewRequired(f"result requires review at step {step_index} ({cap_id})")
+            if review_policy is ReviewPolicy.HALT or below_threshold:
                 result.review_queue.append(ReviewQueueItem(ss, r, remaining_steps))
-                terminal.add(id(ss))
+                terminal.add(entity_key(ss))
                 return
             # ReviewPolicy.ALLOW_CONTINUE falls through to merge and continue.
 
@@ -770,6 +1093,8 @@ class LocalExecutor:
                 expand_policy,
                 expand_by_type,
                 merge_policy,
+                expansion_budget,
+                result,
             )
 
     def _expand_candidates(
@@ -778,9 +1103,11 @@ class LocalExecutor:
         r: WeaveResult,
         cap_id: str,
         spawned: list[StrandSet],
-        terminal: set[int],
+        terminal: set[str | int],
         expand_policy: ExpandPolicy,
         merge_policy: MergePolicy,
+        expansion_budget: _ExpansionBudget,
+        result: ExecutionResult,
     ) -> None:
         """Resolve an AMBIGUOUS result's candidates per ``expand_policy``.
 
@@ -796,9 +1123,7 @@ class LocalExecutor:
             for strand in best.strands:
                 ss.add_strand(strand, merge_policy)
             ss.completion.append(
-                StepOutcome(
-                    cap_id, r.backend_used, "ok", tuple(s.type_id for s in best.strands)
-                )
+                StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in best.strands))
             )
             if n > 1:
                 # Not a silent collapse: record that N-1 alternatives were discarded.
@@ -811,15 +1136,15 @@ class LocalExecutor:
         # leaves regroup to the original query even if a later step forks again.
         root = ss.parent_id if ss.parent_id is not None else ss.entity_id
         take = expand_policy.fork_count(n)
+        take = expansion_budget.reserve(take, ss, cap_id, result)
         for i, cand in enumerate(ranked[:take]):
             child = ss.clone(entity_id=f"{ss.entity_id}#{i}", parent_id=root)
             for strand in cand.strands:
                 child.add_strand(strand, merge_policy)
             child.completion.append(
-                StepOutcome(
-                    cap_id, r.backend_used, "ok", tuple(s.type_id for s in cand.strands)
-                )
+                StepOutcome(cap_id, r.backend_used, "ok", tuple(s.type_id for s in cand.strands))
             )
+            expansion_budget.identify(child)
             spawned.append(child)
         if take < n:
             logger.warning(
@@ -829,7 +1154,7 @@ class LocalExecutor:
                 n,
                 cap_id,
             )
-        terminal.add(id(ss))  # the parent is replaced by its children
+        terminal.add(entity_key(ss))  # the parent is replaced by its children
 
     def _expand_set_outputs(
         self,
@@ -837,10 +1162,12 @@ class LocalExecutor:
         set_outputs: frozenset[str],
         cap_id: str,
         spawned: list[StrandSet],
-        terminal: set[int],
+        terminal: set[str | int],
         expand_policy: ExpandPolicy,
         expand_by_type: dict[str, ExpandPolicy],
         merge_policy: MergePolicy,
+        expansion_budget: _ExpansionBudget,
+        result: ExecutionResult,
     ) -> None:
         """Fork ``ss`` on each set-valued produced join key, per its ``ExpandPolicy``.
 
@@ -870,49 +1197,57 @@ class LocalExecutor:
             return
 
         root = ss.parent_id if ss.parent_id is not None else ss.entity_id
-        working = [ss]  # expand one dimension at a time → cross-product of all dims
-        forked = False
+        forks: list[tuple[str, list, Strand]] = []
         for type_id, values, policy, strand in dims:
             take = policy.fork_count(len(values))
-            kept = values[:take]
-
-            def _scalar(value: object) -> Strand:
-                return Strand(
-                    type_id, value, confidence=strand.confidence, provenance=strand.provenance
+            if take == 1:
+                ss.add_strand(
+                    Strand(
+                        type_id,
+                        values[0],
+                        confidence=strand.confidence,
+                        provenance=strand.provenance,
+                        metadata=dict(strand.metadata),
+                    ),
+                    MergePolicy.LAST_WINS,
                 )
+                if len(values) > 1:
+                    ss.warnings.append(
+                        f"ExpandPolicy.{policy.mode.name}: auto-selected 1 of "
+                        f"{len(values)} {type_id} at {cap_id}"
+                    )
+            else:
+                forks.append((type_id, values[:take], strand))
+                if take < len(values):
+                    ss.warnings.append(
+                        f"ExpandPolicy.{policy.mode.name}: kept {take} of "
+                        f"{len(values)} {type_id} at {cap_id}"
+                    )
+        if not forks:
+            return
 
-            if len(kept) <= 1:  # TOP / TOP_K(1): collapse the list to one value in place
-                for w in working:
-                    w.add_strand(_scalar(kept[0]), MergePolicy.LAST_WINS)
-                if len(values) > 1:  # not silent: record the N→1 collapse
-                    for w in working:
-                        w.warnings.append(
-                            f"ExpandPolicy.{policy.mode.name}: auto-selected 1 of "
-                            f"{len(values)} {type_id} at {cap_id}"
-                        )
-                continue
-
-            next_working: list[StrandSet] = []
-            for w in working:
-                for i, value in enumerate(kept):
-                    child = w.clone(entity_id=f"{w.entity_id}#{i}", parent_id=root)
-                    child.add_strand(_scalar(value), MergePolicy.LAST_WINS)
-                    next_working.append(child)
-            working = next_working
-            forked = True
-            if take < len(values):
-                logger.warning(
-                    "ExpandPolicy.%s: kept %d of %d %s at %s",
-                    policy.mode.name,
-                    take,
-                    len(values),
-                    type_id,
-                    cap_id,
+        requested = prod(len(values) for _, values, _ in forks)
+        take = expansion_budget.reserve(requested, ss, cap_id, result)
+        # Enumerate only retained combinations, cloning once per final child.
+        # Dimension order and nested IDs match the previous cross-product order.
+        combinations = product(*(range(len(values)) for _, values, _ in forks))
+        for indices in islice(combinations, take):
+            suffix = "".join(f"#{index}" for index in indices)
+            child = ss.clone(entity_id=ss.entity_id + suffix, parent_id=root)
+            for (type_id, values, strand), index in zip(forks, indices, strict=True):
+                child.add_strand(
+                    Strand(
+                        type_id,
+                        values[index],
+                        confidence=strand.confidence,
+                        provenance=strand.provenance,
+                        metadata=dict(strand.metadata),
+                    ),
+                    MergePolicy.LAST_WINS,
                 )
-
-        if forked:
-            terminal.add(id(ss))  # the parent is replaced by its children
-            spawned.extend(working)
+            expansion_budget.identify(child)
+            spawned.append(child)
+        terminal.add(entity_key(ss))
 
     @staticmethod
     def _below_threshold(r: WeaveResult, threshold: float) -> bool:
@@ -933,9 +1268,7 @@ class LocalExecutor:
         )
 
     @staticmethod
-    def _synth_error(
-        invocation: CapabilityInvocation, backend: str, message: str
-    ) -> WeaveResult:
+    def _synth_error(invocation: CapabilityInvocation, backend: str, message: str) -> WeaveResult:
         return WeaveResult(
             capability_id=invocation.capability_id,
             weaver_version="",

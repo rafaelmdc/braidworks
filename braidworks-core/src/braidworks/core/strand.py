@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from braidworks.core.keytypes import canonicalize
@@ -124,6 +124,10 @@ class StrandSet:
     # input* it descended from, so callers can regroup leaves by the original query.
     # ``None`` for a plain input set that was never forked.
     parent_id: str | None = None
+    # Optional ordinal supplied by a batch caller; preserved through fan-out.
+    source_row: int | None = None
+    # Internal execution identity; user labels and duplicate rows remain independent.
+    execution_key: str | None = None
 
     @classmethod
     def from_strands(cls, entity_id: str, strands: list[Strand]) -> StrandSet:
@@ -141,6 +145,10 @@ class StrandSet:
             errors=list(self.errors),
             completion=list(self.completion),
             parent_id=parent_id if parent_id is not None else self.parent_id,
+            source_row=self.source_row,
+            execution_key=self.execution_key
+            if entity_id is None or entity_id == self.entity_id
+            else None,
         )
 
     def restricted_to(self, type_ids: Iterable[str]) -> StrandSet:
@@ -202,6 +210,8 @@ class StrandSet:
             "errors": list(self.errors),
             "completion": [o.to_json() for o in self.completion],
             "parent_id": self.parent_id,
+            "source_row": self.source_row,
+            **({"execution_key": self.execution_key} if self.execution_key is not None else {}),
         }
 
     @classmethod
@@ -214,4 +224,11 @@ class StrandSet:
             errors=list(data.get("errors", [])),
             completion=[StepOutcome.from_json(o) for o in data.get("completion", [])],
             parent_id=data.get("parent_id"),
+            source_row=data.get("source_row"),
+            execution_key=data.get("execution_key"),
         )
+
+
+def entity_key(strand_set: StrandSet) -> str | int:
+    """Stable executor key, with identity fallback for unexecuted legacy values."""
+    return strand_set.execution_key if strand_set.execution_key is not None else id(strand_set)

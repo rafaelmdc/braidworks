@@ -10,12 +10,13 @@ from __future__ import annotations
 from braidworks.core import (
     Capability,
     OutputGroup,
+    Parameter,
     Provenance,
     WeaverManifest,
 )
 
 WEAVER_ID = "wikipedia"
-WEAVER_VERSION = "0.1.0"
+WEAVER_VERSION = "0.1.8"
 WEAVER_TITLE = "Wikipedia pageviews (enwiki article title -> recent pageview count)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -28,12 +29,7 @@ PROVENANCE = Provenance(
 
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
-    """Declare every capability for the wired-in backends.
-
-    ``describe_pageviews`` is served by either backend — the live REST api or the
-    dump-built local SQLite — so it's declared for whichever are wired.
-    """
-    served = tuple(b for b in ("api", "local") if b in backends)
+    """Declare every capability for the wired-in backends."""
     return WeaverManifest(
         weaver_id=WEAVER_ID,
         version=WEAVER_VERSION,
@@ -43,9 +39,64 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_pageviews",
                 consumes=frozenset({"wikipedia.title"}),
-                produces=frozenset({"wikipedia.pageviews"}),
-                output_groups=(OutputGroup(id="core", outputs=frozenset({"wikipedia.pageviews"})),),
-                backends=served,
+                produces=frozenset(
+                    {
+                        "wikipedia.pageviews",
+                        "wikipedia.pageviews.measurement",
+                        "wikipedia.pageviews.series",
+                        "wikipedia.pageviews.title",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikipedia.pageviews", "wikipedia.pageviews.measurement"}
+                        ),
+                    ),
+                    OutputGroup(
+                        id="series",
+                        outputs=frozenset(
+                            {"wikipedia.pageviews.series", "wikipedia.pageviews.title"}
+                        ),
+                    ),
+                ),
+                backends=tuple(
+                    b
+                    for b in (
+                        "api",
+                        "local",
+                    )
+                    if b in backends
+                ),
+                parameters=(
+                    Parameter(
+                        name="months",
+                        type="int",
+                        enum=(),
+                        default=None,
+                        description="Completed monthly bins (API default 12; local supports only 1)",
+                    ),
+                    Parameter(
+                        name="end_month",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="Final completed month YYYYMM (API default previous month; local dump month)",
+                    ),
+                    Parameter(
+                        name="agent",
+                        type="string",
+                        enum=(
+                            "all-agents",
+                            "user",
+                            "spider",
+                            "automated",
+                        ),
+                        default=None,
+                        description="Agent scope (API default all-agents; local supports only user)",
+                    ),
+                ),
             ),
         ),
     )

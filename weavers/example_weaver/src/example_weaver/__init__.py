@@ -5,8 +5,8 @@ from example_weaver.provider import ExampleWeaverProvider, register
 from example_weaver.weaver import ExampleWeaver
 
 __all__ = [
-    "build_example_weaver",
-    "register",
     "ExampleWeaver",
     "ExampleWeaverProvider",
+    "build_example_weaver",
+    "register",
 ]

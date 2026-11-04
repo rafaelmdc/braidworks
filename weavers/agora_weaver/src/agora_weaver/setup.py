@@ -14,16 +14,15 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
+import re
 import urllib.request
+import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
-from braidworks.core.localdb import auto_consented
+from braidworks.core.localdb import USER_AGENT, auto_consented, ensure_local_db
 from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
-from braidworks.core.localdb import USER_AGENT
-from braidworks.core.localdb import ensure_local_db
 from braidworks.core.localdb import md5_file as _md5_file
 
 from agora_weaver import dataset
@@ -35,12 +34,11 @@ DEFAULT_SBML_URL = (
     "sbml_files_fixed/zipped/AGORA2_models/AGORA2_SBML.zip"
 )
 DEFAULT_REACTIONS_API = "https://www.vmh.life/_api/reactions/"
-# Per-model SBML: individual model files live alongside the zip, so the metabolic-model
-# capability fetches just the ~8 MB model a caller asks for (lazy, cached) rather than the
-# 2.17 GB archive — the substrate for the metabolic.complementarity layer (seed-set / SMETANA).
+# VMH's current single-model service. Explicit family selection prevents the
+# default/multiple-version route from silently returning AGORA1 or APOLLO.
+# It generates SBML for this release; it is not the byte-identical archive XML.
 DEFAULT_INDIVIDUAL_SBML_BASE = (
-    "https://www.vmh.life/files/reconstructions/AGORA2/version2.01/"
-    "sbml_files/individual_reconstructions/"
+    "https://vmh.life/api/getMicrobeReconstructions?version=agora2_2.01&format=sbml&id="
 )
 
 _NAMESPACE = "agora"
@@ -68,11 +66,66 @@ def default_sbml_cache_dir() -> Path:
     return default_db_path().parent / _SBML_CACHE_DIRNAME
 
 
+class InvalidSBML(ValueError):
+    """A model artifact is malformed or is not an SBML model."""
+
+
+def _validate_model_id(reconstruction_id: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", reconstruction_id):
+        raise ValueError("reconstruction_id must be a safe model identifier")
+
+
+def validate_model_sbml(path: Path) -> str:
+    """Stream-validate complete XML with an SBML root and one identified model.
+
+    This is structural validation, not complete SBML schema/biochemical validation.
+    """
+    root_seen = False
+    model_id = None
+    depth = 0
+    try:
+        for event, element in ET.iterparse(path, events=("start", "end")):
+            tag = element.tag.rsplit("}", 1)[-1]
+            if event == "start":
+                if not root_seen:
+                    if tag != "sbml" or (
+                        element.tag.startswith("{")
+                        and not element.tag.startswith("{http://www.sbml.org/sbml/")
+                    ):
+                        raise InvalidSBML("model artifact must have an SBML root")
+                    root_seen = True
+                elif depth == 1 and tag == "model":
+                    if model_id is not None or not element.get("id"):
+                        raise InvalidSBML("SBML must contain one model with a nonempty id")
+                    model_id = element.get("id")
+                depth += 1
+            else:
+                depth -= 1
+                element.clear()
+    except ET.ParseError as exc:
+        raise InvalidSBML(f"invalid SBML XML: {exc}") from exc
+    if model_id is None:
+        raise InvalidSBML("SBML artifact contains no identified model")
+    return model_id
+
+
+def model_sbml_is_valid(path: Path) -> bool:
+    try:
+        validate_model_sbml(path)
+        return True
+    except (OSError, InvalidSBML):
+        return False
+
+
 def individual_sbml_url(
     reconstruction_id: str, *, base_url: str = DEFAULT_INDIVIDUAL_SBML_BASE
 ) -> str:
     """VMH URL for a single AGORA2 model's SBML file."""
-    return f"{base_url}{reconstruction_id}.xml"
+    _validate_model_id(reconstruction_id)
+    if base_url == DEFAULT_INDIVIDUAL_SBML_BASE:
+        return f"{base_url}{reconstruction_id}"
+    # Explicit caller-configured directories retain the original XML convention.
+    return f"{base_url.rstrip('/')}/{reconstruction_id}.xml"
 
 
 def ensure_model_sbml(
@@ -84,23 +137,33 @@ def ensure_model_sbml(
 ) -> Path | None:
     """Ensure a single model's SBML is cached locally; return its path (or None).
 
-    Cached files are returned instantly. A missing model is downloaded only if consented
-    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (the caller omits the
-    output, mirroring how ``reactions`` is skipped when its DB is absent). ~8 MB per model.
+    Cached files are structurally validated before return. A missing model is downloaded only if consented
+    (``auto`` or ``BRAIDWORKS_AUTO_DOWNLOAD``); otherwise ``None`` (a requested unavailable model becomes a backend error record). Size varies by reconstruction; no archive download.
     """
+    _validate_model_id(reconstruction_id)
     directory = Path(cache_dir) if cache_dir is not None else default_sbml_cache_dir()
     target = directory / f"{reconstruction_id}.xml"
-    if target.exists() and target.stat().st_size > 0:
+    if model_sbml_is_valid(target):
         return target
     if not auto_consented(auto):
         return None
-    directory.mkdir(parents=True, exist_ok=True)
-    _download(
-        individual_sbml_url(reconstruction_id, base_url=base_url),
+
+    def build(staged: Path) -> None:
+        _download(
+            individual_sbml_url(reconstruction_id, base_url=base_url),
+            staged,
+            label=f"AGORA2 model {reconstruction_id}",
+        )
+        validate_model_sbml(staged)
+
+    return ensure_local_db(
         target,
-        label=f"AGORA2 model {reconstruction_id}",
+        is_valid=model_sbml_is_valid,
+        build=build,
+        consent_message=f"AGORA2 SBML for {reconstruction_id} requires download consent",
+        auto=auto,
+        min_free_bytes=32 * 1024**2,
     )
-    return target if target.exists() and target.stat().st_size > 0 else None
 
 
 def default_db_path() -> Path:
@@ -110,18 +173,7 @@ def default_db_path() -> Path:
 
 def db_is_valid(path: Path) -> bool:
     """Return whether ``path`` is a readable, populated reaction DB."""
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    except sqlite3.Error:
-        return False
-    try:
-        return con.execute("SELECT 1 FROM reaction LIMIT 1").fetchone() is not None
-    except sqlite3.Error:
-        return False
-    finally:
-        con.close()
+    return dataset.reaction_db_is_valid(path)
 
 
 def _consent_message(db_path: Path) -> str:
@@ -167,14 +219,20 @@ def _build_reaction_db(tmp_db: Path, *, sbml_url: str, reactions_api: str) -> No
     """Build callback for ``ensure_local_db``: download SBML zip + fetch crosswalk -> SQLite."""
     archive = tmp_db.parent / "AGORA2_SBML.zip"
     logger.info("acquiring AGORA2 SBML archive -> %s (%s)", archive, sbml_url)
-    _download(sbml_url, archive, label="Downloading AGORA2 SBML archive")
-    content_hash = _md5_file(archive)
-    rxn_info = list(_fetch_reaction_crosswalk(reactions_api))
-    written = dataset.build_reaction_db(archive, rxn_info, tmp_db, content_hash=content_hash)
-    archive.unlink(missing_ok=True)
-    if written == 0:
-        raise ValueError("no reactions parsed from the AGORA2 SBML archive (download corrupt?)")
-    logger.info("AGORA2 reaction DB built: %s (%d reaction rows)", tmp_db, written)
+    try:
+        _download(sbml_url, archive, label="Downloading AGORA2 SBML archive")
+        content_hash = _md5_file(archive)
+        written = dataset.build_reaction_db(
+            archive,
+            _fetch_reaction_crosswalk(reactions_api),
+            tmp_db,
+            content_hash=content_hash,
+            annotation_source=reactions_api,
+            sbml_source=sbml_url,
+        )
+        logger.info("AGORA2 reaction DB built: %s (%d reaction rows)", tmp_db, written)
+    finally:
+        archive.unlink(missing_ok=True)
 
 
 def ensure_agora_db(

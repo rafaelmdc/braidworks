@@ -186,7 +186,7 @@ description = "Assembly completeness filter"
   change a weaver's manifest/behaviour, patch-bump all three. If a backend now needs a
   newer core API, raise its `braidworks-core>=` floor in the same change.
 - **Do NOT create git tags by hand.** Tagging is automated:
-  `.github/workflows/release-tags.yml` runs on every push to `main` and creates+pushes
+  `.github/workflows/ci.yml` runs on every push to `main` and, after validation succeeds, creates+pushes
   `<package>-v<version>` for any package whose current version isn't tagged yet. So:
   bump the version in your PR, merge, and the tag appears on its own. Locally,
   `make tags-check` lists missing tags; `make tags` creates them.
@@ -205,7 +205,8 @@ description = "Assembly completeness filter"
 - **Never return `"unknown"` (or empty) from a fingerprint.** It silently disables
   cache invalidation. Use a release tag, dump date, or checksum.
 - **Don't hand-edit generated `vocab.py`.** It mirrors the spec (capabilities +
-  `provenance` + `title`). Change the spec and regenerate (`weaverkit new --force`);
+  `provenance` + `title`). Change the spec, generate into a scratch directory, and selectively copy reviewed vocab
+  (see `weaverkit/docs/safe-regeneration.md`);
   `verify` checks the two stay in sync. **Exception:** `ncbi_weaver` is hand-written
   ("bring your own plumbing" reference) — its `vocab.py` has custom module-level
   constants, so regenerating it from the scaffold *clobbers* them; edit it by hand. The

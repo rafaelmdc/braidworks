@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from example_weaver import vocab
 from example_weaver.factory import build_example_weaver
 
@@ -32,13 +32,13 @@ class TestLocalOrder(WeaverOrderContractTests):
         return weaver
 
     def sample_strand_sets(self):
-        # TODO: replace with >=5 real, distinct inputs from the source.
+        # All five bundled IDs exercise successful records under the unchanged contract.
         samples = [
             {"ncbi.taxon.id": "562"},
             {"ncbi.taxon.id": "1423"},
-            {"ncbi.taxon.id": "sample-0"},
-            {"ncbi.taxon.id": "sample-1"},
-            {"ncbi.taxon.id": "sample-2"},
+            {"ncbi.taxon.id": "1280"},
+            {"ncbi.taxon.id": "1773"},
+            {"ncbi.taxon.id": "1351"},
         ]
         return [
             StrandSet.from_strands(f"e{i}", [Strand(t, v) for t, v in values.items()])
@@ -48,7 +48,7 @@ class TestLocalOrder(WeaverOrderContractTests):
 
 class TestResolveTraitsCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("describe_traits")
-    consumed_values_a = {"ncbi.taxon.id": "562"}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "562"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "traits.core"
     group_superset = "traits.growth"

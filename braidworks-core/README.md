@@ -1,45 +1,46 @@
 # braidworks-core
 
-The domain-neutral framework at the centre of Braidworks: the data model, the planner,
-the executor, weaver discovery, and the `braidworks` command-line interface. Pure stdlib
-plus `networkx`. **No real weavers live here** — they're separate packages that plug in via
-the `braidworks.weavers` entry point.
+Core provides the domain-neutral data model, planner, executor, source discovery and
+`braidworks` query CLI. Biological adapters live in separate weaver packages and join
+through registered input/output types. Runtime dependencies are networkx for routing
+and platformdirs for local paths.
 
-## Concepts
+## Query and inspect sources
 
-| Abstraction | What it is |
+Install core with the weavers your analysis needs. Start with [installation](../docs/installation.md)
+and [query usage](../docs/usage.md), or follow a [researcher tutorial](../docs/index.md#learn-through-a-tutorial).
+The CLI plans across sources with `weave`, calls one capability with `run`, and exposes
+inventory, keys, paths and references through its inspection commands.
+
+Use `fetch`/`async_fetch` for ordinary Python lookups. Applications needing configured
+registries, expansion or managed execution can use the explicit query service;
+[Python usage](../docs/usage.md#query-from-python) includes complete examples.
+
+## Concepts and exact contracts
+
+| Component | Responsibility |
 |---|---|
-| `Strand` | one typed fact (`type_id` + value), e.g. `protein.query = "P04637"` |
-| `StrandSet` | all the strands for one entity, threaded through a run |
-| `Capability` / `WeaverManifest` | a weaver's typed declaration of what it consumes → produces (with `set_outputs` for one→many fan keys) |
-| `BraidRegistry` | the set of registered weavers, projected into a type→type graph |
-| `Braider` | the planner: finds a route from the types you have to the types you want |
-| `LocalExecutor` | runs a plan in batch, with caching, review hooks, and fan-out (`ExpandPolicy`) |
-| `ExecutionResult` | the outcome, bucketed into `resolved` / `unresolved` / `review_queue` |
+| `Strand`, `StrandSet` | Typed values and the values belonging to one input entity |
+| `Capability`, `WeaverManifest` | Declared inputs, outputs, groups, parameters and backend availability |
+| `BraidRegistry`, `Braider` | Registered sources and routes between types |
+| `LocalExecutor` | Batched execution, caching, review and related-entity expansion |
+| `ExecutionResult`, `FetchResult` | Outcomes, retained values and coverage |
 
-Discovery (`build_registry_from_entry_points`) loads every installed weaver from the
-`braidworks.weavers` entry-point group, so the CLI and an arq worker share one mechanism.
+Read [architecture](../docs/architecture.md) for how these pieces fit together.
+Use [core contracts](../docs/core-contracts.md) and [the reference index](../docs/reference/index.md)
+for interfaces and invariants. [Discovery reference](../docs/reference/discovery.md)
+describes strict/tolerant loading and its failure report.
 
-## The `braidworks` CLI
+## Saved observations and progress
 
-Installing this package puts a `braidworks` command on your PATH — query and inspect the
-weaver network from the shell (`weave`, `run`, `weavers`, `keys`, `path`, `references`).
-See the [top-level README](../README.md#2-ask-a-question--from-the-shell) and
-[docs/usage.md](../docs/usage.md).
+Caching and durable run storage are opt-in. Use [cache and saved-run tasks](../docs/persistence.md)
+to configure local paths and continue work; [storage reference](../docs/reference/persistence.md)
+retains TTLs, leases, ownership and compatibility rules. Observation archives are
+separate exports; see [export tasks](../docs/results.md) and [archive reference](../docs/reference/results.md#run-archives).
 
-## Python API
+## Contribute and license
 
-```python
-from braidworks.core import BraidRegistry, Braider, LocalExecutor, Strand, StrandSet
-
-registry = BraidRegistry()
-registry.register(some_weaver)                     # or build_registry_from_entry_points()
-braid = Braider(registry).plan(
-    available_types=frozenset({"protein.query"}),
-    target_types=frozenset({"protein.name"}),
-)
-result = await LocalExecutor(registry).execute(braid, strand_sets)
-```
-
-Design rationale and the full contract: [docs/architecture.md](../docs/architecture.md).
-Tests: `make test-core` (or `cd braidworks-core && uv run --extra test pytest`).
+Run `make test-core` from the workspace root. Follow [contributing](../CONTRIBUTING.md)
+and [repository rules](../AGENTS.md); package-index availability is not assumed.
+The software uses [MIT](LICENSE). Provider data and samples retain their own licenses
+and attribution requirements as declared by each weaver.

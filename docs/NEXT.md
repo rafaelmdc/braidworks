@@ -1,72 +1,58 @@
-# What's next (start here)
+# Current project decisions and backlog
 
-Cold-start orientation for the next working session. Written 2026-06-15, after the
-engine/CI hardening push (core `0.7.1`).
+Updated 2026-10-15. Completed readiness/refactoring and approved weaver work have
+been pushed to the review branch; they have not been merged or published. Historical
+plans remain in [design history](history.md). This page summarizes the open queue,
+not the instructions for using Braidworks.
 
-## Where things stand (all merged, green, tagged)
+## Decisions deliberately left open
 
-The **engine is mature**: routing, cardinality fan-out, traversal (`--for-each` /
-`--traverse`), error-tolerant weaving (a node failure is branch-local + rerouted around),
-interchangeable-source fallback, classified/legible errors, and the full `braidworks`
-CLI. **CI is hardened**: PR lint+test, scheduled live E2E with green-lightable triage,
-CodeQL, Dependabot, idempotent release tags, Node-24 actions. Nine weavers ship, plus the
-offline network visualizer (`make view`) and a runnable bench-biology demo
-(`docs/demo.sh`). So the next move is **reach and polish, not plumbing**.
+| Work | Status |
+|---|---|
+| [Publication channel and release activation (#142)](https://github.com/rafaelmdc/braidworks/issues/142) | Deferred. Checkout/wheel installs are documented; package publication needs the owner's release decision. |
+| [Further cache/resume scope (#143)](https://github.com/rafaelmdc/braidworks/issues/143) | Deferred follow-up. Opt-in SQLite caches, saved runs, and human continuation interfaces already exist; see [persistence](persistence.md). |
+| [GTDB cross-tree distance semantics (#234)](https://github.com/rafaelmdc/braidworks/issues/234) | Deferred. Tree identity/distance changes need a deliberate design decision. |
 
-Audience decided: **bench biologists**; the flagship is the molecular hub
-(`protein.query` → UniProt → PDBe / AlphaFold / STRING / Reactome / QuickGO).
+The [GTDB parent (#165)](https://github.com/rafaelmdc/braidworks/issues/165) and
+[weaver programme (#147)](https://github.com/rafaelmdc/braidworks/issues/147) remain
+open for the deferred GTDB finding.
 
----
+## Platform cleanup loop
 
-## ▶ Recommended next task: `uniprot resolve_mapping` (the gene→protein bridge)
+The eight-issue loop is resolved. Work is on pushed branches, without merge or
+publication. Each later branch includes the preceding changes.
 
-**Why it's #1:** it adds the single missing edge **`gene.ncbi.id → protein.uniprot.accession`**,
-which lets the ortholog fan-out flow *into* the protein hub. That upgrades the demo's third
-act from "TP53's orthologs' names" to the real payoff — **"TP53 across the primates, and
-here's each one's 3D structure / pathways / interactions."** It's also the long-deferred
-top item on the roadmap (see [weaver-roadmap.md](weaver-roadmap.md) §0), so it does double
-duty: best demo upgrade *and* clears the backlog.
+| Issue | Resolution | Branch / record |
+|---|---|---|
+| [#132](https://github.com/rafaelmdc/braidworks/issues/132) | Implemented backend diagnostics | `feat/backend-availability-diagnostics`; [acceptance](audits/backend-availability.plan.md#acceptance-record) |
+| [#131](https://github.com/rafaelmdc/braidworks/issues/131) | Implemented acquisition progress/socket limits | `fix/acquisition-progress`; [record](audits/acquisition-progress.md) |
+| [#133](https://github.com/rafaelmdc/braidworks/issues/133) | Fixed status classification; retained existing error boundaries | `fix/error-classification`; [review](audits/error-boundaries.md) |
+| [#135](https://github.com/rafaelmdc/braidworks/issues/135) | Implemented explicit AGORA universe; automatic pruning rejected | `feat/agora-taxid-universe`; [decision](audits/explicit-source-coverage.md) |
+| [#67](https://github.com/rafaelmdc/braidworks/issues/67) | Generated exact inventories and CI drift checks | `feat/generated-capability-docs`; [record](audits/generated-capability-docs.md) |
+| [#86](https://github.com/rafaelmdc/braidworks/issues/86) | Consolidated validation; gated automatic tags | `ci/consolidate-validation`; [record](audits/workflow-consolidation.md) |
+| [#112](https://github.com/rafaelmdc/braidworks/issues/112) | Not planned after reviewing current declarations | [Decision](audits/declaration-storage-decisions.md#112--strand-decorators-not-planned) |
+| [#64](https://github.com/rafaelmdc/braidworks/issues/64) | Not planned after reviewing current vocabulary storage | [Decision](audits/declaration-storage-decisions.md#64--key-database-not-planned) |
 
-**Scope:**
-- New capability on `uniprot_weaver` — e.g. `resolve_mapping`: consumes `gene.ncbi.id`
-  (NCBI GeneID), produces `protein.uniprot.accession`. Backed by the UniProt **ID-mapping
-  REST API** (`https://rest.uniprot.org/idmapping`, `GeneID` → `UniProtKB`).
-- Once that edge exists, `--for-each orthologs` → each ortholog `gene.ncbi.id` →
-  `resolve_mapping` → accession → existing PDBe/AlphaFold/Reactome/STRING describes. The
-  planner + fan-out compose it automatically; no new traversal needed.
+The final branch, `docs/declaration-storage-decisions`, contains the full loop.
+See the [final acceptance record](audits/platform-loop-acceptance.md) for complete verification.
+No runtime decorator or key-database feature was added for the two rejected ideas.
+They can be reopened with a concrete workflow that changes the assessment.
 
-**Check before committing to it (the one risk):** UniProt's ID-mapping endpoint is
-**async** (submit a job, poll for results) — more involved than a single GET, and the
-existing uniprot backend is synchronous search. And **coverage is sparse for non-model
-orthologs** (many won't have a reviewed UniProt/PDB entry), so a 20-primate fan may return
-mostly `NO_MATCH`. Probe coverage for a real ortholog set (e.g. TP53's mammalian orthologs)
-**first**; if it's thin, lead the demo with the human dossier + a couple of well-covered
-orthologs rather than the full fan.
+## Documentation review
 
----
+[First-pass readability work (#299)](https://github.com/rafaelmdc/braidworks/issues/299)
+reorganizes onboarding and current guides. The [accuracy follow-up (#300)](https://github.com/rafaelmdc/braidworks/issues/300)
+reconciles active source summaries and generated catalogues; see the
+[accuracy findings](audits/documentation-accuracy.md). The [Diátaxis map](audits/documentation-diataxis.md)
+identifies remaining organization work. Three [researcher tutorials](index.md#learn-through-a-tutorial)
+cover protein structures, microbial functional evidence and disease associations.
+Result/storage reference is separate from tasks and explanation. Toolkit/core/source
+entry pages and pacing/local-data guides now link their detailed reference homes.
+The three lessons remain provisional. Final researcher examples and joint reader
+testing are deferred until platform work settles; see the
+[Diátaxis implementation record](audits/documentation-diataxis.md#third-implementation-increment).
 
-## Then, in priority order
-
-1. **Animate the visualizer.** It's already the pitch piece (`weaverkit view`); making a
-   braid *light up as it executes* is what lands in a talk. Pure front-end, no data wiring.
-2. **Breadth for cross-domain questions** — a **disease / MeSH hub** (bridge molecular ↔
-   clinical) or **`string → KEGG`** (`pathway.kegg.id`, mind the KEGG-licensing note in
-   roadmap §7). Each unlocks a new class of question.
-3. **A second taxonomy source (Ensembl / DDBJ).** Would actually *exercise* the
-   interchangeable-source reroute we built — right now nothing triggers it.
-
-## Known issues the live E2E surfaced (small, don't forget)
-
-- **Reactome detail endpoint is down upstream** — `describe_pathway` (`/data/query/{id}`)
-  500s/404s because their Neo4j is unreachable. `list_pathways` (counts/names) is fine. The
-  live triage green-lights it; monitor and re-test, or add a fallback.
-- **NCBI 429s** on unauthenticated Datasets v2 — add backoff or an API key to that backend
-  so live runs are cleaner (currently green-lightable, but noisy).
-- **Phase-5 large-scale E2E** (from the original roadmap) was never run.
-
-## Pointers
-
-- Strategic roadmap + weaver catalogue: [weaver-roadmap.md](weaver-roadmap.md)
-- How to add a weaver (mechanical): [../CONTRIBUTING.md](../CONTRIBUTING.md) + `make new-weaver`
-- Live demo to run/show: [demo.sh](demo.sh)
-- Agent memory has the full session history (traversal, error-tolerance, demo, CI efforts).
+For release checks use [release rehearsal](releasing.md). For evidence of delivered
+work use [weaver acceptance](audits/weavers/remaining-features.plan.md) and
+[refactoring acceptance](refactoring/final-acceptance.md). Local verification does
+not replace remote CI or a production distributed-deployment rehearsal.

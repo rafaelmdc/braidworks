@@ -1,28 +1,27 @@
 # bacdive_weaver
 
-BacDive type-strain phenotypes — a microbe's curated type-strain traits (morphology,
-physiology, growth) keyed by scientific name, over the free, keyless BacDive API. A
-terminal weaver off the organism layer; chains behind `ncbi_weaver` (which produces the
-scientific name) or `uniprot_weaver` (organism of a protein).
+Retrieve strain phenotypes and source evidence from BacDive. A scientific-name trait lookup
+selects a type-strain representative; exact strain IDs and collection/genome mappings support
+strain-specific work. A representative does not describe every isolate of a species. The API is
+keyless.
 
 - **Source:** https://bacdive.dsmz.de · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkab961 — BacDive (DSMZ)
 - **Backend:** `api` (keyless) · **Discoverable as** `bacdive`
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `describe_traits` | `organism.scientific_name` | **morphology:** `microbe.trait.gram_stain`, `microbe.trait.cell_shape` · **physiology:** `microbe.trait.motility`, `microbe.trait.spore_formation`, `microbe.trait.oxygen_tolerance` · **growth:** `microbe.trait.optimum_temp`, `microbe.trait.optimum_ph` |
+| Capability | Use it to |
+|---|---|
+| `describe_traits` | Retrieve representative type-strain traits |
+| `list_strains` | List observed type and non-type strains |
+| `describe_strain` | Inspect an exact strain |
+| `map_to_strain` | Map collection/genome identifiers to strain IDs |
+| `map_from_strain` | Map strain IDs to observed collection/genome references |
 
-Requesting any output computes its group; the mapper emits only the requested slice.
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-## Type-strain representative
-
-BacDive describes **type strains**, not arbitrary isolates, so a species name resolves to
-its type strain's curated phenotype — deterministic and the canonical reference for the
-taxon. A name with no BacDive entry is a clean `NO_MATCH`.
-
-## Use it
+## Run a query
 
 Once installed it is auto-discovered by the `braidworks` CLI:
 
@@ -40,12 +39,20 @@ weaver = build_bacdive_weaver()        # zero-config
 # In an app that wires a WeaverFactory, `bacdive_weaver.register(factory)` adds it as a provider.
 ```
 
-## Develop
+## Setup, interpretation and contribution
 
-```bash
-make verify                        # spec ↔ manifest, reachability, real fingerprints (--strict adds golden)
-make test                          # conformance + contract + golden, fully offline
-BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live BacDive API (schema-drift detector)
-```
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

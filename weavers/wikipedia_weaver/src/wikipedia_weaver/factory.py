@@ -14,16 +14,17 @@ Two-builder convention (see weaverkit/docs/decisions.md C/D):
 from __future__ import annotations
 
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import httpx
-
 from braidworks.core import BackendConfigurationError, BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from wikipedia_weaver.backends.api import WikipediaApiBackend
 from wikipedia_weaver.backends.local import WikipediaLocalBackend
-from wikipedia_weaver.setup import default_db_path, ensure_pageviews_db
+from wikipedia_weaver.setup import db_is_valid, default_db_path, ensure_pageviews_db
 from wikipedia_weaver.weaver import WikipediaWeaver
 
 _DUMP_MONTH_RE = re.compile(r"pageviews-(\d{4})(\d{2})-")
@@ -50,6 +51,11 @@ def build_wikipedia_weaver(
     refresh: bool = False,
     enable_api: bool = False,
     api_client: httpx.AsyncClient | None = None,
+    api_base_url: str | None = None,
+    api_months: int = 12,
+    api_end_month: str | None = None,
+    api_agent: str = "all-agents",
+    api_max_concurrency: int = 4,
     **_ignore: Any,
 ) -> BaseWeaver:
     """Assemble the weaver from config.
@@ -60,11 +66,32 @@ def build_wikipedia_weaver(
     passed. With **no** backend-selecting argument, returns the zero-config introspection
     weaver (both backends declared; local unconfigured, api keyless).
     """
+    reject_unknown_options(_ignore)
     backends: dict[str, Any] = {}
 
-    want_local = db_path is not None or dump_path is not None or auto_setup
+    want_local = (
+        db_path is not None
+        or dump_path is not None
+        or auto_setup
+        or year is not None
+        or month is not None
+    )
     if want_local:
         y, mo = year, month
+        if (year is None) != (month is None):
+            raise BackendConfigurationError("pass both year and month")
+        if (
+            y is None
+            and mo is None
+            and dump_path is None
+            and db_path is not None
+            and db_is_valid(Path(db_path))
+        ):
+            with sqlite3.connect(f"file:{Path(db_path).absolute()}?mode=ro", uri=True) as con:
+                stamp = con.execute("SELECT value FROM metadata WHERE key='dump_month'").fetchone()[
+                    0
+                ]
+            y, mo = int(stamp[:4]), int(stamp[4:])
         if (y is None or mo is None) and dump_path is not None:
             y, mo = _month_from_dump(dump_path)
         if y is None or mo is None:
@@ -73,13 +100,32 @@ def build_wikipedia_weaver(
                 "(or a dump_path= named pageviews-YYYYMM-user.bz2)"
             )
         resolved = ensure_pageviews_db(
-            db_path, year=y, month=mo, dump_path=dump_path,
-            auto=auto_setup, refresh=refresh,
+            db_path,
+            year=y,
+            month=mo,
+            dump_path=dump_path,
+            auto=auto_setup,
+            refresh=refresh,
         )
         backends["local"] = WikipediaLocalBackend(resolved)
 
-    if enable_api or api_client is not None:
-        backends["api"] = WikipediaApiBackend(client=api_client)
+    if (
+        enable_api
+        or api_client is not None
+        or api_base_url is not None
+        or api_months != 12
+        or api_end_month is not None
+        or api_agent != "all-agents"
+        or api_max_concurrency != 4
+    ):
+        backends["api"] = WikipediaApiBackend(
+            **({"base_url": api_base_url} if api_base_url is not None else {}),
+            client=api_client,
+            months=api_months,
+            end_month=api_end_month,
+            agent=api_agent,
+            max_concurrency=api_max_concurrency,
+        )
 
     if not backends:
         # Zero-config introspection: wire both present-but-possibly-unconfigured (local
@@ -94,7 +140,9 @@ def build_wikipedia_weaver_fixture() -> BaseWeaver:
     """Fixture-backed weaver for ``verify --strict`` golden — canned api, no network."""
     from wikipedia_weaver.fixture import mock_client
 
-    return WikipediaWeaver({"api": WikipediaApiBackend(client=mock_client())})
+    return WikipediaWeaver(
+        {"api": WikipediaApiBackend(client=mock_client(), months=2, end_month="202502")}
+    )
 
 
 def build_wikipedia_weaver_local_fixture(db_path: str | Path) -> BaseWeaver:

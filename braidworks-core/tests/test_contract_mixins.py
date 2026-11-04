@@ -5,9 +5,10 @@ This both exercises the mixins and demonstrates the intended subclassing pattern
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.testing import CacheFingerprintTests, WeaverOrderContractTests
-
 from helpers import ScriptedWeaver, ok_result, resolve_name_capability
 
 ID = "ncbi.taxon.id"
@@ -35,6 +36,6 @@ class TestScriptedWeaverOrder(WeaverOrderContractTests):
 
 class TestResolveNameCacheFingerprint(CacheFingerprintTests):
     capability = resolve_name_capability()
-    consumed_values_a = {"organism.name": "Homo sapiens"}
-    consumed_values_b = {"organism.name": "Mus musculus"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"organism.name": "Homo sapiens"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"organism.name": "Mus musculus"}
     # group_subset="core" / group_superset="lineage" defaults match this capability.

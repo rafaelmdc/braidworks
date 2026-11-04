@@ -16,7 +16,6 @@ from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import StrandSet
 from braidworks.core.weaver import BaseWeaver
-
 from weaverkit.view import (
     build_network,
     build_path,

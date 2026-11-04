@@ -11,6 +11,8 @@ from __future__ import annotations
 
 # type_id -> one-line description (what it identifies / who produces it).
 SHARED_KEYS: dict[str, str] = {
+    "microbe.agora.reconstruction_id": "Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it.",
+    "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
     # Entry point
     "organism.name": "The text you start from — an organism name.",
     # Organism layer (ncbi_weaver / gtdb_weaver)
@@ -25,6 +27,7 @@ SHARED_KEYS: dict[str, str] = {
     # Molecular layer (uniprot_weaver hinge + hubs)
     "protein.query": "The text you start from — a gene symbol, protein name, or accession.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "string.id": "Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping.",
     "gene.ncbi.id": "NCBI Gene id for one gene.",
     "gene.ensembl.id": "Ensembl gene id for one gene.",
     "gene.symbol": "A gene's official symbol, e.g. TP53 — joins gene databases.",
@@ -35,16 +38,22 @@ SHARED_KEYS: dict[str, str] = {
     "go.term": "A Gene Ontology term id.",
     "enzyme.ec": "An Enzyme Commission (EC) number.",
     "chem.chebi.id": "A ChEBI chemical id.",
+    "reaction.reactome.id": "Reactome reaction-like event stable identifier; produced by recursive pathway listing and consumed by describe_reaction.",
+    "reaction.vmh.id": "Observed VMH reaction abbreviation; produced by AGORA list_reactions and consumed by describe_reaction.",
     "reaction.rhea.id": "A Rhea reaction id.",
     "pathway.reactome.id": "A Reactome pathway id.",
     "pathway.kegg.id": "A KEGG pathway id.",
     "protein.interpro.id": "An InterPro entry id.",
     "protein.pfam.id": "A Pfam family id.",
     "pdb.id": "A PDB / PDBe structure id.",
+    "culture.collection.id": "Collection-prefix and strain number (e.g. DSM 2801); BacDive produces and consumes observed references with multiplicity.",
+    "metagenome.run_id": "Observed sequencing run accession; produced and consumed by GMrepo run workflows.",
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    "structure.alphafold.model_id": "Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction.",
     # Disease layer (mondo_weaver) — entry points + the unified disease join key
     "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point "
     "for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
+    "disease.disbiome.id": "Provider disease identity produced by Disbiome and consumed by exact disease describe/reverse traversal.",
     "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for "
     "disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
     "disease.name": "A disease name (e.g. 'ulcerative colitis') — a free-text entry point that "
@@ -62,9 +71,60 @@ SHARED_KEYS: dict[str, str] = {
 # a real join target, *promote* it into SHARED_KEYS (a deliberate edit). See
 # weaverkit/docs/decisions.md (Decision F).
 OUTPUT_KEYS: dict[str, str] = {
+    "gtdb.genome.identity": "Observed GTDB genome-specific identity, distinct from species/tree assertions.",
+    "gtdb.genome.quality": "Observed GTDB genome-specific quality, distinct from species/tree assertions.",
+    "gtdb.genome.synonyms": "Observed GTDB genome-specific synonyms, distinct from species/tree assertions.",
+    "gtdb.genome.history": "Observed GTDB genome-specific history, distinct from species/tree assertions.",
+
+    "structure.pdb.entities": "Observed PDBe entities detail with provider identity and availability.",
+    "structure.pdb.assemblies": "Observed PDBe assemblies detail with provider identity and availability.",
+    "structure.pdb.ligands": "Observed PDBe ligands detail with provider identity and availability.",
+    "structure.pdb.mappings": "Observed PDBe mappings detail with provider identity and availability.",
+    "structure.pdb.residues": "Observed PDBe residues detail with provider identity and availability.",
+    "structure.pdb.coordinates": "Observed PDBe coordinates detail with provider identity and availability.",
+
+    "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
+    "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
+    "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
+    "go.term.hierarchy": "Source paths, ancestors, directional replacements and term history.",
+    "pathway.reactome.evidence": "Observed Reactome curation, literature and inference assertions.",
+    "pathway.reactome.reactions": "Recursive reaction-like event listing and display accounting.",
+    "reaction.reactome.detail": "Source reaction participants, literature, curation and inference assertions.",
+    "disease.ontology.definition": "Observed MONDO definition text; absent definitions remain unknown.",
+    "disease.ontology.history": "MONDO current/obsolete status with observed replacement/consider targets and source release identity.",
+    "wikidata.identity": "Requested/current QID, observed redirect and scientific-name source claims.",
+    "wikidata.localized": "Localized label/description with requested and actual language plus explicit English fallback.",
+    "microbe.agora.reconstruction": "One release-qualified model's source taxid/genome associations.",
+    "microbe.agora.reconstructions": "Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set.",
+    "microbe.agora.coverage": "AGORA crosswalk release and full observed versus display counts.",
+    "microbe.agora.genome_listing": "Exact model-to-assembly source associations from the pinned crosswalk.",
+    "microbe.agora.reaction_listing": "Processed-model reaction repertoire with full fan and database source identity.",
+    "reaction.vmh.record": "VMH reaction annotation and observed model membership with database provenance.",
+    "microbe.agora.artifact": "Observed local SBML structural status; release verification and remote availability remain explicit.",
+    "go.term.relations": "Observed typed term children and obsoletion; parents/replacements not inferred.",
+    "pathway.reactome.hierarchy": "Direct observed hasEvent children with distinct pathway/reaction types.",
+    "pathway.reactome.participants": "Typed provider participant references with numeric IDs scoped to observed release.",
+    "ncbi.taxon.history": "Requested/current taxid, merge chain, deletion and dump history availability.",
+    "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
+    "microbe.bacdive.identifier_evidence": "Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions.",
+    "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
+    "gtdb.genome.representative": "Selected species representative accession with source/release provenance; not necessarily the input strain.",
+    "microbe.abundance.run_listing": "Acquired GMrepo runs and exact metadata filters with retained-scope coverage.",
+    "microbe.abundance.run": "One acquired GMrepo sequencing run, metadata and taxonomic profile evidence.",
+    "microbe.abundance.phenotype_listing": "Observed source MeSH phenotype identities for a taxon.",
+    "microbe.abundance.run_metadata": "Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage.",
+    "microbe.ecology.evidence": "Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence.",
+    "structure.pdb.quality": "Observed entry-level PDBe quality metrics with method, availability and missing-value semantics.",
+    "wikipedia.pageviews.series": "Ordered observed monthly bins; absent months are not measured zero.",
+    "wikipedia.pageviews.title": "Supplied English Wikipedia article key and explicit redirect policy.",
+    "structure.alphafold.confidence": "Observed PAE/pLDDT references with model version, coverage and metric semantics.",
+    "structure.alphafold.models": "Capped display of API-observed AlphaFold models; full identities are a separate fan set.",
+    "structure.alphafold.model_coverage": "Observed model/display counts and API-only enumeration scope.",
     # wikidata_weaver / wikipedia_weaver leaf outputs
     "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
-    "wikipedia.pageviews": "Recent English-Wikipedia pageview count for one article — a popularity proxy.",
+    "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",
+    "wikipedia.pageviews": "English-Wikipedia pageview subtotal; compare only matching measurement scopes.",
+    "wikipedia.pageviews.measurement": "Pageview period, project, access, agent and observed/requested monthly-bin coverage.",
     # ncbi_weaver leaf outputs
     "ncbi.taxon.parent_id": "The parent taxon of this organism.",
     "ncbi.taxon.match_type": "How the name resolved to this taxid — exact, synonym, fuzzy, or taxid.",
@@ -85,6 +145,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "genome.assembly.organism": "The source organism of one genome assembly.",
     "genome.assembly.detail": "Full detail of one assembly — submitter, dates, length/GC/N50, gene counts.",
     "genome.sequence.records": "The sequences in one genome — name, role, length, RefSeq/GenBank accession.",
+    "genome.sequence.coverage": "Completion and observed/returned record counts for NCBI sequence reports.",
     # NCBI gene outputs (ncbi_weaver resolve_gene / describe_gene / list_orthologs)
     # (gene.symbol is a shared join key — see SHARED_KEYS — consumed by uniprot map_to_accession)
     "gene.name": "The full name of this gene.",
@@ -92,10 +153,12 @@ OUTPUT_KEYS: dict[str, str] = {
     "gene.organism": "The source organism of this gene.",
     "gene.detail": "Full record of this gene — symbol, description, type, chromosomes, synonyms, xrefs.",
     "gene.product.records": "The transcripts and proteins this gene makes — accessions and names.",
+    "gene.product.coverage": "Completion and observed/returned transcript counts for NCBI product reports.",
     "gene.ortholog.count": "How many orthologs this gene has across organisms.",
     "gene.ortholog.records": "This gene's orthologs — gene id, symbol, organism.",
     # microbe trait outputs (example_weaver / bacdive_weaver / future trait weavers)
     "microbe.trait.gram_stain": "This microbe's Gram stain — positive or negative.",
+    "microbe.trait.records": "Selected strain identity, scope and raw phenotype evidence with conflicts.",
     "microbe.trait.optimum_temp": "The temperature this microbe grows best at.",
     "microbe.trait.metabolism": "How this microbe gets energy — aerobe, anaerobe, …",
     "microbe.trait.cell_shape": "This microbe's cell shape — rod, coccus, …",
@@ -108,6 +171,10 @@ OUTPUT_KEYS: dict[str, str] = {
     "groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, "
     "sulfate_respiration).",
     # microbe–disease association outputs (disbiome_weaver)
+    "microbe.disease.identities": "Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence.",
+    "microbe.disease.taxa": "Exact reverse disease association evidence, publications, rank and full observed taxid fan.",
+    "disease.disbiome.record": "One provider disease identity with retained source records.",
+    "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
     "microbe.disease.names": "The diseases this microbe is linked to.",
     "microbe.disease.count": "How many disease-association experiments mention this microbe.",
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, "
@@ -120,6 +187,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "microbe.abundance.phenotype_names": "The gut-metagenome phenotypes (diseases/health) "
     "this microbe is reported prevalent in (GMrepo).",
     "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.coverage": "GMrepo taxon association acquisition outcome and completeness.",
     "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, "
     "phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
     "microbe.abundance.records": "Full GMrepo abundance rows for this microbe — the global "
@@ -132,6 +200,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "community-flux / seed-set metabolic-complementarity analysis.",
     # disease-ontology outputs (mondo_weaver) — the disease-side feature source
     "disease.ontology.name": "The MONDO term name for this disease.",
+    "disease.ontology.mapping.records": "Observed MONDO mapping relations and source evidence.",
     "disease.ontology.parents": "This disease's direct is-a parents in MONDO — a list of "
     "{mondo_id, name}.",
     "disease.ontology.ancestors": "This disease's full is-a ancestor lineage in MONDO (up to "
@@ -148,6 +217,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "protein.gene": "The gene that codes for this protein.",
     "protein.organism": "The organism this protein comes from.",
     "protein.function": "What this protein does — UniProt's curated summary.",
+    "protein.sequence": "Canonical UniProtKB entry amino-acid sequence; produced by describe_protein.",
+    "protein.annotation.records": "Structured UniProtKB comments/features/references and observed evidence/release metadata.",
     "protein.length": "This protein's length in amino acids.",
     "protein.reviewed": "Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL).",
     # UniProt ID-mapping outputs (uniprot_weaver map_to/from_accession)
@@ -157,18 +228,20 @@ OUTPUT_KEYS: dict[str, str] = {
     "eggnog.group": "This protein's eggNOG orthologous-group id.",
     "chembl.id": "This protein's ChEMBL target id.",
     "drugbank.id": "This protein's DrugBank id.",
-    "string.id": "This protein's STRING id.",
     # protein-protein interaction outputs (string_weaver)
     "protein.interaction.partners": "The proteins this protein interacts with.",
-    "protein.interaction.count": "How many interaction partners this protein has.",
+    "protein.interaction.count": "Number of edges observed within the configured STRING retrieval limit.",
+    "protein.interaction.coverage": "STRING retrieval limit, observed edge/partner counts and unknown network completeness.",
     "protein.interaction.records": "This protein's interactions — partner, combined score, "
     "per-channel subscores.",
     # Gene Ontology annotation outputs (quickgo_weaver), grouped by GO aspect
     "go.molecular_function": "The molecular functions this protein is annotated with.",
     "go.biological_process": "The biological processes this protein takes part in.",
     "go.cellular_component": "Where in the cell this protein acts.",
-    "go.count": "How many GO terms annotate this protein.",
-    "go.records": "This protein's GO annotations — GO id, name, aspect.",
+    "go.count": "Distinct GO terms in retrieved annotation pages; inspect coverage for completeness.",
+    "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
+    "go.annotation.records": "Source annotation rows, retaining evidence, qualifiers and references.",
+    "go.annotation.coverage": "Pagination coverage, source counts and page-cap completeness.",
     # one GO term's detail (quickgo_weaver describe_go_term — consumes go.term)
     "go.term.name": "The name of this GO term.",
     "go.term.aspect": "This GO term's aspect — molecular_function, biological_process, or cellular_component.",

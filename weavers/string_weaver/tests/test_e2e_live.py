@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from string_weaver import build_string_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -29,8 +27,12 @@ async def _interactions(weaver, accession):
             "list_interactions",
             [ss],
             requested_outputs=frozenset(
-                {"protein.query", "protein.interaction.partners", "protein.interaction.count",
-                 "protein.interaction.records"}
+                {
+                    "string.id",
+                    "protein.interaction.partners",
+                    "protein.interaction.count",
+                    "protein.interaction.records",
+                }
             ),
             backend="api",
         )
@@ -55,8 +57,9 @@ async def test_live_tp53_has_interaction_partners():
     assert all(0.0 <= r["score"] <= 1.0 for r in records)
     assert "MDM2" in partners
     # the fan dimension: distinct partner names as protein.query (chains into uniprot)
-    queries = produced["protein.query"]
-    assert "MDM2" in queries and len(queries) == len(set(queries))
+    queries = produced["string.id"]
+    assert all(identifier.startswith("9606.") for identifier in queries)
+    assert len(queries) == len(set(queries))
 
 
 async def test_live_unknown_accession_is_no_match():
@@ -64,3 +67,40 @@ async def test_live_unknown_accession_is_no_match():
     result = await _interactions(weaver, "X0X0X0")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_pinned_service_reports_expected_release():
+    weaver = build_string_weaver()
+    backend = weaver._backends["api"]
+    response = await backend._http().get("/json/version")
+    response.raise_for_status()
+    assert response.json()[0]["string_version"] == "12.5"
+    assert response.json()[0]["stable_address"] == "https://version-12-5.string-db.org"
+    await backend._client.aclose()
+
+
+async def test_live_physical_scope_with_score_and_species():
+    async with build_string_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "list_interactions",
+                [
+                    StrandSet.from_strands(
+                        "physical", [Strand("protein.uniprot.accession", "P04637")]
+                    )
+                ],
+                requested_outputs=frozenset(
+                    {"protein.interaction.coverage", "protein.interaction.records"}
+                ),
+                params={"network_type": "physical", "required_score": 700, "species": 9606},
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["protein.interaction.coverage"]["network_type"] == "physical"
+        assert all(
+            r["score"] >= 0.7 and r["taxon_id"] == 9606
+            for r in values["protein.interaction.records"]
+        )

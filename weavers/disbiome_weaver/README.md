@@ -1,36 +1,25 @@
 # disbiome_weaver
 
-Microbe ↔ disease associations from **[Disbiome](https://disbiome.ugent.be)** (Ghent
-University): given an organism by NCBI taxid, the diseases where its abundance is reported
-**Elevated/Reduced** vs healthy controls (human host, MedDRA-coded). A terminal weaver off
-the organism layer; chains straight behind `ncbi_weaver`.
+Retrieve observed microbe–disease associations in either direction, then inspect disease
+identity, sample context and publication evidence. Build a local SQLite database from the source
+tables before querying. Counts describe experiments, and associations do not establish
+causation. Provider disease IDs and MedDRA codes are distinct.
 
 - **Source:** https://disbiome.ugent.be (keyless JSON API on port 8080) · **License:** Open · **Cite:** https://doi.org/10.1186/s12866-018-1197-5 — Janssens et al., 2018
 - **Backend:** `local` (a small SQLite built from the API; see below) · **Discoverable as** `disbiome`
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `disbiome.list_diseases` | `ncbi.taxon.id` | **summary:** `microbe.disease.names`, `microbe.disease.count` · **associations:** `microbe.disease.associations` · **full:** `microbe.disease.records` |
-
-Output slices, light → heavy (the mapper emits only the requested group):
-
-| Group | What you get |
+| Capability | Use it to |
 |---|---|
-| `summary` | distinct disease names + how many records |
-| `associations` | one compact row per experiment: disease, direction, method, sample, host |
-| `full` | the complete joined blob — every experiment/disease/organism/publication field, incl. the ~16 study-quality flags |
+| `disbiome.list_diseases` | List disease observations for an exact taxid |
+| `disbiome.list_taxa` | List observed taxa for a disease ID or MedDRA code |
+| `disbiome.describe_disease` | Inspect an exact provider disease ID |
 
-## The local backend (no dump file needed)
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-Disbiome publishes no dump file, but its API returns each table whole in one GET and the
-whole dataset is ~7 MB. The `local` backend builds a small SQLite **once** — fetch
-`/experiment` + `/disease` + `/organism` + `/publication`, join in-memory, index by NCBI
-taxid — via the shared `braidworks.core.localdb` plumbing. The cache fingerprint is a
-content hash of the fetched tables (Disbiome has no release tag).
-
-## Use it
+## Run a query
 
 Build the DB once, then it chains straight off `ncbi_weaver`
 (`organism.name → ncbi.taxon.id → microbe.disease.*`):
@@ -38,25 +27,37 @@ Build the DB once, then it chains straight off `ncbi_weaver`
 ```python
 from disbiome_weaver import build_disbiome_weaver_configured
 
-# Builds the ~7 MB DB on first use (prompts on a TTY; set BRAIDWORKS_AUTO_DOWNLOAD=1
-# or pass auto_setup=True non-interactively). Override location with db_path=.
+# Acquires the source tables on first use with explicit auto_setup consent (or
+# BRAIDWORKS_AUTO_DOWNLOAD=1); no terminal prompt is implemented.
+# Override the database location with db_path=.
 weaver = build_disbiome_weaver_configured(auto_setup=True)
 # In an app that wires a WeaverFactory, `disbiome_weaver.register(factory)` adds it as a provider.
 ```
 
-From the `braidworks` CLI (auto-discovered once installed; the DB is built on first use):
+For CLI discovery, first build the **default** cache with
+`ensure_disbiome_db(auto=True)` from `disbiome_weaver.setup`. The default discovery
+builder only inspects that cache; it does not build it. Then run:
 
 ```bash
 braidworks run disbiome disbiome.list_diseases --have ncbi.taxon.id=816
 ```
 
-## Develop
+Follow the [researcher lesson](../../docs/tutorials/disease-associations.md) for a complete exercise.
 
-```bash
-make verify     # spec ↔ manifest, reachability, fingerprints (--strict adds golden vs the fixture)
-make test       # conformance + contract + behavior, offline (live E2E self-skips)
-make test-live  # opt-in: build the real DB from the API and resolve a known taxid
-```
+## Setup, interpretation and contribution
 
-Extend it ([CONTRIBUTING.md](CONTRIBUTING.md)): reverse disease→microbe lookup, emitting
-the taxid back out, etc. Build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
+
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

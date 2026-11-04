@@ -1,17 +1,21 @@
 """LocalTaxonomyBackend — wraps the SQLite TaxonomyResolverService.
 
-One service per thread (``threading.local``), lazily created; sync calls are run
+One owned service per batch; sync calls are run
 off the event loop with ``asyncio.to_thread``. Construction is cheap and never
 raises: ``is_configured()`` reports whether the DB is present and built, and the
-persistent connection is created lazily on first use.
+read session is bound to the backend generation.
 """
 
 from __future__ import annotations
 
 import asyncio
-import threading
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
+from braidworks.core import LookupRecord
+from braidworks.core.source_identity import SourceBinding
 from taxonomy_resolver.policy import ResolutionStatus
 from taxonomy_resolver.schemas import BatchResolveRequest, ResolveRequest, ResolveResult
 from taxonomy_resolver.service import TaxonomyResolverService
@@ -49,7 +53,9 @@ class LocalTaxonomyBackend:
         # backend (manifest-complete, golden skips) without a 1.2 GB download.
         self._db_path = Path(db_path)
         self._cache_db_path = Path(cache_db_path) if cache_db_path else None
-        self._tl = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM metadata"))
+        )
         self._fingerprint: str | None = None
         self._configured = db_is_valid(self._db_path)
 
@@ -57,20 +63,10 @@ class LocalTaxonomyBackend:
         """Whether the taxonomy DB is present and built (checked at construction)."""
         return self._configured
 
-    def _service(self) -> TaxonomyResolverService:
-        """Return this thread's resolver service, creating it lazily on first use."""
-        svc = getattr(self._tl, "svc", None)
-        if svc is None:
-            svc = TaxonomyResolverService(self._db_path, self._cache_db_path)
-            self._tl.svc = svc
-        return svc
-
     def fingerprint(self) -> str:
-        """The taxonomy build version backing this DB (the cache fingerprint)."""
-        if self._fingerprint is None:
-            info = self._service().get_taxonomy_build_info()
-            self._fingerprint = info.get("taxonomy_build_version") or "unversioned"
-        return self._fingerprint
+        if not self._configured:
+            return "ncbi-local-unbuilt"
+        return self._source.fingerprint()
 
     async def resolve(
         self, capability_id: str, queries: list, *, need_lineage: bool
@@ -80,19 +76,156 @@ class LocalTaxonomyBackend:
             self._resolve_sync, capability_id, list(queries), need_lineage
         )
 
+    async def list_children(
+        self, queries: list[dict[str, Any]], *, rank: str
+    ) -> list[LookupRecord]:
+        """List all strict descendants of the requested rank in this dump."""
+        return await asyncio.to_thread(
+            self._children_sync, queries, (rank or "species").strip().lower()
+        )
+
+    def _children_sync(self, queries, rank):
+        with self._source.session() as con:
+            resolved = {}
+            records = []
+            for query in queries:
+                raw = query.get(vocab.TAXON_ID)
+                try:
+                    taxid = int(raw)
+                    if isinstance(raw, (bool, float)) or taxid < 1:
+                        raise ValueError("invalid taxid")
+                except (TypeError, ValueError):
+                    records.append(LookupRecord(query=query, found=False))
+                    continue
+                if taxid not in resolved:
+                    # UNION bounds traversal even for malformed cyclic parent graphs.
+                    # The seed includes the input, which is excluded from the result.
+                    rows = con.execute(
+                        "WITH RECURSIVE subtree(taxid) AS ("
+                        " SELECT taxid FROM taxa WHERE taxid=?"
+                        " UNION SELECT t.taxid FROM taxa t JOIN subtree s ON t.parent_taxid=s.taxid"
+                        ") SELECT t.taxid, t.rank,"
+                        " (SELECT MIN(n.name_txt) FROM taxon_names n"
+                        " WHERE n.taxid=t.taxid AND n.name_class='scientific name')"
+                        " FROM subtree s JOIN taxa t ON t.taxid=s.taxid"
+                        " WHERE t.taxid!=? AND (?='' OR lower(t.rank)=?) ORDER BY t.taxid",
+                        (taxid, taxid, rank, rank),
+                    ).fetchall()
+                    children = [{"taxid": r[0], "rank": r[1].lower(), "name": r[2]} for r in rows]
+                    resolved[taxid] = LookupRecord(
+                        query=query,
+                        found=bool(children),
+                        values={
+                            vocab.TAXON_ID: [r["taxid"] for r in children],
+                            vocab.CHILDREN_COUNT: len(children),
+                            vocab.CHILDREN_RECORDS: children[:200],
+                        }
+                        if children
+                        else {},
+                    )
+                records.append(
+                    replace(resolved[taxid], query=query, values=deepcopy(resolved[taxid].values))
+                )
+            return records
+
+    async def describe_taxon_history(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        return await asyncio.to_thread(self._history_sync, queries)
+
+    def _history_sync(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+        with self._source.session() as con:
+            meta = dict(con.execute("SELECT key, value FROM metadata"))
+            merged_available = meta.get("merged_history_present") == "true"
+            deleted_available = meta.get("deleted_history_present") == "true"
+            records = []
+            for query in queries:
+                raw = query.get(vocab.TAXON_ID)
+                try:
+                    taxid = int(raw)
+                    if isinstance(raw, bool) or taxid < 1 or isinstance(raw, float):
+                        raise ValueError("invalid taxid")
+                except (TypeError, ValueError):
+                    records.append(LookupRecord(query=query, found=False))
+                    continue
+                chain = [taxid]
+                current = taxid
+                seen = set()
+                error = None
+                while merged_available:
+                    row = con.execute(
+                        "SELECT new_taxid FROM taxon_merged WHERE old_taxid=?", (current,)
+                    ).fetchone()
+                    if row is None:
+                        break
+                    if current in seen:
+                        error = "Taxonomy history merge cycle"
+                        break
+                    seen.add(current)
+                    current = row[0]
+                    chain.append(current)
+                if error:
+                    records.append(LookupRecord(query=query, error=error))
+                    continue
+                present = (
+                    con.execute("SELECT 1 FROM taxa WHERE taxid=?", (current,)).fetchone()
+                    is not None
+                )
+                deleted = (
+                    deleted_available
+                    and con.execute(
+                        "SELECT 1 FROM taxon_deleted WHERE taxid=?", (current,)
+                    ).fetchone()
+                    is not None
+                )
+                status = (
+                    ("merged" if len(chain) > 1 else "current")
+                    if present
+                    else "deleted"
+                    if deleted
+                    else "unknown"
+                )
+                records.append(
+                    LookupRecord(
+                        query=query,
+                        found=True,
+                        values={
+                            "ncbi.taxon.history": {
+                                "requested_taxid": taxid,
+                                "current_taxid": current if present else None,
+                                "status": status,
+                                "merge_chain": chain,
+                                "history_available": {
+                                    "merged": merged_available,
+                                    "deleted": deleted_available,
+                                },
+                                "source_dump_sha256": meta.get("source_dump_sha256"),
+                                "build_version": meta.get("taxonomy_build_version"),
+                                "interpretation": "dump-scoped identity; deleted/unknown IDs have no inferred successor",
+                            }
+                        },
+                    )
+                )
+            return records
+
     # --- sync worker (runs in a thread) ------------------------------------
 
     def _resolve_sync(
         self, capability_id: str, queries: list, need_lineage: bool
     ) -> list[TaxonMatch]:
-        svc = self._service()
-        if capability_id == vocab.RESOLVE_NAME:
-            req = BatchResolveRequest(items=[ResolveRequest(original_name=str(q)) for q in queries])
-            results = svc.resolve_batch(req).results
-            return [self._name_match(q, r, need_lineage, svc) for q, r in zip(queries, results)]
-        if capability_id == vocab.DESCRIBE_TAXON:
-            return [self._taxid_match(q, need_lineage, svc) for q in queries]
-        raise ValueError(f"unsupported capability {capability_id!r}")
+        with (
+            self._source.session() as connection,
+            TaxonomyResolverService(
+                self._db_path, self._cache_db_path, taxonomy_connection=connection
+            ) as svc,
+        ):
+            if capability_id == vocab.RESOLVE_NAME:
+                req = BatchResolveRequest(
+                    items=[ResolveRequest(original_name=str(q)) for q in queries]
+                )
+                results = svc.resolve_batch(req).results
+                return [self._name_match(q, r, need_lineage, svc) for q, r in zip(queries, results)]
+            if capability_id == vocab.DESCRIBE_TAXON:
+                return [self._taxid_match(q, need_lineage, svc) for q in queries]
+            raise ValueError(f"unsupported capability {capability_id!r}")
 
     def _lineage_for(self, taxid: int, inline, need_lineage: bool, svc: TaxonomyResolverService):
         """Convert/fetch lineage only when needed; never reads the lineage cache for core-only."""

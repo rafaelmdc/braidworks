@@ -5,14 +5,13 @@ from __future__ import annotations
 import hashlib
 import io
 import tarfile
+from typing import Self
 
 import pytest
-
 from braidworks.core import BackendConfigurationError
-from taxonomy_resolver.service import TaxonomyResolverService
 from ncbi_weaver import setup as setup_mod
 from ncbi_weaver.setup import default_db_path, ensure_taxonomy_db
-
+from taxonomy_resolver.service import TaxonomyResolverService
 from tests.test_deterministic_resolution import NAMES_DMP, NODES_DMP, _BytesReader
 
 
@@ -38,7 +37,7 @@ class _FakeResponse:
         if content_length is not None:
             self.headers["Content-Length"] = str(content_length)
 
-    def __enter__(self) -> "_FakeResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_exc: object) -> None:

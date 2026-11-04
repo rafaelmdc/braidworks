@@ -25,22 +25,53 @@ import asyncio
 import csv
 import io
 import json
+import sqlite3
 import sys
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
+from braidworks.core.archive import begin_archive, write_archive
+from braidworks.core.braid import BackendPolicy
+from braidworks.core.cache_policy import CachePolicy
 from braidworks.core.discovery import build_registry_from_entry_points
-from braidworks.core.errors import explain_error
-from braidworks.core.exceptions import NoPathError, NoPlanError
-from braidworks.core.executor import ExpandPolicy, LocalExecutor
+from braidworks.core.errors import classify_error, explain_error
+from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
+from braidworks.core.executor import (
+    ExecutionError,
+    ExecutionResult,
+    ExpandPolicy,
+    ReviewPolicy,
+)
+from braidworks.core.inputs import read_input_rows
+from braidworks.core.outcomes import (
+    execution_records as _result_records,
+)
+from braidworks.core.outcomes import (
+    number_records as _number_records,
+)
+from braidworks.core.outcomes import (
+    strand_record as _record,
+)
+from braidworks.core.parameters import map_parameter_items
+from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
+from braidworks.core.persistent_query import continue_run
 from braidworks.core.planner import Braider
+from braidworks.core.query import (
+    QueryOptions,
+    QueryRequest,
+    normalize_expansion,
+    prepare_query,
+)
 from braidworks.core.references import (
     format_references,
     references_for,
-    references_for_braid,
 )
 from braidworks.core.registry import BraidRegistry
-from braidworks.core.strand import Strand, StrandSet
-from braidworks.core.traverse import resolve_traversal, run_traversed
+from braidworks.core.result import WeaveStatus
+from braidworks.core.review import ReviewDecision
+from braidworks.core.run_store import SQLiteRunStore, run_status
+from braidworks.core.runner import validate_batch_size
+from braidworks.core.strand import StepOutcome, Strand, StrandSet
 
 
 # --------------------------------------------------------------------------- #
@@ -140,28 +171,10 @@ def _rows_from_file(path: str, in_type: str | None) -> list[dict[str, str]]:
     """
     handle = _open_input(path)
     try:
-        if in_type:
-            rows = []
-            for line in handle:
-                value = line.strip()
-                if not value or value.startswith("#"):
-                    continue
-                rows.append({in_type: value})
-            return rows
-        delimiter = "," if path.endswith(".csv") else "\t"
-        reader = csv.DictReader(handle, delimiter=delimiter)
-        if not reader.fieldnames:
-            raise SystemExit(f"error: {path} has no header row of type-ids")
-        rows = []
-        for raw in reader:
-            row = {
-                (k or "").strip(): (v or "").strip()
-                for k, v in raw.items()
-                if k and v and v.strip()
-            }
-            if row:
-                rows.append(row)
-        return rows
+        delimiter = None if path == "-" else "," if path.endswith(".csv") else "\t"
+        return read_input_rows(handle, input_type=in_type, delimiter=delimiter)
+    except ValueError as exc:
+        raise SystemExit(f"error: {path}: {exc}") from exc
     finally:
         if handle is not sys.stdin:
             handle.close()
@@ -185,33 +198,19 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
             merged = {**constants, **row}
             # A one-value-per-line batch reads better regrouped by the value itself.
             ident = row[args.in_type] if args.in_type else f"e{i}"
-            sets.append(
-                StrandSet.from_strands(ident, [Strand(t, v) for t, v in merged.items()])
-            )
+            sets.append(StrandSet.from_strands(ident, [Strand(t, v) for t, v in merged.items()]))
     else:
         if not constants:
-            raise SystemExit(
-                "error: nothing to run — pass --have TYPE=VALUE or --in-file PATH"
-            )
-        sets.append(
-            StrandSet.from_strands("e1", [Strand(t, v) for t, v in constants.items()])
-        )
+            raise SystemExit("error: nothing to run — pass --have TYPE=VALUE or --in-file PATH")
+        sets.append(StrandSet.from_strands("e1", [Strand(t, v) for t, v in constants.items()]))
+    for index, ss in enumerate(sets, start=1):
+        ss.source_row = index
     return sets
 
 
 # --------------------------------------------------------------------------- #
 # output: one record per entity, rendered per --format
 # --------------------------------------------------------------------------- #
-def _record(entity_id: str, status: str, ss: StrandSet, want: list[str]) -> dict[str, Any]:
-    # If --want is empty (e.g. `run` with no filter), show everything produced.
-    types = want or sorted(ss.available_types())
-    values = {t: ss.get(t).value for t in types if ss.get(t) is not None}
-    rec: dict[str, Any] = {"entity": entity_id, "status": status, "values": values}
-    if ss.parent_id is not None:
-        rec["parent"] = ss.parent_id
-    return rec
-
-
 def _cell(value: Any) -> str:
     """Flatten a value for a TSV/CSV/human cell (lists join with ``;``)."""
     if isinstance(value, list):
@@ -232,22 +231,37 @@ def _emit(records: list[dict[str, Any]], fmt: str, want: list[str]) -> None:
         return
     if fmt in ("tsv", "csv"):
         delimiter = "," if fmt == "csv" else "\t"
-        # Stable column set: entity, [parent], then the union of value keys (want order first).
-        cols = ["entity"]
+        # Stable metadata columns, followed by value keys in requested order.
+        metadata = ["entity", "status", "source_row", "outcome"]
         if any("parent" in r for r in records):
-            cols.append("parent")
+            metadata.append("parent")
+        metadata += [
+            "missing",
+            "requires_review",
+            "warnings",
+            "errors",
+            "diagnostics",
+            "truncations",
+            "completion",
+            "candidates",
+            "strands",
+            "references",
+        ]
         value_cols = list(want)
         for rec in records:
             for k in rec["values"]:
                 if k not in value_cols:
                     value_cols.append(k)
-        cols += value_cols
+        cols = metadata + value_cols
         writer = csv.writer(sys.stdout, delimiter=delimiter, lineterminator="\n")
         writer.writerow(cols)
         for rec in records:
-            row = [rec["entity"]] + (
-                [rec.get("parent", "")] if "parent" in cols else []
-            )
+            row = [
+                json.dumps(rec.get(c, []), ensure_ascii=False)
+                if c in metadata[4:] and c != "parent"
+                else _cell(rec.get(c))
+                for c in metadata
+            ]
             row += [_cell(rec["values"].get(c)) for c in value_cols]
             writer.writerow(row)
         return
@@ -270,6 +284,15 @@ def _summary(counts: dict[str, int]) -> None:
     _err("→ " + (", ".join(parts) if parts else "nothing produced"))
 
 
+def _report_truncations(result: ExecutionResult) -> None:
+    for item in result.truncations:
+        _err(
+            f"warning: expansion limit {item.limit} at {item.capability_id} for "
+            f"{item.entity_id} (source row {item.source_row}): "
+            f"kept {item.kept} of {item.requested}, omitted {item.omitted}"
+        )
+
+
 def _report_errors(errors: list[Any]) -> None:
     """Surface structural errors (e.g. an upstream API 500) loudly on stderr, each with
     a plain-English explanation of its category.
@@ -284,7 +307,9 @@ def _report_errors(errors: list[Any]) -> None:
         where = f" at {e.capability_id}" if e.capability_id else ""
         source = e.capability_id.split(".")[0] if e.capability_id else None
         tag = " (recovered via another route)" if getattr(e, "recovered", False) else ""
-        _err(f"  ✗ {e.strand_set.entity_id}{where}{tag}: {explain_error(e.category, source=source)}")
+        _err(
+            f"  ✗ {e.strand_set.entity_id}{where}{tag}: {explain_error(e.category, source=source)}"
+        )
         _err(f"      ↳ {e.message}")
 
 
@@ -299,169 +324,240 @@ def _map_params(
     A bare ``NAME=VALUE`` lands on every involved capability that declares ``NAME``;
     ``CAP:NAME=VALUE`` targets one. On an unmatched parameter (likely a typo) the
     error is printed to stderr and ``None`` is returned so the caller exits 1."""
-    params: dict[str, dict[str, Any]] = {}
-    for cap_id, name, value in parsed:
-        targets = (
-            [cap_id] if cap_id is not None
-            else [cid for cid, c in caps_by_id.items() if any(p.name == name for p in c.parameters)]
+    try:
+        return map_parameter_items(parsed, caps_by_id)
+    except ValueError as exc:
+        _err(f"error: {exc}. See `braidworks weavers` for each capability's parameters.")
+        return None
+
+
+def _input_groups(sets: list[StrandSet]) -> list[list[StrandSet]]:
+    """Batch rows together only when they actually have the same input types."""
+    grouped: dict[frozenset[str], list[StrandSet]] = {}
+    for ss in sets:
+        grouped.setdefault(ss.available_types(), []).append(ss)
+    return list(grouped.values()) or [[]]
+
+
+def _absorb_result(result: ExecutionResult, part: ExecutionResult) -> None:
+    result.resolved.extend(part.resolved)
+    result.unresolved.extend(part.unresolved)
+    result.review_queue.extend(part.review_queue)
+    result.errors.extend(part.errors)
+    result.truncations.extend(part.truncations)
+    references = {
+        reference.weaver_id: reference for reference in result.references + part.references
+    }
+    result.references = [references[key] for key in sorted(references)]
+
+
+def _archive_start(args, sets, registry, plans, caps, params):
+    if not args.archive:
+        return None
+    return begin_archive(
+        sets,
+        registry,
+        options={key: value for key, value in vars(args).items() if key != "func"},
+        plans=plans,
+        effective_params={
+            cid: cap.resolve_params((params or {}).get(cid, {})) for cid, cap in caps.items()
+        },
+    )
+
+
+def _archive_finish(args, archive, records, execution):
+    if archive is None:
+        return True
+    try:
+        write_archive(args.archive, archive, records=records, execution=execution)
+    except (OSError, ValueError, TypeError) as exc:
+        _err(f"error: could not write run archive: {exc}")
+        return False
+    return True
+
+
+def _persistence_from_args(args):
+    return QueryPersistence(
+        args.cache_db,
+        args.run_db,
+        getattr(args, "run_id", None) if args.command == "weave" else None,
+        CachePolicy(args.cache_positive_ttl, args.cache_negative_ttl, args.cache_max_bytes),
+        args.lease_seconds,
+    )
+
+
+async def _execute_prepared(args, registry, prepared):
+    persistence = _persistence_from_args(args)
+    announced = False
+
+    def saved(checkpoint):
+        nonlocal announced
+        if not announced:
+            _err(f"durable run: {checkpoint.run_id} (store: {args.run_db})")
+            announced = True
+        if checkpoint.status in ("complete", "review"):
+            _err(f"run status: {checkpoint.status}, revision {checkpoint.revision}")
+
+    return await execute_managed_query(registry, prepared, persistence, on_saved=saved)
+
+
+def _parse_decisions(values):
+    decisions = []
+    for value in values or ():
+        key, sep, action = value.partition("=")
+        if not sep:
+            raise ValueError("decision expects ENTITY_KEY=select:INDEX|accept|reject")
+        verb, colon, index = action.partition(":")
+        if verb == "select" and colon:
+            try:
+                index = int(index)
+            except ValueError as exc:
+                raise ValueError("candidate INDEX must be a zero-based integer") from exc
+        elif colon:
+            raise ValueError("Only select accepts an index")
+        else:
+            index = None
+        decisions.append(ReviewDecision(key, verb, index))
+    return tuple(decisions)
+
+
+def _cmd_runs(args):
+    try:
+        store = SQLiteRunStore(args.run_db, create=False)
+        checkpoints = [store.load(args.run_id)] if args.run_id else store.list()
+        statuses = [run_status(cp) for cp in checkpoints]
+        if args.format == "json":
+            json.dump(
+                statuses[0] if args.run_id else statuses, sys.stdout, ensure_ascii=False, indent=2
+            )
+            print()
+        else:
+            for status in statuses:
+                print(
+                    f"{status['run_id']}  {status['status']}  revision={status['revision']}  inputs={status['inputs']}"
+                )
+                for item in status["reviews"]:
+                    ss = item["strand_set"]
+                    result = item["triggering_result"]
+                    print(
+                        f"  review {ss['execution_key']}  entity={ss['entity_id']}  source_row={ss.get('source_row')}  capability={result['capability_id']}"
+                    )
+                    for index, candidate in enumerate(result["candidates"]):
+                        values = {
+                            strand["type_id"]: strand["value"] for strand in candidate["strands"]
+                        }
+                        print(
+                            f"    select:{index}  confidence={candidate['confidence']}  {json.dumps(values, ensure_ascii=False)}"
+                        )
+                    print("    reject" + (" | accept" if result["status"] == "ok" else ""))
+        return 0
+    except (ValueError, OSError, sqlite3.Error, KeyError) as exc:
+        _err(f"error: could not read run store: {exc}")
+        return 1
+
+
+def _cmd_resume(args):
+    try:
+        store = SQLiteRunStore(args.run_db, create=False)
+        original = store.load(args.run_id)
+        prepared = original.definition.prepared
+        registry = _load_registry(args.only)
+        caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
+        archive = _archive_start(
+            args,
+            list(prepared.request.inputs),
+            registry,
+            [braid.to_json() for braid, _ in prepared.plans],
+            caps,
+            prepared.effective_params,
         )
-        if not targets:
-            _err(f"error: no step in this route accepts a parameter named {name!r}. "
-                 f"See `braidworks weavers` for each capability's parameters.")
-            return None
-        for cid in targets:
-            params.setdefault(cid, {})[name] = value
-    return params
+        checkpoint = asyncio.run(
+            continue_run(
+                registry,
+                store,
+                args.run_id,
+                cache=_persistence_from_args(args).cache(),
+                decisions=_parse_decisions(args.decision),
+                lease_seconds=args.lease_seconds,
+            )
+        )
+        result = checkpoint.state.result
+        want = sorted(prepared.request.targets)
+        records = _result_records(result, want)
+        if not _archive_finish(args, archive, records, result.to_json()):
+            return 1
+        _emit(records, args.format, want)
+        _err(f"run {checkpoint.run_id}: {checkpoint.status}, revision {checkpoint.revision}")
+        _report_errors(result.errors)
+        _report_truncations(result)
+        if args.references:
+            _err(format_references(result.references))
+        return int(
+            bool(
+                result.fatal_errors()
+                or (
+                    args.strict
+                    and (result.unresolved or any(row["requires_review"] for row in records))
+                )
+            )
+        )
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
+        _err(f"error: could not resume run: {exc}")
+        return 1
 
 
 def _cmd_weave(args: argparse.Namespace) -> int:
     registry = _load_registry(args.only)
+    backend_policy = BackendPolicy(args.policy)
     want = _split_types(args.want)
-    have_types = frozenset(
-        [k for k, _ in (_parse_kv(i) for i in (args.have or []))]
-        + ([args.in_type] if args.in_type else [])
-    )
-    if not have_types:
-        # CSV/TSV header supplies the types; peek so planning has them.
-        sets_preview = _collect_inputs(args)
-        have_types = frozenset().union(*(s.available_types() for s in sets_preview))
+    sets = _collect_inputs(args)
 
     # Traversal fan-out: --for-each <relationship> / --traverse <capability-id>.
     traversal_tokens = list(args.for_each or []) + list(args.traverse or [])
     if traversal_tokens:
-        return _weave_traversed(args, registry, want, have_types, traversal_tokens)
+        return _weave_traversed(args, registry, want, traversal_tokens, sets)
 
     if not want:
         raise SystemExit("error: --want TYPE[,TYPE…] is required")
     try:
-        braid = Braider(registry).plan(
-            available_types=have_types, target_types=frozenset(want)
+        prepared = prepare_query(
+            registry,
+            QueryRequest(
+                tuple(sets),
+                frozenset(want),
+                options=QueryOptions(
+                    backend_policy,
+                    normalize_expansion(args.expand),
+                    ReviewPolicy(args.review_policy),
+                    args.confidence_threshold,
+                    args.max_expansion,
+                ),
+                parameter_items=tuple(_parse_params(args.param)),
+            ),
         )
     except (NoPathError, NoPlanError) as exc:
         _err(f"no route: {exc}")
-        _err("try `braidworks keys` to see what's produced, or `braidworks path --from … --to …`.")
+        _err("try `braidworks keys` to see what is produced, or `braidworks path --from … --to …`.")
         return 1
-
-    step_caps = {
-        s.capability_id: registry.get_capability(s.weaver_id, s.capability_id)
-        for s in braid.steps
-    }
-    params = _map_params(_parse_params(args.param), step_caps)
-    if params is None:
-        return 1
-
-    sets = _collect_inputs(args)
-    _err(f"running {len(braid.steps)} step(s) over {len(sets)} input(s)…")
-    try:
-        result = asyncio.run(
-            LocalExecutor(registry).execute(
-                braid, sets, expand_policy=_expand_policy(args.expand), params=params
-            )
-        )
-    except ValueError as exc:  # bad param value (unknown name / outside enum)
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
-
-    records: list[dict[str, Any]] = []
-    for ss in result.resolved:
-        records.append(_record(ss.entity_id, "resolved", ss, want))
-    for ss, _wr in result.unresolved:
-        records.append(_record(ss.entity_id, "unresolved", ss, want))
-    for item in result.review_queue:
-        records.append(_record(item.strand_set.entity_id, "review", item.strand_set, want))
-
-    _emit(records, args.format, want)
-    if args.references:
-        refs = format_references(references_for_braid(braid, registry))
-        if refs:
-            _err("\nSources:\n" + refs)
-    _summary(
-        {
-            "resolved": len(result.resolved),
-            "unresolved": len(result.unresolved),
-            "review": len(result.review_queue),
-            "errors": len(result.errors),
-        }
+    plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
+    step_caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
+    params = prepared.effective_params
+    archive = _archive_start(
+        args, sets, registry, [b.to_json() for b, _ in plans], step_caps, params
     )
-    _report_errors(result.errors)
-    # A *fatal* structural error (blocked an entity, not rerouted) fails the run; a
-    # failure on one branch of an otherwise-resolved entity is reported but not fatal.
-    # --strict also fails on unresolved/review.
-    if result.fatal_errors():
-        return 1
-    if args.strict and (result.unresolved or result.review_queue):
-        return 1
-    return 0
-
-
-def _weave_traversed(
-    args: argparse.Namespace,
-    registry: BraidRegistry,
-    want: list[str],
-    have_types: frozenset[str],
-    tokens: list[str],
-) -> int:
-    """Run a weave that fans *through* one or more relationships (--for-each/--traverse).
-
-    Each token names a fan capability (a relationship noun, or a full capability id);
-    we run them in order, re-rooting on every produced value, then plan ``--want`` from
-    each child. ``--want`` is optional here — with none you just get the fanned entities.
-    """
+    _err(f"running {sum(len(b.steps) for b, _ in plans)} step(s) over {len(sets)} input(s)…")
     try:
-        traversals = [resolve_traversal(registry, t) for t in tokens]
-    except NoPlanError as exc:
-        _err(f"no traversal: {exc}")
-        return 1
-
-    # Capabilities that --param can target: the traversal caps, plus a best-effort
-    # preview of the final route (planned from the types available after fanning).
-    caps_by_id = {cid: registry.get_capability(wid, cid) for wid, cid in traversals}
-    if want:
-        est_types = have_types.union(
-            *(registry.get_capability(wid, cid).produces for wid, cid in traversals)
-        )
-        try:
-            preview = Braider(registry).plan(
-                available_types=est_types, target_types=frozenset(want)
-            )
-            for s in preview.steps:
-                caps_by_id.setdefault(
-                    s.capability_id, registry.get_capability(s.weaver_id, s.capability_id)
-                )
-        except (NoPathError, NoPlanError):
-            pass  # the orchestrator re-plans and surfaces the real error below
-    params = _map_params(_parse_params(args.param), caps_by_id)
-    if params is None:
-        return 1
-
-    # --for-each/--traverse imply fanning ALL produced values unless --expand is given.
-    expand = _expand_policy(args.expand) if args.expand else ExpandPolicy.all()
-
-    sets = _collect_inputs(args)
-    # capability ids are already weaver-namespaced (e.g. ncbi.list_orthologs)
-    rels = " → ".join(cid for _wid, cid in traversals)
-    _err(f"fanning through {rels} over {len(sets)} input(s)…")
-    try:
-        result = asyncio.run(
-            run_traversed(
-                registry, sets, traversals, frozenset(want),
-                expand_policy=expand, params=params,
-            )
-        )
-    except (NoPathError, NoPlanError) as exc:
-        _err(f"no route after traversal: {exc}")
-        return 1
-    except ValueError as exc:  # bad param value
+        result = asyncio.run(_execute_prepared(args, registry, prepared))
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
 
-    records: list[dict[str, Any]] = []
-    for ss in result.resolved:
-        records.append(_record(ss.entity_id, "resolved", ss, want))
-    for ss, _wr in result.unresolved:
-        records.append(_record(ss.entity_id, "unresolved", ss, want))
-    for item in result.review_queue:
-        records.append(_record(item.strand_set.entity_id, "review", item.strand_set, want))
+    records = _result_records(result, want)
+    if not _archive_finish(args, archive, records, result.to_json()):
+        return 1
 
     _emit(records, args.format, want)
     if args.references:
@@ -477,9 +573,89 @@ def _weave_traversed(
         }
     )
     _report_errors(result.errors)
-    if result.errors:
+    _report_truncations(result)
+    # A *fatal* structural error (blocked an entity, not rerouted) fails the run; a
+    # failure on one branch of an otherwise-resolved entity is reported but not fatal.
+    # --strict also fails on unresolved/review.
+    if result.fatal_errors():
         return 1
-    if args.strict and (result.unresolved or result.review_queue):
+    if args.strict and (result.unresolved or any(row["requires_review"] for row in records)):
+        return 1
+    return 0
+
+
+def _weave_traversed(
+    args: argparse.Namespace,
+    registry: BraidRegistry,
+    want: list[str],
+    tokens: list[str],
+    sets: list[StrandSet],
+) -> int:
+    """Run a weave that fans *through* one or more relationships (--for-each/--traverse).
+
+    Each token names a fan capability (a relationship noun, or a full capability id);
+    we run them in order, re-rooting on every produced value, then plan ``--want`` from
+    each child. ``--want`` is optional here — with none you just get the fanned entities.
+    """
+    backend_policy = BackendPolicy(args.policy)
+    try:
+        prepared = prepare_query(
+            registry,
+            QueryRequest(
+                tuple(sets),
+                frozenset(want),
+                tuple(tokens),
+                options=QueryOptions(
+                    backend_policy,
+                    normalize_expansion(args.expand, traversal=True),
+                    ReviewPolicy(args.review_policy),
+                    args.confidence_threshold,
+                    args.max_expansion,
+                ),
+                parameter_items=tuple(_parse_params(args.param)),
+            ),
+        )
+        caps_by_id = {
+            cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids
+        }
+        archive = _archive_start(
+            args,
+            sets,
+            registry,
+            [{"traversals": [list(item) for item in prepared.traversals], "want": want}],
+            caps_by_id,
+            prepared.effective_params,
+        )
+        _err(
+            f"fanning through {' → '.join(cid for _, cid in prepared.traversals)} over {len(sets)} input(s)…"
+        )
+        result = asyncio.run(_execute_prepared(args, registry, prepared))
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
+        _err(f"error: {exc}")
+        return 1
+
+    records = _result_records(result, want)
+    if not _archive_finish(args, archive, records, result.to_json()):
+        return 1
+
+    _emit(records, args.format, want)
+    if args.references:
+        refs = format_references(result.references)
+        if refs:
+            _err("\nSources:\n" + refs)
+    _summary(
+        {
+            "resolved": len(result.resolved),
+            "unresolved": len(result.unresolved),
+            "review": len(result.review_queue),
+            "errors": len(result.errors),
+        }
+    )
+    _report_errors(result.errors)
+    _report_truncations(result)
+    if result.fatal_errors():
+        return 1
+    if args.strict and (result.unresolved or any(row["requires_review"] for row in records)):
         return 1
     return 0
 
@@ -490,10 +666,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if manifest is None:
         _err(f"unknown weaver {args.weaver!r}. Try `braidworks weavers`.")
         return 1
-    cap = next((c for c in manifest.capabilities if c.id == args.capability), None)
-    if cap is None:
-        ids = ", ".join(c.id for c in manifest.capabilities)
-        _err(f"weaver {args.weaver!r} has no capability {args.capability!r}. Has: {ids}")
+    from braidworks.core.availability import require_capability
+    from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+
+    try:
+        cap = require_capability(registry.get_weaver(args.weaver), args.capability)
+    except (BackendUnavailable, UnsupportedCapability) as exc:
+        _err(str(exc))
         return 1
 
     backend = args.backend
@@ -501,13 +680,24 @@ def _cmd_run(args: argparse.Namespace) -> int:
         if len(cap.backends) == 1:
             backend = cap.backends[0]
         else:
-            _err(f"--backend is required ({args.weaver}.{args.capability} has: "
-                 f"{', '.join(cap.backends)})")
+            _err(
+                f"--backend is required ({args.weaver}.{args.capability} has: "
+                f"{', '.join(cap.backends)})"
+            )
             return 1
 
     want = _split_types(args.want) or sorted(cap.produces)
+    if backend not in cap.backends:
+        _err(
+            f"error: backend {backend!r} is not declared for {args.weaver}.{args.capability}. "
+            f"Available: {', '.join(cap.backends)}"
+        )
+        return 1
     # One capability here, so every --param NAME=VALUE applies to it (CAP: prefix optional).
-    raw_params = {name: value for _cid, name, value in _parse_params(args.param)}
+    mapped = _map_params(_parse_params(args.param), {cap.id: cap})
+    if mapped is None:
+        return 1
+    raw_params = mapped.get(cap.id, {})
     try:  # validate/default against the declaration up front for a clean error
         run_params = cap.resolve_params(raw_params)
     except ValueError as exc:
@@ -515,29 +705,82 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 1
     sets = _collect_inputs(args)
     weaver = registry.get_weaver(args.weaver)
+    archive = _archive_start(
+        args,
+        sets,
+        registry,
+        [{"weaver_id": args.weaver, "capability_id": cap.id, "backend": backend, "want": want}],
+        {cap.id: cap},
+        {cap.id: run_params},
+    )
     _err(f"running {args.weaver}.{args.capability} over {len(sets)} input(s)…")
     try:
         results = asyncio.run(
             weaver.execute_batch(
-                args.capability, sets,
-                requested_outputs=frozenset(want), backend=backend, params=run_params,
+                args.capability,
+                sets,
+                requested_outputs=frozenset(want),
+                backend=backend,
+                params=run_params,
             )
         )
-    except ValueError as exc:
+        validate_batch_size(len(sets), len(results), context=f"{args.capability} [{backend}]")
+    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
         _err(f"error: {exc}")
         return 1
 
     records: list[dict[str, Any]] = []
-    counts = {"resolved": 0, "unresolved": 0}
-    for ss, wr in zip(sets, results):
+    counts = {"resolved": 0, "unresolved": 0, "review": 0, "errors": 0}
+    diagnostics: list[ExecutionError] = []
+    for ss, wr in zip(sets, results, strict=True):
         merged = ss.clone()
         merged.merge_result(wr)
-        status = "resolved" if wr.status.name == "OK" else "unresolved"
-        counts[status] = counts.get(status, 0) + 1
-        records.append(_record(ss.entity_id, status, merged, want))
+        merged.completion.append(
+            StepOutcome(
+                cap.id, backend, wr.status.value, tuple(strand.type_id for strand in wr.strands)
+            )
+        )
+        if wr.status is WeaveStatus.ERROR:
+            status = "error"
+            for message in wr.errors or ("backend returned ERROR without a diagnostic",):
+                diagnostics.append(
+                    ExecutionError(
+                        strand_set=merged,
+                        error_type="WeaverError",
+                        message=message,
+                        capability_id=cap.id,
+                        category=classify_error(message),
+                    )
+                )
+        elif wr.status is WeaveStatus.AMBIGUOUS or wr.requires_review:
+            status = "review"
+        elif wr.status is WeaveStatus.NO_MATCH:
+            status = "unresolved"
+        else:
+            status = "resolved"
+        counts["errors" if status == "error" else status] += 1
+        record = _record(ss.entity_id, status, merged, want)
+        if wr.errors:
+            record["errors"] = list(wr.errors)
+        if wr.candidates:
+            record["candidates"] = [candidate.to_json() for candidate in wr.candidates]
+            _err(f"{ss.entity_id}: {len(wr.candidates)} candidate(s) require review")
+        record["diagnostics"] = [
+            {key: value for key, value in error.to_json().items() if key != "strand_set"}
+            for error in diagnostics
+            if error.strand_set is merged
+        ]
+        record["references"] = [ref.to_json() for ref in references_for([args.weaver], registry)]
+        records.append(record)
+    records = _number_records(records)
+    if not _archive_finish(
+        args, archive, records, {"direct_results": [item.to_json() for item in results]}
+    ):
+        return 1
     _emit(records, args.format, want)
     _summary(counts)
-    if args.strict and counts.get("unresolved"):
+    _report_errors(diagnostics)
+    if counts["errors"] or (args.strict and (counts["unresolved"] or counts["review"])):
         return 1
     return 0
 
@@ -607,8 +850,10 @@ def _cmd_keys(args: argparse.Namespace) -> int:
 
     if args.format == "json":
         out = {
-            k: {"produced_by": sorted(producers.get(k, [])),
-                "consumed_by": sorted(consumers.get(k, []))}
+            k: {
+                "produced_by": sorted(producers.get(k, [])),
+                "consumed_by": sorted(consumers.get(k, [])),
+            }
             for k in keys
         }
         json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
@@ -628,7 +873,9 @@ def _cmd_path(args: argparse.Namespace) -> int:
         raise SystemExit("error: --from and --to are both required")
     try:
         braid = Braider(registry).plan(
-            available_types=frozenset(frm), target_types=frozenset(to)
+            available_types=frozenset(frm),
+            target_types=frozenset(to),
+            backend_policy=BackendPolicy(args.policy),
         )
     except (NoPathError, NoPlanError) as exc:
         _err(f"no route from {frm} to {to}: {exc}")
@@ -637,8 +884,9 @@ def _cmd_path(args: argparse.Namespace) -> int:
     for i, step in enumerate(braid.steps, start=1):
         ins = ", ".join(sorted(step.input_types))
         outs = ", ".join(sorted(step.output_types))
-        print(f"  {i}. {step.weaver_id}.{step.capability_id} "
-              f"[{step.primary_backend}]: {ins} → {outs}")
+        print(
+            f"  {i}. {step.weaver_id}.{step.capability_id} [{step.primary_backend}]: {ins} → {outs}"
+        )
     return 0
 
 
@@ -657,23 +905,79 @@ def _cmd_references(args: argparse.Namespace) -> int:
 # argument parser
 # --------------------------------------------------------------------------- #
 def _add_input_flags(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--have", action="append", metavar="TYPE=VALUE",
-                   help="an input strand; repeatable. Broadcast onto every --in-file row.")
-    p.add_argument("--in-file", metavar="PATH",
-                   help="batch input: a CSV/TSV with type-id columns, or (with --in-type) "
-                        "one value per line. Use '-' for stdin.")
-    p.add_argument("--in-type", metavar="TYPE",
-                   help="treat --in-file as one VALUE per line of this strand type.")
+    p.add_argument(
+        "--have",
+        action="append",
+        metavar="TYPE=VALUE",
+        help="an input strand; repeatable. Broadcast onto every --in-file row.",
+    )
+    p.add_argument(
+        "--in-file",
+        metavar="PATH",
+        help="batch input: a CSV/TSV with type-id columns, or (with --in-type) "
+        "one value per line. Use '-' for stdin.",
+    )
+    p.add_argument(
+        "--in-type",
+        metavar="TYPE",
+        help="treat --in-file as one VALUE per line of this strand type.",
+    )
 
 
 def _add_output_flags(p: argparse.ArgumentParser, *, strict: bool = True) -> None:
-    p.add_argument("--format", choices=["human", "json", "jsonl", "tsv", "csv"],
-                   default="human", help="output format (default: human).")
-    p.add_argument("--only", metavar="WEAVERS",
-                   help="restrict to these weaver ids (comma/space separated).")
+    p.add_argument(
+        "--format",
+        choices=["human", "json", "jsonl", "tsv", "csv"],
+        default="human",
+        help="output format (default: human).",
+    )
+    p.add_argument(
+        "--only", metavar="WEAVERS", help="restrict to these weaver ids (comma/space separated)."
+    )
     if strict:
-        p.add_argument("--strict", action="store_true",
-                       help="exit non-zero if any input is unresolved or needs review.")
+        p.add_argument(
+            "--archive",
+            metavar="PATH",
+            help="save a self-contained JSON run archive (new file; no overwrite).",
+        )
+        p.add_argument(
+            "--strict",
+            action="store_true",
+            help="exit non-zero if any input is unresolved or needs review.",
+        )
+
+
+def _add_persistence_flags(parser, *, start=False):
+    parser.add_argument("--cache-db", metavar="PATH", help="opt-in local SQLite lookup cache")
+    parser.add_argument(
+        "--cache-positive-ttl",
+        type=float,
+        default=3600,
+        help="positive/ambiguous lifetime in seconds; 0 disables admission",
+    )
+    parser.add_argument(
+        "--cache-negative-ttl",
+        type=float,
+        default=300,
+        help="no-match lifetime in seconds; 0 disables admission",
+    )
+    parser.add_argument(
+        "--cache-max-bytes",
+        type=int,
+        default=256 * 1024 * 1024,
+        help="cache payload budget; physical SQLite size may differ",
+    )
+    parser.add_argument(
+        "--run-db", metavar="PATH", required=not start, help="opt-in local durable run store"
+    )
+    parser.add_argument(
+        "--lease-seconds",
+        type=float,
+        default=60,
+        help="run owner lease, renewed while executing (default: 60 seconds)",
+    )
+    if start:
+        parser.add_argument("--run-id", help="new run identity; existing IDs are never overwritten")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -687,32 +991,104 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("weave", help="plan a route from --have to --want and run it.")
     _add_input_flags(w)
     w.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
-    w.add_argument("--for-each", action="append", metavar="RELATIONSHIP", dest="for_each",
-                   help="fan the weave THROUGH a relationship, then plan --want from each "
-                        "result (e.g. --for-each orthologs). Repeatable; implies --expand all.")
-    w.add_argument("--traverse", action="append", metavar="CAPABILITY",
-                   help="like --for-each but names a fan capability id directly "
-                        "(e.g. --traverse ncbi.list_orthologs); the unambiguous form.")
-    w.add_argument("--expand", default=None, metavar="none|all|top:K",
-                   help="fan out one→many set outputs (default: none, or all when "
-                        "--for-each/--traverse is used).")
-    w.add_argument("--param", action="append", metavar="NAME=VALUE",
-                   help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
-                        "step. See `braidworks weavers` for each capability's parameters.")
-    w.add_argument("--references", action="store_true",
-                   help="print source citations for the route to stderr.")
+    w.add_argument(
+        "--for-each",
+        action="append",
+        metavar="RELATIONSHIP",
+        dest="for_each",
+        help="fan the weave THROUGH a relationship, then plan --want from each "
+        "result (e.g. --for-each orthologs). Repeatable; implies --expand all.",
+    )
+    w.add_argument(
+        "--traverse",
+        action="append",
+        metavar="CAPABILITY",
+        help="like --for-each but names a fan capability id directly "
+        "(e.g. --traverse ncbi.list_orthologs); the unambiguous form.",
+    )
+    w.add_argument(
+        "--expand",
+        default=None,
+        metavar="none|all|top:K",
+        help="fan out one→many set outputs (default: none, or all when "
+        "--for-each/--traverse is used).",
+    )
+    w.add_argument(
+        "--max-expansion",
+        type=int,
+        default=10_000,
+        metavar="N",
+        help="run-wide leaf limit (default: 10000); preserves all input roots "
+        "and reports omitted successors.",
+    )
+    w.add_argument(
+        "--policy",
+        choices=[policy.value for policy in BackendPolicy],
+        default="local_first",
+        help="backend policy (default: local_first).",
+    )
+    w.add_argument(
+        "--review-policy",
+        choices=[policy.value for policy in ReviewPolicy],
+        default="halt",
+        help="ambiguity/review policy (default: halt); "
+        "allow_continue explicitly permits candidate selection.",
+    )
+    w.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.0,
+        metavar="0..1",
+        help="minimum confidence; lower results pause even with allow_continue.",
+    )
+    w.add_argument(
+        "--param",
+        action="append",
+        metavar="NAME=VALUE",
+        help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
+        "step. See `braidworks weavers` for each capability's parameters.",
+    )
+    w.add_argument(
+        "--references", action="store_true", help="print source citations for the route to stderr."
+    )
     _add_output_flags(w)
+    _add_persistence_flags(w, start=True)
     w.set_defaults(func=_cmd_weave)
+
+    runs = sub.add_parser("runs", help="list saved runs or inspect a run's status/review choices")
+    runs.add_argument("run_id", nargs="?")
+    runs.add_argument("--run-db", required=True, metavar="PATH")
+    runs.add_argument("--format", choices=["human", "json"], default="human")
+    runs.set_defaults(func=_cmd_runs)
+    resume = sub.add_parser("resume", help="continue a saved run with its original query settings")
+    resume.add_argument("run_id")
+    resume.add_argument(
+        "--decision",
+        action="append",
+        metavar="ENTITY_KEY=select:INDEX|accept|reject",
+        help="explicit saved review decision; select INDEX is zero-based; repeatable",
+    )
+    resume.add_argument("--references", action="store_true")
+    _add_output_flags(resume)
+    _add_persistence_flags(resume)
+    resume.set_defaults(func=_cmd_resume)
 
     # run
     r = sub.add_parser("run", help="call ONE weaver capability directly (no routing).")
     r.add_argument("weaver", help="weaver id (see `braidworks weavers`).")
     r.add_argument("capability", help="capability id.")
-    r.add_argument("--want", metavar="TYPE[,TYPE…]",
-                   help="restrict outputs (default: all the capability produces).")
+    r.add_argument(
+        "--want",
+        metavar="TYPE[,TYPE…]",
+        help="restrict outputs (default: all the capability produces).",
+    )
     r.add_argument("--backend", help="backend name (required only if the capability has >1).")
-    r.add_argument("--param", action="append", metavar="NAME=VALUE",
-                   help="a capability parameter (repeatable).")
+    r.add_argument(
+        "--param",
+        action="append",
+        metavar="NAME=VALUE",
+        help="a capability parameter (repeatable).",
+    )
     _add_input_flags(r)
     _add_output_flags(r)
     r.set_defaults(func=_cmd_run)
@@ -736,6 +1112,12 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--from", dest="frm", metavar="TYPE[,TYPE…]", required=True)
     pa.add_argument("--to", metavar="TYPE[,TYPE…]", required=True)
     pa.add_argument("--only", metavar="WEAVERS")
+    pa.add_argument(
+        "--policy",
+        choices=[policy.value for policy in BackendPolicy],
+        default="local_first",
+        help="backend policy (default: local_first).",
+    )
     pa.set_defaults(func=_cmd_path)
 
     # references

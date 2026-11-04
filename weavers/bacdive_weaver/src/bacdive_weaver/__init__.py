@@ -5,8 +5,8 @@ from bacdive_weaver.provider import BacdiveWeaverProvider, register
 from bacdive_weaver.weaver import BacdiveWeaver
 
 __all__ = [
-    "build_bacdive_weaver",
-    "register",
     "BacdiveWeaver",
     "BacdiveWeaverProvider",
+    "build_bacdive_weaver",
+    "register",
 ]

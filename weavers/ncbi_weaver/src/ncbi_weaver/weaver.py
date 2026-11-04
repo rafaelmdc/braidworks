@@ -21,6 +21,8 @@ class NCBITaxonWeaver(BackendDispatchWeaver):
         if not backends:
             raise ValueError("NCBITaxonWeaver requires at least one backend")
         super().__init__(backends)
-        self.MANIFEST: WeaverManifest = vocab.build_manifest(
-            backends=tuple(sorted(backends))
-        )
+        self.MANIFEST: WeaverManifest = vocab.build_manifest(backends=tuple(sorted(backends)))
+
+    def declared_manifest(self) -> WeaverManifest:
+        """Describe all supported operations independently of enabled backends."""
+        return vocab.build_manifest(backends=("local", "api"))

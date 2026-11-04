@@ -21,10 +21,10 @@ from braidworks.core.registry import BraidRegistry
 
 __all__ = [
     "ENTRY_POINT_GROUP",
-    "iter_weaver_builders",
     "build_registry_from_entry_points",
-    "set_registry",
     "get_registry",
+    "iter_weaver_builders",
+    "set_registry",
 ]
 
 _registry: BraidRegistry | None = None

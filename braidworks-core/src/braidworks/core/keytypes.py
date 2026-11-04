@@ -26,6 +26,8 @@ from typing import Any
 # accessions, and ontology/EC/accession-style ids are ``str``; structured values keep
 # their container type and are left untouched by ``canonicalize``.
 CANONICAL_TYPES: dict[str, type] = {
+    "microbe.agora.reconstruction_id": str,
+    "microbe.bacdive.strain_id": int,
     "organism.name": str,
     "ncbi.taxon.id": int,
     "ncbi.taxon.species_id": int,
@@ -37,6 +39,7 @@ CANONICAL_TYPES: dict[str, type] = {
     "wikipedia.title": str,
     "protein.query": str,
     "protein.uniprot.accession": str,
+    "string.id": str,
     "gene.ncbi.id": int,
     "gene.ensembl.id": str,
     "gene.symbol": str,
@@ -48,13 +51,21 @@ CANONICAL_TYPES: dict[str, type] = {
     "enzyme.ec": str,
     "chem.chebi.id": str,
     "reaction.rhea.id": str,
+    "reaction.vmh.id": str,
+    "reaction.reactome.id": str,
     "pathway.reactome.id": str,
     "pathway.kegg.id": str,
     "protein.interpro.id": str,
     "protein.pfam.id": str,
     "pdb.id": str,
+    "structure.alphafold.model_id": str,
     "genome.accession": str,
+    "metagenome.run_id": str,
+    "culture.collection.id": str,
     "disease.mondo.id": str,
+    "disease.disbiome.id": int,
+    "disease.mesh.id": str,
+    "disease.meddra.id": str,
 }
 
 

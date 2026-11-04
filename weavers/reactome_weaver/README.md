@@ -1,32 +1,26 @@
 # reactome_weaver
 
-Curated biological pathways via Reactome — a molecular weaver off the protein hub, over
-the free, keyless Reactome ContentService API. The systems-level "what process is it part
-of" panel of the protein dossier. Lists every pathway a protein participates in, and
-drills any single pathway into its detail.
+List the pathways observed for a protein, inspect pathway details and contained reactions, and
+retain provider evidence. UniProt can supply the accession. The keyless API returns source
+observations, not a synthesized biological confidence assessment; display limits and complete
+fan sets serve different purposes.
 
 - **Source:** https://reactome.org · **License:** CC0-1.0 · **Cite:** https://doi.org/10.1093/nar/gkab1028 — Reactome
 - **Backend:** `api` (keyless) · **Discoverable as** `reactome`
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_pathways` | `protein.uniprot.accession` | **`pathway.reactome.id`** (⤜ fan: every distinct pathway), `pathway.reactome.names` (top N), `pathway.reactome.count` (true total), `pathway.reactome.records` |
-| `describe_pathway` | `pathway.reactome.id` | `pathway.reactome.display_name`, `pathway.reactome.species`, `pathway.reactome.in_disease`, `pathway.reactome.detail` |
+| Capability | Use it to |
+|---|---|
+| `list_pathways` | List observed pathways for a protein |
+| `describe_pathway` | Inspect a pathway and its evidence |
+| `list_reactions` | List reactions for a reconstruction or pathway |
+| `describe_reaction` | Inspect one source reaction |
 
-`list_pathways` emits `pathway.reactome.id` as a **set output** (the fan dimension), and
-`describe_pathway` consumes it — so a fanned pathway is drillable end-to-end.
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-## Dedup + deterministic ordering
-
-Reactome maps the accession to its pathways; the backend dedups to **distinct pathways**
-(by Reactome stable id) and orders them by stable id. `count` is the true total;
-`names`/`records` are the top `limit` (default 30); `pathway.reactome.id` is the full
-distinct set (uncapped — the fan dimension). Same accession → same list. An accession with
-no pathways (Reactome 400/404, or an empty list) is a clean `NO_MATCH`.
-
-## Use it
+## Run a query
 
 Once installed it is auto-discovered by the `braidworks` CLI:
 
@@ -42,16 +36,24 @@ From Python:
 ```python
 from reactome_weaver import build_reactome_weaver
 
-weaver = build_reactome_weaver()        # zero-config
+weaver = build_reactome_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `reactome_weaver.register(factory)` adds it as a provider.
 ```
 
-## Develop
+## Setup, interpretation and contribution
 
-```bash
-make verify                        # spec ↔ manifest, reachability, real fingerprints (--strict adds golden)
-make test                          # conformance + contract + golden, fully offline
-BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live Reactome API (schema-drift detector)
-```
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
-
 from braidworks.core import BaseWeaver, WeaverFactory, WeaverProvider
-
 from helpers import make_weaver, simple_capability
 
 

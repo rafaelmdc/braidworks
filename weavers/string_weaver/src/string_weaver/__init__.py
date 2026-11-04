@@ -5,8 +5,8 @@ from string_weaver.provider import StringWeaverProvider, register
 from string_weaver.weaver import StringWeaver
 
 __all__ = [
-    "build_string_weaver",
-    "register",
     "StringWeaver",
     "StringWeaverProvider",
+    "build_string_weaver",
+    "register",
 ]

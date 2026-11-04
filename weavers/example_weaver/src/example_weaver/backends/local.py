@@ -12,9 +12,10 @@ from __future__ import annotations
 import csv
 from functools import lru_cache
 from importlib.resources import files
+from io import StringIO
 from typing import Any
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, LookupRecord, format_exc
 
 # Bump this whenever the bundled data changes — it is the backend's fingerprint,
 # so it must change when the data changes and stay identical for identical data.
@@ -29,16 +30,45 @@ _COLUMNS = {
 }
 
 
+class _InvalidTable(ValueError):
+    """The bundled teaching source violates its declared CSV schema."""
+
+
+def _parse_table(raw: str) -> dict[str, dict[str, str]]:
+    """Pure CSV normalization: strict headers/rows and unique positive taxids.
+
+    Column order is irrelevant. Blank trait cells mean absent values. Empty data
+    with a valid header is allowed; malformed source is never interpreted as a miss.
+    """
+    reader = csv.DictReader(StringIO(raw), strict=True)
+    required = {"tax_id", *_COLUMNS}
+    table: dict[str, dict[str, str]] = {}
+    try:
+        headers = reader.fieldnames or []
+        if len(headers) != len(required) or set(headers) != required:
+            raise _InvalidTable(
+                "Example CSV requires unique tax_id, gram_stain, optimum_temp headers"
+            )
+        for row in reader:
+            if None in row or any(value is None for value in row.values()):
+                raise _InvalidTable(f"Example CSV row {reader.line_num} has missing or extra cells")
+            raw_taxid = row["tax_id"].strip()
+            if not raw_taxid.isascii() or not raw_taxid.isdecimal() or int(raw_taxid) <= 0:
+                raise _InvalidTable(f"Example CSV row {reader.line_num} requires a positive taxid")
+            taxid = str(int(raw_taxid))
+            if taxid in table:
+                raise _InvalidTable(f"Example CSV row {reader.line_num} repeats a taxid")
+            table[taxid] = {type_id: row[col] for col, type_id in _COLUMNS.items() if row[col]}
+    except csv.Error as exc:
+        raise _InvalidTable(f"Example CSV is malformed: {exc}") from exc
+    return table
+
+
 @lru_cache(maxsize=1)
 def _load_table() -> dict[str, dict[str, str]]:
-    """taxid -> {produced_type_id: value}, parsed once from the bundled CSV."""
+    """Read bundled data once; cached parsed data stays private to the backend."""
     raw = (files("example_weaver") / "data" / _DATA_FILE).read_text(encoding="utf-8")
-    table: dict[str, dict[str, str]] = {}
-    for row in csv.DictReader(raw.splitlines()):
-        table[row["tax_id"]] = {
-            type_id: row[col] for col, type_id in _COLUMNS.items() if row.get(col)
-        }
-    return table
+    return _parse_table(raw)
 
 
 class ExampleLocalBackend(BackendBase):
@@ -67,7 +97,11 @@ class ExampleLocalBackend(BackendBase):
     ) -> list[LookupRecord]:
         # This lookup has no expensive path, so groups_to_compute is unused here;
         # the mapper still filters to the requested outputs.
-        table = _load_table()
+        try:
+            table = _load_table()
+        except (OSError, UnicodeError, _InvalidTable) as exc:
+            error = f"Example source error: {format_exc(exc)}"
+            return [LookupRecord(query=query, error=error) for query in queries]
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
             taxid = str(query.get("ncbi.taxon.id"))

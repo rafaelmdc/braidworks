@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from mondo_weaver.factory import build_mondo_weaver_fixture
 
 MONDO_ID = "disease.mondo.id"

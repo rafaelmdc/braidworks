@@ -1,0 +1,123 @@
+finding_id	weaver	priority	classification	scope_status	group_id	group_issue	finding_issue	finding_url	related_group_issues
+WV-EXAMPLE-001	example	P1	Docs	Remediation proposal; design still reviewable	SH-01	148	174	https://github.com/rafaelmdc/braidworks/issues/174	
+WV-EXAMPLE-002	example	P2	Configuration	Remediation proposal; design still reviewable	SH-02	149	175	https://github.com/rafaelmdc/braidworks/issues/175	
+WV-EXAMPLE-003	example	P2	Usability	Remediation proposal; design still reviewable	SRC-EXAMPLE	157	176	https://github.com/rafaelmdc/braidworks/issues/176	
+WV-EXAMPLE-004	example	P2	Tests	Remediation proposal; design still reviewable	SRC-EXAMPLE	157	177	https://github.com/rafaelmdc/braidworks/issues/177	
+WV-EXAMPLE-005	example	P2	Provenance	Remediation proposal; design still reviewable	SRC-EXAMPLE	157	178	https://github.com/rafaelmdc/braidworks/issues/178	
+WV-EXAMPLE-006	example	P3	Architecture	Proposal / scope decision required	SRC-EXAMPLE	157	179	https://github.com/rafaelmdc/braidworks/issues/179	156
+WV-UNIPROT-001	uniprot	P1	Correctness	Remediation proposal; design still reviewable	SH-08	155	180	https://github.com/rafaelmdc/braidworks/issues/180	
+WV-UNIPROT-002	uniprot	P1	Correctness	Remediation proposal; design still reviewable	SH-08	155	181	https://github.com/rafaelmdc/braidworks/issues/181	
+WV-UNIPROT-003	uniprot	P1	Groups/coverage	Remediation proposal; design still reviewable	SH-04	151	182	https://github.com/rafaelmdc/braidworks/issues/182	
+WV-UNIPROT-004	uniprot	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	183	https://github.com/rafaelmdc/braidworks/issues/183	
+WV-UNIPROT-005	uniprot	P2	Errors	Remediation proposal; design still reviewable	SH-03	150	184	https://github.com/rafaelmdc/braidworks/issues/184	
+WV-UNIPROT-006	uniprot	P2	Configuration/lifecycle	Remediation proposal; design still reviewable	SH-02	149	185	https://github.com/rafaelmdc/braidworks/issues/185	154
+WV-UNIPROT-007	uniprot	P2	Architecture/errors	Remediation proposal; design still reviewable	SRC-UNIPROT	158	186	https://github.com/rafaelmdc/braidworks/issues/186	150,153,155,156
+WV-UNIPROT-008	uniprot	P2	Docs	Remediation proposal; design still reviewable	SH-01	148	187	https://github.com/rafaelmdc/braidworks/issues/187	
+WV-UNIPROT-009	uniprot	P2	Features	Proposal / scope decision required	SRC-UNIPROT	158	188	https://github.com/rafaelmdc/braidworks/issues/188	
+WV-UNIPROT-010	uniprot	P2	Tests	Remediation proposal; design still reviewable	SRC-UNIPROT	158	189	https://github.com/rafaelmdc/braidworks/issues/189	155
+WV-PDBE-001	pdbe	P1	Identity/configuration	Remediation proposal; design still reviewable	SH-07	154	190	https://github.com/rafaelmdc/braidworks/issues/190	
+WV-PDBE-002	pdbe	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	191	https://github.com/rafaelmdc/braidworks/issues/191	
+WV-PDBE-003	pdbe	P2	Errors	Remediation proposal; design still reviewable	SH-03	150	192	https://github.com/rafaelmdc/braidworks/issues/192	
+WV-PDBE-004	pdbe	P2	Features	Proposal / scope decision required	SRC-PDBE	159	193	https://github.com/rafaelmdc/braidworks/issues/193	
+WV-PDBE-005	pdbe	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	194	https://github.com/rafaelmdc/braidworks/issues/194	148
+WV-PDBE-006	pdbe	P2	Docs	Remediation proposal; design still reviewable	SRC-PDBE	159	195	https://github.com/rafaelmdc/braidworks/issues/195	
+WV-PDBE-007	pdbe	P2	Correctness	Remediation proposal; design still reviewable	SH-08	155	196	https://github.com/rafaelmdc/braidworks/issues/196	
+WV-ALPHAFOLD-001	alphafold	P1	Scientific semantics	Remediation proposal; design still reviewable	SRC-ALPHAFOLD	160	197	https://github.com/rafaelmdc/braidworks/issues/197	
+WV-ALPHAFOLD-002	alphafold	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	198	https://github.com/rafaelmdc/braidworks/issues/198	
+WV-ALPHAFOLD-003	alphafold	P2	Features	Proposal / scope decision required	SRC-ALPHAFOLD	160	199	https://github.com/rafaelmdc/braidworks/issues/199	
+WV-ALPHAFOLD-004	alphafold	P2	Configuration/lifecycle	Remediation proposal; design still reviewable	SH-02	149	200	https://github.com/rafaelmdc/braidworks/issues/200	154
+WV-ALPHAFOLD-005	alphafold	P2	Docs	Remediation proposal; design still reviewable	SH-01	148	201	https://github.com/rafaelmdc/braidworks/issues/201	
+WV-ALPHAFOLD-006	alphafold	P2	Features	Proposal / scope decision required	SRC-ALPHAFOLD	160	202	https://github.com/rafaelmdc/braidworks/issues/202	
+WV-QUICKGO-001	quickgo	P1	Correctness	Remediation proposal; design still reviewable	SH-08	155	203	https://github.com/rafaelmdc/braidworks/issues/203	
+WV-QUICKGO-002	quickgo	P1	Identity/coverage	Remediation proposal; design still reviewable	SH-07	154	204	https://github.com/rafaelmdc/braidworks/issues/204	
+WV-QUICKGO-003	quickgo	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	205	https://github.com/rafaelmdc/braidworks/issues/205	
+WV-QUICKGO-004	quickgo	P2	Features	Proposal / scope decision required	SRC-QUICKGO	161	206	https://github.com/rafaelmdc/braidworks/issues/206	
+WV-QUICKGO-005	quickgo	P2	Features	Proposal / scope decision required	SRC-QUICKGO	161	207	https://github.com/rafaelmdc/braidworks/issues/207	
+WV-QUICKGO-006	quickgo	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	208	https://github.com/rafaelmdc/braidworks/issues/208	148
+WV-REACTOME-001	reactome	P1	Identity/configuration	Remediation proposal; design still reviewable	SH-07	154	209	https://github.com/rafaelmdc/braidworks/issues/209	
+WV-REACTOME-002	reactome	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	210	https://github.com/rafaelmdc/braidworks/issues/210	
+WV-REACTOME-003	reactome	P2	Errors	Remediation proposal; design still reviewable	SH-03	150	211	https://github.com/rafaelmdc/braidworks/issues/211	
+WV-REACTOME-004	reactome	P2	Features	Proposal / scope decision required	SRC-REACTOME	162	212	https://github.com/rafaelmdc/braidworks/issues/212	
+WV-REACTOME-005	reactome	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	213	https://github.com/rafaelmdc/braidworks/issues/213	148
+WV-REACTOME-006	reactome	P2	Scientific semantics	Remediation proposal; design still reviewable	SRC-REACTOME	162	214	https://github.com/rafaelmdc/braidworks/issues/214	155
+WV-STRING-001	string	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	215	https://github.com/rafaelmdc/braidworks/issues/215	
+WV-STRING-002	string	P1	Coverage	Remediation proposal; design still reviewable	SH-04	151	216	https://github.com/rafaelmdc/braidworks/issues/216	
+WV-STRING-003	string	P1	Correctness	Remediation proposal; design still reviewable	SH-08	155	217	https://github.com/rafaelmdc/braidworks/issues/217	
+WV-STRING-004	string	P1	Source identity	Remediation proposal; design still reviewable	SH-07	154	218	https://github.com/rafaelmdc/braidworks/issues/218	
+WV-STRING-005	string	P2	Scientific semantics/parameters	Remediation proposal; design still reviewable	SRC-STRING	163	219	https://github.com/rafaelmdc/braidworks/issues/219	
+WV-STRING-006	string	P2	Errors	Remediation proposal; design still reviewable	SH-03	150	220	https://github.com/rafaelmdc/braidworks/issues/220	
+WV-STRING-007	string	P2	Configuration/docs	Remediation proposal; design still reviewable	SRC-STRING	163	221	https://github.com/rafaelmdc/braidworks/issues/221	148,149,153
+WV-NCBI-001	ncbi	P0	Build/data safety	Remediation proposal; design still reviewable	SH-05	152	222	https://github.com/rafaelmdc/braidworks/issues/222	
+WV-NCBI-002	ncbi	P1	CLI usability	Remediation proposal; design still reviewable	SRC-NCBI	164	223	https://github.com/rafaelmdc/braidworks/issues/223	
+WV-NCBI-003	ncbi	P1	Groups/coverage	Remediation proposal; design still reviewable	SH-04	151	224	https://github.com/rafaelmdc/braidworks/issues/224	
+WV-NCBI-004	ncbi	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	225	https://github.com/rafaelmdc/braidworks/issues/225	
+WV-NCBI-005	ncbi	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	226	https://github.com/rafaelmdc/braidworks/issues/226	
+WV-NCBI-006	ncbi	P2	Configuration/lifecycle	Remediation proposal; design still reviewable	SH-02	149	227	https://github.com/rafaelmdc/braidworks/issues/227	154
+WV-NCBI-007	ncbi	P2	Batching	Remediation proposal; design still reviewable	SH-06	153	228	https://github.com/rafaelmdc/braidworks/issues/228	
+WV-NCBI-008	ncbi	P2	Pagination/coverage	Remediation proposal; design still reviewable	SH-04	151	229	https://github.com/rafaelmdc/braidworks/issues/229	
+WV-NCBI-009	ncbi	P2	Architecture/contracts	Remediation proposal; design still reviewable	SRC-NCBI	164	230	https://github.com/rafaelmdc/braidworks/issues/230	
+WV-NCBI-010	ncbi	P2	Docs/features	Proposal / scope decision required	SRC-NCBI	164	231	https://github.com/rafaelmdc/braidworks/issues/231	
+WV-GTDB-001	gtdb	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	232	https://github.com/rafaelmdc/braidworks/issues/232	
+WV-GTDB-002	gtdb	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	233	https://github.com/rafaelmdc/braidworks/issues/233	
+WV-GTDB-003	gtdb	P1	Scientific semantics	Remediation proposal; design still reviewable	SRC-GTDB	165	234	https://github.com/rafaelmdc/braidworks/issues/234	155
+WV-GTDB-004	gtdb	P1	Build/provenance	Remediation proposal; design still reviewable	SH-07	154	235	https://github.com/rafaelmdc/braidworks/issues/235	
+WV-GTDB-005	gtdb	P2	Build	Remediation proposal; design still reviewable	SH-05	152	236	https://github.com/rafaelmdc/braidworks/issues/236	
+WV-GTDB-006	gtdb	P2	Validation	Remediation proposal; design still reviewable	SRC-GTDB	165	237	https://github.com/rafaelmdc/braidworks/issues/237	150
+WV-GTDB-007	gtdb	P2	Performance/build	Remediation proposal; design still reviewable	SH-09	156	238	https://github.com/rafaelmdc/braidworks/issues/238	
+WV-GTDB-008	gtdb	P2	Configuration/lifecycle	Remediation proposal; design still reviewable	SH-02	149	239	https://github.com/rafaelmdc/braidworks/issues/239	153,154
+WV-GTDB-009	gtdb	P2	Docs/features	Proposal / scope decision required	SRC-GTDB	165	240	https://github.com/rafaelmdc/braidworks/issues/240	148
+WV-BACDIVE-001	bacdive	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	241	https://github.com/rafaelmdc/braidworks/issues/241	
+WV-BACDIVE-002	bacdive	P1	Coverage/identity	Remediation proposal; design still reviewable	SH-04	151	242	https://github.com/rafaelmdc/braidworks/issues/242	154
+WV-BACDIVE-003	bacdive	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	243	https://github.com/rafaelmdc/braidworks/issues/243	
+WV-BACDIVE-004	bacdive	P2	Batching	Remediation proposal; design still reviewable	SH-06	153	244	https://github.com/rafaelmdc/braidworks/issues/244	156
+WV-BACDIVE-005	bacdive	P2	Evidence	Remediation proposal; design still reviewable	SH-08	155	245	https://github.com/rafaelmdc/braidworks/issues/245	
+WV-BACDIVE-006	bacdive	P2	Docs/features	Proposal / scope decision required	SRC-BACDIVE	166	246	https://github.com/rafaelmdc/braidworks/issues/246	
+WV-BACDIVE-007	bacdive	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	247	https://github.com/rafaelmdc/braidworks/issues/247	148,154
+WV-AGORA-001	agora	P1	Groups/coverage	Remediation proposal; design still reviewable	SH-04	151	248	https://github.com/rafaelmdc/braidworks/issues/248	
+WV-AGORA-002	agora	P1	Artifact safety/identity	Remediation proposal; design still reviewable	SRC-AGORA	167	249	https://github.com/rafaelmdc/braidworks/issues/249	150,151,152,154
+WV-AGORA-003	agora	P2	Build/coverage	Remediation proposal; design still reviewable	SH-04	151	250	https://github.com/rafaelmdc/braidworks/issues/250	
+WV-AGORA-004	agora	P2	Features/connectivity	Proposal / scope decision required	SRC-AGORA	167	251	https://github.com/rafaelmdc/braidworks/issues/251	
+WV-AGORA-005	agora	P2	Build/provenance	Remediation proposal; design still reviewable	SH-05	152	252	https://github.com/rafaelmdc/braidworks/issues/252	154
+WV-AGORA-006	agora	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	253	https://github.com/rafaelmdc/braidworks/issues/253	148
+WV-AGORA-008	agora	P2	License metadata	Remediation proposal; design still reviewable	SRC-AGORA	167	254	https://github.com/rafaelmdc/braidworks/issues/254	
+WV-AGORA-007	agora	P3	Architecture/performance	Proposal / scope decision required	SH-09	156	255	https://github.com/rafaelmdc/braidworks/issues/255	
+WV-FAPROTAX-001	faprotax	P1	Scientific correctness	Remediation proposal; design still reviewable	SRC-FAPROTAX	168	256	https://github.com/rafaelmdc/braidworks/issues/256	155
+WV-FAPROTAX-002	faprotax	P1	Parser correctness	Remediation proposal; design still reviewable	SRC-FAPROTAX	168	257	https://github.com/rafaelmdc/braidworks/issues/257	
+WV-FAPROTAX-003	faprotax	P2	Validation/evidence	Remediation proposal; design still reviewable	SRC-FAPROTAX	168	258	https://github.com/rafaelmdc/braidworks/issues/258	150
+WV-FAPROTAX-004	faprotax	P2	Tests/docs	Remediation proposal; design still reviewable	SRC-FAPROTAX	168	259	https://github.com/rafaelmdc/braidworks/issues/259	
+WV-FAPROTAX-005	faprotax	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	260	https://github.com/rafaelmdc/braidworks/issues/260	148
+WV-FAPROTAX-006	faprotax	P3	Performance	Proposal / scope decision required	SH-09	156	261	https://github.com/rafaelmdc/braidworks/issues/261	
+WV-DISBIOME-001	disbiome	P1	Connectivity/identity	Remediation proposal; design still reviewable	SRC-DISBIOME	169	262	https://github.com/rafaelmdc/braidworks/issues/262	155
+WV-DISBIOME-002	disbiome	P2	Performance/groups	Remediation proposal; design still reviewable	SH-09	156	263	https://github.com/rafaelmdc/braidworks/issues/263	
+WV-DISBIOME-003	disbiome	P2	Evidence/features	Proposal / scope decision required	SRC-DISBIOME	169	264	https://github.com/rafaelmdc/braidworks/issues/264	
+WV-DISBIOME-004	disbiome	P2	Build/validation	Remediation proposal; design still reviewable	SRC-DISBIOME	169	265	https://github.com/rafaelmdc/braidworks/issues/265	150,151
+WV-DISBIOME-005	disbiome	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	266	https://github.com/rafaelmdc/braidworks/issues/266	148
+WV-DISBIOME-006	disbiome	P3	Features/performance	Proposal / scope decision required	SH-09	156	267	https://github.com/rafaelmdc/braidworks/issues/267	
+WV-GMREPO-001	gmrepo	P1	Build/coverage	Remediation proposal; design still reviewable	SH-04	151	268	https://github.com/rafaelmdc/braidworks/issues/268	150
+WV-GMREPO-002	gmrepo	P1	Scientific coverage	Remediation proposal; design still reviewable	SH-04	151	269	https://github.com/rafaelmdc/braidworks/issues/269	
+WV-GMREPO-003	gmrepo	P2	Correctness	Remediation proposal; design still reviewable	SH-08	155	270	https://github.com/rafaelmdc/braidworks/issues/270	153
+WV-GMREPO-004	gmrepo	P2	Validation	Remediation proposal; design still reviewable	SRC-GMREPO	170	271	https://github.com/rafaelmdc/braidworks/issues/271	150
+WV-GMREPO-005	gmrepo	P2	Features	Proposal / scope decision required	SRC-GMREPO	170	272	https://github.com/rafaelmdc/braidworks/issues/272	
+WV-GMREPO-006	gmrepo	P2	Acquisition	Remediation proposal; design still reviewable	SH-06	153	273	https://github.com/rafaelmdc/braidworks/issues/273	151
+WV-GMREPO-007	gmrepo	P2	Docs/configuration	Remediation proposal; design still reviewable	SH-02	149	274	https://github.com/rafaelmdc/braidworks/issues/274	148,156
+WV-MONDO-001	mondo	P1	Scientific identity	Remediation proposal; design still reviewable	SH-08	155	275	https://github.com/rafaelmdc/braidworks/issues/275	
+WV-MONDO-002	mondo	P1	Scientific semantics	Remediation proposal; design still reviewable	SH-08	155	276	https://github.com/rafaelmdc/braidworks/issues/276	
+WV-MONDO-003	mondo	P1	Graph safety	Remediation proposal; design still reviewable	SRC-MONDO	171	277	https://github.com/rafaelmdc/braidworks/issues/277	
+WV-MONDO-004	mondo	P2	Features	Proposal / scope decision required	SRC-MONDO	171	278	https://github.com/rafaelmdc/braidworks/issues/278	
+WV-MONDO-005	mondo	P2	Performance/groups	Remediation proposal; design still reviewable	SH-09	156	279	https://github.com/rafaelmdc/braidworks/issues/279	
+WV-MONDO-006	mondo	P2	Build/provenance	Remediation proposal; design still reviewable	SH-07	154	280	https://github.com/rafaelmdc/braidworks/issues/280	
+WV-MONDO-007	mondo	P2	Configuration/docs	Remediation proposal; design still reviewable	SH-02	149	281	https://github.com/rafaelmdc/braidworks/issues/281	148
+WV-WIKIDATA-001	wikidata	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	282	https://github.com/rafaelmdc/braidworks/issues/282	
+WV-WIKIDATA-002	wikidata	P2	Query correctness	Remediation proposal; design still reviewable	SH-03	150	283	https://github.com/rafaelmdc/braidworks/issues/283	
+WV-WIKIDATA-003	wikidata	P2	Determinism	Remediation proposal; design still reviewable	SH-08	155	284	https://github.com/rafaelmdc/braidworks/issues/284	
+WV-WIKIDATA-004	wikidata	P2	Configuration/lifecycle	Remediation proposal; design still reviewable	SH-02	149	285	https://github.com/rafaelmdc/braidworks/issues/285	154
+WV-WIKIDATA-005	wikidata	P2	Features	Proposal / scope decision required	SRC-WIKIDATA	172	286	https://github.com/rafaelmdc/braidworks/issues/286	
+WV-WIKIDATA-006	wikidata	P2	Errors/policy	Remediation proposal; design still reviewable	SH-03	150	287	https://github.com/rafaelmdc/braidworks/issues/287	
+WV-WIKIDATA-007	wikidata	P2	Docs	Remediation proposal; design still reviewable	SH-01	148	288	https://github.com/rafaelmdc/braidworks/issues/288	
+WV-WIKIPEDIA-001	wikipedia	P1	Scientific semantics/parity	Remediation proposal; design still reviewable	SH-04	151	289	https://github.com/rafaelmdc/braidworks/issues/289	154
+WV-WIKIPEDIA-002	wikipedia	P1	Temporal correctness	Remediation proposal; design still reviewable	SH-04	151	290	https://github.com/rafaelmdc/braidworks/issues/290	
+WV-WIKIPEDIA-003	wikipedia	P1	Build/configuration	Remediation proposal; design still reviewable	SH-07	154	291	https://github.com/rafaelmdc/braidworks/issues/291	
+WV-WIKIPEDIA-004	wikipedia	P1	Errors	Remediation proposal; design still reviewable	SH-03	150	292	https://github.com/rafaelmdc/braidworks/issues/292	
+WV-WIKIPEDIA-005	wikipedia	P2	Batching/configuration	Remediation proposal; design still reviewable	SH-02	149	293	https://github.com/rafaelmdc/braidworks/issues/293	153,154
+WV-WIKIPEDIA-006	wikipedia	P2	Build/validation	Remediation proposal; design still reviewable	SH-07	154	294	https://github.com/rafaelmdc/braidworks/issues/294	151
+WV-WIKIPEDIA-007	wikipedia	P2	Features/docs	Proposal / scope decision required	SRC-WIKIPEDIA	173	295	https://github.com/rafaelmdc/braidworks/issues/295	148,151

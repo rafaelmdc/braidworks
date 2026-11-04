@@ -13,7 +13,8 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from braidworks.core.result import WeaveResult
+from braidworks.core.cache_codec import validate_json
+from braidworks.core.result import WeaveResult, WeaveStatus
 
 if TYPE_CHECKING:
     from braidworks.core.capability import Capability
@@ -60,8 +61,9 @@ def compute_cache_key(
         type_id: (s.value if (s := strand_set.get(type_id)) is not None else None)
         for type_id in capability.consumes
     }
+    validate_json({"in": fingerprint_inputs, "params": params or {}})
     payload = json.dumps(
-        {"in": fingerprint_inputs, "params": params or {}}, sort_keys=True, default=str
+        {"in": fingerprint_inputs, "params": params or {}}, sort_keys=True, allow_nan=False
     )
     input_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return StrandCacheKey(
@@ -79,9 +81,7 @@ class StrandCache(Protocol):
     superset scan without exposing it to callers; ``put`` indexes by
     ``result.computed_groups``."""
 
-    def get(
-        self, key: StrandCacheKey, requested_groups: frozenset[str]
-    ) -> WeaveResult | None: ...
+    def get(self, key: StrandCacheKey, requested_groups: frozenset[str]) -> WeaveResult | None: ...
 
     def put(self, key: StrandCacheKey, result: WeaveResult) -> None: ...
 
@@ -92,15 +92,15 @@ class InMemoryStrandCache:
 
     _store: dict[StrandCacheKey, list[WeaveResult]] = field(default_factory=dict)
 
-    def get(
-        self, key: StrandCacheKey, requested_groups: frozenset[str]
-    ) -> WeaveResult | None:
+    def get(self, key: StrandCacheKey, requested_groups: frozenset[str]) -> WeaveResult | None:
         for entry in self._store.get(key, ()):
             if entry.computed_groups >= requested_groups:
                 return entry
         return None
 
     def put(self, key: StrandCacheKey, result: WeaveResult) -> None:
+        if result.status is WeaveStatus.ERROR:
+            return
         entries = self._store.setdefault(key, [])
         for i, entry in enumerate(entries):
             if entry.computed_groups == result.computed_groups:

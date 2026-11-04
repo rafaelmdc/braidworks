@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from uniprot_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("api",))
@@ -39,13 +39,13 @@ class TestApiOrder(WeaverOrderContractTests):
         return weaver
 
     def sample_strand_sets(self):
-        # TODO: replace with >=5 real, distinct inputs from the source.
+        # Five observed successful identities strengthen the unchanged order contract.
         samples = [
-            {"protein.query": "TP53"},
-            {"protein.query": "sample-0"},
-            {"protein.query": "sample-1"},
-            {"protein.query": "sample-2"},
-            {"protein.query": "sample-3"},
+            {"protein.query": "P04637"},
+            {"protein.query": "A0A087WT22"},
+            {"protein.query": "P02340"},
+            {"protein.query": "P38398"},
+            {"protein.query": "Q00987"},
         ]
         return [
             StrandSet.from_strands(f"e{i}", [Strand(t, v) for t, v in values.items()])
@@ -55,7 +55,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 class TestResolveProteinCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("resolve_protein")
-    consumed_values_a = {"protein.query": "TP53"}
-    consumed_values_b = {"protein.query": "sample-b-protein.query"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"protein.query": "TP53"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"protein.query": "sample-b-protein.query"}
     group_subset = "identity"
     group_superset = "taxonomy"

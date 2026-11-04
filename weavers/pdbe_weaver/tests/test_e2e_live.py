@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from pdbe_weaver import build_pdbe_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -73,8 +71,12 @@ async def _describe(weaver, pdb_id):
             "describe_structure",
             [ss],
             requested_outputs=frozenset(
-                {"structure.pdb.title", "structure.pdb.method",
-                 "structure.pdb.release_date", "structure.pdb.detail"}
+                {
+                    "structure.pdb.title",
+                    "structure.pdb.method",
+                    "structure.pdb.release_date",
+                    "structure.pdb.detail",
+                }
             ),
             backend="api",
         )
@@ -98,3 +100,75 @@ async def test_live_describe_unknown_is_no_match():
     result = await _describe(weaver, "9zz9")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_bulk_best_structures_match_each_accession():
+    weaver = build_pdbe_weaver()
+    accessions = ["P04637", "P69905"]
+    results = await weaver.execute_batch(
+        "list_structures",
+        [StrandSet.from_strands(a, [Strand("protein.uniprot.accession", a)]) for a in accessions],
+        requested_outputs=frozenset({"pdb.id", "structure.pdb.count"}),
+        backend="api",
+    )
+    assert len(results) == 2
+    for result, expected_structure in zip(results, ["1tup", "4hhb"]):
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert expected_structure in values["pdb.id"]
+        assert values["structure.pdb.count"] == len(values["pdb.id"])
+
+
+async def test_live_requested_quality_preserves_missing_data_metrics():
+    async with build_pdbe_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_structure",
+                [StrandSet.from_strands("quality", [Strand("pdb.id", "1tup")])],
+                requested_outputs=frozenset({"structure.pdb.quality"}),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        quality = values["structure.pdb.quality"]
+        assert quality["available"] and quality["pdb_id"] == "1tup"
+        assert "X-ray diffraction" in quality["method"]
+        assert "geometry_quality" in quality["metrics"]
+
+
+async def test_live_entities_assemblies_ligands_sifts_and_artifact_urls():
+    import httpx
+    from pdbe_weaver.backends.api import PdbeApiBackend
+
+    async with httpx.AsyncClient(base_url="https://www.ebi.ac.uk/pdbe/api", timeout=30) as client:
+        backend = PdbeApiBackend(client=client)
+        result = (
+            await backend.fetch(
+                "describe_structure",
+                [{"pdb.id": "1cbs"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(
+                    {"entities", "assemblies", "ligands", "mappings", "residues", "coordinates"}
+                ),
+            )
+        )[0]
+        assert not result.error, result.error
+        values = result.values
+        assert values["structure.pdb.entities"]["records"][0]["entity_id"] == 1
+        assert values["structure.pdb.assemblies"]["records"][0]["assembly_id"] == "1"
+        assert values["structure.pdb.ligands"]["records"][0]["chem_comp_id"] == "REA"
+        assert "P29373" in values["structure.pdb.mappings"]["records"]["UniProt"]
+        residues = values["structure.pdb.residues"]
+        assert residues["count"] == 137
+        refs = residues["records"][0]["cross_references"]
+        assert any(
+            ref.get("dbSource") == "UniProt"
+            and ref.get("dbAccessionId") == "P29373"
+            and ref.get("dbResNum") == "2"
+            for ref in refs
+        )
+        artifacts = values["structure.pdb.coordinates"]
+        assert artifacts["acquired"] is False
+        assert artifacts["assemblies"][0]["mmcif_gz_url"].endswith("1cbs-assembly-1.cif.gz")

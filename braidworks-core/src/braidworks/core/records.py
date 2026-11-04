@@ -50,6 +50,26 @@ class LookupRecord:
     found: bool = False
     values: dict[str, Any] = field(default_factory=dict)
     error: str | None = None  # per-entity failure; a miss is found=False, not an error
+    warnings: tuple[str, ...] = ()  # non-fatal source limitations, e.g. partial coverage
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "query": self.query,
+            "found": self.found,
+            "values": self.values,
+            "error": self.error,
+            "warnings": list(self.warnings),
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> LookupRecord:
+        return cls(
+            query=dict(data["query"]),
+            found=data.get("found", False),
+            values=dict(data.get("values", {})),
+            error=data.get("error"),
+            warnings=tuple(data.get("warnings", [])),
+        )
 
 
 @dataclass

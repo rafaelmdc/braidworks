@@ -16,22 +16,24 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from pdbe_weaver.backends.api import PdbeApiBackend
 from pdbe_weaver.weaver import PdbeWeaver
 
 
-def build_pdbe_weaver(**_config: Any) -> BaseWeaver:
-    """Zero-config introspection builder (``weaverkit verify``'s entry point).
-
-    Wires every declared backend present-but-possibly-unconfigured. For real use,
-    add a configured builder (see the module docstring / the commented skeletons).
-    """
-    backends = {
-        "api": PdbeApiBackend(),
-    }
-    return PdbeWeaver(backends)
+def build_pdbe_weaver(
+    *,
+    base_url: str = "https://www.ebi.ac.uk/pdbe/api",
+    client: httpx.AsyncClient | None = None,
+    limit: int = 25,
+    **_config: Any,
+) -> BaseWeaver:
+    """Build with explicit source settings; injected clients remain caller-owned."""
+    reject_unknown_options(_config)
+    return PdbeWeaver({"api": PdbeApiBackend(base_url=base_url, client=client, limit=limit)})
 
 
 def build_pdbe_weaver_fixture() -> BaseWeaver:

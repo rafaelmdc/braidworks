@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.3.0"
+version = "0.3.9"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -45,9 +45,11 @@ source_sample = """
 
 [[capability]]
 id = "disbiome.list_diseases"
-# Species-level data: consume the species-rank taxid so the planner climbs a
-# strain/subspecies taxid (e.g. from the UniProt bridge) up to its species first.
-consumes = ["ncbi.taxon.species_id"]
+# Exact source identity: generic taxids include genus records; species IDs remain
+# an alternative for existing callers. No inferred ancestor roll-up.
+consumes = ["ncbi.taxon.id", "ncbi.taxon.species_id"]
+consumes_any = true
+set_outputs = ["disease.disbiome.id", "disease.meddra.id"]
 
   # Lightest slice — "what diseases is this microbe linked to, and how many records?"
   [[capability.group]]
@@ -59,6 +61,14 @@ consumes = ["ncbi.taxon.species_id"]
   id = "associations"
   outputs = ["microbe.disease.associations"]
 
+  # Exact identity and source-reported rank (unknown when absent).
+  [[capability.group]]
+  id = "coverage"
+  outputs = ["microbe.disease.coverage"]
+
+  [[capability.group]]
+  id = "identity"
+  outputs = ["disease.disbiome.id", "disease.meddra.id", "microbe.disease.identities"]
   # The big blob — every joined field, for callers that want everything.
   [[capability.group]]
   id = "full"
@@ -67,7 +77,56 @@ consumes = ["ncbi.taxon.species_id"]
 # Golden runs against the deterministic fixture (build_disbiome_weaver_fixture: a tiny
 # SQLite built from canned records for Lactobacillus, taxid 1591) so verify --strict is
 # reproducible offline.
+  [[capability.parameter]]
+  name = "sample"
+  type = "string"
+  description = "Exact provider sample name; missing context is excluded when filtering"
+
+  [[capability.parameter]]
+  name = "method"
+  type = "string"
+  description = "Exact provider detection method; omitted means unfiltered"
+
+  [[capability.parameter]]
+  name = "outcome"
+  type = "string"
+  description = "Exact provider qualitative outcome, such as Elevated or Reduced"
+
 [[golden]]
 capability = "disbiome.list_diseases"
-input = { "ncbi.taxon.species_id" = 1591 }
+input = { "ncbi.taxon.id" = 1591 }
 expect = { "microbe.disease.count" = 1, "microbe.disease.names" = ["Autism"] }
+
+
+[[capability]]
+id = "disbiome.list_taxa"
+consumes = ["disease.disbiome.id", "disease.meddra.id"]
+consumes_any = true
+set_outputs = ["ncbi.taxon.id"]
+  [[capability.group]]
+  id = "taxa"
+  outputs = ["ncbi.taxon.id", "microbe.disease.taxa"]
+  [[capability.parameter]]
+  name = "sample"
+  type = "string"
+  description = "Exact source sample name; missing context excluded"
+  [[capability.parameter]]
+  name = "method"
+  type = "string"
+  description = "Exact source detection method"
+  [[capability.parameter]]
+  name = "outcome"
+  type = "string"
+  description = "Exact source qualitative outcome"
+
+[[capability]]
+id = "disbiome.describe_disease"
+consumes = ["disease.disbiome.id"]
+  [[capability.group]]
+  id = "disease"
+  outputs = ["disease.disbiome.record"]
+
+[[golden]]
+capability = "disbiome.list_taxa"
+input = { "disease.meddra.id" = "10011401" }
+expect = { "ncbi.taxon.id" = [1350] }

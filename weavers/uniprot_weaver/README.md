@@ -1,71 +1,32 @@
 # uniprot_weaver
 
-UniProt protein identity — a free-text gene symbol / protein name / accession resolved
-to a UniProt entry. The **molecular hinge** of Braidworks: it produces both the protein
-hub key (`protein.uniprot.accession`, which every downstream molecular weaver joins on)
-and the organism hub key (`ncbi.taxon.id`), so a protein query can flow on to structures,
-pathways, interactions — and back into the organism layer. Free, keyless UniProtKB REST API.
+Resolve protein queries, describe exact accessions, and map identifiers to or from the UniProt
+hub. Accessions connect to structure, pathway and annotation sources; taxids connect to organism
+sources. Gene-symbol search selects one representative, so constrain the organism or use an
+exact accession. The API is keyless.
 
 - **Source:** https://www.uniprot.org · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkac1052 — UniProt Consortium
 - **Backend:** `api` (keyless) · **Discoverable as** `uniprot`
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `resolve_protein` | `protein.query` | `protein.uniprot.accession`, `ncbi.taxon.id` + leaves: `protein.name`, `protein.gene`, `protein.organism`, `protein.function`, `protein.length`, `protein.reviewed` |
-| `map_to_accession` | **any one of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `gene.symbol`, `refseq.protein.id`, `gene.hgnc.id`, `nucleotide.insdc.accession`, `pdb.id` | `protein.uniprot.accession` (set) + mapping count/records |
-| `map_from_accession` | `protein.uniprot.accession` | **any of** `gene.ncbi.id`, `gene.ensembl.id`, `protein.ensembl.id`, `pathway.kegg.id`, `pathway.reactome.id`, `refseq.protein.id`, `orthodb.group`, `eggnog.group`, `chembl.id`, `drugbank.id`, `pdb.id`, `string.id` (each a set) + mapping count/records |
+| Capability | Use it to |
+|---|---|
+| `resolve_protein` | Select a representative entry for a protein query |
+| `describe_protein` | Inspect an exact accession and annotations |
+| `map_to_accession` | Map alternative identifier types into UniProt |
+| `map_from_accession` | Map a UniProt accession to requested identifier types |
 
-## ID mapping (`map_to_accession` / `map_from_accession`)
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-Two directional capabilities over the async, batched UniProt **ID-mapping** service
-(`rest.uniprot.org/idmapping`). UniProt accession is the hub: the API maps **into** it
-(`X → UniProtKB`) or **out of** it (`UniProtKB_AC-ID → Y`).
-
-- `map_to_accession` uses **alternative inputs** (`consumes_any`): supply *any one* of the
-  supported ids and the backend picks the UniProt `from` db. It runs two jobs (reviewed
-  Swiss-Prot + full UniProtKB) and orders accessions **reviewed-first**, so
-  `ExpandPolicy.top()` takes the canonical entry while `ALL` fans every isoform.
-- `map_from_accession` picks the `to` db from **whichever output is requested**, so one
-  capability serves every target — the planner routes `accession → pathway.kegg.id`,
-  `accession → gene.ncbi.id` (reverse bridge), etc.
-
-They compose through the hub automatically — e.g. `gene.ncbi.id → accession → structure`
-(the ortholog→protein→structure chain) or `gene.symbol → accession → pathway.reactome.id`.
-The db tables live in `src/uniprot_weaver/mapping.py`. Backed by the same UniProt source,
-so it stays one weaver, one citation.
-
-## The bridge
-
-A UniProt entry carries its organism's NCBI taxid, so this weaver *produces*
-`ncbi.taxon.id`. That single edge bridges the molecular layer back into the organism
-layer — a protein hit flows on to `ncbi_weaver` (lineage), `bacdive_weaver` (traits),
-and `disbiome_weaver` (disease). UniProt is the one node that speaks both hub keys.
-
-## Deterministic representative selection
-
-**The same query always resolves to the same protein.** UniProt's default relevance
-ranking is *not* stable (a bare `TP53` can return different orthologs on different
-calls), so the backend imposes a fixed total order instead:
-
-1. Prefer **reviewed (Swiss-Prot)** over unreviewed (TrEMBL).
-2. Escalate the query, most-specific first: exact **accession** → exact **gene symbol**
-   (`gene_exact:`) → free text.
-3. Within the top page, pick by **highest annotation score, then accession ascending**.
-
-> **Cross-species ambiguity.** A bare gene symbol matches every species' ortholog
-> equally, so the representative is the *best-annotated* ortholog — **not necessarily
-> the species you expect** (`TP53` → a hamster entry, not human). This is deterministic,
-> not arbitrary. For a *specific* protein, query an **accession** (`P04637` → human p53,
-> exact and stable) or add an organism to the term.
-
-## Use it
+## Run a query
 
 Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run uniprot resolve_protein --have protein.query=P04637
+braidworks weave --have protein.query=TP53 --param organism=9606 --want protein.uniprot.accession,ncbi.taxon.id
 braidworks weave --have protein.query=P04637 --want protein.name,ncbi.taxon.id
 ```
 
@@ -74,16 +35,24 @@ From Python:
 ```python
 from uniprot_weaver import build_uniprot_weaver
 
-weaver = build_uniprot_weaver()        # zero-config
+weaver = build_uniprot_weaver()  # zero-config
 # In an app that wires a WeaverFactory, `uniprot_weaver.register(factory)` adds it as a provider.
 ```
 
-## Develop
+## Setup, interpretation and contribution
 
-```bash
-make verify                        # spec ↔ manifest, reachability, real fingerprints (--strict adds golden)
-make test                          # conformance + contract + golden, fully offline
-BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live UniProt API (schema-drift detector)
-```
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

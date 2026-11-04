@@ -12,11 +12,16 @@ directly (decisions.md "thin contract, free implementation").
 
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
+from braidworks.core.availability import require_capability
 from braidworks.core.backend import BackendBase
-from braidworks.core.exceptions import BackendUnavailable, UnsupportedCapability
+from braidworks.core.exceptions import BackendUnavailable
+from braidworks.core.http_pacing import validate_request_pacing
+from braidworks.core.lifecycle import close_backends
 from braidworks.core.result import WeaveResult
+from braidworks.core.runner import validate_batch_size
 from braidworks.core.weaver import BaseWeaver
 
 
@@ -35,6 +40,9 @@ class BackendDispatchWeaver(BaseWeaver):
             raise ValueError(f"{type(self).__name__} requires at least one backend")
         self._backends = dict(backends)
 
+    async def aclose(self) -> None:
+        await close_backends(self._backends.values())
+
     def _strategy(self, backend: str) -> BackendBase:
         strat = self._backends.get(backend)
         if strat is None or not strat.is_configured():
@@ -42,6 +50,9 @@ class BackendDispatchWeaver(BaseWeaver):
                 f"backend {backend!r} is not configured for {self.MANIFEST.weaver_id!r}"
             )
         return strat
+
+    def supports_request_pacing(self, backend: str) -> bool:
+        return bool(getattr(self._backends.get(backend), "supports_request_pacing", False))
 
     def backend_fingerprint(self, backend: str) -> str:
         strat = self._backends.get(backend)
@@ -56,20 +67,25 @@ class BackendDispatchWeaver(BaseWeaver):
         self, capability_id, strand_set, *, requested_outputs, backend, params=None
     ) -> WeaveResult:
         results = await self.execute_batch(
-            capability_id, [strand_set], requested_outputs=requested_outputs,
-            backend=backend, params=params,
+            capability_id,
+            [strand_set],
+            requested_outputs=requested_outputs,
+            backend=backend,
+            params=params,
         )
         return results[0]
 
     async def execute_batch(
-        self, capability_id, strand_sets, *, requested_outputs, backend,
+        self,
+        capability_id,
+        strand_sets,
+        *,
+        requested_outputs,
+        backend,
         params: dict[str, Any] | None = None,
     ) -> list[WeaveResult]:
-        cap = self.MANIFEST.capability(capability_id)
-        if cap is None:
-            raise UnsupportedCapability(
-                f"{self.MANIFEST.weaver_id!r} has no capability {capability_id!r}"
-            )
+        cap = require_capability(self, capability_id, backend)
+        validate_request_pacing(self, backend)
         strategy = self._strategy(backend)  # raises BackendUnavailable
         # Resolve params against the declaration (defaults + validation). The executor
         # normally does this, but a direct execute_batch caller (e.g. the CLI's `run`)
@@ -89,6 +105,11 @@ class BackendDispatchWeaver(BaseWeaver):
             requested_outputs=requested_outputs,
             groups_to_compute=groups_to_compute,
             params=effective_params,
+        )
+        validate_batch_size(
+            len(queries),
+            len(records),
+            context=f"{self.MANIFEST.weaver_id}.{capability_id} [{backend}] backend",
         )
         mapper = type(self).MAPPER
         return [

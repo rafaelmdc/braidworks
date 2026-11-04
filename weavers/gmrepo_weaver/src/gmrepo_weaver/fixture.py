@@ -81,14 +81,34 @@ _PHENOTYPES = [
 # runs, each with two genera's relative abundances — enough to exercise the mesh_id lookup and
 # the sample × taxon shape without network.
 _SAMPLE_PROFILES = [
-    {"mesh_id": "D003093", "run_id": "ERRFIX01", "ncbi_taxon_id": 816, "rank": "genus",
-     "relative_abundance": 52.4},
-    {"mesh_id": "D003093", "run_id": "ERRFIX01", "ncbi_taxon_id": 216851, "rank": "genus",
-     "relative_abundance": 18.7},
-    {"mesh_id": "D003093", "run_id": "ERRFIX02", "ncbi_taxon_id": 816, "rank": "genus",
-     "relative_abundance": 44.1},
-    {"mesh_id": "D003093", "run_id": "ERRFIX02", "ncbi_taxon_id": 216851, "rank": "genus",
-     "relative_abundance": 25.3},
+    {
+        "mesh_id": "D003093",
+        "run_id": "ERRFIX01",
+        "ncbi_taxon_id": 816,
+        "rank": "genus",
+        "relative_abundance": 52.4,
+    },
+    {
+        "mesh_id": "D003093",
+        "run_id": "ERRFIX01",
+        "ncbi_taxon_id": 216851,
+        "rank": "genus",
+        "relative_abundance": 18.7,
+    },
+    {
+        "mesh_id": "D003093",
+        "run_id": "ERRFIX02",
+        "ncbi_taxon_id": 816,
+        "rank": "genus",
+        "relative_abundance": 44.1,
+    },
+    {
+        "mesh_id": "D003093",
+        "run_id": "ERRFIX02",
+        "ncbi_taxon_id": 216851,
+        "rank": "genus",
+        "relative_abundance": 25.3,
+    },
 ]
 
 _cached_path: Path | None = None

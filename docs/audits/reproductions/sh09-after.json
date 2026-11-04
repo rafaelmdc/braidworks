@@ -1,0 +1,82 @@
+{
+  "agora_reactions": {
+    "digest": "f1d3866ef324847aa3ac4c21d6497dbda7b8f76c5986a8936cf134cb28c328fc",
+    "peak_python_bytes": 427117,
+    "recursive_selects": 0,
+    "seconds": 0.008834,
+    "selects": 2
+  },
+  "disbiome_full": {
+    "digest": "64a0e59f64e66cc7be495e02213bb161bef0e1001829ab60c8ef3afc31d3544f",
+    "peak_python_bytes": 22500452,
+    "recursive_selects": 0,
+    "seconds": 0.61825,
+    "selects": 2
+  },
+  "disbiome_summary": {
+    "digest": "001317816c4fd7c5fb1942f32731fb756f6c029eed55c7b307d6095d1c118ea0",
+    "peak_python_bytes": 64775,
+    "recursive_selects": 0,
+    "seconds": 0.004642,
+    "selects": 2
+  },
+  "faprotax_duplicates": {
+    "digest": "b8128f34e7c9671d3964365c4227d5e1f308e928b379f9993c937b839e8a96d0",
+    "matcher_calls": 1,
+    "peak_python_bytes": 27342,
+    "recursive_selects": 0,
+    "seconds": 0.070741,
+    "selects": 0
+  },
+  "gtdb_all_rootpaths": {
+    "digest": "81a83544cf93c245178cbc1620030f1123f435af867c79d87135983c52ab39d9",
+    "peak_python_bytes": 1613290,
+    "recursive_selects": 0,
+    "seconds": 0.070087,
+    "selects": 0
+  },
+  "gtdb_build_1000": {
+    "digest": "40510175845988f13f6162ed8526f0b09f73384467fa855e1e79b44a56562a58",
+    "peak_python_bytes": 228686,
+    "recursive_selects": 0,
+    "seconds": 0.009742,
+    "selects": 9
+  },
+  "gtdb_build_10000": {
+    "digest": "39e5b4830d4d9c14db7368a95b65d5463ea3d09520373723430c03a5a453b5df",
+    "peak_python_bytes": 170959,
+    "recursive_selects": 0,
+    "seconds": 0.072779,
+    "selects": 9
+  },
+  "gtdb_indexed_paths": {
+    "digest": "105600186dd42085146c5d02698086649b7be67a32820750c7a041b4d51fd15b",
+    "peak_python_bytes": 1266850,
+    "recursive_selects": 0,
+    "seconds": 0.077036,
+    "selects": 0
+  },
+  "mondo_graph": {
+    "digest": "5caf5be1079359f3594a394670799884e832703f25cbf17765b2b4960cae2f34",
+    "peak_python_bytes": 157413,
+    "recursive_selects": 1,
+    "seconds": 0.007639,
+    "selects": 3
+  },
+  "mondo_identity": {
+    "digest": "649eecff6b12cba721770630127f6adc11b130e7dad02876c6a0c437e013a910",
+    "peak_python_bytes": 30662,
+    "recursive_selects": 0,
+    "seconds": 0.00289,
+    "selects": 3
+  },
+  "scope": {
+    "agora_models": 30,
+    "disbiome_rows": 500,
+    "duplicate_queries": 20,
+    "gtdb_rows": 10000,
+    "memory_scope": "tracemalloc Python allocations; excludes SQLite/native allocations",
+    "mondo_chain_nodes": 30,
+    "tree_leaves": 2000
+  }
+}

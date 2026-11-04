@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from braidworks.core.braid import Braid, CapabilityInvocation, FallbackCondition
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest

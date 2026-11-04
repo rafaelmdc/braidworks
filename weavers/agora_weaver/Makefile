@@ -12,7 +12,11 @@ verify:
 	uv run --extra test weaverkit verify --spec weaver.spec.toml --package agora_weaver
 
 lint:
-	uv run ruff check .
+	uvx ruff==0.16.10 check .
 
 fmt:
-	uv run ruff format .
+	uvx ruff==0.16.10 format .
+
+.PHONY: test-live
+test-live:
+	BRAIDWORKS_RUN_LIVE=1 uv run --extra test python -m pytest tests/test_model_sbml.py -v

@@ -1,9 +1,9 @@
 """The local backend for disbiome_weaver.
 
 Serves microbe→disease lookups from the small SQLite built by ``setup.py`` (one
-row per Disbiome experiment, keyed by NCBI taxid). A single indexed query returns
-every experiment for a taxid; from those rows the backend fills all produced
-outputs and the shared mapper emits only the requested slice:
+row per Disbiome experiment, keyed by exact NCBI taxid). Summary queries aggregate
+indexed light columns; compact queries read projected columns. Full JSON is parsed
+only for the full group. Distinct inputs share work within one batch:
 
 - ``microbe.disease.names``        — distinct disease names (summary)
 - ``microbe.disease.count``        — number of experiment records (summary)
@@ -19,11 +19,13 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-import threading
+from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from disbiome_weaver.setup import _coerce_taxid, db_is_valid, default_disbiome_db_path
 
@@ -36,6 +38,10 @@ RECORDS = "microbe.disease.records"
 def _association_row(record: dict[str, Any]) -> dict[str, Any]:
     """The compact per-experiment view (the association signal + minimal context)."""
     return {
+        "experiment_id": _coerce_taxid(record.get("experiment_id")),
+        "publication_id": _coerce_taxid(record.get("publication_id")),
+        "organism_id": _coerce_taxid(record.get("organism_id")),
+        "disease_id": _coerce_taxid(record.get("disease_id")),
         "disease_name": record.get("disease_name"),
         "meddra_id": record.get("meddra_id"),
         "meddra_level": record.get("meddra_level"),
@@ -43,17 +49,6 @@ def _association_row(record: dict[str, Any]) -> dict[str, Any]:
         "sample": record.get("sample_name"),
         "host": record.get("host_type"),
         "method": record.get("method_name"),
-    }
-
-
-def _values_from_records(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Fill every produced output from a taxid's experiment records (mapper filters)."""
-    names = sorted({r["disease_name"] for r in records if r.get("disease_name")})
-    return {
-        NAMES: names,
-        COUNT: len(records),
-        ASSOCIATIONS: [_association_row(r) for r in records],
-        RECORDS: records,
     }
 
 
@@ -66,31 +61,17 @@ class DisbiomeLocalBackend(BackendBase):
         self._db_path = Path(db_path) if db_path else default_disbiome_db_path()
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
-        self._local = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
 
     def is_configured(self) -> bool:
         return self._configured
 
     def fingerprint(self) -> str:
-        # Disbiome has no release tag; the build records a content hash of the
-        # fetched tables. Read it once (only ever called when configured).
-        if self._fingerprint is None:
-            row = (
-                self._connect()
-                .execute("SELECT value FROM meta WHERE key = 'content_sha256'")
-                .fetchone()
-            )
-            self._fingerprint = f"disbiome-{row[0][:16]}" if row else "unconfigured:local"
-        return self._fingerprint
-
-    def _connect(self) -> sqlite3.Connection:
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(
-                f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False
-            )
-            self._local.con = con
-        return con
+        if not self._configured:
+            return "unconfigured:local"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -101,21 +82,263 @@ class DisbiomeLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        return await asyncio.to_thread(self._lookup_all, queries)
+        options = params or {}
+        if any(not isinstance(value, str) or not value for value in options.values()):
+            return [
+                LookupRecord(query=q, error="Disbiome filters must be nonempty strings")
+                for q in queries
+            ]
+        if capability_id in {"disbiome.list_taxa", "disbiome.describe_disease"}:
+            return await asyncio.to_thread(self._disease_queries, capability_id, queries, options)
+        if options:
+            return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute, options)
+        return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
-    def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        return [self._lookup_one(con, q) for q in queries]
+    def _disease_queries(self, capability, queries, filters):
+        with self._source.session() as con:
+            results = []
+            for query in queries:
+                provider_id = _coerce_taxid(query.get("disease.disbiome.id"))
+                has_provider = query.get("disease.disbiome.id") is not None
+                code = query.get("disease.meddra.id")
+                value = provider_id if has_provider else _coerce_taxid(code)
+                if value is None:
+                    results.append(LookupRecord(query=query, found=False))
+                    continue
+                column = "disease_id" if has_provider else "meddra_id"
+                where = f"({column}=? OR {column}=?)"
+                bindings = [value, str(value)]
+                for name, col in {
+                    "sample": "sample_name",
+                    "method": "method_name",
+                    "outcome": "qualitative_outcome",
+                }.items():
+                    if name in filters:
+                        where += f" AND {col}=?"
+                        bindings.append(filters[name])
+                rows = [
+                    json.loads(row[0])
+                    for row in con.execute(
+                        f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                        bindings,
+                    )
+                ]
+                if not rows:
+                    results.append(LookupRecord(query=query, found=False))
+                    continue
+                if capability == "disbiome.describe_disease":
+                    diseases = []
+                    for row in rows:
+                        disease = row.get("disease")
+                        if disease is not None and disease not in diseases:
+                            diseases.append(disease)
+                    values = {
+                        "disease.disbiome.record": {
+                            "id": provider_id,
+                            "source_records": diseases,
+                            "observed_experiments": len(rows),
+                        }
+                    }
+                else:
+                    ids = sorted(
+                        {
+                            taxid
+                            for row in rows
+                            if (taxid := _coerce_taxid(row.get("organism_ncbi_id"))) is not None
+                        }
+                    )
+                    values = {
+                        "ncbi.taxon.id": ids,
+                        "microbe.disease.taxa": {
+                            "records": [
+                                {
+                                    **_association_row(row),
+                                    "taxid": _coerce_taxid(row.get("organism_ncbi_id")),
+                                    "organism": row.get("organism"),
+                                    "publication": row.get("publication"),
+                                }
+                                for row in rows[:10]
+                            ],
+                            "observed_taxon_count": len(ids),
+                            "experiment_count": len(rows),
+                            "matched_disease_ids": sorted(
+                                {
+                                    did
+                                    for row in rows
+                                    if (did := _coerce_taxid(row.get("disease_id"))) is not None
+                                }
+                            ),
+                            "scope": "exact provider disease/code; all code-linked disease records retained; no ancestor propagation",
+                            "effective_filters": dict(filters),
+                        },
+                    }
+                results.append(LookupRecord(query=query, found=True, values=values))
+            return results
 
-    def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
-        taxid = _coerce_taxid(query.get("ncbi.taxon.species_id"))
+    def _lookup_all(
+        self,
+        queries: list[dict[str, Any]],
+        groups: frozenset[str],
+        params: dict[str, Any] | None = None,
+    ) -> list[LookupRecord]:
+        # Per-call work reuse, bounded by this batch; results remain detached.
+        with self._source.session() as con:
+            resolved: dict[int | None, LookupRecord] = {}
+            records = []
+            for query in queries:
+                # A generic identity is authoritative when both alternatives occur.
+                # Never fall back to a different species/ancestor after an exact miss.
+                key = (
+                    "ncbi.taxon.id"
+                    if query.get("ncbi.taxon.id") is not None
+                    else "ncbi.taxon.species_id"
+                )
+                taxid = _coerce_taxid(query.get(key))
+                if taxid not in resolved:
+                    resolved[taxid] = self._lookup_one(con, query, taxid, groups, params)
+                records.append(
+                    replace(resolved[taxid], query=query, values=deepcopy(resolved[taxid].values))
+                )
+            return records
+
+    def _lookup_one(
+        self,
+        con: sqlite3.Connection,
+        query: dict[str, Any],
+        taxid: int | None,
+        groups: frozenset[str],
+        params: dict[str, Any] | None = None,
+    ) -> LookupRecord:
         if taxid is None:
             return LookupRecord(query=query, found=False)
-        rows = con.execute(
-            "SELECT full_json FROM association WHERE ncbi_id = ? ORDER BY experiment_id",
-            (taxid,),
-        ).fetchall()
-        if not rows:
+        filters = params or {}
+        columns = {
+            "sample": "sample_name",
+            "method": "method_name",
+            "outcome": "qualitative_outcome",
+        }
+        where = "ncbi_id = ?"
+        bindings = [taxid]
+        for name, column in columns.items():
+            if name in filters:
+                where += f" AND {column} = ?"
+                bindings.append(filters[name])
+        values: dict[str, Any] = {}
+        if "full" in groups:
+            rows = con.execute(
+                f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
+            ).fetchall()
+            records = [json.loads(row[0]) for row in rows]
+            if not records:
+                return LookupRecord(query=query, found=False)
+            values[RECORDS] = records
+            if "summary" in groups:
+                values.update(
+                    {
+                        NAMES: sorted(
+                            {r["disease_name"] for r in records if r.get("disease_name")}
+                        ),
+                        COUNT: len(records),
+                    }
+                )
+            if "associations" in groups:
+                values[ASSOCIATIONS] = [_association_row(record) for record in records]
+        elif "associations" in groups:
+            rows = con.execute(
+                "SELECT experiment_id, publication_id, organism_id, disease_id, disease_name, meddra_id, meddra_level, qualitative_outcome, sample_name, host_type, method_name "
+                f"FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
+            ).fetchall()
+            if not rows:
+                return LookupRecord(query=query, found=False)
+            keys = (
+                "experiment_id",
+                "publication_id",
+                "organism_id",
+                "disease_id",
+                "disease_name",
+                "meddra_id",
+                "meddra_level",
+                "qualitative_outcome",
+                "sample_name",
+                "host_type",
+                "method_name",
+            )
+            records = [dict(zip(keys, row)) for row in rows]
+            values[ASSOCIATIONS] = [_association_row(record) for record in records]
+            if "summary" in groups:
+                values.update(
+                    {
+                        NAMES: sorted(
+                            {r["disease_name"] for r in records if r.get("disease_name")}
+                        ),
+                        COUNT: len(records),
+                    }
+                )
+        elif "summary" in groups:
+            rows = con.execute(
+                f"SELECT disease_name, COUNT(*) FROM association WHERE {where} GROUP BY disease_name",
+                bindings,
+            ).fetchall()
+            if not rows:
+                return LookupRecord(query=query, found=False)
+            values.update(
+                {
+                    NAMES: sorted(row[0] for row in rows if row[0]),
+                    COUNT: sum(row[1] for row in rows),
+                }
+            )
+        elif not con.execute(
+            f"SELECT 1 FROM association WHERE {where} LIMIT 1", bindings
+        ).fetchone():
             return LookupRecord(query=query, found=False)
-        records = [json.loads(r[0]) for r in rows]
-        return LookupRecord(query=query, found=True, values=_values_from_records(records))
+        if "identity" in groups:
+            rows = con.execute(
+                f"SELECT DISTINCT disease_id,meddra_id,meddra_level,disease_name FROM association WHERE {where} ORDER BY disease_id,meddra_id",
+                bindings,
+            ).fetchall()
+            identities = [
+                {
+                    "provider_id": _coerce_taxid(row[0]),
+                    "meddra_id": str(row[1]) if row[1] is not None else None,
+                    "meddra_level": row[2],
+                    "name": row[3],
+                }
+                for row in rows
+            ]
+            values["disease.disbiome.id"] = sorted(
+                {r["provider_id"] for r in identities if r["provider_id"] is not None}
+            )
+            values["disease.meddra.id"] = sorted(
+                {r["meddra_id"] for r in identities if r["meddra_id"]}
+            )
+            values["microbe.disease.identities"] = identities
+        if "coverage" in groups:
+            # Rank is source evidence, never inferred from the caller's input key.
+            rows = con.execute(
+                f"SELECT full_json FROM association WHERE {where} ORDER BY experiment_id",
+                bindings,
+            ).fetchall()
+            organisms = []
+            for row in rows:
+                record = json.loads(row[0])
+                organism = record.get("organism") or {}
+                identity = {
+                    "taxid": _coerce_taxid(record.get("organism_ncbi_id")),
+                    "organism_id": _coerce_taxid(record.get("organism_id")),
+                    "name": organism.get("scientific_name") or organism.get("name"),
+                    "rank": organism.get("rank"),
+                }
+                if identity not in organisms:
+                    organisms.append(identity)
+            values["microbe.disease.coverage"] = {
+                "matched_taxid": taxid,
+                "lookup_policy": "exact",
+                "ancestor_rollup": False,
+                "propagated_to_descendants": False,
+                "organisms": organisms,
+                "rank_available": all(item["rank"] is not None for item in organisms),
+                "experiment_count": len(rows),
+            }
+        return LookupRecord(query=query, found=True, values=values)

@@ -12,9 +12,7 @@ import os
 from pathlib import Path
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from mondo_weaver.backends.local import MondoLocalBackend
 from mondo_weaver.setup import ensure_mondo_db
 from mondo_weaver.weaver import MondoWeaver

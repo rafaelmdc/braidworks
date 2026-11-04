@@ -1,6 +1,6 @@
 # Contributing to disbiome_weaver
 
-Disbiome microbe–disease associations (taxid -> diseases + direction). Source: https://disbiome.ugent.be (Open — cite Janssens et al., BMC Microbiology 2018 (doi:10.1186/s12866-018-1197-5); confirm reuse terms). Kind: `lookup`. Capabilities: `disbiome.list_diseases`.
+Disbiome microbe–disease associations (taxid -> diseases + direction). Source: https://disbiome.ugent.be (Open). Kind: `lookup`. Capabilities: `disbiome.list_diseases`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -20,43 +20,49 @@ weaverkit verify --spec weaver.spec.toml --package disbiome_weaver --strict
    (or add a new group).
 2. If it's a new *leaf* output, catalog it in `weaverkit.keys.OUTPUT_KEYS`; if it's a
    genuine *join key* others will consume, add it to `SHARED_KEYS` instead.
-3. Regenerate vocab: `weaverkit new --spec weaver.spec.toml --dest . --force`
-   (this only re-stamps generated files; your backend code is yours to edit).
+3. Follow the scratch-generation workflow below; selectively copy the generated vocab.
 4. Map it in each backend's `fetch` (`record.values[<type_id>] = ...`).
 5. Add/adjust a `[[golden]]` example so the new output is verified.
 
 ## Add a capability or a backend
 
 - **Capability:** add a `[[capability]]` block (consume a registered shared key),
-  regenerate, and handle it in `fetch` (branch on `capability_id` if needed).
-- **Backend:** add its name to `[weaver].backends`, regenerate, and implement the
+  generate in scratch, review the diff, and handle it in `fetch` (branch on `capability_id` if needed).
+- **Backend:** add its name to `[weaver].backends`, generate in scratch, and selectively add the
   new `src/disbiome_weaver/backends/<name>.py` (`is_configured` / `fingerprint` / `fetch`).
+
+## Safe regeneration of an implemented package
+
+Run from this package directory after editing the spec:
+
+```bash
+scratch_dir=$(mktemp -d)
+weaverkit new --spec weaver.spec.toml --dest "$scratch_dir/package"
+diff -ru --exclude=.git --exclude=__pycache__ --exclude=.pytest_cache . "$scratch_dir/package"
+# diff exits 1 when differences exist; review them before the next command.
+cp "$scratch_dir/package/src/disbiome_weaver/vocab.py" src/disbiome_weaver/vocab.py
+```
+
+Copy only the reviewed generated vocab. Merge capability/backend additions
+selectively into the existing implementation, factories, tests and metadata;
+do not copy placeholder backends over working code. Preserve your configuration
+builders, source-specific policies and contributor notes. Inspect `git diff`,
+run package tests and strict verification, then remove the scratch directory.
+
+`weaverkit new --force` overwrites generated paths, including implemented
+backends, factories and tests. It does not merge or preserve your edits.
+Never run it against an implemented package. The handwritten NCBI reference
+is exempt: edit its custom vocab manually instead of copying scaffold vocab.
 
 ## Keep the fixture & golden honest
 
-- Golden runs against `build_disbiome_weaver_fixture()` (canned records in
-  `src/disbiome_weaver/fixture.py` — Lactobacillus/1591 and Enterococcus/1350). The
-  conformance and order-contract tests use the fixture too, so they run offline.
-- After touching `setup.py` or the join, run the live E2E (`make test-live`,
-  `BRAIDWORKS_RUN_LIVE=1`) to confirm the real API shapes still parse.
+- Golden inputs must resolve in whatever `--strict` runs against (a `build_disbiome_weaver_fixture()`
+  or a configured backend). When the source data changes, bump the backend `fingerprint`
+  and refresh the fixture/golden.
 
 ## Current outputs
 
-`microbe.disease.names`, `microbe.disease.count` (summary group);
-`microbe.disease.associations` (associations group); `microbe.disease.records`
-(full group — the complete joined blob).
-
-## How the local backend works
-
-`setup.py` fetches the keyless Disbiome tables whole (`/experiment` + `/disease` +
-`/organism` + `/publication`, ~7 MB), joins each experiment to its disease/organism/
-publication, and writes one row per experiment into a SQLite indexed by NCBI taxid
-(via `braidworks.core.localdb.ensure_local_db`). `/sample` and `/method` are just
-`{id, name}` and already denormalized onto each experiment, so they aren't fetched.
-Disbiome encodes missing values as the string `"None"` → normalized to `None` in
-`_clean`. The fingerprint is a content hash of the fetched tables (no release tag).
-`write_db` is shared by the live build and the fixture, so the schema lives in one
-place.
+See [README.md](README.md) and `weaver.spec.toml` for the current output keys and groups.
 
 ## Expansion notes
 

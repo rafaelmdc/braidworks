@@ -10,32 +10,114 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.1.4"
+version = "0.1.14"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
 source_url = "https://www.ebi.ac.uk/QuickGO"
-fingerprint_source = "QuickGO REST API contract (ebi.ac.uk/QuickGO/services, annotation/search)"
+fingerprint_source = "effective QuickGO endpoint plus pagination budget (unversioned live contents)"
 api_key = "none"
 backends = ["api"]
 # Real excerpt of GET .../QuickGO/services/annotation/search?geneProductId=P04637
-#   &limit=3&includeFields=goName
+#   &limit=2&includeFields=goName
 source_sample = """
 {
-  "numberOfHits": 1036,
-  "pageInfo": { "resultsPerPage": 3, "current": 1, "total": 346 },
+  "numberOfHits": 1043,
   "results": [
     {
+      "id": "UniProtKB:P04637!58679183",
       "geneProductId": "UniProtKB:P04637",
+      "qualifier": "acts_upstream_of",
       "goId": "GO:0008285",
       "goName": "negative regulation of cell population proliferation",
-      "goAspect": "biological_process",
       "goEvidence": "ISS",
-      "qualifier": "acts_upstream_of",
+      "goAspect": "biological_process",
+      "evidenceCode": "ECO:0000250",
+      "reference": "PMID:30514107",
+      "withFrom": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "UniProtKB",
+              "id": "P10361"
+            }
+          ]
+        }
+      ],
       "taxonId": 9606,
-      "symbol": "TP53"
+      "taxonName": null,
+      "assignedBy": "ARUK-UCL",
+      "extensions": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "CL",
+              "id": "0002254",
+              "relation": "occurs_in"
+            }
+          ]
+        }
+      ],
+      "targetSets": [
+        "BHF-UCL",
+        "KRUK",
+        "dbTF"
+      ],
+      "symbol": "TP53",
+      "date": "20210810",
+      "synonyms": null,
+      "name": null
+    },
+    {
+      "id": "UniProtKB:P04637!58679184",
+      "geneProductId": "UniProtKB:P04637",
+      "qualifier": "acts_upstream_of",
+      "goId": "GO:0051726",
+      "goName": "regulation of cell cycle",
+      "goEvidence": "ISS",
+      "goAspect": "biological_process",
+      "evidenceCode": "ECO:0000250",
+      "reference": "PMID:30514107",
+      "withFrom": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "UniProtKB",
+              "id": "P10361"
+            }
+          ]
+        }
+      ],
+      "taxonId": 9606,
+      "taxonName": null,
+      "assignedBy": "ARUK-UCL",
+      "extensions": [
+        {
+          "connectedXrefs": [
+            {
+              "db": "CL",
+              "id": "0002254",
+              "relation": "occurs_in"
+            }
+          ]
+        }
+      ],
+      "targetSets": [
+        "BHF-UCL",
+        "KRUK",
+        "dbTF"
+      ],
+      "symbol": "TP53",
+      "date": "20210810",
+      "synonyms": null,
+      "name": null
     }
-  ]
+  ],
+  "pageInfo": {
+    "resultsPerPage": 2,
+    "current": 1,
+    "total": 522
+  }
 }
 # GET .../ontology/go/terms/GO:0006915 (describe_go_term)
 {
@@ -45,6 +127,7 @@ source_sample = """
       "name": "apoptotic process",
       "aspect": "biological_process",
       "definition": { "text": "A programmed cell death process which begins when a cell receives an internal or external signal..." },
+      "children": [{"id":"GO:0097194","relation":"part_of"},{"id":"GO:0097152","relation":"is_a"}],
       "isObsolete": false
     }
   ]
@@ -52,14 +135,14 @@ source_sample = """
 """
 
 # One accession -> paginated annotation/search, deduped to distinct GO terms. QuickGO
-# has no batch-by-accession endpoint, so batches fan out per accession.
+# accepts comma-separated accessions; the backend correlates echoed geneProductId.
 [[capability]]
 id = "list_go_terms"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 10
 # go.term is one→many: the weaver emits every distinct GO id, so a caller can fan out
 # (ExpandPolicy) one child per term — "protein -> all GO terms, each drillable". The
-# per-aspect lists (go.molecular_function/…) are descriptive term names; go.count the total.
+# per-aspect lists are term names; go.count counts distinct terms in retrieved pages.
 set_outputs = ["go.term"]
 
   [[capability.group]]
@@ -78,6 +161,37 @@ set_outputs = ["go.term"]
   id = "full"
   outputs = ["go.records"]
 
+  [[capability.group]]
+  id = "annotations"
+  outputs = ["go.annotation.records"]
+
+  [[capability.group]]
+  id = "coverage"
+  outputs = ["go.annotation.coverage"]
+
+  [[capability.parameter]]
+  name = "evidence_code"
+  type = "string"
+  description = "One ECO:nnnnnnn evidence ID; omitted preserves source retrieval scope"
+
+  [[capability.parameter]]
+  name = "evidence_usage"
+  type = "string"
+  enum = ["exact", "descendants"]
+  default = "exact"
+  description = "ECO matching mode, used only when evidence_code is supplied"
+
+  [[capability.parameter]]
+  name = "qualifier"
+  type = "string"
+  description = "Exact provider annotation qualifier; NOT evidence remains in raw records"
+
+  [[capability.parameter]]
+  name = "aspect"
+  type = "string"
+  enum = ["molecular_function", "biological_process", "cellular_component"]
+  description = "GO aspect filter"
+
 # The consumer of the fan dimension: one GO id -> that term's detail (QuickGO
 # /ontology/go/terms/{id}). Consumes go.term (what list_go_terms produces), so a
 # fanned term is drillable: protein -> list_go_terms -> fan -> describe_go_term.
@@ -89,6 +203,41 @@ max_batch_size = 10
   [[capability.group]]
   id = "detail"
   outputs = ["go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"]
+
+  [[capability.group]]
+  id = "relations"
+  outputs = ["go.term.relations"]
+
+  [[capability.group]]
+  id = "hierarchy"
+  outputs = ["go.term.hierarchy"]
+
+[[capability]]
+id = "list_gene_products"
+consumes = ["go.term"]
+set_outputs = ["protein.uniprot.accession"]
+max_batch_size = 10
+
+  [[capability.group]]
+  id = "products"
+  outputs = ["protein.uniprot.accession", "go.reverse.annotations", "go.reverse.coverage"]
+
+  [[capability.parameter]]
+  name = "taxon_id"
+  type = "int"
+  description = "Restrict annotations to a source NCBI taxon ID"
+
+  [[capability.parameter]]
+  name = "evidence_code"
+  type = "string"
+  description = "ECO evidence code"
+
+  [[capability.parameter]]
+  name = "evidence_usage"
+  type = "string"
+  enum = ["exact", "descendants"]
+  default = "exact"
+  description = "ECO matching scope"
 
 # Golden runs against the deterministic fixture (quickgo_weaver.fixture, an
 # httpx.MockTransport serving a canned 3-term annotation page for P04637 plus a

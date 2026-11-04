@@ -14,8 +14,8 @@
 db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
-title = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
-version = "0.2.0"
+title = "UniProt protein identity, exact sequence/annotation description and ID mapping"
+version = "0.2.10"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -23,26 +23,50 @@ source_url = "https://www.uniprot.org"
 fingerprint_source = "UniProtKB REST API contract (rest.uniprot.org, JSON)"
 api_key = "none"
 backends = ["api"]
-# Real excerpt of GET https://rest.uniprot.org/uniprotkb/search?query=gene:TP53
-# +AND+organism_id:9606+AND+reviewed:true&fields=accession,protein_name,gene_names,
-# organism_name,organism_id,length,cc_function,reviewed&format=json&size=1
+# Actual 2026-10-09 bulk /uniprotkb/search?query=accession:P04637+OR+accession:A0A087WT22
+# Full-entry excerpt: results truncated to P04637, features to first observed row;
+# other fields omitted. Release header: 2026_03. No invented field values.
 source_sample = """
 {
   "results": [
     {
-      "entryType": "UniProtKB reviewed (Swiss-Prot)",
       "primaryAccession": "P04637",
-      "uniProtkbId": "P53_HUMAN",
-      "organism": { "scientificName": "Homo sapiens", "taxonId": 9606 },
-      "proteinDescription": {
-        "recommendedName": { "fullName": { "value": "Cellular tumor antigen p53" } }
+      "entryType": "UniProtKB reviewed (Swiss-Prot)",
+      "organism": {
+        "scientificName": "Homo sapiens",
+        "taxonId": 9606
       },
-      "genes": [ { "geneName": { "value": "TP53" } } ],
-      "comments": [
-        { "commentType": "FUNCTION",
-          "texts": [ { "value": "Multifunctional transcription factor that induces cell cycle arrest, DNA repair or apoptosis." } ] }
+      "sequence": {
+        "value": "MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDIEQWFTEDPGPDEAPRMPEAAPPVAPAPAAPTPAAPAPAPSWPLSSSVPSQKTYQGSYGFRLGFLHSGTAKSVTCTYSPALNKMFCQLAKTCPVQLWVDSTPPPGTRVRAMAIYKQSQHMTEVVRRCPHHERCSDSDGLAPPQHLIRVEGNLRVEYLDDRNTFRHSVVVPYEPPEVGSDCTTIHYNYMCNSSCMGGMNRRPILTIITLEDSSGNLLGRNSFEVRVCACPGRDRRTEEENLRKKGEPHHELPPGSTKRALPNNTSSSPQPKKKPLDGEYFTLQIRGRERFEMFRELNEALELKDAQAGKEPGGSRAHSSHLKSKKGQSTSRHKKLMFKTEGPDSD",
+        "length": 393,
+        "molWeight": 43653,
+        "crc64": "AD5C149FD8106131",
+        "md5": "C133DFCE69F606F20865E9008199F852"
+      },
+      "features": [
+        {
+          "type": "Chain",
+          "location": {
+            "start": {
+              "value": 1,
+              "modifier": "EXACT"
+            },
+            "end": {
+              "value": 393,
+              "modifier": "EXACT"
+            }
+          },
+          "description": "Cellular tumor antigen p53",
+          "featureId": "PRO_0000185703"
+        }
       ],
-      "sequence": { "length": 393 }
+      "entryAudit": {
+        "firstPublicDate": "1987-08-13",
+        "lastAnnotationUpdateDate": "2026-09-02",
+        "lastSequenceUpdateDate": "2009-11-24",
+        "entryVersion": 315,
+        "sequenceVersion": 4
+      }
     }
   ]
 }
@@ -79,6 +103,23 @@ always_computed_groups = ["identity"]
   id = "function"
   outputs = ["protein.function", "protein.length"]
 
+# Exact primary accession description. Distinct identifiers share bulk search;
+# compact identity, optional sequence projection and full structured annotation data.
+[[capability]]
+id = "describe_protein"
+consumes = ["protein.uniprot.accession"]
+max_batch_size = 25
+always_computed_groups = ["identity"]
+  [[capability.group]]
+  id = "identity"
+  outputs = ["protein.uniprot.accession", "protein.name", "protein.gene", "protein.organism", "protein.reviewed", "ncbi.taxon.id", "protein.function", "protein.length"]
+  [[capability.group]]
+  id = "sequence"
+  outputs = ["protein.sequence"]
+  [[capability.group]]
+  id = "annotations"
+  outputs = ["protein.annotation.records"]
+
 # --- ID mapping: cross-reference to/from the UniProt accession hub ------------
 # Two directional capabilities over the async, batched UniProt ID-mapping REST service.
 # UniProt accession is the hub; the API maps INTO it (X -> UniProtKB) or OUT of it
@@ -92,7 +133,7 @@ always_computed_groups = ["identity"]
 id = "map_to_accession"
 consumes = [
   "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "gene.symbol",
-  "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id",
+  "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id", "string.id",
 ]
 consumes_any = true
 max_batch_size = 1000
@@ -104,25 +145,68 @@ set_outputs = ["protein.uniprot.accession"]
 
 # map_from_accession: protein.uniprot.accession -> any supported id. The backend picks the
 # UniProt `to` db from whichever output is requested (single job). Every target is a set
-# output (one accession can map to many ids).
+# output (one accession can map to many ids). Summary outputs fetch all supported
+# targets; target-only calls fetch only that target. Groups match upstream work.
 [[capability]]
 id = "map_from_accession"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 1000
-always_computed_groups = ["mapping"]
 set_outputs = [
   "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "pathway.kegg.id",
   "pathway.reactome.id", "refseq.protein.id", "orthodb.group", "eggnog.group",
   "chembl.id", "drugbank.id", "pdb.id", "string.id",
 ]
   [[capability.group]]
-  id = "mapping"
-  outputs = [
-    "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "pathway.kegg.id",
-    "pathway.reactome.id", "refseq.protein.id", "orthodb.group", "eggnog.group",
-    "chembl.id", "drugbank.id", "pdb.id", "string.id",
-    "protein.uniprot.mapping.count", "protein.uniprot.mapping.records",
-  ]
+  id = "gene_ncbi_id"
+  outputs = ["gene.ncbi.id"]
+
+  [[capability.group]]
+  id = "gene_ensembl_id"
+  outputs = ["gene.ensembl.id"]
+
+  [[capability.group]]
+  id = "protein_ensembl_id"
+  outputs = ["protein.ensembl.id"]
+
+  [[capability.group]]
+  id = "pathway_kegg_id"
+  outputs = ["pathway.kegg.id"]
+
+  [[capability.group]]
+  id = "pathway_reactome_id"
+  outputs = ["pathway.reactome.id"]
+
+  [[capability.group]]
+  id = "refseq_protein_id"
+  outputs = ["refseq.protein.id"]
+
+  [[capability.group]]
+  id = "orthodb_group"
+  outputs = ["orthodb.group"]
+
+  [[capability.group]]
+  id = "eggnog_group"
+  outputs = ["eggnog.group"]
+
+  [[capability.group]]
+  id = "chembl_id"
+  outputs = ["chembl.id"]
+
+  [[capability.group]]
+  id = "drugbank_id"
+  outputs = ["drugbank.id"]
+
+  [[capability.group]]
+  id = "pdb_id"
+  outputs = ["pdb.id"]
+
+  [[capability.group]]
+  id = "string_id"
+  outputs = ["string.id"]
+
+  [[capability.group]]
+  id = "summary"
+  outputs = ["protein.uniprot.mapping.count", "protein.uniprot.mapping.records"]
 
 # Golden runs against the deterministic fixture (uniprot_weaver.fixture, an
 # httpx.MockTransport serving a canned TP53 search response) so
@@ -138,3 +222,20 @@ expect = { "protein.uniprot.accession" = "P04637", "protein.gene" = "TP53" }
 capability = "map_to_accession"
 input = { "gene.ncbi.id" = "7157" }
 expect = { "protein.uniprot.accession" = ["P04637"], "protein.uniprot.mapping.count" = 1 }
+
+# Observed supported input: https://rest.uniprot.org/configure/idmapping/fields
+# STRING has from=true/to=true; taxon-scoped TP53 identifier maps to P04637.
+[[golden]]
+capability = "map_to_accession"
+input = { "string.id" = "9606.ENSP00000269305" }
+expect = { "protein.uniprot.accession" = ["P04637"] }
+
+[[golden]]
+capability = "describe_protein"
+input = { "protein.uniprot.accession" = "P04637" }
+expect = { "protein.uniprot.accession" = "P04637", "protein.length" = 393, "ncbi.taxon.id" = 9606 }
+
+[[golden]]
+capability = "describe_protein"
+input = { "protein.uniprot.accession" = "A0A087WT22" }
+expect = { "protein.uniprot.accession" = "A0A087WT22", "protein.reviewed" = "unreviewed" }

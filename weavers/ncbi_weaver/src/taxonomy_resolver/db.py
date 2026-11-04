@@ -7,7 +7,11 @@ readable and testable.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+
+from braidworks.core.sqlite import connection_scope, transaction
 
 DEFAULT_DB_PATH: Path | None = None
 DatabaseHandle = sqlite3.Connection | Path | str | None
@@ -82,7 +86,12 @@ INDEX_STATEMENTS = [
 
 
 def connect(db_path: DatabaseHandle = None) -> sqlite3.Connection:
-    """Open a SQLite connection with row access by column name."""
+    """Legacy opener: callers close returned owned handles explicitly.
+
+    An explicit path also sets the legacy no-path default. Internal resource
+    scopes never update that global; pass handles/paths to new code instead.
+    Passing a connection borrows it without changing its row factory.
+    """
 
     global DEFAULT_DB_PATH
     if isinstance(db_path, sqlite3.Connection):
@@ -102,27 +111,51 @@ def get_default_db_path() -> Path:
     return DEFAULT_DB_PATH
 
 
+@contextmanager
+def _scope(
+    database: DatabaseHandle, *, write: bool = False, commit: bool = True
+) -> Iterator[sqlite3.Connection]:
+    """Path writes own a transaction; active borrowed transactions stay caller-owned.
+
+    commit=False requires a borrowed handle, whose caller commits or rolls back.
+    Reads by path are read-only and never create files.
+    """
+    database = database if database is not None else get_default_db_path()
+    borrowed = isinstance(database, sqlite3.Connection)
+    if write and not commit and not borrowed:
+        raise ValueError("commit=False requires a caller-owned connection")
+    with connection_scope(database, readonly=not write and not borrowed) as connection:
+        if write and commit and not connection.in_transaction:
+            with transaction(connection):
+                yield connection
+        else:
+            yield connection
+
+
 def initialize_database(db_path: DatabaseHandle, *, create_indexes: bool = True) -> None:
     """Create the reference and cache schema in a new or existing database."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path, write=True) as connection:
+        connection.execute("CREATE TABLE IF NOT EXISTS taxonomy_schema (version INTEGER NOT NULL)")
+        row = connection.execute("SELECT version FROM taxonomy_schema").fetchone()
+        if row is not None and row[0] != 1:
+            raise ValueError(f"Unsupported taxonomy schema version: {row[0]}")
+        if row is None:
+            connection.execute("INSERT INTO taxonomy_schema VALUES (1)")
         for statement in SCHEMA_STATEMENTS:
             connection.execute(statement)
         if create_indexes:
             for statement in INDEX_STATEMENTS:
                 connection.execute(statement)
-        connection.commit()
 
 
 def clear_reference_tables(db_path: DatabaseHandle, *, commit: bool = True) -> None:
     """Remove reference-build data while preserving reviewed mapping history."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path, write=True, commit=commit) as connection:
         connection.execute("DELETE FROM taxon_names")
         connection.execute("DELETE FROM taxa")
         connection.execute("DELETE FROM metadata")
-        if commit:
-            connection.commit()
 
 
 def insert_taxa_rows(
@@ -133,7 +166,7 @@ def insert_taxa_rows(
 ) -> None:
     """Bulk insert parsed taxa rows from `nodes.dmp`."""
 
-    with connect(db_path or get_default_db_path()) as connection:
+    with _scope(db_path, write=True, commit=commit) as connection:
         connection.executemany(
             """
             INSERT INTO taxa(
@@ -155,8 +188,6 @@ def insert_taxa_rows(
             """,
             rows,
         )
-        if commit:
-            connection.commit()
 
 
 def insert_taxon_name_rows(
@@ -167,7 +198,7 @@ def insert_taxon_name_rows(
 ) -> None:
     """Bulk insert parsed taxon name rows from `names.dmp`."""
 
-    with connect(db_path or get_default_db_path()) as connection:
+    with _scope(db_path, write=True, commit=commit) as connection:
         connection.executemany(
             """
             INSERT INTO taxon_names(
@@ -180,8 +211,6 @@ def insert_taxon_name_rows(
             """,
             rows,
         )
-        if commit:
-            connection.commit()
 
 
 def upsert_metadata(
@@ -192,7 +221,7 @@ def upsert_metadata(
 ) -> None:
     """Persist build metadata used for reproducibility and cache reuse."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path, write=True, commit=commit) as connection:
         connection.executemany(
             """
             INSERT INTO metadata(key, value)
@@ -201,14 +230,12 @@ def upsert_metadata(
             """,
             items.items(),
         )
-        if commit:
-            connection.commit()
 
 
 def get_metadata_value(db_path: DatabaseHandle, key: str) -> str | None:
     """Return one metadata value from the SQLite store if it exists."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         row = connection.execute(
             "SELECT value FROM metadata WHERE key = ?",
             (key,),
@@ -219,7 +246,7 @@ def get_metadata_value(db_path: DatabaseHandle, key: str) -> str | None:
 def fetch_all_metadata(db_path: DatabaseHandle) -> dict[str, str]:
     """Return all metadata key/value pairs from the SQLite store."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         rows = connection.execute("SELECT key, value FROM metadata ORDER BY key").fetchall()
     return {str(row["key"]): str(row["value"]) for row in rows}
 
@@ -227,7 +254,7 @@ def fetch_all_metadata(db_path: DatabaseHandle) -> dict[str, str]:
 def insert_reviewed_mapping(db_path: DatabaseHandle, row: tuple[object, ...]) -> None:
     """Persist one reviewed mapping record."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path, write=True) as connection:
         connection.execute(
             """
             INSERT INTO reviewed_mappings(
@@ -249,7 +276,6 @@ def insert_reviewed_mapping(db_path: DatabaseHandle, row: tuple[object, ...]) ->
             """,
             row,
         )
-        connection.commit()
 
 
 def fetch_reusable_reviewed_mapping(
@@ -261,7 +287,7 @@ def fetch_reusable_reviewed_mapping(
 ) -> sqlite3.Row | None:
     """Return the latest reviewed mapping eligible for conservative reuse."""
 
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         return connection.execute(
             """
             SELECT *
@@ -327,7 +353,7 @@ def fetch_name_matches(
         WHERE {where_clause}
     """
 
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         return list(connection.execute(query, parameters).fetchall())
 
 
@@ -354,13 +380,10 @@ def fetch_lineage_entries(db_path: DatabaseHandle, taxid: int) -> list[dict[str,
             ON sci.taxid = a.taxid AND sci.name_class = 'scientific name'
         ORDER BY a.depth DESC
     """
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         rows = connection.execute(query, (taxid,)).fetchall()
 
-    return [
-        {"taxid": row["taxid"], "rank": row["rank"], "name": row["name"] or ""}
-        for row in rows
-    ]
+    return [{"taxid": row["taxid"], "rank": row["rank"], "name": row["name"] or ""} for row in rows]
 
 
 def fetch_fuzzy_name_pool(
@@ -427,7 +450,7 @@ def fetch_fuzzy_name_pool(
         LIMIT ?
     """
 
-    with connect(db_path) as connection:
+    with _scope(db_path) as connection:
         rows = list(
             connection.execute(
                 primary_query,

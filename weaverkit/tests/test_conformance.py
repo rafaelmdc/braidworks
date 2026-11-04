@@ -11,7 +11,7 @@ import dataclasses
 from pathlib import Path
 
 from braidworks.core.capability import Capability, OutputGroup
-
+from tests.fakes import ConformingFakeWeaver, UnknownFingerprintWeaver
 from weaverkit.conformance import (
     WeaverConformanceTests,
     check_fingerprints,
@@ -19,8 +19,6 @@ from weaverkit.conformance import (
     check_manifest,
 )
 from weaverkit.spec import load_spec
-
-from tests.fakes import ConformingFakeWeaver, UnknownFingerprintWeaver
 
 FIXTURE = Path(__file__).parent / "fixtures" / "valid.weaver.spec.toml"
 
@@ -188,7 +186,6 @@ def test_every_shared_key_has_a_canonical_type():
     no declared shape (cache/join fragmentation) — caught here at CI time.
     """
     from braidworks.core import CANONICAL_TYPES
-
     from weaverkit.index import ENTRY_KEYS
     from weaverkit.keys import SHARED_KEYS
 
@@ -212,7 +209,6 @@ def test_every_shared_key_has_a_canonical_type():
 def test_entry_keys_are_shared_but_exempt_from_canonical_type():
     """Entry keys must be reachable (shared) yet need no canonical type (#3)."""
     from braidworks.core import CANONICAL_TYPES
-
     from weaverkit.index import ENTRY_KEYS
     from weaverkit.keys import SHARED_KEYS
 

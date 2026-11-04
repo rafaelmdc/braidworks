@@ -1,116 +1,70 @@
 # weaverkit
 
-Guardrails for building Braidworks weavers, so an agent can add a database
-weaver reliably instead of vibe-coding it. Three pieces:
+Use weaverkit to create and verify a source adapter, inspect the installed source
+network, or run queries in a local browser. Query planning, execution and shared
+backend machinery live in `braidworks-core`; this package supplies authoring and
+visual tools.
 
-- **spec** (`weaver.spec.toml`) — the contract an agent fills *before* coding:
-  db name, source, license, capabilities (consuming **registered shared keys**),
-  output groups, backends, and golden examples. Validated by `weaverkit.spec`.
-- **scaffold** (`weaverkit new`) — stamps a thin weaver package from a spec (vocab,
-  thin glue, backend stubs); the routing/mapping/record runtime is imported from
-  `braidworks-core`, not copied. So the structure/wiring is generated, not
-  hand-written, and you implement only the backends.
-- **conformance** (`weaverkit verify` + `WeaverConformanceTests`) — machine checks
-  that the built weaver matches its spec, is reachable (consumes a shared key),
-  and never returns an `"unknown"` fingerprint.
-- **index** (`weaverkit index`) — scans every `weaver.spec.toml` and writes a small
-  delimited map (`weaver`, `capability`, `kind`, `api_key`, `backends`, `consumes`,
-  `produces`, `unmet_inputs`) so you can see what join keys already exist and pick a
-  new weaver's inputs to connect. An `unmet_inputs` entry is a hint, not an error.
-- **view** (`weaverkit view`) — discovers the installed weavers (the
-  `braidworks.weavers` entry points) and renders a single self-contained,
-  interactive HTML file: the whole weaver network as a `type → weaver → type`
-  graph, plus an optional braid path for a `--from … --to …` query (the real
-  `Braider` plan, laid out by dependency wave). Set-valued (one→many) produced
-  keys are badged `⤜ fan`. Pass `--run result.json` (a serialized
-  `ExecutionResult.to_json()`) to add a **run-lineage view** per originating
-  input — the cardinality fan-out trace, `input → fork ⤜ one leaf per value`.
-  No CDN, opens offline.
-- **serve** (`weaverkit serve`) — the *interactive* counterpart to `view`: a localhost
-  GUI to **build** a braid (enter a have-type and a want-type, autocompleted from the
-  network), plan the route live, copy the generated `braidworks weave` line / Python
-  snippet / braid JSON (with the route's source citations), then **run** it with real
-  values and watch the braid **light up wave-by-wave** (green per step, red + reroute on
-  failure), with a results table and CSV/TSV/JSON export and a fan-out control
-  (`top`/`top-k`/`all`). Requires the optional extra (`pip install 'weaverkit[serve]'` —
-  FastAPI + uvicorn); the base package stays stdlib-only. Localhost-only; the static
-  `view` export is unaffected.
+## Run queries in the browser
 
-The architectural decisions behind the toolkit (what's contract vs weaver freedom,
-the `--strict` regimes, dispatcher/backend split) live in
-[docs/decisions.md](docs/decisions.md); the resulting work is tracked in
-[docs/backlog.md](docs/backlog.md).
+Install the `serve` extra with your selected sources, then run `weaverkit serve`.
+Follow [the browser guide](../docs/browser.md) to build a route, process a batch,
+export results or continue saved work. The optional server uses FastAPI and uvicorn;
+the base toolkit depends on core and its networkx/platformdirs dependencies.
 
-When implementing the generated `# TODO` backend spots, see
-[docs/implementing-backends.md](docs/implementing-backends.md) — the per-function
-contract the stubs deep-link into. For the wider picture see
-[docs/weaver-implementation-guide.md](../docs/weaver-implementation-guide.md) and
-[AGENTS.md](../AGENTS.md).
+For an offline network view, use `weaverkit view --out network.html`. It writes a
+self-contained HTML file without CDN dependencies. Add `--from`/`--to` for a planned
+route, or `--run result.json` for the lineage of a serialized `ExecutionResult`.
+Set-valued keys are marked as fan dimensions. See `weaverkit view --help`.
+
+## Build or extend an adapter
+
+Follow [the implementation guide](../docs/weaver-implementation-guide.md):
+write a spec, scaffold the package, implement source backends, then verify it.
+The scaffold imports records, mapping and dispatch from core. Conformance checks
+compare the implementation to the spec; strict verification adds completed goldens.
+
+| Task | Guide or command |
+|---|---|
+| Define inputs, outputs, parameters and provenance | [Spec reference](docs/spec-reference.md) |
+| Generate a new package | `weaverkit new --spec PATH --dest PATH` |
+| Verify the source contract | `weaverkit verify --spec PATH --package PACKAGE --strict` |
+| Implement backend behavior | [Backend reference](docs/implementing-backends.md) |
+| Extend an implemented package safely | [Safe regeneration](docs/safe-regeneration.md) |
+| Inspect/write scaffold artifacts from Python | [Scaffold interfaces](docs/scaffold-reference.md) |
+| Find source connections | `weaverkit index`; [key index](../docs/keys-index.md) |
+| Inspect source attribution | `weaverkit references` |
+
+The index scans workspace specs and writes capability/input/output/backend metadata;
+`unmet_inputs` is a connectivity hint, not a verification failure. The view and references
+commands report broken plugins while retaining valid ones. Queries use strict discovery;
+see [discovery reference](../docs/reference/discovery.md).
 
 ## `weaver.spec.toml` field reference
 
-Complete worked examples live in [`tests/fixtures/`](tests/fixtures/) (lookup,
-resolver, and bulk). `weaverkit verify --spec ...` reports every field problem at
-once, so write a draft and let it guide you. The fields:
+Exact fields now live in [the spec reference](docs/spec-reference.md). This heading
+retains the route from existing contributor links.
 
-**`[weaver]`**
+## Why specs use TOML
 
-| field | required | notes |
-|---|---|---|
-| `db_name` | yes | `^[a-z][a-z0-9_]*$`; the package becomes `<db_name>_weaver`. |
-| `title`, `version`, `license`, `source_url` | yes | non-empty metadata. |
-| `fingerprint_source` | yes | what versions the data (release tag / dump date / checksum); never `"unknown"`. |
-| `source_sample` | yes | a **real** snippet of the source (anti-hallucination guard). |
-| `backends` | yes | e.g. `["local"]`, `["local", "api"]`. |
-| `weaver_id` | no | join namespace if it differs from `db_name` (ncbi_weaver's is `ncbi`). |
-| `kind` | no | `"lookup"` (default, clean id→data) or `"resolver"` (fuzzy/ambiguous + candidates). |
-| `api_key` | no | `"none"` (default) / `"optional"` / `"required"` — drives the API backend stub. |
+TOML supplies explicit string/number types and a standard-library parser (`tomllib`),
+matching the workspace's `pyproject.toml`. Nested array-of-table syntax costs verbosity;
+semantic validation reports contract errors after parsing. The format is a maintained
+contract, so edit and validate it as capabilities change. See [design decisions](docs/decisions.md)
+for the shared runtime, builder and verification rationale.
 
-**`[[capability]]`** (one or more) — `id`, `consumes` (registered shared keys),
-optional `backends` / `max_batch_size` / `cost`, optional `always_computed_groups`
-(group ids always computed internally, e.g. `["core"]`), optional `set_outputs`
-(produced join keys that are one→many — the weaver emits a *list* and the executor
-may fan out one child per value under `ExpandPolicy`; must be a subset of `produces`,
-e.g. `["pathway.reactome.id"]`), optional `consumes_any` (bool — interpret `consumes`
-as *alternatives*: any one input suffices and the planner routes from each one
-independently, rather than the default *conjunction* of all inputs; the backend
-dispatches on whichever input is present — e.g. a UniProt ID-mapping
-`{gene id, ensembl id, pdb id, …} → accession`), one or more `[[capability.group]]`
-(`id` + `outputs`, disjoint across groups), and optional `[[capability.parameter]]`
-blocks (per-query knobs — filters/sort/thresholds — `name`, `type` ∈
-`string|int|float|bool`, optional `enum`/`default`/`description`; surfaced as
-`--param` in the CLI and threaded to the backend's `fetch` as `params`).
+## Installation and interfaces
 
-**`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
-`filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB
-local DB.
+Use [checkout or wheel installation](../docs/installation.md); publication to a package
+index is not assumed. The [browser interface reference](../docs/reference/browser.md)
+records HTTP endpoints and generated artifacts. [Current work](docs/backlog.md) tracks
+pending toolkit changes; it is separate from current usage instructions.
 
-**`[[golden]]`** (optional for `verify`; `--strict` requires ≥1) — `capability`,
-`input` (keys ⊆ that capability's consumes), `expect` (keys ⊆ its produces). Under
-`--strict` each runs against a fixture (`build_<package>_fixture()`) or an
-already-configured backend, so pick inputs resident in that data.
+## Software license
 
-## Decision: the spec is TOML, not YAML
+The software uses [MIT](LICENSE). Provider data and source samples retain their own
+licenses and attribution requirements as declared by each weaver.
 
-The spec format is `weaver.spec.toml`, parsed with the stdlib `tomllib`. This was
-a deliberate choice over YAML:
-
-- **No silent type coercion.** A spec is full of short identifiers, version tags,
-  and accession-like strings. YAML would mangle them — `license: NO` parses to
-  boolean `False` (the "Norway problem"), `version: 1.10` becomes a float and
-  drops the trailing zero, `id: 09` can error on octal. TOML keeps every value
-  exactly as written. For a *guardrail*, no-surprise parsing matters most.
-- **Zero dependencies.** weaverkit is the package everything else trusts; keeping
-  it stdlib-only (no PyYAML) is worth more here than anywhere. It also matches the
-  rest of the repo — authors are already in `pyproject.toml` headspace.
-- **Fails loud, not silent.** TOML errors on malformed structure; YAML often
-  parses subtly-wrong input into the wrong shape (merged keys, stray tabs). For an
-  agent-authored, machine-validated file, a loud parse error beats a quiet misparse.
-
-The one cost is that the schema is nested (capabilities → groups → outputs), and
-TOML's array-of-tables (`[[capability]]`, `[[capability.group]]`) is more verbose
-than the YAML equivalent. That's acceptable: the nesting is only two levels deep,
-and `validate_spec` turns any structural mistake into a precise error. The spec is
-write-once and machine-validated in a loop, so parse-determinism and clear errors
-outweigh authoring ergonomics — which is exactly where TOML wins. If this were a
-human-tuned config edited daily, YAML would be the better call.
+Refresh spec-owned capability tables with `weaverkit capability-docs --root .`; add
+`--check` to detect drift without writing. See [inventory generation](docs/scaffold-reference.md#generated-capability-inventories)
+for marker ownership and workspace commands.

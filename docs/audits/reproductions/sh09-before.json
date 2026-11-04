@@ -1,0 +1,75 @@
+{
+  "agora_reactions": {
+    "digest": "f1d3866ef324847aa3ac4c21d6497dbda7b8f76c5986a8936cf134cb28c328fc",
+    "peak_python_bytes": 372810,
+    "recursive_selects": 0,
+    "seconds": 0.004961,
+    "selects": 60
+  },
+  "disbiome_full": {
+    "digest": "64a0e59f64e66cc7be495e02213bb161bef0e1001829ab60c8ef3afc31d3544f",
+    "peak_python_bytes": 81311122,
+    "recursive_selects": 0,
+    "seconds": 0.496148,
+    "selects": 21
+  },
+  "disbiome_summary": {
+    "digest": "001317816c4fd7c5fb1942f32731fb756f6c029eed55c7b307d6095d1c118ea0",
+    "peak_python_bytes": 81375265,
+    "recursive_selects": 0,
+    "seconds": 0.583208,
+    "selects": 21
+  },
+  "faprotax_duplicates": {
+    "digest": "b8128f34e7c9671d3964365c4227d5e1f308e928b379f9993c937b839e8a96d0",
+    "matcher_calls": 20,
+    "peak_python_bytes": 31263,
+    "recursive_selects": 0,
+    "seconds": 1.357652,
+    "selects": 0
+  },
+  "gtdb_all_rootpaths": {
+    "digest": "81a83544cf93c245178cbc1620030f1123f435af867c79d87135983c52ab39d9",
+    "peak_python_bytes": 1503642,
+    "recursive_selects": 0,
+    "seconds": 0.07079,
+    "selects": 0
+  },
+  "gtdb_build_1000": {
+    "digest": "40510175845988f13f6162ed8526f0b09f73384467fa855e1e79b44a56562a58",
+    "peak_python_bytes": 456967,
+    "recursive_selects": 0,
+    "seconds": 0.013293,
+    "selects": 7
+  },
+  "gtdb_build_10000": {
+    "digest": "39e5b4830d4d9c14db7368a95b65d5463ea3d09520373723430c03a5a453b5df",
+    "peak_python_bytes": 3872485,
+    "recursive_selects": 0,
+    "seconds": 0.114806,
+    "selects": 7
+  },
+  "mondo_graph": {
+    "digest": "5caf5be1079359f3594a394670799884e832703f25cbf17765b2b4960cae2f34",
+    "peak_python_bytes": 308030,
+    "recursive_selects": 40,
+    "seconds": 0.013759,
+    "selects": 701
+  },
+  "mondo_identity": {
+    "digest": "649eecff6b12cba721770630127f6adc11b130e7dad02876c6a0c437e013a910",
+    "peak_python_bytes": 311398,
+    "recursive_selects": 40,
+    "seconds": 0.018272,
+    "selects": 701
+  },
+  "scope": {
+    "agora_models": 30,
+    "disbiome_rows": 500,
+    "duplicate_queries": 20,
+    "gtdb_rows": 10000,
+    "memory_scope": "tracemalloc Python allocations; excludes SQLite/native allocations",
+    "mondo_chain_nodes": 30,
+    "tree_leaves": 2000
+  }
+}

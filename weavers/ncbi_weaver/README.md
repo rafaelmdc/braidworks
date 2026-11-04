@@ -1,51 +1,31 @@
 # ncbi_weaver
 
-NCBI Taxonomy — resolve a free-text organism name to its NCBI taxid + ranked lineage, and
-describe a taxid. The **organism hub** of Braidworks (the taxid that BacDive, Disbiome,
-STRING, and UniProt all join on) and the **advanced reference weaver**: a `resolver` (fuzzy
-name matching, with review for ambiguous hits) with two interchangeable backends — a local
-SQLite resolver (`taxonomy_resolver`, migrated from taxonbridge) and the NCBI Datasets v2
-REST API. Both normalize to a neutral `TaxonMatch`, then one mapper produces strands, so the
-backends emit identical shapes even though their matching differs.
+Resolve organism names, describe taxids, follow descendants and assemblies, or retrieve genes
+and orthologs. Taxonomy and descendants support local data and the Datasets API; reviewed
+history is local-only and gene/genome operations are API-only. Name resolution can preserve
+ambiguity for review.
 
 - **Source:** https://www.ncbi.nlm.nih.gov/taxonomy · **License:** Public Domain — NCBI Taxonomy
 - **Backends:** `local` (SQLite, bulk) + `api` (NCBI Datasets v2, keyless) · **Discoverable as** `ncbi`
 
 ## Capabilities
 
-| Capability | Consumes | Produces (by group) |
-|---|---|---|
-| `ncbi.resolve_name` | `organism.name` | **core:** `ncbi.taxon.id`, `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id`, `ncbi.taxon.match_type`, `ncbi.taxon.review_required` · **lineage:** `ncbi.taxon.lineage` |
-| `ncbi.describe_taxon` | `ncbi.taxon.id` | **core:** `organism.scientific_name`, `ncbi.taxon.rank`, `ncbi.taxon.parent_id` · **lineage:** `ncbi.taxon.lineage` |
-| `ncbi.list_children` ⤜ | `ncbi.taxon.id` | **`ncbi.taxon.id`** (⤜ fan: each descendant), `ncbi.taxon.children_count`, `ncbi.taxon.children_records` — param `rank` (default `species`) · **api-only** |
-| `ncbi.list_genomes` ⤜ | `ncbi.taxon.id` | **`genome.accession`** (⤜ fan: each assembly), `genome.assembly.count`, `genome.assembly.records` — params `reference_only`, `annotated_only`, `assembly_level` · **api-only** |
-| `ncbi.describe_genome` | `genome.accession` | **assembly:** `genome.assembly.title`, `genome.assembly.level`, `genome.assembly.organism`, `genome.assembly.detail` · **sequences:** `genome.sequence.records` · **api-only** |
-| `ncbi.resolve_gene` | `protein.query` | `gene.ncbi.id`, `gene.symbol`, `gene.name`, `gene.organism` — param `taxon` (default `9606`) · **api-only** |
-| `ncbi.describe_gene` | `gene.ncbi.id` | **summary:** `gene.symbol`, `gene.name`, `gene.type`, `gene.organism`, `gene.detail` · **products:** `gene.product.records` · **api-only** |
-| `ncbi.list_orthologs` ⤜ | `gene.ncbi.id` | **`gene.ncbi.id`** (⤜ fan: each ortholog), `gene.ortholog.count`, `gene.ortholog.records` — param `taxon_filter` · **api-only** |
+| Capability | Use it to |
+|---|---|
+| `ncbi.resolve_name` | Resolve an organism name with reviewable candidates |
+| `ncbi.describe_taxon` | Describe an exact taxid |
+| `ncbi.describe_taxon_history` | Inspect local taxid history |
+| `ncbi.list_children` | Follow taxonomic descendants |
+| `ncbi.list_genomes` | List assemblies for a taxid |
+| `ncbi.describe_genome` | Inspect an assembly accession |
+| `ncbi.resolve_gene` | Resolve a gene query |
+| `ncbi.describe_gene` | Describe a gene ID |
+| `ncbi.list_orthologs` | List observed ortholog gene IDs |
 
-This is a **resolver**: a fuzzy/ambiguous name match can come back flagged
-(`ncbi.taxon.review_required`) for human confirmation rather than guessing silently.
-The `list_*` capabilities emit a **set output** (the fan dimension) — `list_children`
-fans a genus into its species, `list_genomes` fans an organism into its genome
-assemblies (the new `genome.accession` join key bridges organism → genome):
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-`resolve_gene` consumes `protein.query` (a gene symbol is a valid molecular query), so a
-query can take **two paths** from the same entry — UniProt's protein identity *or* the
-NCBI gene id — and from there into structures, pathways, or orthologs.
-
-```bash
-braidworks run ncbi ncbi.list_children --have ncbi.taxon.id=216851 --param rank=species
-braidworks run ncbi ncbi.list_genomes --have ncbi.taxon.id=562 --param reference_only=true
-# organism -> each reference genome -> its assembly detail:
-braidworks weave --have organism.name="Escherichia coli" \
-    --want genome.assembly.level --param reference_only=true --expand all
-# gene symbol -> NCBI gene id -> its mammalian orthologs, each drillable:
-braidworks run ncbi ncbi.resolve_gene --have protein.query=TP53
-braidworks run ncbi ncbi.list_orthologs --have gene.ncbi.id=7157 --param taxon_filter=40674
-```
-
-## Choosing a backend
+## Choose a backend
 
 ```python
 from ncbi_weaver import build_ncbi_weaver
@@ -56,11 +36,14 @@ weaver = build_ncbi_weaver(auto_setup=True)                 # build/reuse the DB
 weaver = build_ncbi_weaver(db_path="…", enable_api=True)    # local preferred, API fallback
 ```
 
-The manifest advertises only the backends you wire in, so a missing one never breaks
-planning — it just isn't an option. See [docs/database.md](../../docs/database.md) for the
+Explicit backend selection advertises the wired backends and their supported
+capabilities. Zero-argument construction declares both backends for discovery: the
+API is usable, while local may be unconfigured. A declared route therefore does not
+guarantee a prepared local database. Gene/genome operations remain API-only; history
+is local-only; taxonomy and descendant listing support both. See [docs/database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
 local DB. In an app that wires a `WeaverFactory`, `ncbi_weaver.register(factory)` adds it.
 
-## Use it
+## Run a query
 
 The local backend needs a one-time DB (the `api` backend doesn't):
 
@@ -76,12 +59,20 @@ braidworks weave --have organism.name="Escherichia coli" --want ncbi.taxon.id,nc
 > weavers it carries its own `dispatch.py`/`mapper.py`, the `taxonomy_resolver` library, and
 > the `ncbi-weaver` CLI, so its `vocab.py` is **hand-maintained** (don't regenerate it).
 
-## Develop
+## Setup, interpretation and contribution
 
-```bash
-make verify                        # spec ↔ manifest, reachability, real fingerprints (--strict adds golden)
-make test                          # conformance + contract + golden, fully offline
-BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live NCBI Datasets API (schema-drift detector)
-```
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

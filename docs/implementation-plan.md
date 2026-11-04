@@ -1,5 +1,9 @@
 # Braidworks Implementation Plan
 
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [architecture](architecture.md).
+> This record is retained for its rationale; it is not an operating guide.
+
 > **Status: historical (MVP shipped).** This is the original build-order plan for the
 > core MVP — kept for the rationale and definition-of-done discipline it records. The
 > MVP (registry, braider, executor, cache, the first weavers) is built and well past

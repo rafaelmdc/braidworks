@@ -18,12 +18,14 @@ blocks the event loop, with one read-only connection per thread.
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
-import threading
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from gmrepo_weaver.setup import _coerce_taxid, db_is_valid, default_gmrepo_db_path
 
@@ -51,17 +53,9 @@ def _association_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _values(overview: dict[str, Any] | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Fill every produced output from a taxid's overview + association rows."""
-    names = sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
-    associations = [_association_row(r) for r in rows]
-    return {
-        OVERVIEW: overview,
-        NAMES: names,
-        COUNT: len(rows),
-        ASSOCIATIONS: associations,
-        RECORDS: {"overview": overview, "associations": rows},
-    }
+def _acquisition(con: sqlite3.Connection) -> dict[str, Any]:
+    row = con.execute("SELECT value FROM meta WHERE key = 'acquisition'").fetchone()
+    return json.loads(row[0]) if row else {"scope": "unknown", "taxa": {}, "profiles": {}}
 
 
 class GmrepoLocalBackend(BackendBase):
@@ -73,32 +67,17 @@ class GmrepoLocalBackend(BackendBase):
         self._db_path = Path(db_path) if db_path else default_gmrepo_db_path()
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
-        self._local = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
 
     def is_configured(self) -> bool:
         return self._configured
 
     def fingerprint(self) -> str:
-        # GMrepo has no release tag; the build records a content hash of the fetched
-        # tables. Read it once (only ever called when configured).
-        if self._fingerprint is None:
-            row = (
-                self._connect()
-                .execute("SELECT value FROM meta WHERE key = 'content_sha256'")
-                .fetchone()
-            )
-            self._fingerprint = f"gmrepo-{row[0][:16]}" if row else "unconfigured:local"
-        return self._fingerprint
-
-    def _connect(self) -> sqlite3.Connection:
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(
-                f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False
-            )
-            con.row_factory = sqlite3.Row
-            self._local.con = con
-        return con
+        if not self._configured:
+            return "unconfigured:local"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -109,17 +88,197 @@ class GmrepoLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id in {"gmrepo.list_runs", "gmrepo.describe_run", "gmrepo.list_phenotypes"}:
+            return await asyncio.to_thread(
+                self._entity_queries, capability_id, queries, params or {}
+            )
         if capability_id == _PROFILES_CAPABILITY:
+            if "metadata" in groups_to_compute:
+                return await asyncio.to_thread(self._profiles_all, queries, groups_to_compute)
             return await asyncio.to_thread(self._profiles_all, queries)
-        return await asyncio.to_thread(self._lookup_all, queries)
+        return await asyncio.to_thread(self._lookup_all, queries, groups_to_compute)
 
-    def _lookup_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        return [self._lookup_one(con, q) for q in queries]
+    def _entity_queries(self, capability, queries, params):
+        with self._source.session() as con:
+            acquisition = _acquisition(con)
+            profiles = acquisition.get("profiles", {})
+            out = []
+            for query in queries:
+                if capability == "gmrepo.list_phenotypes":
+                    taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
+                    taxon_scope = acquisition.get("taxa", {}).get(str(taxid))
+                    if taxon_scope and taxon_scope.get("status") == "failed":
+                        out.append(
+                            LookupRecord(query=query, error="GMrepo taxon acquisition failed")
+                        )
+                        continue
+                    rows = [
+                        dict(row)
+                        for row in con.execute(
+                            "SELECT mesh_id, phenotype_name, rank FROM association WHERE ncbi_taxon_id=? ORDER BY mesh_id,rank",
+                            (taxid,),
+                        )
+                    ]
+                    ids = sorted({row["mesh_id"] for row in rows})
+                    values = {
+                        "disease.mesh.id": ids,
+                        "microbe.abundance.phenotype_listing": {
+                            "records": rows[:10],
+                            "observed_count": len(ids),
+                            "coverage": acquisition.get("taxa", {}).get(str(taxid)),
+                            "scope": "retained source associations, not all possible phenotypes",
+                        },
+                    }
+                    out.append(
+                        LookupRecord(query=query, found=bool(ids), values=values if ids else {})
+                    )
+                    continue
+                if capability == "gmrepo.list_runs":
+                    mesh = str(query.get("disease.mesh.id") or "").strip()
+                    scope = profiles.get(mesh)
+                    metadata = scope.get("run_metadata") if scope else None
+                    if params and metadata is None:
+                        out.append(
+                            LookupRecord(
+                                query=query,
+                                error="GMrepo metadata filters require acquired run metadata",
+                            )
+                        )
+                        continue
+                    if scope and scope.get("status") == "failed":
+                        out.append(
+                            LookupRecord(query=query, error="GMrepo run listing acquisition failed")
+                        )
+                        continue
+                    if metadata is not None:
+                        ids = sorted(
+                            rid
+                            for rid, row in metadata.items()
+                            if all(row.get(key) == value for key, value in params.items())
+                        )
+                    else:
+                        ids = [
+                            row[0]
+                            for row in con.execute(
+                                "SELECT DISTINCT run_id FROM sample_profile WHERE mesh_id=? ORDER BY run_id",
+                                (mesh,),
+                            )
+                        ]
+                        if not ids and scope is None:
+                            out.append(
+                                LookupRecord(
+                                    query=query, error="GMrepo runs not acquired for this phenotype"
+                                )
+                            )
+                            continue
+                    out.append(
+                        LookupRecord(
+                            query=query,
+                            found=True,
+                            values={
+                                "metagenome.run_id": ids,
+                                "microbe.abundance.run_listing": {
+                                    "mesh_id": mesh,
+                                    "records": [
+                                        deepcopy(metadata[rid])
+                                        if metadata is not None
+                                        else {"run_id": rid}
+                                        for rid in ids[:10]
+                                    ],
+                                    "observed_count": len(ids),
+                                    "metadata_available": metadata is not None,
+                                    "effective_filters": dict(params),
+                                    "filter_scope": "retained acquired runs; selection-before-cap requires builder profile_filters",
+                                    "coverage": {
+                                        k: v
+                                        for k, v in (scope or {}).items()
+                                        if k != "run_metadata"
+                                    },
+                                },
+                            },
+                        )
+                    )
+                    continue
+                rid = str(query.get("metagenome.run_id") or "").strip()
+                evidence = [
+                    {
+                        "mesh_id": mesh,
+                        "metadata": deepcopy(scope.get("run_metadata", {}).get(rid)),
+                        "profile_outcome": deepcopy(scope.get("runs", {}).get(rid)),
+                        "selection_filters": deepcopy(scope.get("selection_filters", {})),
+                    }
+                    for mesh, scope in sorted(profiles.items())
+                    if rid in scope.get("run_metadata", {}) or rid in scope.get("runs", {})
+                ]
+                rows = [
+                    dict(row)
+                    for row in con.execute(
+                        "SELECT mesh_id,ncbi_taxon_id,rank,relative_abundance FROM sample_profile WHERE run_id=? ORDER BY mesh_id,ncbi_taxon_id,rank",
+                        (rid,),
+                    )
+                ]
+                out.append(
+                    LookupRecord(
+                        query=query,
+                        found=bool(rows or evidence),
+                        values={
+                            "microbe.abundance.run": {
+                                "run_id": rid,
+                                "source_evidence": evidence,
+                                "profiles": rows,
+                                "scope": "acquired source rows; missing/failed/empty profiles remain explicit",
+                            }
+                        }
+                        if rows or evidence
+                        else {},
+                    )
+                )
+            return out
 
-    def _profiles_all(self, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        return [self._profiles_one(con, q) for q in queries]
+    def _lookup_all(
+        self, queries: list[dict[str, Any]], groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        # Legacy direct-backend callers use an empty group set for the full view.
+        groups = groups or frozenset({"summary", "associations", "full"})
+        with self._source.session() as con:
+            return [self._lookup_one(con, q, groups) for q in queries]
+
+    def _profiles_all(
+        self, queries: list[dict[str, Any]], groups: frozenset[str] | None = None
+    ) -> list[LookupRecord]:
+        groups = groups or frozenset({"profiles"})
+        with self._source.session() as con:
+            records = []
+            for query in queries:
+                scope = (
+                    _acquisition(con)
+                    .get("profiles", {})
+                    .get(str(query.get("disease.mesh.id", "")).strip())
+                )
+                if "profiles" in groups:
+                    record = self._profiles_one(con, query)
+                else:
+                    record = (
+                        LookupRecord(query=query, found=True)
+                        if scope
+                        else LookupRecord(query=query, error="GMrepo run metadata not acquired")
+                    )
+                if "metadata" in groups and record.found:
+                    metadata = scope.get("run_metadata") if scope else None
+                    record.values["microbe.abundance.run_metadata"] = {
+                        "mesh_id": str(query.get("disease.mesh.id", "")).strip(),
+                        "records": [dict(metadata[rid]) for rid in sorted(metadata)]
+                        if metadata is not None
+                        else [],
+                        "available": metadata is not None,
+                        "coverage": {k: v for k, v in scope.items() if k != "run_metadata"}
+                        if scope
+                        else None,
+                        "selection_scope": "observed run listing before bounded profile acquisition; no additional metadata requests",
+                        "interpretation": "provider metadata and units retained; unknown values not inferred",
+                    }
+                records.append(record)
+            return records
 
     def _profiles_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
         mesh_id = query.get("disease.mesh.id")
@@ -135,38 +294,123 @@ class GmrepoLocalBackend(BackendBase):
             }
             for r in con.execute(
                 "SELECT run_id, ncbi_taxon_id, rank, relative_abundance "
-                "FROM sample_profile WHERE mesh_id = ? ORDER BY run_id, ncbi_taxon_id",
+                "FROM sample_profile WHERE mesh_id = ? ORDER BY run_id, ncbi_taxon_id, rank",
                 (mesh_id,),
             ).fetchall()
         ]
-        if not rows:
-            return LookupRecord(query=query, found=False)
+        coverage = _acquisition(con).get("profiles", {}).get(mesh_id)
+        if coverage is not None:
+            coverage = {key: value for key, value in coverage.items() if key != "run_metadata"}
+        if coverage is None:
+            if not rows:
+                return LookupRecord(
+                    query=query, error=f"GMrepo profiles not acquired for {mesh_id}"
+                )
+            coverage = {
+                "requested": None,
+                "selected_runs": None,
+                "fetched_runs": None,
+                "empty_runs": None,
+                "failed_runs": None,
+                "complete": None,
+                "scope": "caller-supplied",
+                "cohort_total_runs": None,
+            }
+        if coverage.get("status") == "failed" or (coverage.get("failed_runs", 0) and not rows):
+            return LookupRecord(
+                query=query, error=f"GMrepo profile acquisition incomplete: {coverage}"
+            )
         n_runs = len({r["run_id"] for r in rows})
         return LookupRecord(
             query=query,
             found=True,
-            values={SAMPLE_PROFILES: {"mesh_id": mesh_id, "n_runs": n_runs, "profiles": rows}},
+            values={
+                SAMPLE_PROFILES: {
+                    "mesh_id": mesh_id,
+                    "n_runs": n_runs,
+                    "n_runs_with_rows": n_runs,
+                    "profiles": rows,
+                    "coverage": coverage,
+                    "denominator": {
+                        "fetched_runs": coverage.get("fetched_runs"),
+                        "cohort_total_runs": coverage.get("cohort_total_runs"),
+                    },
+                }
+            },
+            warnings=(
+                (
+                    "GMrepo n_runs counts runs with retained rows; use coverage and "
+                    "denominator to assess empty, failed and capped acquisition."
+                ),
+            ),
         )
 
-    def _lookup_one(self, con: sqlite3.Connection, query: dict[str, Any]) -> LookupRecord:
+    def _lookup_one(
+        self, con: sqlite3.Connection, query: dict[str, Any], groups: frozenset[str]
+    ) -> LookupRecord:
         taxid = _coerce_taxid(query.get("ncbi.taxon.id"))
         if taxid is None:
             return LookupRecord(query=query, found=False)
-        rows = [
-            dict(r)
-            for r in con.execute(
-                "SELECT rank, mesh_id, phenotype_name, samples, phenotype_valid_runs, "
-                "prevalence_percentage, abundance_mean, abundance_median, abundance_sd "
-                "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id",
+        coverage = _acquisition(con).get("taxa", {}).get(str(taxid))
+        if coverage and coverage.get("status") == "failed":
+            return LookupRecord(
+                query=query, error=f"GMrepo taxon acquisition failed: {coverage.get('error')}"
+            )
+        want_rows = bool(groups & {"full", "associations"})
+        rows = []
+        summary_rows = []
+        if want_rows:
+            rows = [
+                dict(r)
+                for r in con.execute(
+                    "SELECT rank, mesh_id, phenotype_name, samples, phenotype_valid_runs, "
+                    "prevalence_percentage, abundance_mean, abundance_median, abundance_sd "
+                    "FROM association WHERE ncbi_taxon_id = ? ORDER BY mesh_id, rank",
+                    (taxid,),
+                ).fetchall()
+            ]
+        else:
+            summary_rows = con.execute(
+                "SELECT phenotype_name, COUNT(*) FROM association "
+                "WHERE ncbi_taxon_id = ? GROUP BY phenotype_name",
                 (taxid,),
             ).fetchall()
-        ]
         overview_row = con.execute(
             "SELECT rank, name, pct_of_all_samples, nr_phenotypes, presented_samples "
             "FROM overview WHERE ncbi_taxon_id = ? ORDER BY rank LIMIT 1",
             (taxid,),
         ).fetchone()
         overview = dict(overview_row) if overview_row is not None else None
-        if not rows and overview is None:
+        count = len(rows) if want_rows else sum(row[1] for row in summary_rows)
+        if not count and overview is None:
             return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_values(overview, rows))
+        values = {}
+        if "summary" in groups:
+            values.update(
+                {
+                    OVERVIEW: overview,
+                    NAMES: sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
+                    if want_rows
+                    else sorted(row[0] for row in summary_rows if row[0]),
+                    COUNT: count,
+                }
+            )
+        if "associations" in groups:
+            values[ASSOCIATIONS] = [_association_row(row) for row in rows]
+        if "full" in groups:
+            values[RECORDS] = {"overview": overview, "associations": rows}
+        scope = coverage or {"scope": "caller-supplied", "complete": None, "rows": count}
+        if "summary" in groups:
+            values["microbe.abundance.coverage"] = scope
+        if "full" in groups:
+            values[RECORDS]["coverage"] = scope
+        return LookupRecord(
+            query=query,
+            found=True,
+            values=values,
+            warnings=()
+            if scope.get("complete")
+            else (
+                "GMrepo association counts describe retained rows; full acquisition is not established.",
+            ),
+        )

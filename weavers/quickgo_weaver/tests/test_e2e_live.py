@@ -2,8 +2,7 @@
 
 Opt-in: set ``BRAIDWORKS_RUN_LIVE=1`` to enable (makes real network calls). Run it
 after changes that touch the api backend's request/parse code, to confirm the live
-schema still matches what the offline tests assume. Replace the TODO input/asserts
-with a known-truth example from the real source.
+schema still matches what the offline tests assume.
 """
 
 from __future__ import annotations
@@ -11,9 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from quickgo_weaver import build_quickgo_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -29,8 +26,16 @@ async def _go(weaver, accession):
             "list_go_terms",
             [ss],
             requested_outputs=frozenset(
-                {"go.term", "go.molecular_function", "go.biological_process",
-                 "go.cellular_component", "go.count", "go.records"}
+                {
+                    "go.term",
+                    "go.molecular_function",
+                    "go.biological_process",
+                    "go.cellular_component",
+                    "go.count",
+                    "go.records",
+                    "go.annotation.records",
+                    "go.annotation.coverage",
+                }
             ),
             backend="api",
         )
@@ -57,6 +62,16 @@ async def test_live_tp53_go_annotations():
     assert any(r["go_id"] == "GO:0006915" for r in records)
     # the fan dimension: the full distinct GO-id set, matching the records
     assert produced["go.term"] == [r["go_id"] for r in records]
+    annotations = produced["go.annotation.records"]
+    coverage = produced["go.annotation.coverage"]
+    assert annotations and all("goId" in row for row in annotations)
+    assert any(row.get("goEvidence") and row.get("qualifier") for row in annotations)
+    assert coverage["observed_annotations"] == len(annotations)
+    assert coverage["complete"] is not None
+    if coverage["complete"]:
+        assert coverage["total_annotations"] == len(annotations)
+    else:
+        assert result.warnings
 
 
 async def test_live_unknown_accession_is_no_match():
@@ -72,7 +87,8 @@ async def test_live_describe_go_term():
     ss = StrandSet.from_strands("t1", [Strand("go.term", "GO:0006915")])
     result = (
         await weaver.execute_batch(
-            "describe_go_term", [ss],
+            "describe_go_term",
+            [ss],
             requested_outputs=frozenset(
                 {"go.term.name", "go.term.aspect", "go.term.definition", "go.term.detail"}
             ),
@@ -85,3 +101,107 @@ async def test_live_describe_go_term():
     assert produced["go.term.name"] == "apoptotic process"
     assert produced["go.term.aspect"] == "biological_process"
     assert produced["go.term.detail"]["id"] == "GO:0006915"
+
+
+async def test_live_bulk_annotations_correlate_each_accession():
+    weaver = build_quickgo_weaver()
+    accessions = ["P04637", "P69905"]
+    results = await weaver.execute_batch(
+        "list_go_terms",
+        [StrandSet.from_strands(a, [Strand("protein.uniprot.accession", a)]) for a in accessions],
+        requested_outputs=frozenset({"go.annotation.records", "go.annotation.coverage"}),
+        backend="api",
+    )
+    assert len(results) == len(accessions)
+    for accession, result in zip(accessions, results):
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        annotations = values["go.annotation.records"]
+        assert annotations
+        assert all(row["geneProductId"] == "UniProtKB:" + accession for row in annotations)
+        coverage = values["go.annotation.coverage"]
+        assert coverage["observed_annotations"] == len(annotations)
+        if coverage["complete"]:
+            assert coverage["total_annotations"] == len(annotations)
+        else:
+            assert result.warnings
+
+
+async def test_live_exact_evidence_aspect_and_qualifier_scope():
+    async with build_quickgo_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "list_go_terms",
+                [StrandSet.from_strands("scope", [Strand("protein.uniprot.accession", "P04637")])],
+                requested_outputs=frozenset({"go.annotation.records", "go.annotation.coverage"}),
+                params={
+                    "evidence_code": "ECO:0000315",
+                    "evidence_usage": "exact",
+                    "aspect": "biological_process",
+                    "qualifier": "acts_upstream_of_negative_effect",
+                },
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        rows = values["go.annotation.records"]
+        assert rows and all(row["evidenceCode"] == "ECO:0000315" for row in rows)
+        assert all(row["goAspect"] == "biological_process" for row in rows)
+        assert all(row["qualifier"] == "acts_upstream_of_negative_effect" for row in rows)
+
+
+async def test_live_typed_term_children():
+    async with build_quickgo_weaver() as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_go_term",
+                [StrandSet.from_strands("relations", [Strand("go.term", "GO:0006915")])],
+                requested_outputs=frozenset({"go.term.relations"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        relations = {s.type_id: s.value for s in result.strands}["go.term.relations"]
+        assert {child["relation"] for child in relations["children"]} >= {"is_a", "part_of"}
+        assert relations["is_obsolete"] is False
+        assert relations["parents"] is None and relations["replacement_ids"] is None
+
+
+async def test_live_hierarchy_and_reverse_products():
+    import httpx
+    from quickgo_weaver.backends.api import QuickgoApiBackend
+
+    async with httpx.AsyncClient(
+        base_url="https://www.ebi.ac.uk/QuickGO/services", timeout=30
+    ) as client:
+        backend = QuickgoApiBackend(max_pages=1, client=client)
+        hierarchy = (
+            await backend.fetch(
+                "describe_go_term",
+                [{"go.term": "GO:0006915"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"hierarchy"}),
+            )
+        )[0]
+        assert not hierarchy.error, hierarchy.error
+        value = hierarchy.values["go.term.hierarchy"]
+        assert {"id": "GO:0012501", "relation": "is_a"} in value["parents"]
+        assert "GO:0008150" in value["ancestors"]
+        assert value["replaces"] and value["replacements"] is None
+        reverse = (
+            await backend.fetch(
+                "list_gene_products",
+                [{"go.term": "GO:0006915"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(),
+                params={"taxon_id": 9606},
+            )
+        )[0]
+        assert not reverse.error, reverse.error
+        assert reverse.values["protein.uniprot.accession"]
+        assert reverse.values["go.reverse.coverage"]["complete"] is False
+        assert reverse.warnings

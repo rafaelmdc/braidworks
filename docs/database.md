@@ -1,20 +1,21 @@
-# NCBI Taxonomy Database
+# Prepare the local NCBI taxonomy database
 
 The `ncbi_weaver` **`local` backend** resolves names against a local SQLite copy
 of the NCBI taxonomy. The **`api` backend** uses NCBI Datasets v2 remotely and
 needs **no database** — if you only use `api`, skip this page entirely.
 
-Braidworks never downloads the database implicitly. Acquisition is an explicit,
-opt-in, one-time step — a ~60 MB download plus a ~1-minute local build (~1.2 GB on
-disk). The easiest path is `ncbi-weaver ensure` (below); `build-db` is the
-fully-manual alternative.
+Database acquisition requires consent. Download size and build duration depend on
+the current dump and your machine. Start with `ncbi-weaver ensure` below, or use
+`build-db` to choose an explicit taxdump and output path.
 
-## Easiest: `ncbi-weaver ensure`
+## Prepare or refresh the database
+
+Run these commands from the checkout with `ncbi_weaver` installed.
 
 ```bash
-ncbi-weaver ensure              # prompt, then download + build into the user cache
-ncbi-weaver ensure --yes        # non-interactive (CI/servers)
-ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+uv run --no-sync ncbi-weaver ensure              # prompt, then download + build into the user cache
+uv run --no-sync ncbi-weaver ensure --yes        # non-interactive (CI/servers)
+uv run --no-sync ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
 ```
 
 `ensure` is idempotent (a valid DB is reused instantly), lands the DB in the
@@ -23,13 +24,13 @@ newer NCBI release exists. Afterward `build_ncbi_weaver(auto_setup=True)` finds 
 automatically. The design and decisions are in
 [local-db-setup-plan.md](local-db-setup-plan.md).
 
-## Manual: build it (download + build in one step)
+## Build from a chosen taxdump
 
 A console script (`ncbi-weaver`) ships with the `ncbi_weaver` package:
 
 ```bash
 # from the repo root
-uv run --package ncbi_weaver ncbi-weaver build-db \
+uv run --no-sync ncbi-weaver build-db \
     --download \
     --dump  data/taxdump.tar.gz \
     --db    data/ncbi_taxonomy.sqlite
@@ -42,9 +43,9 @@ uv run --package ncbi_weaver ncbi-weaver build-db \
 - `--dump` is where the `.tar.gz` is written/read; `--db` is the SQLite output.
 - `--report-json PATH` optionally writes a build report (counts, build version).
 
-The build prints a summary including the **taxonomy build version** — that string
-is the `local` backend's cache fingerprint, so rebuilding from a newer taxdump
-automatically invalidates stale cache entries.
+The build prints a summary including the taxonomy build version. The local backend's
+fingerprint combines source/build metadata with artifact-generation identity. Reopen
+the weaver after rebuilding so new lookups use the new generation and cache identity.
 
 ## Use it
 
@@ -68,7 +69,7 @@ The database and taxdump are git-ignored (`*.sqlite`, `taxdump.tar.gz`,
 `/data/`). Keep them out of version control and out of network filesystems
 (SQLite over NFS is unsafe — copy to local disk on HPC).
 
-## Assisted setup (implemented)
+## Assisted setup
 
 `build_ncbi_weaver(auto_setup=True)` provisions the `local` DB on demand: on an
 interactive terminal it prompts before the download + build; non-interactively it
@@ -76,3 +77,24 @@ honors `auto_setup` / `BRAIDWORKS_AUTO_DOWNLOAD` or raises an actionable error
 naming the exact command to run. The `api` backend stays zero-setup — it works over
 the network and logs (INFO) that it is doing so. Decisions behind this:
 [local-db-setup-plan.md](local-db-setup-plan.md).
+
+## Reader generations and build ownership
+
+Reopen a weaver after replacing its database or related tree files. Its backend is
+bound to the source generation it opened. Do not remove lock files while builders
+may run. Exact generation, cancellation and locking rules are in
+[local-data reference](reference/local-data.md#reader-generations-and-build-ownership).
+
+## NCBI reviewed decisions (from ncbi_weaver 0.2.4)
+
+Shared read-only taxonomy installations need a separate writable reviewed-history
+path. Reference refresh preserves that history, but decisions from another reference
+build are not reused automatically. Before migration or rollback, retain both artifacts.
+See [reviewed-history reference](reference/local-data.md#ncbi-reviewed-history-storage)
+for default paths, migration guarantees and legacy compatibility.
+
+## Other saved data
+
+The taxonomy database is reference data. Executor lookup caches, saved runs and
+observation archives have different purposes and lifetimes. See
+[cache and saved runs](persistence.md).

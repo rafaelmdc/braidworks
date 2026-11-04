@@ -36,6 +36,7 @@ ASSEMBLY_TITLE = "genome.assembly.title"
 ASSEMBLY_LEVEL = "genome.assembly.level"
 ASSEMBLY_ORGANISM = "genome.assembly.organism"
 ASSEMBLY_DETAIL = "genome.assembly.detail"
+SEQUENCE_COVERAGE = "genome.sequence.coverage"
 SEQUENCE_RECORDS = "genome.sequence.records"
 
 PROTEIN_QUERY = "protein.query"  # gene symbol input to resolve_gene (shared molecular entry)
@@ -45,6 +46,7 @@ GENE_NAME = "gene.name"
 GENE_TYPE = "gene.type"
 GENE_ORGANISM = "gene.organism"
 GENE_DETAIL = "gene.detail"
+GENE_PRODUCT_COVERAGE = "gene.product.coverage"
 GENE_PRODUCTS = "gene.product.records"
 ORTHOLOG_COUNT = "gene.ortholog.count"
 ORTHOLOG_RECORDS = "gene.ortholog.records"
@@ -63,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.14"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -76,6 +78,7 @@ PROVENANCE = Provenance(
 
 RESOLVE_NAME = "ncbi.resolve_name"
 DESCRIBE_TAXON = "ncbi.describe_taxon"
+DESCRIBE_TAXON_HISTORY = "ncbi.describe_taxon_history"
 LIST_CHILDREN = "ncbi.list_children"
 LIST_GENOMES = "ncbi.list_genomes"
 DESCRIBE_GENOME = "ncbi.describe_genome"
@@ -127,7 +130,7 @@ def list_children_capability(*, backends: tuple[str, ...]) -> Capability:
     Emits ``ncbi.taxon.id`` as a **set output** (the fan dimension), so a caller can
     fan out one child per descendant — "genus -> all species, each drillable". The
     ``rank`` parameter (default ``species``) selects which descendant rank to return.
-    API-only: NCBI Datasets ``dataset_report?children=true`` walks the subtree.
+    Local dump or NCBI Datasets ``dataset_report?children=true`` walks the subtree.
     """
     return Capability(
         id=LIST_CHILDREN,
@@ -150,7 +153,7 @@ def list_children_capability(*, backends: tuple[str, ...]) -> Capability:
 
 LIST_GENOMES_OUTPUTS = frozenset({GENOME_ACCESSION, ASSEMBLY_COUNT, ASSEMBLY_RECORDS})
 ASSEMBLY_GROUP = frozenset({ASSEMBLY_TITLE, ASSEMBLY_LEVEL, ASSEMBLY_ORGANISM, ASSEMBLY_DETAIL})
-SEQUENCES_GROUP = frozenset({SEQUENCE_RECORDS})
+SEQUENCES_GROUP = frozenset({SEQUENCE_RECORDS, SEQUENCE_COVERAGE})
 
 
 def list_genomes_capability(*, backends: tuple[str, ...]) -> Capability:
@@ -168,12 +171,23 @@ def list_genomes_capability(*, backends: tuple[str, ...]) -> Capability:
         output_groups=(OutputGroup(id="genomes", outputs=LIST_GENOMES_OUTPUTS),),
         set_outputs=frozenset({GENOME_ACCESSION}),
         parameters=(
-            Parameter(name="reference_only", type="bool", default=False,
-                      description="Only NCBI reference/representative genomes."),
-            Parameter(name="annotated_only", type="bool", default=False,
-                      description="Only assemblies that have annotation."),
-            Parameter(name="assembly_level", type="string",
-                      description="Filter to a level: Complete Genome / Chromosome / Scaffold / Contig."),
+            Parameter(
+                name="reference_only",
+                type="bool",
+                default=False,
+                description="Only NCBI reference/representative genomes.",
+            ),
+            Parameter(
+                name="annotated_only",
+                type="bool",
+                default=False,
+                description="Only assemblies that have annotation.",
+            ),
+            Parameter(
+                name="assembly_level",
+                type="string",
+                description="Filter to a level: Complete Genome / Chromosome / Scaffold / Contig.",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,
@@ -201,7 +215,7 @@ def describe_genome_capability(*, backends: tuple[str, ...]) -> Capability:
 
 RESOLVE_GENE_OUTPUTS = frozenset({GENE_ID, GENE_SYMBOL, GENE_NAME, GENE_ORGANISM})
 GENE_SUMMARY_GROUP = frozenset({GENE_SYMBOL, GENE_NAME, GENE_TYPE, GENE_ORGANISM, GENE_DETAIL})
-GENE_PRODUCTS_GROUP = frozenset({GENE_PRODUCTS})
+GENE_PRODUCTS_GROUP = frozenset({GENE_PRODUCTS, GENE_PRODUCT_COVERAGE})
 ORTHOLOG_OUTPUTS = frozenset({GENE_ID, ORTHOLOG_COUNT, ORTHOLOG_RECORDS})
 
 
@@ -219,8 +233,12 @@ def resolve_gene_capability(*, backends: tuple[str, ...]) -> Capability:
         produces=RESOLVE_GENE_OUTPUTS,
         output_groups=(OutputGroup(id="gene", outputs=RESOLVE_GENE_OUTPUTS),),
         parameters=(
-            Parameter(name="taxon", type="string", default="9606",
-                      description="Taxid/name to disambiguate the species (default human)."),
+            Parameter(
+                name="taxon",
+                type="string",
+                default="9606",
+                description="Taxid/name to disambiguate the species (default human).",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,
@@ -261,8 +279,11 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
         output_groups=(OutputGroup(id="orthologs", outputs=ORTHOLOG_OUTPUTS),),
         set_outputs=frozenset({GENE_ID}),
         parameters=(
-            Parameter(name="taxon_filter", type="string",
-                      description="Restrict orthologs to this taxid/clade (e.g. 40674 mammals)."),
+            Parameter(
+                name="taxon_filter",
+                type="string",
+                description="Restrict orthologs to this taxid/clade (e.g. 40674 mammals).",
+            ),
         ),
         backends=backends,
         max_batch_size=MAX_BATCH_SIZE,
@@ -272,15 +293,28 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """The NCBI weaver manifest, declaring each capability for the wired backends.
 
-    The genome + ``list_children`` capabilities are API-only (they hit the live NCBI
+    Genome/gene capabilities are API-only (they hit the live NCBI
     Datasets service), so they appear only when the ``api`` backend is wired.
     """
     capabilities = [
         resolve_name_capability(backends=backends),
         describe_taxon_capability(backends=backends),
     ]
+    if "local" in backends:
+        capabilities.append(
+            Capability(
+                id=DESCRIBE_TAXON_HISTORY,
+                consumes=frozenset({TAXON_ID}),
+                produces=frozenset({"ncbi.taxon.history"}),
+                output_groups=(
+                    OutputGroup(id="history", outputs=frozenset({"ncbi.taxon.history"})),
+                ),
+                backends=("local",),
+                max_batch_size=MAX_BATCH_SIZE,
+            )
+        )
+    capabilities.append(list_children_capability(backends=backends))
     if "api" in backends:
-        capabilities.append(list_children_capability(backends=("api",)))
         capabilities.append(list_genomes_capability(backends=("api",)))
         capabilities.append(describe_genome_capability(backends=("api",)))
         capabilities.append(resolve_gene_capability(backends=("api",)))

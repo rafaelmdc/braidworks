@@ -12,7 +12,6 @@ from pathlib import Path
 
 from taxonomy_resolver.build import build_taxonomy_database
 from taxonomy_tools import cli
-
 from tests.test_deterministic_resolution import NAMES_DMP, NODES_DMP, _BytesReader
 
 

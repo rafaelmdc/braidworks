@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 
-from braidworks.core.braid import Braid, BackendPolicy, CapabilityInvocation
+from braidworks.core.braid import BackendPolicy, Braid, CapabilityInvocation
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
 from braidworks.core.executor import LocalExecutor
 from braidworks.core.planner import Braider

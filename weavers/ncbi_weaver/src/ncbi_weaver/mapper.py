@@ -107,7 +107,7 @@ def map_taxon_match(
         capability_id=capability.id,
         weaver_version=weaver_version,
         backend_used=backend,
-        computed_groups=computed_groups,
+        computed_groups=frozenset() if status is WeaveStatus.ERROR else computed_groups,
         status=status,
         strands=tuple(strands),
         candidates=candidates,

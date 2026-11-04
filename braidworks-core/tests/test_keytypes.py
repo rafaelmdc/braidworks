@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Strand, StrandSet, canonicalize, compute_cache_key
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Strand,
+    StrandSet,
+    canonicalize,
+    compute_cache_key,
+)
 
 
 def test_int_keys_coerce_digit_strings():
@@ -42,9 +49,9 @@ def test_int_vs_str_taxid_share_one_cache_fingerprint():
         output_groups=(OutputGroup(id="core", outputs=frozenset({"out.value"})),),
         backends=("local",),
     )
-    key_args = dict(
-        weaver_id="x", weaver_version="1.0.0", backend="local", backend_fingerprint="fp"
-    )
+    key_args = {
+        "weaver_id": "x", "weaver_version": "1.0.0", "backend": "local", "backend_fingerprint": "fp"
+    }
     as_int = compute_cache_key(
         cap, StrandSet.from_strands("a", [Strand("ncbi.taxon.id", 1578)]), **key_args
     )

@@ -17,13 +17,28 @@ import httpx
 
 _BEST_STRUCTURES = {
     "P04637": [
-        {"pdb_id": "1tup", "chain_id": "A", "experimental_method": "X-ray diffraction",
-         "resolution": 2.2, "coverage": 0.55},
+        {
+            "pdb_id": "1tup",
+            "chain_id": "A",
+            "experimental_method": "X-ray diffraction",
+            "resolution": 2.2,
+            "coverage": 0.55,
+        },
         # a second chain of the same structure -> must collapse to one, keeping best coverage
-        {"pdb_id": "1tup", "chain_id": "B", "experimental_method": "X-ray diffraction",
-         "resolution": 2.2, "coverage": 0.52},
-        {"pdb_id": "2ahi", "chain_id": "A", "experimental_method": "Electron Microscopy",
-         "resolution": 3.5, "coverage": 0.9},
+        {
+            "pdb_id": "1tup",
+            "chain_id": "B",
+            "experimental_method": "X-ray diffraction",
+            "resolution": 2.2,
+            "coverage": 0.52,
+        },
+        {
+            "pdb_id": "2ahi",
+            "chain_id": "A",
+            "experimental_method": "Electron Microscopy",
+            "resolution": 3.5,
+            "coverage": 0.9,
+        },
     ]
 }
 
@@ -40,6 +55,11 @@ _STRUCTURE_DETAIL = {
 
 
 def _handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("/best_structures") and request.method == "POST":
+        ids = request.content.decode().split(",")
+        return httpx.Response(
+            200, json={acc: _BEST_STRUCTURES[acc] for acc in ids if acc in _BEST_STRUCTURES}
+        )
     if "/best_structures/" in request.url.path:
         acc = request.url.path.rsplit("/", 1)[1]
         if acc in _BEST_STRUCTURES:

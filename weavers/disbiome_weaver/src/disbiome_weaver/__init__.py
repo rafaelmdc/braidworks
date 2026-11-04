@@ -10,12 +10,12 @@ from disbiome_weaver.setup import ensure_disbiome_db, iter_associations
 from disbiome_weaver.weaver import DisbiomeWeaver
 
 __all__ = [
+    "DisbiomeWeaver",
+    "DisbiomeWeaverProvider",
     "build_disbiome_weaver",
     "build_disbiome_weaver_configured",
     "build_disbiome_weaver_fixture",
     "ensure_disbiome_db",
     "iter_associations",
     "register",
-    "DisbiomeWeaver",
-    "DisbiomeWeaverProvider",
 ]

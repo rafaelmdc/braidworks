@@ -1,31 +1,23 @@
 # string_weaver
 
-STRING protein–protein interactions — a molecular weaver off the protein hub, over the
-free, keyless STRING REST API. Lists a protein's interaction partners with confidence
-scores and per-evidence-channel subscores.
+Retrieve bounded protein functional-association networks from STRING with combined scores and
+evidence channels. Associations can include indirect functional relationships and need not
+represent physical binding. The keyless API supports species, score and retrieval controls; its
+observed count is not an exhaustive interaction network.
 
 - **Source:** https://string-db.org · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkac1000 — STRING (Szklarczyk et al.)
 - **Backend:** `api` (keyless) · **Discoverable as** `string`
 
 ## Capabilities
 
-| Capability | Consumes | Produces |
-|---|---|---|
-| `list_interactions` | `protein.uniprot.accession` | **`protein.query`** (⤜ fan: each partner name), `protein.interaction.partners`, `protein.interaction.count`, `protein.interaction.records` (full edges: partner, combined score, per-channel subscores) |
+| Capability | Use it to |
+|---|---|
+| `list_interactions` | Retrieve a bounded functional-association network |
 
-STRING maps the accession to its protein + species itself, so this is single-input and
-reachable directly off the hub. It emits each partner name as **`protein.query`** (a set
-output) — the same key `uniprot_weaver` consumes — so fanning out re-resolves each partner
-back through UniProt: `protein → partners → fan → each partner's UniProt entry`.
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-## Deterministic ordering
-
-STRING returns partners ranked by confidence, but ties are not ordered stably. The backend
-imposes a fixed total order — **combined score descending, then partner name ascending** —
-and caps the display at `limit` (default 25). So the same accession always yields the same
-partner list. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
-
-## Use it
+## Run a query
 
 Once installed it is auto-discovered by the `braidworks` CLI:
 
@@ -43,12 +35,20 @@ weaver = build_string_weaver()        # zero-config
 # In an app that wires a WeaverFactory, `string_weaver.register(factory)` adds it as a provider.
 ```
 
-## Develop
+## Setup, interpretation and contribution
 
-```bash
-make verify                        # spec ↔ manifest, reachability, real fingerprints (--strict adds golden)
-make test                          # conformance + contract + golden, fully offline
-BRAIDWORKS_RUN_LIVE=1 make test    # also hit the live STRING API (schema-drift detector)
-```
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run --no-sync`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
 
-Extend it: [CONTRIBUTING.md](CONTRIBUTING.md) · build loop & boundaries: [AGENTS.md](../../AGENTS.md).
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.

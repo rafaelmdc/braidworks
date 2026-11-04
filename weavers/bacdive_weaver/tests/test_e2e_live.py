@@ -12,10 +12,8 @@ from __future__ import annotations
 import os
 
 import pytest
-
-from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from bacdive_weaver import build_bacdive_weaver
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 pytestmark = pytest.mark.skipif(
@@ -50,3 +48,63 @@ async def test_live_unknown_name_is_no_match():
     result = await _resolve(weaver, "Notarealus fakenamei")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_list_and_exact_strain_do_not_confuse_species_scope():
+    async with build_bacdive_weaver() as weaver:
+        listing = (
+            await weaver.execute_batch(
+                "list_strains",
+                [
+                    StrandSet.from_strands(
+                        "name", [Strand("organism.scientific_name", "Myroides odoratus")]
+                    )
+                ],
+                requested_outputs=frozenset({"microbe.bacdive.strain_id"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(listing)
+        assert listing.status is WeaveStatus.OK
+        ids = {s.type_id: s.value for s in listing.strands}["microbe.bacdive.strain_id"]
+        assert 5621 in ids
+        results = await weaver.execute_batch(
+            "describe_strain",
+            [
+                StrandSet.from_strands(str(i), [Strand("microbe.bacdive.strain_id", i)])
+                for i in [5621, 999999999]
+            ],
+            requested_outputs=frozenset({"microbe.bacdive.strain", "microbe.trait.records"}),
+            backend="api",
+        )
+        skip_if_transient(results[0])
+        assert results[0].status is WeaveStatus.OK and results[1].status is WeaveStatus.NO_MATCH
+        detail = {s.type_id: s.value for s in results[0].strands}["microbe.bacdive.strain"]
+        assert detail["strain_id"] == 5621
+        assert detail["culture_collection_references"] and detail["sequence_references"]
+
+
+async def test_live_collection_and_genome_mapping_are_many_to_many():
+    from bacdive_weaver.backends.api import BacdiveApiBackend
+
+    backend = BacdiveApiBackend()
+    try:
+        records = await backend.fetch(
+            "map_to_strain",
+            [{"culture.collection.id": "DSM 2801"}, {"genome.accession": "GCA_000243275"}],
+            requested_outputs=frozenset(),
+            groups_to_compute=frozenset({"strains"}),
+        )
+        assert all(5621 in record.values["microbe.bacdive.strain_id"] for record in records)
+        reverse = (
+            await backend.fetch(
+                "map_from_strain",
+                [{"microbe.bacdive.strain_id": 5621}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"identifiers"}),
+            )
+        )[0]
+        assert "DSM 2801" in reverse.values["culture.collection.id"]
+        assert "GCA_000243275" in reverse.values["genome.accession"]
+    finally:
+        await backend.aclose()

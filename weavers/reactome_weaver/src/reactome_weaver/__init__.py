@@ -5,8 +5,8 @@ from reactome_weaver.provider import ReactomeWeaverProvider, register
 from reactome_weaver.weaver import ReactomeWeaver
 
 __all__ = [
-    "build_reactome_weaver",
-    "register",
     "ReactomeWeaver",
     "ReactomeWeaverProvider",
+    "build_reactome_weaver",
+    "register",
 ]

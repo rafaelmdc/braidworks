@@ -7,10 +7,16 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Provenance, WeaverManifest
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Parameter,
+    Provenance,
+    WeaverManifest,
+)
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.4"
+WEAVER_VERSION = "0.1.14"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -35,12 +41,14 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"protein.uniprot.accession"}),
                 produces=frozenset(
                     {
-                        "go.term",
+                        "go.annotation.coverage",
+                        "go.annotation.records",
                         "go.biological_process",
                         "go.cellular_component",
                         "go.count",
                         "go.molecular_function",
                         "go.records",
+                        "go.term",
                     }
                 ),
                 output_groups=(
@@ -54,24 +62,63 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                             }
                         ),
                     ),
-                    OutputGroup(id="summary", outputs=frozenset({"go.term", "go.count"})),
+                    OutputGroup(id="summary", outputs=frozenset({"go.count", "go.term"})),
                     OutputGroup(id="full", outputs=frozenset({"go.records"})),
+                    OutputGroup(id="annotations", outputs=frozenset({"go.annotation.records"})),
+                    OutputGroup(id="coverage", outputs=frozenset({"go.annotation.coverage"})),
                 ),
-                set_outputs=frozenset({"go.term"}),
                 backends=backends,
                 max_batch_size=10,
+                set_outputs=frozenset({"go.term"}),
+                parameters=(
+                    Parameter(
+                        name="evidence_code",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="One ECO:nnnnnnn evidence ID; omitted preserves source retrieval scope",
+                    ),
+                    Parameter(
+                        name="evidence_usage",
+                        type="string",
+                        enum=(
+                            "exact",
+                            "descendants",
+                        ),
+                        default="exact",
+                        description="ECO matching mode, used only when evidence_code is supplied",
+                    ),
+                    Parameter(
+                        name="qualifier",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="Exact provider annotation qualifier; NOT evidence remains in raw records",
+                    ),
+                    Parameter(
+                        name="aspect",
+                        type="string",
+                        enum=(
+                            "molecular_function",
+                            "biological_process",
+                            "cellular_component",
+                        ),
+                        default=None,
+                        description="GO aspect filter",
+                    ),
+                ),
             ),
-            # The consumer side: one GO id -> that term's detail. Consumes the set key
-            # list_go_terms produces, so a fanned term is drillable.
             Capability(
                 id="describe_go_term",
                 consumes=frozenset({"go.term"}),
                 produces=frozenset(
                     {
-                        "go.term.name",
                         "go.term.aspect",
                         "go.term.definition",
                         "go.term.detail",
+                        "go.term.hierarchy",
+                        "go.term.name",
+                        "go.term.relations",
                     }
                 ),
                 output_groups=(
@@ -79,16 +126,66 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="detail",
                         outputs=frozenset(
                             {
-                                "go.term.name",
                                 "go.term.aspect",
                                 "go.term.definition",
                                 "go.term.detail",
+                                "go.term.name",
+                            }
+                        ),
+                    ),
+                    OutputGroup(id="relations", outputs=frozenset({"go.term.relations"})),
+                    OutputGroup(id="hierarchy", outputs=frozenset({"go.term.hierarchy"})),
+                ),
+                backends=backends,
+                max_batch_size=10,
+            ),
+            Capability(
+                id="list_gene_products",
+                consumes=frozenset({"go.term"}),
+                produces=frozenset(
+                    {"go.reverse.annotations", "go.reverse.coverage", "protein.uniprot.accession"}
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="products",
+                        outputs=frozenset(
+                            {
+                                "go.reverse.annotations",
+                                "go.reverse.coverage",
+                                "protein.uniprot.accession",
                             }
                         ),
                     ),
                 ),
                 backends=backends,
                 max_batch_size=10,
+                set_outputs=frozenset({"protein.uniprot.accession"}),
+                parameters=(
+                    Parameter(
+                        name="taxon_id",
+                        type="int",
+                        enum=(),
+                        default=None,
+                        description="Restrict annotations to a source NCBI taxon ID",
+                    ),
+                    Parameter(
+                        name="evidence_code",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="ECO evidence code",
+                    ),
+                    Parameter(
+                        name="evidence_usage",
+                        type="string",
+                        enum=(
+                            "exact",
+                            "descendants",
+                        ),
+                        default="exact",
+                        description="ECO matching scope",
+                    ),
+                ),
             ),
         ),
     )

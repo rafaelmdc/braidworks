@@ -64,7 +64,8 @@ def parse_decisions(payload: Any) -> list[DecisionRecord]:
     if isinstance(payload, dict) and "decisions" in payload:
         payload = payload["decisions"]
     if not isinstance(payload, list):
-        raise ValueError("Decision input must be a list or an object with a 'decisions' key.")
+        # Invalid external JSON shape follows the same ValueError contract as batch input.
+        raise ValueError("Decision input must be a list or an object with a 'decisions' key.")  # noqa: TRY004
 
     decisions: list[DecisionRecord] = []
     for item in payload:

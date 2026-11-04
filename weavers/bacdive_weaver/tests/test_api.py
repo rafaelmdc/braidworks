@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from bacdive_weaver.backends.api import BacdiveApiBackend
 
 CAP = "describe_traits"
@@ -35,6 +34,19 @@ def _backend(taxon, records, *, max_strains_scanned=1000, taxon_status=200, call
     the semicolon ids and returning those records (the real batch shape).
     ``calls``: optional list to append each requested path to (assert batching).
     """
+
+    # Successful source fixtures include the taxonomy echoed by real strain records.
+    from copy import deepcopy
+
+    records = deepcopy(records)
+    for suffix, payload in taxon.items():
+        parts = suffix.split("?", 1)[0].split("/")
+        species_name = " ".join(parts[-2:])
+        for identifier in payload["results"]:
+            if identifier in records:
+                section = records[identifier]["Name and taxonomic classification"]
+                for row in section if isinstance(section, list) else [section]:
+                    row.setdefault("species", species_name)
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -139,7 +151,8 @@ async def test_scan_cap_stops_searching():
     taxon = {"/taxon/Many/strains": {"results": [1, 2, 3], "next": None}}
     records = {1: _typed("no"), 2: _typed("no"), 3: _typed("yes")}
     record = await _one(_backend(taxon, records, max_strains_scanned=2), "Many strains")
-    assert record.found is False  # capped before reaching strain 3
+    assert not record.found and record.error
+    assert "complete=false" in record.error  # incomplete is not a biological miss
 
 
 async def test_paginates_via_next():
@@ -168,3 +181,105 @@ async def test_blank_name_is_a_miss_without_calling_api():
 def test_fingerprint_is_stable_and_real():
     fp = BacdiveApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_scan_fetch_does_not_exceed_remaining_budget():
+    calls = []
+    backend = _backend(
+        {"/taxon/Many/strains": {"results": [1, 2, 3], "next": None}},
+        {1: _typed("no"), 2: _typed("no"), 3: _typed("yes")},
+        max_strains_scanned=2,
+        calls=calls,
+    )
+    assert (await _one(backend, "Many strains")).error
+    assert [call for call in calls if "/fetch/" in call] == ["/v2/fetch/1;2"]
+
+
+async def test_exhausted_catalog_at_exact_budget_is_definitive_miss():
+    backend = _backend(
+        {"/taxon/Many/strains": {"results": [1, 2], "next": None}},
+        {1: _typed("no"), 2: _typed("no")},
+        max_strains_scanned=2,
+    )
+    result = await _one(backend, "Many strains")
+    assert not result.found and result.error is None
+
+
+def test_scan_budget_changes_source_fingerprint():
+    assert BacdiveApiBackend(max_strains_scanned=2).fingerprint() != (
+        BacdiveApiBackend(max_strains_scanned=3).fingerprint()
+    )
+
+
+def test_builders_share_default_budget_and_honor_explicit_budget():
+    from bacdive_weaver.factory import build_bacdive_weaver, build_bacdive_weaver_configured
+
+    default = build_bacdive_weaver().backend_fingerprint("api")
+    assert default == build_bacdive_weaver_configured().backend_fingerprint("api")
+    assert default != build_bacdive_weaver(max_strains_scanned=2).backend_fingerprint("api")
+
+
+async def test_genus_and_qualified_names_are_rejected_without_lookup():
+    calls = []
+    backend = _backend({}, {}, calls=calls)
+    for name in [
+        "Escherichia",
+        "Escherichia coli subsp. coli",
+        "Escherichia sp.",
+        "Escherichia coli strain K12",
+    ]:
+        record = await _one(backend, name)
+        assert record.error and not record.found
+    assert calls == []
+
+
+async def test_type_identity_is_stable_across_listing_order_and_pages():
+    records = {1: _typed("yes"), 2: _typed("yes")}
+    outputs = []
+    for taxon in [
+        {"/taxon/Escherichia/coli": {"results": [2, 1, 2], "next": None}},
+        {
+            "/taxon/Escherichia/coli": {
+                "results": [2],
+                "next": "https://t/v2/taxon/Escherichia/coli?page=2",
+            },
+            "/taxon/Escherichia/coli?page=2": {"results": [1], "next": None},
+        },
+    ]:
+        record = await _one(_backend(taxon, records), "Escherichia coli")
+        assert record.found
+        outputs.append(record.values["microbe.trait.records"])
+    assert outputs[0] == outputs[1]
+    assert outputs[0]["strain_id"] == 1
+    assert outputs[0]["scope"] == "type_strain_representative"
+
+
+async def test_conflicting_traits_omit_scalar_and_preserve_units_references():
+    taxon = {"/taxon/Escherichia/coli": {"results": [1], "next": None}}
+    measurements = [
+        {"type": "optimum", "temperature": value, "unit": "C", "reference": reference}
+        for value, reference in [(37, "publication-a"), (30, "publication-b")]
+    ]
+    values = []
+    for observed in (measurements, list(reversed(measurements))):
+        source = {**_typed("yes"), "Culture and growth conditions": {"culture temp": observed}}
+        record = await _one(_backend(taxon, {1: source}), "Escherichia coli")
+        assert record.found and record.warnings
+        assert "microbe.trait.optimum_temp" not in record.values
+        values.append(record.values)
+    assert values[0] == values[1]
+    evidence = values[0]["microbe.trait.records"]
+    assert evidence["conflicts"]["microbe.trait.optimum_temp"] == ["30", "37"]
+    assert {
+        row["reference"]
+        for row in evidence["source"]["Culture and growth conditions"]["culture temp"]
+    } == {"publication-a", "publication-b"}
+
+
+async def test_mismatched_source_species_is_an_error():
+    taxon = {"/taxon/Escherichia/coli": {"results": [1], "next": None}}
+    source = {
+        "Name and taxonomic classification": {"type strain": "yes", "species": "Bacillus subtilis"}
+    }
+    record = await _one(_backend(taxon, {1: source}), "Escherichia coli")
+    assert record.error and not record.found

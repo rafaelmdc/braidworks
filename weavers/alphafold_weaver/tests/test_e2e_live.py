@@ -11,10 +11,8 @@ from __future__ import annotations
 import os
 
 import pytest
-
-from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from alphafold_weaver import build_alphafold_weaver
+from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 pytestmark = pytest.mark.skipif(
@@ -29,8 +27,12 @@ async def _model(weaver, accession):
             "describe_model",
             [ss],
             requested_outputs=frozenset(
-                {"structure.alphafold.entry_id", "structure.alphafold.mean_plddt",
-                 "structure.alphafold.model_url"}
+                {
+                    "structure.alphafold.entry_id",
+                    "structure.alphafold.mean_plddt",
+                    "structure.alphafold.model_url",
+                    "structure.alphafold.records",
+                }
             ),
             backend="api",
         )
@@ -51,6 +53,9 @@ async def test_live_tp53_canonical_model():
     assert produced["structure.alphafold.entry_id"] == "AF-P04637-F1"
     assert 0.0 <= produced["structure.alphafold.mean_plddt"] <= 100.0
     assert produced["structure.alphafold.model_url"].endswith(".pdb")
+    coverage = produced["structure.alphafold.records"]["coverage"]
+    assert coverage["uniprot_start"] == 1 and coverage["uniprot_end"] == 393
+    assert coverage["sequence_length"] == 393 and coverage["status"] == "full_sequence"
 
 
 async def test_live_malformed_accession_is_no_match():
@@ -60,3 +65,62 @@ async def test_live_malformed_accession_is_no_match():
     result = await _model(weaver, "NOTAREALACC")
     skip_if_transient(result)
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_confidence_references_are_source_urls():
+    async with build_alphafold_weaver() as weaver:
+        inputs = [StrandSet.from_strands("tp53", [Strand("protein.uniprot.accession", "P04637")])]
+        result = (
+            await weaver.execute_batch(
+                "describe_model",
+                inputs,
+                requested_outputs=frozenset({"structure.alphafold.confidence"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        value = next(
+            s.value for s in result.strands if s.type_id == "structure.alphafold.confidence"
+        )
+        assert value["entry_id"] == "AF-P04637-F1"
+        assert value["pae_json_url"].endswith(".json")
+        assert value["plddt_json_url"].endswith(".json")
+        assert value["coverage"]["uniprot_end"] == 393
+
+
+async def test_live_model_list_drills_to_source_entry():
+    async with build_alphafold_weaver() as weaver:
+        inputs = [StrandSet.from_strands("tp53", [Strand("protein.uniprot.accession", "P04637")])]
+        result = (
+            await weaver.execute_batch(
+                "list_models",
+                inputs,
+                requested_outputs=frozenset({"structure.alphafold.model_id"}),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        identities = next(
+            s.value for s in result.strands if s.type_id == "structure.alphafold.model_id"
+        )
+        identity = next(value for value in identities if value.startswith("AF-P04637-F1@"))
+        exact = [
+            StrandSet.from_strands("model", [Strand("structure.alphafold.model_id", identity)])
+        ]
+        result = (
+            await weaver.execute_batch(
+                "describe_prediction",
+                exact,
+                requested_outputs=frozenset(
+                    {"structure.alphafold.entry_id", "structure.alphafold.version"}
+                ),
+                backend="api",
+            )
+        )[0]
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {s.type_id: s.value for s in result.strands}
+        assert values["structure.alphafold.entry_id"] == "AF-P04637-F1"
+        assert identity.endswith(f"@v{values['structure.alphafold.version']}")

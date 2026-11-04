@@ -7,10 +7,10 @@
 # measured-from-samples abundance — a genuinely orthogonal modality.
 #
 # GMrepo exposes a POST-JSON API. The whole per-taxon/per-phenotype abundance summary is
-# bounded (~150 phenotypes x two rank-level calls + one global overview), so the `local`
+# acquired via a taxon universe, phenotype catalog and one summary per taxon; the `local`
 # backend builds a small SQLite once by fetching + inverting those tables on taxon id,
-# then serves offline (like disbiome_weaver — no per-run profiles in this DB; those are a
-# heavier, separate ingestion for the co-occurrence layer).
+# then serves offline. Optional per-run profiles require explicit phenotype scope and
+# run budgets; they populate a separate table in the same complete database build.
 #
 # Outputs come in light->heavy slices: `summary` (global abundance overview + the phenotype
 # names it appears in + a count), `associations` (one compact row per phenotype: prevalence
@@ -21,29 +21,88 @@ db_name = "gmrepo"
 weaver_id = "gmrepo"
 kind = "lookup"
 title = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
-version = "0.2.0"
+version = "0.2.9"
 license = "Open"
 citation = "https://doi.org/10.1093/nar/gkz764"
 attribution = "GMrepo (Wu et al., NAR 2020)"
 source_url = "https://gmrepo.humangut.info"
 fingerprint_source = "content hash (sha256) of the fetched GMrepo abundance tables, recorded at build time — GMrepo publishes no release tag"
 backends = ["local"]
-# Real records from the keyless POST-JSON API. The local build fetches the global microbe
-# overview once, then walks every phenotype fetching its associated genera + species, and
-# inverts the rows on ncbi_taxon_id.
+# Observed 2026-10-09; arrays truncated to their first real row for brevity.
 source_sample = """
-# POST https://gmrepo.humangut.info/api/get_all_gut_microbes  body {}  ->
-{ "all_species": [ {"species_name":"Bacteroides uniformis","ncbi_taxon_id":820,
-                    "pct_of_all_samples":78.4,"nr_phenotypes":41,"median_abundance":2.13} ],
-  "all_genus":   [ {"genus_name":"Bacteroides","ncbi_taxon_id":816,
-                    "pct_of_all_samples":94.1,"nr_phenotypes":58,"median_abundance":9.72} ] }
-# POST /api/get_all_phenotypes  body {}  ->
-{ "phenotypes": [ {"mesh_id":"D003093","phenotype_name":"Colitis, Ulcerative",
-                   "nr_species":712,"nr_genera":233,"nr_valid_samples":540} ] }
-# POST /api/getAssociatedGeneraByMeshID   body {"mesh_id":"D003093"}  ->
-[ {"genus_name":"Bacteroides","ncbi_taxon_id":816,"samples":540,
-   "prevalence_percentage":91.3,"median_abundance":7.41} ]
-# POST /api/getAssociatedSpeciesByMeshID  body {"mesh_id":"D003093"}  -> [ {species_name, ncbi_taxon_id, samples, prevalence_percentage, median_abundance} ]
+# POST https://gmrepo.humangut.info/api/get_all_gut_microbes/ body {}
+{
+  "code": "200",
+  "all_genus": [
+    {
+      "ncbi_taxon_id": 629,
+      "presented_samples": "8",
+      "nr_phenotypes": 4,
+      "pct_of_all_samples": "0.0083",
+      "name": "Yersinia",
+      "dblinks": "[{\"url\":\"http://mvp.medgenius.info/microbes/629/Yersinia\",\"anno\":\"assoc w/ 4 phage clusters\",\"dbtype\":\"MVP\"}]"
+    }
+  ],
+  "all_species": [
+    {
+      "ncbi_taxon_id": 253,
+      "presented_samples": "4",
+      "nr_phenotypes": 2,
+      "pct_of_all_samples": "0.0041",
+      "name": "Chryseobacterium indologenes",
+      "dblinks": "[]",
+      "ismarker": 0
+    }
+  ],
+  "metadata": {
+    "loaded_samples": 96625
+  }
+}
+# POST https://gmrepo.humangut.info/api/get_all_phenotypes/ body {}
+{
+  "code": "200",
+  "phenotype_data_obtained": true,
+  "phenotypes": [
+    {
+      "id": 119,
+      "disease": "D006262",
+      "all_samples": 83798,
+      "processed_runs": 72860,
+      "valid_runs": 40948,
+      "failed_runs": 31912,
+      "nr_species": 2593,
+      "nr_genus": 1793,
+      "term": "Health",
+      "note": ""
+    }
+  ]
+}
+# POST https://gmrepo.humangut.info/api/getPhenotypesAndAbundanceSummaryOfAAssociatedTaxon/ body {"ncbi_taxon_id": 816}
+{
+  "phenotypes_associated_with_taxon": [
+    {
+      "id": 291,
+      "disease": "D020521",
+      "taxon_rank_level": "genus",
+      "ncbi_taxon_id": 816,
+      "samples": 2,
+      "abus_mean": 58.33333333333333,
+      "abus_median": 58.33333333333333,
+      "abus_sd": 11.785113019775785,
+      "all_samples": 677,
+      "processed_runs": 677,
+      "valid_runs": 7,
+      "failed_runs": 670,
+      "nr_species": 0,
+      "nr_genus": 4,
+      "term": "Stroke",
+      "note": "",
+      "pct_samples": "28.5714"
+    }
+  ]
+}
+# POST getAssociatedRunsByPhenotypeMeshIDLimit body {"mesh_id":"D003093","skip":0,"limit":1}
+[{"run_id":"SRR6504882","sample_id":"SRS2861111","project_id":"PRJNA429990","QCStatus":1,"host_age":null,"sex":null,"country":"China"}]
 """
 
 [[capability]]
@@ -55,7 +114,7 @@ consumes = ["ncbi.taxon.id"]
   # Lightest slice — "how common/abundant is this microbe in guts, and in which phenotypes?"
   [[capability.group]]
   id = "summary"
-  outputs = ["microbe.abundance.overview", "microbe.abundance.phenotype_names", "microbe.abundance.count"]
+  outputs = ["microbe.abundance.overview", "microbe.abundance.phenotype_names", "microbe.abundance.count", "microbe.abundance.coverage"]
 
   # Medium slice — one compact row per phenotype (the prevalence + abundance signal).
   [[capability.group]]
@@ -80,9 +139,58 @@ consumes = ["disease.mesh.id"]
   id = "profiles"
   outputs = ["microbe.abundance.sample_profiles"]
 
+  [[capability.group]]
+  id = "metadata"
+  outputs = ["microbe.abundance.run_metadata"]
+
 # Golden runs against the deterministic fixture (build_gmrepo_weaver_fixture: a tiny SQLite
 # built from canned rows for Bacteroides, taxid 816) so verify --strict is reproducible offline.
 [[golden]]
 capability = "gmrepo.list_abundances"
 input = { "ncbi.taxon.id" = 816 }
 expect = { "microbe.abundance.count" = 1, "microbe.abundance.phenotype_names" = ["Colitis, Ulcerative"] }
+
+
+[[capability]]
+id = "gmrepo.list_runs"
+consumes = ["disease.mesh.id"]
+set_outputs = ["metagenome.run_id"]
+  [[capability.group]]
+  id = "runs"
+  outputs = ["metagenome.run_id", "microbe.abundance.run_listing"]
+  [[capability.parameter]]
+  name = "country"
+  type = "string"
+  description = "Exact country within acquired run metadata; no inferred cohort completeness"
+  [[capability.parameter]]
+  name = "sex"
+  type = "string"
+  description = "Exact provider sex label; unknown excluded"
+  [[capability.parameter]]
+  name = "project_id"
+  type = "string"
+  description = "Exact source project identifier"
+  [[capability.parameter]]
+  name = "QCStatus"
+  type = "int"
+  description = "Exact source QC status code, no reinterpretation"
+
+[[capability]]
+id = "gmrepo.describe_run"
+consumes = ["metagenome.run_id"]
+  [[capability.group]]
+  id = "run"
+  outputs = ["microbe.abundance.run"]
+
+[[capability]]
+id = "gmrepo.list_phenotypes"
+consumes = ["ncbi.taxon.id"]
+set_outputs = ["disease.mesh.id"]
+  [[capability.group]]
+  id = "phenotypes"
+  outputs = ["disease.mesh.id", "microbe.abundance.phenotype_listing"]
+
+[[golden]]
+capability = "gmrepo.list_runs"
+input = { "disease.mesh.id" = "D003093" }
+expect = { "metagenome.run_id" = ["ERRFIX01", "ERRFIX02"] }
