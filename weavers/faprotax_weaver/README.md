@@ -46,13 +46,13 @@ Follow the [researcher lesson](../../docs/tutorials/microbial-functions.md) for 
 
 ## Setup, interpretation and contribution
 
-Use [checkout or wheel installation](../../docs/installation.md) with core and the
+Use [checkout or wheel installation](../../docs/how-to/install.md) with core and the
 sources needed for your route. From the checkout, prefix commands above with
 `uv run`; a bare command assumes the environment is activated.
 Source installation does not acquire optional biological databases.
 
 [Source reference](REFERENCE.md) retains coverage, selection, failure and resource
-rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+rules. [Builder configuration](../../docs/reference/weaver-configuration.md) documents supported
 options and ownership; close configured weavers after work completes. See
 [contributing](CONTRIBUTING.md) to extend this source, and run package checks from
 this package directory. Current installation does not assume package-index publication.

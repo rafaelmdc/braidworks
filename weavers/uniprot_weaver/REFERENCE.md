@@ -156,7 +156,7 @@ braidworks run uniprot map_from_accession --have protein.uniprot.accession=P0463
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Mapping-job boundaries

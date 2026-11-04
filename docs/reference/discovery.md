@@ -1,8 +1,8 @@
 # Weaver discovery
 
 Core discovers installed source adapters from the `braidworks.weavers` entry-point
-group. For ordinary query use, see [usage](../usage.md); for package boundaries,
-see [architecture](../architecture.md).
+group. For ordinary query use, see [usage](../how-to/run-queries.md); for package boundaries,
+see [architecture](../explanation/architecture.md).
 
 ## Strict and tolerant inventories
 

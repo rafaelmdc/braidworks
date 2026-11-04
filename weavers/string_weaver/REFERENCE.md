@@ -81,7 +81,7 @@ Provider input support observed at
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Bulk requests and source pacing

@@ -39,6 +39,6 @@ you inspect that observation, but a live API may change without a new contract
 fingerprint. A cache reuses observations; a saved run records progress. Neither freezes
 a provider database. Keep these distinctions when reporting an analysis.
 
-For practical coverage checks and export steps, use [the result guide](../results.md).
+For practical coverage checks and export steps, use [the result guide](../how-to/check-results.md).
 Exact shapes are in [result reference](../reference/results.md); storage controls are
-in [cache and saved runs](../persistence.md).
+in [cache and saved runs](../how-to/cache-and-resume.md).

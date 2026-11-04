@@ -40,7 +40,7 @@ Explicit backend selection advertises the wired backends and their supported
 capabilities. Zero-argument construction declares both backends for discovery: the
 API is usable, while local may be unconfigured. A declared route therefore does not
 guarantee a prepared local database. Gene/genome operations remain API-only; history
-is local-only; taxonomy and descendant listing support both. See [docs/database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
+is local-only; taxonomy and descendant listing support both. See [docs/how-to/set-up-ncbi-database.md](https://github.com/rafaelmdc/braidworks/blob/main/docs/database.md) for the
 local DB. In an app that wires a `WeaverFactory`, `ncbi_weaver.register(factory)` adds it.
 
 ## Run a query
@@ -61,13 +61,13 @@ braidworks weave --have organism.name="Escherichia coli" --want ncbi.taxon.id,nc
 
 ## Setup, interpretation and contribution
 
-Use [checkout or wheel installation](../../docs/installation.md) with core and the
+Use [checkout or wheel installation](../../docs/how-to/install.md) with core and the
 sources needed for your route. From the checkout, prefix commands above with
 `uv run`; a bare command assumes the environment is activated.
 Source installation does not acquire optional biological databases.
 
 [Source reference](REFERENCE.md) retains coverage, selection, failure and resource
-rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+rules. [Builder configuration](../../docs/reference/weaver-configuration.md) documents supported
 options and ownership; close configured weavers after work completes. See
 [contributing](CONTRIBUTING.md) to extend this source, and run package checks from
 this package directory. Current installation does not assume package-index publication.

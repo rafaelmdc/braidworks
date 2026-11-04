@@ -8,7 +8,7 @@ Ready-to-run input files so you can try Braidworks without making your own.
 
 ## Quick start
 
-Install UniProt, QuickGO, and STRING using the [selected-source instructions](../docs/installation.md).
+Install UniProt, QuickGO, and STRING using the [selected-source instructions](../docs/how-to/install.md).
 From the repo root:
 
 ```bash
@@ -22,4 +22,4 @@ uv run braidworks weave --in-file examples/genes.txt --in-type protein.query \
 
 `--param organism=9606` pins each bare gene symbol to human (NCBI taxid 9606);
 drop it (or change the taxid) for another species. See the main
-[usage guide](../docs/usage.md#process-a-batch) for the full walkthrough.
+[usage guide](../docs/how-to/run-queries.md#process-a-batch) for the full walkthrough.

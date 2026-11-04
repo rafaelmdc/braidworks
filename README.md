@@ -19,7 +19,7 @@ input to another.
 You choose the data you need; Braidworks handles the connections. Available routes
 depend on your installed weavers and configured backends. Public APIs need network
 access; some sources require a separately prepared local database. See the
-[source catalogue](docs/sources.md) to choose sources for your work.
+[source catalogue](docs/how-to/choose-sources.md) to choose sources for your work.
 
 ## Try one query
 
@@ -54,12 +54,12 @@ Start with a researcher walkthrough:
 
 | You want to… | Start here |
 |---|---|
-| Run queries or export a batch to a spreadsheet | [CLI usage](docs/usage.md#query-from-the-command-line) |
-| Retrieve values in a script or notebook | [Python usage](docs/usage.md#query-from-python) |
-| Build and run a query visually | [Browser usage](docs/usage.md#use-the-browser) |
-| Find available fields and source requirements | [Source catalogue](docs/sources.md) and [key index](docs/keys-index.md) |
-| Check missing data, ambiguity, and failures | [Reading results](docs/results.md) |
-| Reuse lookups or continue a saved run | [Cache and saved runs](docs/persistence.md) |
+| Run queries or export a batch to a spreadsheet | [CLI usage](docs/how-to/run-queries.md#query-from-the-command-line) |
+| Retrieve values in a script or notebook | [Python usage](docs/how-to/run-queries.md#query-from-python) |
+| Build and run a query visually | [Browser usage](docs/how-to/run-queries.md#use-the-browser) |
+| Find available fields and source requirements | [Source catalogue](docs/how-to/choose-sources.md) and [key index](docs/reference/keys-index.md) |
+| Check missing data, ambiguity, and failures | [Reading results](docs/how-to/check-results.md) |
+| Reuse lookups or continue a saved run | [Cache and saved runs](docs/how-to/cache-and-resume.md) |
 
 A result marked resolved may still have missing fields. Keep coverage and review
 information alongside your data; an empty source lookup does not establish
@@ -70,7 +70,7 @@ biological absence. The [documentation index](docs/index.md) links to the full g
 Braidworks is a `uv` workspace with a domain-neutral core, source-specific weavers,
 and `weaverkit` for creating and verifying adapters. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup and [AGENTS.md](AGENTS.md) for repository
-contracts. The [architecture](docs/architecture.md) explains the boundaries.
+contracts. The [architecture](docs/explanation/architecture.md) explains the boundaries.
 
 ```bash
 make sync
@@ -80,8 +80,8 @@ make test
 
 New weavers follow the spec → scaffold → implement → verify loop described in
 [weaverkit](weaverkit/README.md). Each package versions independently; installation
-currently uses the checkout or built wheels. See [installation](docs/installation.md)
-for other setups and [release rehearsal](docs/releasing.md) for maintainers.
+currently uses the checkout or built wheels. See [installation](docs/how-to/install.md)
+for other setups and [release rehearsal](docs/how-to/release.md) for maintainers.
 
 ## License and attribution
 

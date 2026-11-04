@@ -87,7 +87,7 @@ type-strain observations, not an assertion of species-wide consensus.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 `list_strains` lists the complete observed paginated binomial strain listing as

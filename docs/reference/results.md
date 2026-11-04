@@ -1,7 +1,7 @@
 # Result exports and run archives
 
 Exact output contracts for the CLI and Python APIs. For choosing and saving an export,
-see [the export guide](../results.md). For coverage and interpretation, see
+see [the export guide](../how-to/check-results.md). For coverage and interpretation, see
 [result meaning](../explanation/result-meaning.md).
 
 ## Machine records

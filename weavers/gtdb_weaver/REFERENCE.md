@@ -90,12 +90,12 @@ Local tree backends retain one parent/depth entry per node and materialize only
 requested root paths. Node IDs, forest order and branch lengths match the existing
 root-path helpers. Public paths are detached from the retained index.
 
-See [the measured-work report](../../docs/audits/weavers/SH-09.implementation.md)
+See [the measured-work report](../../docs/internal/audits/weavers/SH-09.implementation.md)
 for fixture measurements and the separate real-release measurement target.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ### Source validation

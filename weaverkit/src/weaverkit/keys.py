@@ -4,7 +4,7 @@ Reachability guardrail: a weaver is only useful if some other weaver produces a
 type it consumes. By requiring every ``consumes`` entry to be a registered shared
 key, an agent cannot accidentally build an "island" weaver keyed on a private,
 unconnectable type. To add a genuinely new bridge key, add it here in the same PR
-(a deliberate, reviewable act) — see docs/weaver-roadmap.md §1 for the join model.
+(a deliberate, reviewable act) — see docs/internal/weaver-roadmap.md §1 for the join model.
 """
 
 from __future__ import annotations

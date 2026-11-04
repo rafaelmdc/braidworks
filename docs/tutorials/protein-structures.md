@@ -21,7 +21,7 @@ uv sync --all-extras
 ```
 
 This creates a local `.venv` with core and every source, including UniProt and PDBe.
-It does not download biological databases. See [installation](../installation.md) for other environments.
+It does not download biological databases. See [installation](../how-to/install.md) for other environments.
 
 ## Connect one protein to its structure listing
 
@@ -45,7 +45,7 @@ representative used for downstream lookup; it does not reduce that reported tota
 
 If the command fails, inspect the diagnostic before interpreting the biology. Check
 that both sources are installed and reachable. A no-match or technical error does not
-establish that a protein lacks a structure. The [result guide](../results.md) explains
+establish that a protein lacks a structure. The [result guide](../how-to/check-results.md) explains
 coverage and review outcomes.
 
 ## Inspect two related structures
@@ -67,7 +67,7 @@ best structures for your research question.
 Check that the two rows have titles and methods. You have inspected a bounded
 selection, not the full inventory. A protein mapping alone does not establish
 full-length sequence coverage or biological assembly relevance. Further expansion
-controls belong in [related-entity usage](../usage.md#follow-related-entities).
+controls belong in [related-entity usage](../how-to/run-queries.md#follow-related-entities).
 
 ## Prepare a two-protein batch
 
@@ -129,5 +129,5 @@ provenance; you supply that scientific judgement.
 For a larger protein list, replace the input rows while retaining the coverage columns.
 For a complete per-structure table, follow the expansion guide and inspect budgets and
 warnings. The [PDBe README](../../weavers/pdbe_weaver/README.md) describes additional
-mapping and detail capabilities; [Python usage](../usage.md#query-from-python) shows
+mapping and detail capabilities; [Python usage](../how-to/run-queries.md#query-from-python) shows
 how to work with results in a script or notebook.

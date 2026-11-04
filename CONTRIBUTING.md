@@ -66,9 +66,9 @@ the `# TODO` backend spots. See [`weaverkit/README.md`](weaverkit/README.md) for
 the toolkit and [AGENTS.md](AGENTS.md) for the Spec→Scaffold→Implement→Verify loop
 and the boundaries. For a step-by-step build manual with per-module skeletons and a
 done-checklist, see
-[docs/weaver-implementation-guide.md](docs/weaver-implementation-guide.md); for
+[docs/how-to/implement-a-weaver.md](docs/how-to/implement-a-weaver.md); for
 *which* databases to build next and the reachability model, see
-[docs/weaver-roadmap.md](docs/weaver-roadmap.md). The manual shape, for reference:
+[docs/internal/weaver-roadmap.md](docs/internal/weaver-roadmap.md). The manual shape, for reference:
 
 1. **Create the package** at `weavers/<db>_weaver/` with its own `pyproject.toml`
    (depends on `braidworks-core` via `[tool.uv.sources] braidworks-core = { workspace = true }`).
@@ -96,7 +96,7 @@ done-checklist, see
 7. **Ship contract tests.** Subclass `WeaverOrderContractTests` and
    `CacheFingerprintTests` from `braidworks.testing.contract`, once per backend.
 
-See [docs/architecture.md](docs/architecture.md) ("Backend strategies and
+See [docs/explanation/architecture.md](docs/explanation/architecture.md) ("Backend strategies and
 dispatch" and "Weaver assembly: the two-layer factory") for the rationale.
 
 ## Versioning & backwards compatibility
@@ -130,10 +130,10 @@ Weavers (and `weaverkit`) depend on the core with a **floor, not a ceiling** —
 
 Never commit taxonomy databases or taxdump archives — they are multi-GB and
 git-ignored (`*.sqlite`, `taxdump.tar.gz`, `/data/`). See
-[docs/database.md](docs/database.md) for building them.
+[docs/how-to/set-up-ncbi-database.md](docs/how-to/set-up-ncbi-database.md) for building them.
 
 ## Documentation changes
 
 Write guides around the reader's task and keep current instructions separate from
-design history. See the [documentation conventions](docs/documentation-style.md)
+design history. See the [documentation conventions](docs/reference/documentation-style.md)
 for examples, source claims, links, and verification.
