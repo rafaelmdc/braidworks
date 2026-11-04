@@ -12,9 +12,7 @@ import os
 from pathlib import Path
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from disbiome_weaver.backends.local import DisbiomeLocalBackend
 from disbiome_weaver.setup import ensure_disbiome_db
 from disbiome_weaver.weaver import DisbiomeWeaver

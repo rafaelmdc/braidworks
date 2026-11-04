@@ -26,5 +26,5 @@ Worked example to copy: `../example_weaver/src/example_weaver/backends/local.py`
 
 - [ ] `make test` — conformance + contract + golden all green
 - [ ] `weaverkit verify --spec weaver.spec.toml --package wikidata_weaver --strict` — no placeholders left, golden runs
-- [ ] register the weaver where the app assembles its `WeaverFactory` (see README)
+- [ ] confirm entry-point discovery or register a built instance in `BraidRegistry` for application execution (see README)
 - [ ] after merge, tag the release `wikidata_weaver-v0.1.0` — `make tags` does this for every bumped package (CI also auto-tags on merge to main)

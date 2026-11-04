@@ -3,7 +3,7 @@
 Distributed execution for Braidworks: run weave-steps on [arq](https://arq-docs.helpmanual.io/)
 workers over Redis. You get a **durable queue** (steps survive a worker crash and
 retry), **cross-machine fan-out** (entities and concurrent braids/branches spread
-across workers), and **cluster-wide rate limiting** against shared upstreams (e.g.
+across workers), and **cluster-wide HTTP request pacing** against shared upstreams (e.g.
 NCBI) — without changing any orchestration logic.
 
 arq is **async-native**, which matches braidworks: the orchestrator and weavers are
@@ -25,9 +25,18 @@ LocalExecutor (orchestrator)
                  └─ await weaver.execute_batch(...)
 ```
 
-A weave-step is a pure, cache-keyed function of `(weaver_id, capability_id, backend,
-input StrandSets, requested_outputs)` plus the backend fingerprint, and all of those
-serialize to JSON — which is what makes moving it off-process safe and idempotent.
+A weave-step is identified for caching by `(weaver_id, capability_id, backend,
+input StrandSets, requested_outputs, effective parameters)` plus the backend fingerprint.
+The executor sends the expected manifest and backend fingerprint to each dispatched
+worker; a mismatch aborts before fetching rather than mixing datasets or package versions.
+Deploy matching orchestrator and worker versions together when upgrading this protocol.
+
+Distributed caching is disabled by default: an orchestrator fingerprint cannot establish
+the identity of every worker, and a cache hit would bypass the worker check. Set
+`assume_homogeneous_workers=True` only when deployment controls guarantee identical
+manifests and backend fingerprints across the fleet for the executor lifetime. A custom
+`cache=` requires that explicit assertion. Checks on dispatched jobs still apply.
+This does not validate an entire fleet or freeze a mutable upstream API.
 
 ## Usage
 
@@ -53,33 +62,39 @@ Configuration (all env, all optional):
 | `BRAIDWORKS_REDIS_URL` | `redis://localhost:6379/0` | Redis for the queue + job results |
 | `BRAIDWORKS_QUEUE` | `weaver.default` | the queue a worker consumes (set to `weaver.<id>`) |
 | `BRAIDWORKS_WEAVERS` | _(all)_ | comma list of weaver ids to load into a worker |
-| `BRAIDWORKS_RATE_LIMITS` | _(off)_ | `weaver[:backend]=per_sec`, e.g. `ncbi:api=3` |
+| `BRAIDWORKS_RATE_LIMITS` | _(no explicit rules)_ | `weaver[:backend]=requests_per_sec`, e.g. `ncbi:api=3` |
 | `BRAIDWORKS_FANOUT` | _(off)_ | `weaver[:backend]=width` — split a step's batch across up to `width` concurrent workers |
 | `BRAIDWORKS_FANOUT_UNBUDGETED` | _(empty)_ | `weaver[:backend]` list asserted to make **no** rate-limited external calls (local-DB backends) |
 | `BRAIDWORKS_FANOUT_CHUNK` | _(auto)_ | `weaver[:backend]=N` entities-per-task override |
+
+Workers install a request-budget callback for every job. Without a matching explicit
+rate rule, that callback charges no pacing budget; source-local defaults do not
+supply a Redis limit. Configure `BRAIDWORKS_RATE_LIMITS` entries for cluster-wide
+pacing. Local source defaults described in [request pacing](../docs/request-pacing.md)
+apply when no executor budget overrides them.
 
 ### Entity-level fan-out
 
 By default a step's whole batch runs as one job on one worker. For bulk workloads,
 fan-out splits the batch into contiguous chunks dispatched as **concurrent jobs**, so
 multiple workers process one batch in parallel; results are gathered back in input
-order. It is opt-in per `weaver:backend` and **gated on a rate budget** so it can never
-storm an upstream:
+order. It is opt-in per `weaver:backend` and requires a dispatch budget or an
+explicit assertion that the backend makes no rate-limited external calls.
 
-- **Local backends** (no external rate limit) are the throughput win. Enable with a
-  width and assert them unbudgeted:
-  `BRAIDWORKS_FANOUT=ncbi:local=8` + `BRAIDWORKS_FANOUT_UNBUDGETED=ncbi:local`.
-- **Rate-limited API backends** must have a budget. Fan-out for a backend with neither
-  a `BRAIDWORKS_RATE_LIMITS` entry nor an unbudgeted assertion **raises
-  `FanoutConfigError`** (loud, never a silent storm). With a budget, each fanned task
-  takes one token per entity (≈ per external call), so the cluster-wide token bucket
-  caps the *aggregate* call rate regardless of fan-out width — extra workers simply
-  block on tokens. Budgeted backends default to 1 entity/task for the smoothest burst;
-  unbudgeted backends split evenly across `width`.
+- Local backends can use `BRAIDWORKS_FANOUT=ncbi:local=8` with
+  `BRAIDWORKS_FANOUT_UNBUDGETED=ncbi:local`.
+- External backends require a `BRAIDWORKS_RATE_LIMITS` entry. Missing both a budget
+  and an unbudgeted assertion raises `FanoutConfigError`. Workers charge one token
+  immediately before each HTTP request, including redirects, pagination and polling.
+  Bulk requests cost one token regardless of their number of input identifiers.
+  Budgeted and local backends split evenly across the configured width.
 
-Fan-out is a property of the distributed runner only — `braidworks-core` and the
-weavers are unchanged. (Per-call rate granularity *inside* a weaver is a future
-refinement; today the token cost is charged per task at the batch boundary.)
+Redis server time controls refill. Buckets have capacity one, preventing an initial
+burst, and workers must agree on rates and capacity for a shared bucket. Conflicting
+configurations fail explicitly. A cancelled wait sends no request; already sent
+requests retain their charges. Third-party backends must declare request pacing support
+and use core's `PacedHTTPClient` for every HTTP call; configured unsupported backends
+fail before execution. See [request pacing](../docs/request-pacing.md).
 
 ### Worker discovery
 
@@ -92,10 +107,30 @@ restricts a worker to the weavers whose data it holds.
 
 - arq stores jobs in Redis and re-queues a job whose worker died mid-run (the
   in-progress lock expires), bounded by `max_tries`.
-- `weave_step` distinguishes failure kinds: control-flow exceptions
-  (`BackendUnavailable` / `BackendConfigurationError`) propagate immediately so the
-  orchestrator's backend fallback handles them; any other exception is retried with
-  backoff (arq `Retry`) until `MAX_TRIES`, then surfaces as `WeaveStatus.ERROR`.
+- `weave_step` retries only known connection/timeout exceptions, with the existing
+  jittered exponential delay and **three total attempts**. On the last attempt the
+  original exception propagates. Each attempt executes the batch once.
+- `BackendUnavailable` propagates for executor fallback; configuration/unsupported
+  requests, contract violations, programming errors and unknown exceptions fail
+  immediately. `BackendConfigurationError` aborts the run rather than invoking fallback.
+- `NO_MATCH` / `ERROR` results are returned unchanged for executor policy. Worker retry
+  does not infer transience from result messages or source HTTP status codes.
+
+| Exception/result | Worker decision |
+|---|---|
+| Python `ConnectionError` / `TimeoutError` | Retry within the attempt limit |
+| Redis connection/timeout errors | Retry, excluding authentication/authorization errors |
+| HTTPX `NetworkError` / `TimeoutException`, when HTTPX is installed | Retry within the attempt limit |
+| Domain errors, Redis auth errors, programming/unknown exceptions, other local I/O errors | Propagate immediately |
+| HTTP status exception (including 429/5xx) | Propagate; status policy belongs in the source backend |
+| Returned `NO_MATCH` / `ERROR` | Return unchanged; executor owns fallback |
+| Cancellation | Propagate immediately |
+
+The pure `braidworks_arq.retry.should_retry` function makes this decision. It uses
+concrete exception types rather than message matching. HTTPX stays optional for workers
+serving non-HTTP sources; no core HTTP dependency or exception hierarchy changed.
+Retry covers exceptions raised during batch execution (including request-budget charges);
+identity, input and worker setup checks retain their immediate failure behavior.
 
 ## Tests
 
@@ -103,3 +138,18 @@ restricts a worker to the weavers whose data it holds.
 runs the task coroutine directly). The Redis Lua token bucket is verified against a
 real Redis in `tests/test_integration_redis.py`, skipped unless
 `BRAIDWORKS_REDIS_TEST=<redis url>` is set.
+
+## Installation and documentation
+
+Install this package together with a compatible core in a virtual environment.
+See the [installation guide](https://github.com/rafaelmdc/braidworks/blob/main/docs/installation.md),
+[source setup catalogue](https://github.com/rafaelmdc/braidworks/blob/main/docs/sources.md)
+and [documentation index](https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md).
+Current release instructions use this checkout or built wheels; package-index
+availability is not assumed.
+
+## Software license
+
+This package's software is licensed under [MIT](https://github.com/rafaelmdc/braidworks/blob/main/braidworks-arq/LICENSE). Upstream biological data,
+bundled source samples and provider content retain their separately declared source
+licenses. The source license in a weaver manifest describes its data, not this code.

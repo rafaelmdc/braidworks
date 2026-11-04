@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import replace
 from pathlib import Path
 
 from weaverkit.index import (
@@ -81,8 +82,13 @@ def test_consumes_any_unmet_only_when_no_alternative_is_met() -> None:
     # An alternative-input capability is reachable if ANY one input is produced.
     producer = _spec("prod", ("organism.name",), ("ncbi.taxon.id",))
     any_cap = WeaverSpec(
-        db_name="mapper", title="m", version="0.1.0", license="CC0-1.0",
-        source_url="https://example.org", fingerprint_source="t", source_sample="a\n1\n",
+        db_name="mapper",
+        title="m",
+        version="0.1.0",
+        license="CC0-1.0",
+        source_url="https://example.org",
+        fingerprint_source="t",
+        source_sample="a\n1\n",
         backends=("local",),
         capabilities=(
             CapabilitySpec(
@@ -100,8 +106,13 @@ def test_consumes_any_unmet_only_when_no_alternative_is_met() -> None:
 
 def test_consumes_any_unmet_lists_all_when_none_met() -> None:
     any_cap = WeaverSpec(
-        db_name="mapper", title="m", version="0.1.0", license="CC0-1.0",
-        source_url="https://example.org", fingerprint_source="t", source_sample="a\n1\n",
+        db_name="mapper",
+        title="m",
+        version="0.1.0",
+        license="CC0-1.0",
+        source_url="https://example.org",
+        fingerprint_source="t",
+        source_sample="a\n1\n",
         backends=("local",),
         capabilities=(
             CapabilitySpec(
@@ -231,3 +242,35 @@ def test_write_key_index_emits_markdown(tmp_path: Path) -> None:
     out = tmp_path / "keys-index.md"
     write_key_index(tmp_path, out)
     assert out.read_text().startswith("# Key index")
+
+
+def test_capability_backend_scope_survives_catalogue_export() -> None:
+    spec = _spec(
+        "ncbi", ("ncbi.taxon.id",), ("organism.scientific_name",), backends=("local", "api")
+    )
+    template = spec.capabilities[0]
+    spec = replace(
+        spec,
+        capabilities=(
+            replace(template, id="taxonomy"),
+            replace(template, id="gene", backends=("api",)),
+            replace(template, id="history", backends=("local",)),
+        ),
+    )
+    exported = {
+        row["capability"]: row["backends"]
+        for row in csv.DictReader(io.StringIO(render(build_rows([spec]))), delimiter="\t")
+    }
+    assert exported == {"taxonomy": "local;api", "gene": "api", "history": "local"}
+
+
+def test_hidden_scratch_specs_do_not_duplicate_workspace_catalogue(tmp_path: Path) -> None:
+    for relative in (
+        "weavers/example_weaver",
+        ".audit-local/example-scaffold-baseline",
+        "weavers/.scratch/example_weaver",
+    ):
+        directory = tmp_path / relative
+        directory.mkdir(parents=True)
+        (directory / "weaver.spec.toml").write_text("scratch or real spec")
+    assert discover_specs(tmp_path) == [tmp_path / "weavers/example_weaver/weaver.spec.toml"]

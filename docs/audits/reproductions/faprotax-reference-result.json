@@ -1,0 +1,84 @@
+{
+  "source_sha256": "00302f375a2e0465d2bd397a2cdb9d576cd9317e664b3b659d04d14f08675c17",
+  "groups": 92,
+  "cases": 25068,
+  "mismatches": 0,
+  "examples": [
+    {
+      "lineage": [
+        "Methanosarcina",
+        "Methanosarcina barkeri"
+      ],
+      "groups": [
+        "acetoclastic_methanogenesis",
+        "chemoheterotrophy",
+        "fermentation",
+        "hydrogenotrophic_methanogenesis",
+        "methanogenesis",
+        "methanogenesis_by_CO2_reduction_with_H2",
+        "nitrogen_fixation",
+        "respiration_of_sulfur_compounds",
+        "sulfur_respiration"
+      ]
+    },
+    {
+      "lineage": [
+        "Bacteria",
+        "Cyanobacteriia",
+        "chloroplast"
+      ],
+      "groups": [
+        "chloroplasts"
+      ]
+    },
+    {
+      "lineage": [
+        "Bacteria",
+        "Cyanobacteriia"
+      ],
+      "groups": [
+        "oxygenic_photoautotrophy",
+        "photoautotrophy",
+        "photosynthetic_cyanobacteria",
+        "phototrophy"
+      ]
+    },
+    {
+      "lineage": [
+        "Bacteria",
+        "Cyanobacteriia",
+        "Melainabacteria"
+      ],
+      "groups": [
+        "oxygenic_photoautotrophy",
+        "photoautotrophy",
+        "photosynthetic_cyanobacteria",
+        "phototrophy"
+      ]
+    },
+    {
+      "lineage": [
+        "Methylococcus"
+      ],
+      "groups": [
+        "chemoheterotrophy",
+        "hydrocarbon_degradation",
+        "methanotrophy",
+        "methylotrophy"
+      ]
+    },
+    {
+      "lineage": [
+        "Methanosarcinaceae",
+        "Methanosarcina",
+        "Methanosarcina barkeriana"
+      ],
+      "groups": [
+        "dark_hydrogen_oxidation",
+        "hydrogenotrophic_methanogenesis",
+        "methanogenesis",
+        "methanogenesis_by_CO2_reduction_with_H2"
+      ]
+    }
+  ]
+}

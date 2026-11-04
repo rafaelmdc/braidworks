@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, ClassVar, Hashable, Protocol, TypeVar, runtime_checkable
+from collections.abc import Callable, Hashable
+from typing import Any, ClassVar, Protocol, Self, TypeVar, runtime_checkable
 
 from braidworks.core.capability import WeaverManifest
+from braidworks.core.http_pacing import validate_request_pacing
 from braidworks.core.result import WeaveResult
 from braidworks.core.strand import StrandSet
 
@@ -41,6 +43,37 @@ class BaseWeaver(ABC):
     """
 
     MANIFEST: ClassVar[WeaverManifest]
+
+    def declared_manifest(self) -> WeaverManifest:
+        """Full implementation catalogue, without constructing or probing backends.
+
+        Override when ``MANIFEST`` omits disabled backends/capabilities. Routing,
+        discovery and persistence continue to use the active ``MANIFEST``.
+        """
+        return self.MANIFEST
+
+    async def aclose(self) -> None:
+        """Release owned resources; resource-free weavers need no override."""
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        await self.aclose()
+
+    def supports_request_pacing(self, backend: str) -> bool:
+        """Whether every HTTP request on this backend uses the pacing seam."""
+        return False
+
+    def backend_ready(self, backend: str) -> bool:
+        """Whether ``backend`` is set up to answer queries (for diagnostics only).
+
+        Defaults to the shared convention that an unconfigured backend fingerprints as
+        ``"unconfigured:<backend>"``. Weavers with a cheaper or more precise check may
+        override it. The executor never consults this; it is what ``braidworks
+        doctor`` reports.
+        """
+        return not self.backend_fingerprint(backend).startswith("unconfigured:")
 
     @abstractmethod
     def backend_fingerprint(self, backend: str) -> str:
@@ -84,6 +117,7 @@ class BaseWeaver(ABC):
         Hard contract: returns exactly one result per input, in input order.
         Default implementation is a serial loop; override for real batch.
         """
+        validate_request_pacing(self, backend)
         results: list[WeaveResult] = []
         for strand_set in strand_sets:
             results.append(

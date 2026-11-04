@@ -7,13 +7,17 @@ hand-editing capabilities here.
 
 from __future__ import annotations
 
-from braidworks.core import Capability, OutputGroup, Parameter, Provenance, WeaverManifest
-
-from uniprot_weaver import mapping
+from braidworks.core import (
+    Capability,
+    OutputGroup,
+    Parameter,
+    Provenance,
+    WeaverManifest,
+)
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.0"
-WEAVER_TITLE = "UniProt protein identity (gene/protein query -> accession + taxid + annotation)"
+WEAVER_VERSION = "0.2.10"
+WEAVER_TITLE = "UniProt protein identity, exact sequence/annotation description and ID mapping"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
@@ -65,54 +69,162 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="function", outputs=frozenset({"protein.function", "protein.length"})
                     ),
                 ),
+                backends=backends,
+                max_batch_size=25,
+                always_computed_groups=frozenset({"identity"}),
                 parameters=(
                     Parameter(
                         name="organism",
                         type="string",
-                        description=(
-                            "NCBI taxid to constrain the species (e.g. 9606 human, "
-                            "10090 mouse). A bare gene symbol like TP53 otherwise "
-                            "resolves to whichever species ranks first; unset = any."
+                        enum=(),
+                        default=None,
+                        description="NCBI taxid to constrain the species (e.g. 9606 human, 10090 mouse). A bare gene symbol like TP53 otherwise resolves to whichever species ranks first; unset = any.",
+                    ),
+                ),
+            ),
+            Capability(
+                id="describe_protein",
+                consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {
+                        "ncbi.taxon.id",
+                        "protein.annotation.records",
+                        "protein.function",
+                        "protein.gene",
+                        "protein.length",
+                        "protein.name",
+                        "protein.organism",
+                        "protein.reviewed",
+                        "protein.sequence",
+                        "protein.uniprot.accession",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="identity",
+                        outputs=frozenset(
+                            {
+                                "ncbi.taxon.id",
+                                "protein.function",
+                                "protein.gene",
+                                "protein.length",
+                                "protein.name",
+                                "protein.organism",
+                                "protein.reviewed",
+                                "protein.uniprot.accession",
+                            }
                         ),
+                    ),
+                    OutputGroup(id="sequence", outputs=frozenset({"protein.sequence"})),
+                    OutputGroup(
+                        id="annotations", outputs=frozenset({"protein.annotation.records"})
                     ),
                 ),
                 backends=backends,
                 max_batch_size=25,
                 always_computed_groups=frozenset({"identity"}),
             ),
-            _map_to_accession(backends),
-            _map_from_accession(backends),
+            Capability(
+                id="map_to_accession",
+                consumes=frozenset(
+                    {
+                        "gene.ensembl.id",
+                        "gene.hgnc.id",
+                        "gene.ncbi.id",
+                        "gene.symbol",
+                        "nucleotide.insdc.accession",
+                        "pdb.id",
+                        "protein.ensembl.id",
+                        "refseq.protein.id",
+                        "string.id",
+                    }
+                ),
+                produces=frozenset(
+                    {
+                        "protein.uniprot.accession",
+                        "protein.uniprot.mapping.count",
+                        "protein.uniprot.mapping.records",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(
+                        id="mapping",
+                        outputs=frozenset(
+                            {
+                                "protein.uniprot.accession",
+                                "protein.uniprot.mapping.count",
+                                "protein.uniprot.mapping.records",
+                            }
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=1000,
+                always_computed_groups=frozenset({"mapping"}),
+                set_outputs=frozenset({"protein.uniprot.accession"}),
+                consumes_any=True,
+            ),
+            Capability(
+                id="map_from_accession",
+                consumes=frozenset({"protein.uniprot.accession"}),
+                produces=frozenset(
+                    {
+                        "chembl.id",
+                        "drugbank.id",
+                        "eggnog.group",
+                        "gene.ensembl.id",
+                        "gene.ncbi.id",
+                        "orthodb.group",
+                        "pathway.kegg.id",
+                        "pathway.reactome.id",
+                        "pdb.id",
+                        "protein.ensembl.id",
+                        "protein.uniprot.mapping.count",
+                        "protein.uniprot.mapping.records",
+                        "refseq.protein.id",
+                        "string.id",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(id="gene_ncbi_id", outputs=frozenset({"gene.ncbi.id"})),
+                    OutputGroup(id="gene_ensembl_id", outputs=frozenset({"gene.ensembl.id"})),
+                    OutputGroup(id="protein_ensembl_id", outputs=frozenset({"protein.ensembl.id"})),
+                    OutputGroup(id="pathway_kegg_id", outputs=frozenset({"pathway.kegg.id"})),
+                    OutputGroup(
+                        id="pathway_reactome_id", outputs=frozenset({"pathway.reactome.id"})
+                    ),
+                    OutputGroup(id="refseq_protein_id", outputs=frozenset({"refseq.protein.id"})),
+                    OutputGroup(id="orthodb_group", outputs=frozenset({"orthodb.group"})),
+                    OutputGroup(id="eggnog_group", outputs=frozenset({"eggnog.group"})),
+                    OutputGroup(id="chembl_id", outputs=frozenset({"chembl.id"})),
+                    OutputGroup(id="drugbank_id", outputs=frozenset({"drugbank.id"})),
+                    OutputGroup(id="pdb_id", outputs=frozenset({"pdb.id"})),
+                    OutputGroup(id="string_id", outputs=frozenset({"string.id"})),
+                    OutputGroup(
+                        id="summary",
+                        outputs=frozenset(
+                            {"protein.uniprot.mapping.count", "protein.uniprot.mapping.records"}
+                        ),
+                    ),
+                ),
+                backends=backends,
+                max_batch_size=1000,
+                set_outputs=frozenset(
+                    {
+                        "chembl.id",
+                        "drugbank.id",
+                        "eggnog.group",
+                        "gene.ensembl.id",
+                        "gene.ncbi.id",
+                        "orthodb.group",
+                        "pathway.kegg.id",
+                        "pathway.reactome.id",
+                        "pdb.id",
+                        "protein.ensembl.id",
+                        "refseq.protein.id",
+                        "string.id",
+                    }
+                ),
+            ),
         ),
-    )
-
-
-def _map_to_accession(backends: tuple[str, ...]) -> Capability:
-    """Any supported id -> protein.uniprot.accession (alternative-input, into the hub)."""
-    produces = frozenset({mapping.ACCESSION, mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS})
-    return Capability(
-        id=mapping.TO_ACCESSION,
-        consumes=frozenset(mapping.FROM_DB),  # alternatives
-        produces=produces,
-        output_groups=(OutputGroup(id="mapping", outputs=produces),),
-        backends=backends,
-        max_batch_size=1000,
-        set_outputs=frozenset({mapping.ACCESSION}),
-        consumes_any=True,
-        always_computed_groups=frozenset({"mapping"}),
-    )
-
-
-def _map_from_accession(backends: tuple[str, ...]) -> Capability:
-    """protein.uniprot.accession -> any supported id (routes by requested output)."""
-    targets = frozenset(mapping.TO_DB)
-    produces = targets | {mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS}
-    return Capability(
-        id=mapping.FROM_ACCESSION,
-        consumes=frozenset({mapping.ACCESSION}),
-        produces=produces,
-        output_groups=(OutputGroup(id="mapping", outputs=produces),),
-        backends=backends,
-        max_batch_size=1000,
-        set_outputs=targets,
-        always_computed_groups=frozenset({"mapping"}),
     )

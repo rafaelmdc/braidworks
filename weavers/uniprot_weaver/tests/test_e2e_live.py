@@ -2,8 +2,7 @@
 
 Opt-in: set ``BRAIDWORKS_RUN_LIVE=1`` to enable (makes real network calls). Run it
 after changes that touch the api backend's request/parse code, to confirm the live
-schema still matches what the offline tests assume. Replace the TODO input/asserts
-with a known-truth example from the real source.
+schema still matches what the offline tests assume.
 """
 
 from __future__ import annotations
@@ -11,9 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from uniprot_weaver import build_uniprot_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -71,6 +68,24 @@ async def test_live_accession_is_deterministic():
     assert produced.get("ncbi.taxon.id") == 9606
 
 
+async def test_live_species_pinned_symbol_selects_human_tp53():
+    """The documented organism-pinned symbol query selects human p53."""
+    weaver = build_uniprot_weaver()
+    ss = StrandSet.from_strands("human", [Strand("protein.query", "TP53")])
+    result = await weaver.execute(
+        "resolve_protein",
+        ss,
+        requested_outputs=frozenset({"protein.uniprot.accession", "ncbi.taxon.id"}),
+        backend="api",
+        params={"organism": "9606"},
+    )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    produced = {s.type_id: s.value for s in result.strands}
+    assert produced["protein.uniprot.accession"] == "P04637"
+    assert produced["ncbi.taxon.id"] == 9606
+
+
 async def test_live_unknown_query_is_no_match():
     weaver = build_uniprot_weaver()
     ss = StrandSet.from_strands("e1", [Strand("protein.query", "zzzznotarealprotein9999")])
@@ -118,12 +133,98 @@ async def test_live_map_to_accession_from_ensembl():
 
 async def test_live_map_from_accession_to_geneid():
     """Reverse bridge: accession P04637 -> NCBI GeneID 7157 (routes by requested output)."""
-    result = await _idmap("map_from_accession", "protein.uniprot.accession", "P04637", "gene.ncbi.id")
+    result = await _idmap(
+        "map_from_accession", "protein.uniprot.accession", "P04637", "gene.ncbi.id"
+    )
     assert result.status is WeaveStatus.OK
     gene_ids = {s.type_id: s.value for s in result.strands}["gene.ncbi.id"]
     assert any(str(g) == "7157" for g in gene_ids)
 
 
 async def test_live_map_to_accession_unknown_is_no_match():
-    result = await _idmap("map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession")
+    result = await _idmap(
+        "map_to_accession", "gene.ncbi.id", "999999999", "protein.uniprot.accession"
+    )
     assert result.status is WeaveStatus.NO_MATCH
+
+
+async def test_live_map_to_accession_from_taxon_scoped_string_id():
+    weaver = build_uniprot_weaver()
+    result = (
+        await weaver.execute_batch(
+            "map_to_accession",
+            [StrandSet.from_strands("string-tp53", [Strand("string.id", "9606.ENSP00000269305")])],
+            requested_outputs=frozenset({"protein.uniprot.accession"}),
+            backend="api",
+        )
+    )[0]
+    assert result.status is WeaveStatus.OK
+    assert "P04637" in next(
+        strand.value for strand in result.strands if strand.type_id == "protein.uniprot.accession"
+    )
+
+
+async def test_live_explicit_unreviewed_accession_preserves_identity():
+    """Observed TrEMBL accession remains exact instead of preferring another reviewed entry."""
+    async with build_uniprot_weaver() as weaver:
+        result = await weaver.execute(
+            "resolve_protein",
+            StrandSet.from_strands("unreviewed", [Strand("protein.query", "A0A087WT22")]),
+            requested_outputs=frozenset(
+                {"protein.uniprot.accession", "protein.reviewed", "ncbi.taxon.id"}
+            ),
+            backend="api",
+            params={"organism": "9606"},
+        )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    values = {strand.type_id: strand.value for strand in result.strands}
+    # resolve_protein always emits its declared identity group too.
+    assert values["protein.uniprot.accession"] == "A0A087WT22"
+    assert values["protein.reviewed"] == "unreviewed"
+    assert values["ncbi.taxon.id"] == 9606
+
+
+async def test_live_describe_exact_reviewed_and_unreviewed_sequences():
+    async with build_uniprot_weaver() as weaver:
+        results = await weaver.execute_batch(
+            "describe_protein",
+            [
+                StrandSet.from_strands(f"p{i}", [Strand("protein.uniprot.accession", acc)])
+                for i, acc in enumerate(["P04637", "A0A087WT22"])
+            ],
+            requested_outputs=frozenset({"protein.sequence", "protein.length", "protein.reviewed"}),
+            backend="api",
+        )
+    for result, accession, reviewed in zip(
+        results, ["P04637", "A0A087WT22"], ["reviewed", "unreviewed"], strict=True
+    ):
+        skip_if_transient(result)
+        assert result.status is WeaveStatus.OK
+        values = {strand.type_id: strand.value for strand in result.strands}
+        assert values["protein.uniprot.accession"] == accession
+        assert values["protein.reviewed"] == reviewed
+        assert len(values["protein.sequence"]) == values["protein.length"]
+    assert len(next(s.value for s in results[0].strands if s.type_id == "protein.sequence")) == 393
+
+
+async def test_live_describe_preserves_annotations_and_release():
+    async with build_uniprot_weaver() as weaver:
+        result = await weaver.execute(
+            "describe_protein",
+            StrandSet.from_strands("p53", [Strand("protein.uniprot.accession", "P04637")]),
+            requested_outputs=frozenset({"protein.annotation.records"}),
+            backend="api",
+        )
+    skip_if_transient(result)
+    assert result.status is WeaveStatus.OK
+    records = next(s.value for s in result.strands if s.type_id == "protein.annotation.records")
+    assert (
+        records["features"] and records["references"] and records["entryAudit"]["entryVersion"] > 0
+    )
+    assert records["release"]["version"]
+    assert any(
+        text.get("evidences")
+        for comment in records["comments"]
+        for text in comment.get("texts", [])
+    )

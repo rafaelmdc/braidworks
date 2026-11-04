@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from braidworks_arq.ratelimit import TokenBucket, parse_rate_limits, rate_for
 
 
@@ -25,10 +26,10 @@ class FakeAsyncRedis:
     def __init__(self) -> None:
         self.store: dict[str, tuple[float, float]] = {}
 
-    async def eval(self, script, numkeys, *args):  # noqa: A003
+    async def eval(self, script, numkeys, *args):
         key = args[0]
         rate, capacity, now = float(args[1]), float(args[2]), float(args[3])
-        cost = min(float(args[4]) if len(args) > 4 else 1.0, capacity)
+        cost = float(args[4]) if len(args) > 4 else 1.0
         tokens, ts = self.store.get(key, (capacity, now))
         tokens = min(capacity, tokens + max(0.0, now - ts) * rate)
         if tokens >= cost:
@@ -80,3 +81,86 @@ def test_retry_defer_is_jittered_and_bounded():
     assert len(set(vals)) > 1  # actually jittered, not constant
     # job_try=3 → base 4, jitter in [2.0, 6.0)
     assert all(2.0 <= _retry_defer(3) < 6.0 for _ in range(50))
+
+
+@pytest.mark.parametrize("invalid", [0, -1, float("nan"), float("inf")])
+def test_bucket_rejects_invalid_configuration(invalid):
+    with pytest.raises(ValueError, match="rate"):
+        TokenBucket(FakeAsyncRedis(), key="k", rate=invalid, capacity=1)
+    with pytest.raises(ValueError, match="capacity"):
+        TokenBucket(FakeAsyncRedis(), key="k", rate=1, capacity=invalid)
+    with pytest.raises(ValueError, match="invalid rate limit"):
+        parse_rate_limits(f"ncbi={invalid}")
+
+
+async def test_oversized_acquisition_charges_every_token(monkeypatch):
+    from braidworks_arq import ratelimit
+
+    clock = [100.0]
+    monkeypatch.setattr(ratelimit.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ratelimit.time, "monotonic", lambda: clock[0])
+
+    async def advance(seconds):
+        clock[0] += seconds
+
+    monkeypatch.setattr(ratelimit.asyncio, "sleep", advance)
+    redis = FakeAsyncRedis()
+    bucket = TokenBucket(redis, key="k", rate=2, capacity=2)
+    assert await bucket.acquire(7)
+    # Two tokens initially, five replenished over 2.5 seconds. Nothing is forgiven.
+    assert clock[0] == 102.5
+    assert redis.store["k"][0] == 0
+    assert await bucket._try_take() > 0
+
+
+async def test_oversized_timeout_does_not_refund_partial_charge():
+    redis = FakeAsyncRedis()
+    bucket = TokenBucket(redis, key="k", rate=0.001, capacity=2)
+    assert await bucket.acquire(3, timeout=0.01) is False
+    assert redis.store["k"][0] < 0.01
+
+
+@pytest.mark.parametrize("invalid", [0, -1, float("nan"), float("inf")])
+async def test_acquire_rejects_invalid_cost(invalid):
+    bucket = TokenBucket(FakeAsyncRedis(), key="k", rate=1, capacity=1)
+    with pytest.raises(ValueError, match="cost"):
+        await bucket.acquire(invalid)
+
+
+async def test_actual_lua_oversized_timeout_and_server_clock():
+    from braidworks_arq.ratelimit import _LUA
+    from fakeredis import FakeAsyncRedis
+
+    async with FakeAsyncRedis() as redis:
+        bucket = TokenBucket(redis, key="actual-lua", rate=0.001, capacity=2)
+        assert await bucket.acquire(3, timeout=0.01) is False
+        state = await redis.hgetall("actual-lua")
+        assert float(state[b"tokens"]) < 0.01
+        assert 0 < await redis.ttl("actual-lua") <= 2001
+        # An arbitrarily advanced worker clock must not mint tokens.
+        reply = await redis.eval(_LUA, 1, "actual-lua", 0.001, 2, 10**15, 1)
+        assert float(reply) > 900
+
+
+async def test_actual_lua_workers_share_one_burst():
+    import asyncio
+
+    from fakeredis import FakeAsyncRedis
+
+    async with FakeAsyncRedis() as redis:
+        workers = [TokenBucket(redis, key="shared-lua", rate=0.001, capacity=2) for _ in range(3)]
+        outcomes = await asyncio.gather(*(worker.acquire(timeout=0) for worker in workers))
+        assert outcomes.count(True) == 2
+        assert outcomes.count(False) == 1
+
+
+async def test_actual_lua_rejects_workers_with_different_rate_settings():
+    from braidworks.core.exceptions import BackendConfigurationError
+    from fakeredis import FakeAsyncRedis
+
+    async with FakeAsyncRedis() as redis:
+        first = TokenBucket(redis, key="mixed-config", rate=2, capacity=1)
+        assert await first.acquire()
+        second = TokenBucket(redis, key="mixed-config", rate=3, capacity=1)
+        with pytest.raises(BackendConfigurationError, match="workers disagree"):
+            await second.acquire()

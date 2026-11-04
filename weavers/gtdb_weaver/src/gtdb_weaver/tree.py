@@ -32,8 +32,10 @@ this module deliberately splits the computation into two halves:
 from __future__ import annotations
 
 import itertools
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 # One step on a leaf's path from the root: the ancestor node's stable id and the
 # cumulative branch length (depth) from the root to that node.
@@ -64,11 +66,37 @@ def parse_newick(text: str) -> _Node:
     parser.skip_ws()
     if parser.pos < len(text) and text[parser.pos] == ";":
         parser.pos += 1
+    parser.skip_ws()
+    if parser.pos != len(text):
+        raise NewickError(f"unexpected trailing input at position {parser.pos}")
+    _validate_tree(root)
     return root
 
 
+def _validate_tree(root: _Node) -> None:
+    """Validate leaf identity and geometry without materializing every root path."""
+    labels: set[str] = set()
+    stack = [(root, 0.0)]
+    while stack:
+        node, parent_depth = stack.pop()
+        length = node.length or 0.0
+        if not math.isfinite(length) or length < 0:
+            raise NewickError(f"invalid branch length {node.length!r}")
+        depth = parent_depth + length
+        if not math.isfinite(depth):
+            raise NewickError("non-finite cumulative branch length")
+        if node.children:
+            stack.extend((child, depth) for child in node.children)
+        else:
+            if not node.name.strip():
+                raise NewickError("leaf label must be non-empty")
+            if node.name in labels:
+                raise NewickError(f"duplicate leaf label {node.name!r}")
+            labels.add(node.name)
+
+
 class _Parser:
-    _SPECIAL = set("(),:;")
+    _SPECIAL: ClassVar[set[str]] = set("(),:;")
 
     def __init__(self, text: str) -> None:
         self.text = text
@@ -151,6 +179,8 @@ def _walk(
         for child in node.children:
             _walk(child, path, counter, paths)
     elif node.name:
+        if node.name in paths:
+            raise NewickError(f"duplicate leaf label {node.name!r}")
         paths[node.name] = path
 
 
@@ -162,6 +192,7 @@ def build_rootpaths(root: _Node) -> dict[str, RootPath]:
     it — the property that lets :func:`cophenetic` align two independently-fetched paths.
     ``depth`` is the cumulative branch length from the root (the root itself is depth 0).
     """
+    _validate_tree(root)
     paths: dict[str, RootPath] = {}
     _walk(root, [], itertools.count(), paths)
     return paths
@@ -202,3 +233,50 @@ def cophenetic(a: Sequence[RootStep], b: Sequence[RootStep]) -> float:
         else:
             break
     return float(a[-1][1]) + float(b[-1][1]) - 2.0 * mrca_depth
+
+
+class _RootPathIndex:
+    """Immutable parent links: retain each node once, materialize only requested paths."""
+
+    def __init__(self, parents, depths, leaves):
+        from types import MappingProxyType
+
+        self._parents = tuple(parents)
+        self._depths = tuple(depths)
+        self._leaves = MappingProxyType(dict(leaves))
+
+    def path_for(self, label: str) -> RootPath | None:
+        node = self._leaves.get(label)
+        if node is None:
+            return None
+        path: RootPath = []
+        while node is not None:
+            path.append((node, self._depths[node]))
+            node = self._parents[node]
+        path.reverse()
+        return path
+
+
+def load_rootpath_index(texts: Iterable[str]) -> _RootPathIndex:
+    """Index a forest in the same preorder id space as :func:`load_rootpaths`."""
+    parents: list[int | None] = []
+    depths: list[float] = []
+    leaves: dict[str, int] = {}
+    for text in texts:
+        root = parse_newick(text)
+        stack = [(root, None, root.length or 0.0)]
+        while stack:
+            node, parent, depth = stack.pop()
+            index = len(parents)
+            parents.append(parent)
+            depths.append(depth)
+            if node.children:
+                stack.extend(
+                    (child, index, depth + (child.length or 0.0))
+                    for child in reversed(node.children)
+                )
+            elif node.name:
+                if node.name in leaves:
+                    raise NewickError(f"duplicate leaf label {node.name!r}")
+                leaves[node.name] = index
+    return _RootPathIndex(parents, depths, leaves)

@@ -27,6 +27,7 @@ LICENSE_RULES: dict[str, str] = {
     "CC-BY-3.0": ATTRIBUTION_REQUIRED,
     "CC-BY-4.0": ATTRIBUTION_REQUIRED,
     "CC-BY-SA-4.0": ATTRIBUTION_REQUIRED,
+    "CC-BY-NC-4.0": RESTRICTED,  # recognized noncommercial terms; never classified as open
 }
 
 

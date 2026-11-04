@@ -2,10 +2,10 @@
 
 Serves disease→ontology lookups from the SQLite built by ``setup.py``. Given a MeSH or
 MedDRA disease id (per capability), it resolves the unified MONDO id via the ``xref``
-index (preferring ``MONDO:equivalentTo`` matches), then fills all produced outputs:
+index (accepting one explicitly equivalent identity), then fills requested groups:
 
-- ``disease.mondo.id``            — the resolved MONDO id (summary/term)
-- ``disease.ontology.name``       — the MONDO term name (term)
+- ``disease.mondo.id``            — the resolved MONDO id (identity)
+- ``disease.ontology.name``       — the MONDO term name (identity)
 - ``disease.ontology.parents``    — direct is-a parents (term)
 - ``disease.ontology.depth``      — shortest is-a distance to a MONDO root (term)
 - ``disease.ontology.ancestors``  — the term + its full is-a ancestor lineage (ancestors)
@@ -17,12 +17,17 @@ DB carries only edges. Queries run via ``asyncio.to_thread`` so SQLite never blo
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
-import threading
+from collections import deque
+from copy import deepcopy
+from dataclasses import replace
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import Any
 
 from braidworks.core import BackendBase, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from mondo_weaver.setup import db_is_valid, default_mondo_db_path, normalize_name
 
@@ -35,22 +40,58 @@ ANCESTORS = "disease.ontology.ancestors"
 # capability id -> (consumed type id, xref source tag). Source "NAME" resolves via the
 # label/synonym index instead of a cross-reference.
 _CAPABILITY_SOURCE = {
+    "describe_disease": ("disease.mondo.id", "MONDO"),
     "mondo.lookup_by_mesh": ("disease.mesh.id", "MESH"),
     "mondo.lookup_by_meddra": ("disease.meddra.id", "MedDRA"),
     "mondo.lookup_by_name": ("disease.name", "NAME"),
 }
 
 _ANCESTORS_SQL = """
-WITH RECURSIVE anc(id, depth) AS (
-    SELECT ?, 0
+WITH RECURSIVE anc(id) AS (
+    SELECT ?
     UNION
-    SELECT isa.parent, anc.depth + 1 FROM isa JOIN anc ON isa.child = anc.id
+    SELECT isa.parent FROM isa JOIN anc ON isa.child = anc.id
 )
-SELECT anc.id, MIN(anc.depth) AS d, term.name
+SELECT anc.id, term.name, isa.parent
 FROM anc JOIN term ON term.mondo_id = anc.id
-GROUP BY anc.id
-ORDER BY d, anc.id
+LEFT JOIN isa ON isa.child = anc.id
+ORDER BY anc.id, isa.parent
 """
+
+
+class _InvalidGraph(ValueError):
+    """A stored ontology graph cannot establish valid ancestor/depth evidence."""
+
+
+def _ancestor_rows(con: sqlite3.Connection, origin: str) -> list[tuple]:
+    """Read each reachable identity once, reject cycles, compute shortest DAG depths."""
+    names: dict[str, str] = {}
+    parents: dict[str, set[str]] = {}
+    for identifier, name, parent in con.execute(_ANCESTORS_SQL, (origin,)):
+        names[identifier] = name
+        parents.setdefault(identifier, set())
+        if parent is not None:
+            parents[identifier].add(parent)
+    if origin not in names or any(
+        parent not in names for group in parents.values() for parent in group
+    ):
+        raise _InvalidGraph("MONDO ancestor graph contains missing terms")
+    try:
+        TopologicalSorter(parents).prepare()
+    except CycleError as exc:
+        raise _InvalidGraph("MONDO ancestor graph contains a cycle") from exc
+    depths = {origin: 0}
+    pending = deque([origin])
+    while pending:
+        identifier = pending.popleft()
+        for parent in sorted(parents[identifier]):
+            if parent not in depths:
+                depths[parent] = depths[identifier] + 1
+                pending.append(parent)
+    return [
+        (identifier, depth, names[identifier], not parents[identifier])
+        for identifier, depth in sorted(depths.items(), key=lambda row: (row[1], row[0]))
+    ]
 
 
 def _coerce_id(value: Any) -> str | None:
@@ -64,6 +105,10 @@ def _coerce_id(value: Any) -> str | None:
     return None
 
 
+class _IdentityReview(ValueError):
+    """A name or cross-reference cannot establish a unique equivalent identity."""
+
+
 class MondoLocalBackend(BackendBase):
     """local backend reading the built MONDO SQLite."""
 
@@ -73,31 +118,17 @@ class MondoLocalBackend(BackendBase):
         self._db_path = Path(db_path) if db_path else default_mondo_db_path()
         self._configured = db_is_valid(self._db_path)
         self._fingerprint: str | None = None
-        self._local = threading.local()
+        self._source = SourceBinding(
+            self._db_path, lambda con: dict(con.execute("SELECT key, value FROM meta"))
+        )
 
     def is_configured(self) -> bool:
         return self._configured
 
     def fingerprint(self) -> str:
-        # MONDO has a real release tag (OBO data-version); use it as the cache key.
-        if self._fingerprint is None:
-            row = (
-                self._connect()
-                .execute("SELECT value FROM meta WHERE key = 'data_version'")
-                .fetchone()
-            )
-            tag = row[0].replace("releases/", "") if row else None
-            self._fingerprint = f"mondo-{tag}" if tag else "unconfigured:local"
-        return self._fingerprint
-
-    def _connect(self) -> sqlite3.Connection:
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(
-                f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False
-            )
-            self._local.con = con
-        return con
+        if not self._configured:
+            return "unconfigured:local"
+        return self._source.fingerprint()
 
     async def fetch(
         self,
@@ -108,69 +139,161 @@ class MondoLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        return await asyncio.to_thread(self._lookup_all, capability_id, queries)
+        return await asyncio.to_thread(self._lookup_all, capability_id, queries, groups_to_compute)
 
-    def _lookup_all(self, capability_id: str, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        con = self._connect()
-        consumed, source = _CAPABILITY_SOURCE[capability_id]
-        return [self._lookup_one(con, q, consumed, source) for q in queries]
+    def _lookup_all(
+        self, capability_id: str, queries: list[dict[str, Any]], groups: frozenset[str]
+    ) -> list[LookupRecord]:
+        with self._source.session() as con:
+            consumed, source = _CAPABILITY_SOURCE[capability_id]
+            resolved: dict[str | None, LookupRecord] = {}
+            graphs: dict[str, list] = {}
+            records = []
+            for query in queries:
+                value = _coerce_id(query.get(consumed))
+                key = normalize_name(value) if value and source == "NAME" else value
+                if key not in resolved:
+                    resolved[key] = self._lookup_one(con, query, consumed, source, groups, graphs)
+                record = resolved[key]
+                records.append(replace(record, query=query, values=deepcopy(record.values)))
+            return records
 
-    def _resolve_mondo(self, con: sqlite3.Connection, source: str, value: str) -> str | None:
+    def _resolve_mondo(
+        self, con: sqlite3.Connection, source: str, value: str
+    ) -> tuple[str | None, list[dict]]:
+        if source == "MONDO":
+            row = con.execute("SELECT mondo_id FROM term WHERE mondo_id=?", (value,)).fetchone()
+            return (row[0], [{"mondo_id": row[0], "relation": "identity"}]) if row else (None, [])
         if source == "NAME":
-            row = con.execute(
-                "SELECT mondo_id FROM name WHERE norm = ? ORDER BY priority LIMIT 1",
+            rows = con.execute(
+                "SELECT DISTINCT mondo_id, priority FROM name WHERE norm = ? ORDER BY priority, mondo_id",
                 (normalize_name(value),),
-            ).fetchone()
-            return row[0] if row else None
-        row = con.execute(
-            "SELECT mondo_id FROM xref WHERE source = ? AND xref_id = ? "
-            "ORDER BY is_equivalent DESC LIMIT 1",
-            (source, value),
-        ).fetchone()
-        return row[0] if row else None
+            ).fetchall()
+            evidence = [
+                {"mondo_id": row[0], "relation": "label" if row[1] == 0 else "exact_synonym"}
+                for row in rows
+            ]
+            identities = sorted({row[0] for row in rows})
+        else:
+            rows = con.execute(
+                "SELECT mondo_id, relation, evidence FROM xref WHERE source = ? AND xref_id = ? "
+                "ORDER BY mondo_id, relation, evidence",
+                (source, value),
+            ).fetchall()
+            evidence = [
+                {
+                    "mondo_id": row[0],
+                    "relation": row[1],
+                    "source": source,
+                    "xref_id": value,
+                    "evidence": row[2],
+                }
+                for row in rows
+            ]
+            identities = sorted({row[0] for row in rows if row[1] == "equivalent"})
+            for identifier in identities:
+                relations = {row[1] for row in rows if row[0] == identifier}
+                if relations != {"equivalent"}:
+                    raise _IdentityReview(
+                        "Contradictory MONDO mapping relations require review: "
+                        + json.dumps(evidence, sort_keys=True)
+                    )
+        if not evidence:
+            return None, []
+        if len(identities) != 1:
+            raise _IdentityReview(
+                "MONDO mapping requires review: " + json.dumps(evidence, sort_keys=True)
+            )
+        return identities[0], evidence
 
     def _lookup_one(
-        self, con: sqlite3.Connection, query: dict[str, Any], consumed: str, source: str
+        self,
+        con: sqlite3.Connection,
+        query: dict[str, Any],
+        consumed: str,
+        source: str,
+        groups: frozenset[str],
+        graphs: dict[str, list],
     ) -> LookupRecord:
         xref_id = _coerce_id(query.get(consumed))
         if xref_id is None:
             return LookupRecord(query=query, found=False)
-        mondo_id = self._resolve_mondo(con, source, xref_id)
+        try:
+            mondo_id, evidence = self._resolve_mondo(con, source, xref_id)
+        except _IdentityReview as exc:
+            return LookupRecord(query=query, error=str(exc))
         if mondo_id is None:
             return LookupRecord(query=query, found=False)
-
-        name_row = con.execute("SELECT name FROM term WHERE mondo_id = ?", (mondo_id,)).fetchone()
-        lineage = [
-            {"mondo_id": rid, "name": rname}
-            for rid, _depth, rname in con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
-        ]
-        parents = [
-            {"mondo_id": pid, "name": pname}
-            for pid, pname in con.execute(
-                "SELECT isa.parent, term.name FROM isa JOIN term ON term.mondo_id = isa.parent "
-                "WHERE isa.child = ? ORDER BY isa.parent",
+        graph = None
+        if groups & {"term", "ancestors"}:
+            if mondo_id not in graphs:
+                try:
+                    graphs[mondo_id] = _ancestor_rows(con, mondo_id)
+                except _InvalidGraph as exc:
+                    return LookupRecord(query=query, error=str(exc))
+            graph = graphs[mondo_id]
+            name = next(row[2] for row in graph if row[0] == mondo_id)
+        else:
+            row = con.execute("SELECT name FROM term WHERE mondo_id = ?", (mondo_id,)).fetchone()
+            name = row[0] if row else None
+        values = {MONDO_ID: mondo_id, NAME: name, "disease.ontology.mapping.records": evidence}
+        if "definition" in groups or "history" in groups:
+            definition, obsolete, replaced_by, consider = con.execute(
+                "SELECT definition, obsolete, replaced_by, consider FROM term WHERE mondo_id=?",
                 (mondo_id,),
-            ).fetchall()
-        ]
-        depth = self._depth_to_root(con, mondo_id)
-        return LookupRecord(
-            query=query,
-            found=True,
-            values={
-                MONDO_ID: mondo_id,
-                NAME: name_row[0] if name_row else None,
-                PARENTS: parents,
-                DEPTH: depth,
-                ANCESTORS: lineage,
-            },
-        )
-
-    def _depth_to_root(self, con: sqlite3.Connection, mondo_id: str) -> int:
-        """Shortest is-a distance from ``mondo_id`` to a root (a term with no parents)."""
-        rows = con.execute(_ANCESTORS_SQL, (mondo_id,)).fetchall()
-        best: int | None = None
-        for rid, depth, _name in rows:
-            has_parent = con.execute("SELECT 1 FROM isa WHERE child = ? LIMIT 1", (rid,)).fetchone()
-            if not has_parent and (best is None or depth < best):
-                best = depth
-        return best if best is not None else 0
+            ).fetchone()
+            if "definition" in groups:
+                values["disease.ontology.definition"] = definition
+            if "history" in groups:
+                meta = dict(con.execute("SELECT key, value FROM meta"))
+                replacements, suggestions = json.loads(replaced_by), json.loads(consider)
+                values["disease.ontology.history"] = {
+                    "id": mondo_id,
+                    "is_obsolete": bool(obsolete),
+                    "status": "current"
+                    if not obsolete
+                    else "replaced"
+                    if replacements
+                    else "consider"
+                    if suggestions
+                    else "obsolete",
+                    "replaced_by": replacements,
+                    "consider": suggestions,
+                    "data_version": meta["data_version"],
+                    "source_sha256": meta["source_sha256"],
+                    "interpretation": "observed source history; consider targets are suggestions, not automatic replacements",
+                }
+        if "mappings" in groups:
+            meta = dict(con.execute("SELECT key, value FROM meta"))
+            mapping_source = json.loads(meta["mapping_source"])
+            if mapping_source is None:
+                return LookupRecord(
+                    query=query,
+                    error="Typed mappings unavailable: rebuild with release-matched mapping_path and mapping_release",
+                )
+            values["disease.ontology.external_mappings"] = {
+                "records": [
+                    json.loads(row[0])
+                    for row in con.execute(
+                        "SELECT record FROM mapping WHERE mondo_id=? ORDER BY record", (mondo_id,)
+                    )
+                ],
+                "source": mapping_source,
+                "data_version": meta["data_version"],
+                "interpretation": "observed directional predicates; no blanket equivalence",
+            }
+        if "term" in groups:
+            values[PARENTS] = sorted(
+                [
+                    {"mondo_id": rid, "name": label}
+                    for rid, depth, label, _root in graph
+                    if depth == 1
+                ],
+                key=lambda parent: parent["mondo_id"],
+            )
+            values[DEPTH] = min((depth for _rid, depth, _label, root in graph if root), default=0)
+        if "ancestors" in groups:
+            values[ANCESTORS] = [
+                {"mondo_id": rid, "name": label} for rid, _depth, label, _root in graph
+            ]
+        return LookupRecord(query=query, found=True, values=values)

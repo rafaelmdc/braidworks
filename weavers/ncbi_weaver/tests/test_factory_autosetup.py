@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from braidworks.core import BackendConfigurationError
 from ncbi_weaver import factory
 from ncbi_weaver.factory import build_ncbi_weaver

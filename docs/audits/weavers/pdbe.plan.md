@@ -1,0 +1,47 @@
+# PDBe proposed implementation plan
+
+Status proposed. [Spec](pdbe.spec.md).
+
+| Package | Requirements | Work |
+|---|---|---|
+| WP-PDBE-01 | 001 | Choose parameter versus immutable backend policy for display limit; validate; regression for cache source/limit separation. |
+| WP-PDBE-02 | 002, 003 | Source-local decoding/correlation helpers and per-chunk outcomes; adverse payload and chunk cases, no generic hierarchy. |
+| WP-PDBE-03 | 005, 006 | Configured construction/lifecycle aligned with accepted shared policy; docs/spec comments and safe regeneration. |
+| WP-PDBE-04 | 004, 007, conditional | Research observed chain/quality schemas; specify optional groups, implement pure projections with tie/order tests and known-truth live cases. |
+
+01–02 before feature work; 03 may share common lifecycle decisions from synthesis.
+Create accepted work-package issues before coding; preserve contracts, patch package
+versions consistently, verify strict + package tests + lint and live E2E after API
+changes. Catalogs after manifest changes; installed/minimum-floor checks if imports
+or packaging change. No push/publication.
+
+Tracking update: [individual finding issues and shared/source groups](issue-hierarchy.md)
+are open under #147. Use those issues for work-package acceptance and evidence. Necessary
+breaking changes are permitted; document affected interfaces, migrations and version updates.
+
+
+### SH-03 implementation (2026-10-09)
+
+Completed the #150 response-validation/failure-isolation scope for #191, #192. Best-structure and summary responses are validated against their keyed source shape. An unexpected response identifier is an error; results are never borrowed from another identifier. Detail-request failures affect only that request chunk, and later chunks are still attempted.
+
+See [SH-03 implementation evidence](SH-03.implementation.md) for changes, migrations, exact verification and remaining scope. Other work packages/findings in this source plan remain separately tracked.
+
+## Shared source identity work implemented
+
+The #154 findings are implemented and verified in
+[SH-07 implementation and migration evidence](SH-07.implementation.md).
+Related work packages/findings remain separately tracked.
+
+## SH-08 identity implementation
+
+Primary shared identity findings are implemented under #155; see
+[SH-08 implementation and validation](SH-08.implementation.md). Source-specific
+work packages with additional feature proposals remain tracked by their own groups.
+
+Shared configuration/lifecycle findings in #149 are implemented; see
+[SH-02 acceptance, verification and migrations](SH-02.implementation.md).
+Source-specific remaining proposals and capabilities stay separately tracked.
+
+Remaining documentation acceptance #195 is complete; see
+[source evidence](SRC-PDBE.implementation.md). #193 remains on the feature decision
+stack; existing chain/source/range retention is already implemented under SH-08.

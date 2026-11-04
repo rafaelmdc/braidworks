@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from weaverkit import WeaverConformanceTests
-
 from bacdive_weaver.factory import build_bacdive_weaver_fixture
+
+from weaverkit import WeaverConformanceTests
 
 SPEC = str(Path(__file__).resolve().parent.parent / "weaver.spec.toml")
 

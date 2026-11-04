@@ -1,6 +1,9 @@
 # agora_weaver
 
-AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire) weaver for Braidworks.
+Use AGORA2 to find metabolic reconstructions from taxids or genome accessions, then inspect
+model reactions and source annotations. The bundled crosswalk works offline; reactions require
+an acquired database, and model downloads require consent. Model membership is not measured
+metabolic activity.
 
 - **Source:** [Virtual Metabolic Human (VMH)](https://www.vmh.life) — AGORA2 (Heinken et al., *Nat Biotechnol* 2023)
 - **License:** **CC BY-NC 4.0** ⚠️ — the VMH/AGORA2 *data* is **NonCommercial**. Fine for
@@ -9,46 +12,64 @@ AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repert
 - **Attribution:** AGORA2 / Virtual Metabolic Human (VMH), Heinken et al.
 - **Cite:** https://doi.org/10.1038/s41587-022-01628-0
 
-Maps an organism (by **NCBI taxid**) to its AGORA2 genome-scale metabolic
-reconstruction(s) and, on request, the **reaction repertoire** of those models — the
-substrate for metabolic complementarity/competition analysis. Consumes only `ncbi.taxon.id`
-(name→taxid is `ncbi_weaver`'s job; the braider chains them).
+## Capabilities
 
-## Outputs (grouped)
+| Capability | Use it to |
+|---|---|
+| `describe_metabolic_reconstruction` | Find reconstructions and optional reaction/model outputs for a taxid |
+| `list_reconstructions` | Find reconstruction IDs from taxids or genome accessions |
+| `describe_reconstruction` | Inspect one release-qualified reconstruction |
+| `list_genomes` | List observed genome accessions for a reconstruction |
+| `list_reactions` | List reactions for a reconstruction or pathway |
+| `describe_reaction` | Inspect one source reaction |
 
-- **`core`** → `microbe.metabolism.reconstruction`: a list of `{reconstruction_id, gcf_id}`
-  (the AGORA2 model and the RefSeq genome it was built from). Served from a **bundled**
-  crosswalk (AGORA2 Supplementary Table S1) — **offline, all 7,302 strains, no download.**
-- **`reactions`** → `microbe.metabolism.reactions`: the per-model reaction repertoire, a
-  list of `{reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}` (EC/KEGG/Rhea from
-  the VMH reaction crosswalk — so this also acts as an **intermediate** into the molecular
-  hub). Needs the reaction DB built by `ensure_agora_db` from the AGORA2 SBML archive
-  (~2.17 GB, consent-gated); absent it, `core` still answers.
+See [source reference](REFERENCE.md#capabilities) for exact inputs, output groups, backends and parameters,
+or inspect the [spec](weaver.spec.toml).
 
-```python
-import agora_weaver
+## Query the bundled crosswalk
 
-# core only (offline, no download):
-weaver = agora_weaver.build_agora_weaver()
-
-# also build the reaction repertoire DB (downloads the 2.17 GB SBML archive):
-weaver = agora_weaver.build_agora_weaver(auto_setup=True)
-```
+With the package installed, run:
 
 ```bash
-make verify   # check the weaver still matches its spec
-make test     # conformance + contract + golden tests (offline)
+braidworks run agora describe_metabolic_reconstruction --have ncbi.taxon.id=562 \
+    --want microbe.metabolism.reconstruction
 ```
 
-## Registering this weaver
+The crosswalk works without acquiring models. Reaction and SBML outputs have separate
+resource and consent requirements; follow [output/setup reference](REFERENCE.md#outputs-grouped)
+before enabling acquisition. Archive acquisition can require multi-GB space.
 
-A weaver is only reachable to the braider once its provider is registered in the
-application's `WeaverFactory`. Wherever you assemble the factory:
+## Setup, interpretation and contribution
+
+Use [checkout or wheel installation](../../docs/installation.md) with core and the
+sources needed for your route. From the checkout, prefix commands above with
+`uv run`; a bare command assumes the environment is activated.
+Source installation does not acquire optional biological databases.
+
+[Source reference](REFERENCE.md) retains coverage, selection, failure and resource
+rules. [Builder configuration](../../docs/weaver-configuration.md) documents supported
+options and ownership; close configured weavers after work completes. See
+[contributing](CONTRIBUTING.md) to extend this source, and run package checks from
+this package directory. Current installation does not assume package-index publication.
+
+## Software license
+
+The software uses [MIT](LICENSE). Provider data retain their source licenses and
+attribution requirements above; the manifest data license does not license this code.
+
+## Filter an existing taxid collection
+
+When you already have taxids from a related-organism query, intersect them with the
+bundled crosswalk before constructing AGORA inputs:
 
 ```python
-from braidworks.core import WeaverFactory
-import agora_weaver
+from agora_weaver import crosswalk_taxids
 
-factory = WeaverFactory()
-agora_weaver.register(factory)        # makes "agora" buildable
+# related_taxids is your observed collection, before executor fan-out.
+selected_taxids = sorted({int(value) for value in related_taxids} & crosswalk_taxids())
 ```
+
+Keep `related_taxids` alongside the selected collection so excluded IDs remain
+inspectable. This explicit filter leaves ordinary braid execution unchanged. It
+identifies reconstruction crosswalk hits, not reaction/SBML readiness; see
+[exact taxid universe](REFERENCE.md#exact-taxid-universe).

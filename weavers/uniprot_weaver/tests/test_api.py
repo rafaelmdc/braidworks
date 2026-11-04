@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from uniprot_weaver.backends.api import UniprotApiBackend, _pick
 
 CAP = "resolve_protein"
@@ -32,7 +31,9 @@ _TP53 = {
     "entryType": "UniProtKB reviewed (Swiss-Prot)",
     "primaryAccession": "P04637",
     "organism": {"scientificName": "Homo sapiens", "taxonId": 9606},
-    "proteinDescription": {"recommendedName": {"fullName": {"value": "Cellular tumor antigen p53"}}},
+    "proteinDescription": {
+        "recommendedName": {"fullName": {"value": "Cellular tumor antigen p53"}}
+    },
     "genes": [{"geneName": {"value": "TP53"}}],
     "comments": [
         {
@@ -106,8 +107,11 @@ async def test_falls_back_to_unreviewed_when_no_reviewed_hit():
 
 async def test_sparse_unreviewed_entry_does_not_crash():
     # TrEMBL entries often lack recommendedName / genes / function / sequence.
-    sparse = {"entryType": "UniProtKB unreviewed (TrEMBL)", "primaryAccession": "X1",
-              "organism": {"scientificName": "Bacillus subtilis", "taxonId": 1423}}
+    sparse = {
+        "entryType": "UniProtKB unreviewed (TrEMBL)",
+        "primaryAccession": "X1",
+        "organism": {"scientificName": "Bacillus subtilis", "taxonId": 1423},
+    }
     v = (await _one(_backend(reviewed=None, unreviewed=sparse), "x")).values
     assert v["protein.uniprot.accession"] == "X1"
     assert "protein.gene" not in v and "protein.function" not in v
@@ -150,7 +154,7 @@ def test_fingerprint_is_stable_and_real():
 
 # --- ID mapping (map_to_accession / map_from_accession) ----------------------
 
-from urllib.parse import parse_qs  # noqa: E402
+from urllib.parse import parse_qs
 
 ACC = "protein.uniprot.accession"
 COUNT = "protein.uniprot.mapping.count"
@@ -183,66 +187,241 @@ def _idmap_backend(maps, *, run_calls=None, run_status=200):
 
 
 async def test_map_to_accession_reviewed_first_and_picks_from_db():
-    backend = _idmap_backend({
-        ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
-        ("GeneID", "UniProtKB"): {"7157": ["A0A087WT22", "P04637"]},
-    })
-    rec = (await backend.fetch("map_to_accession", [{"gene.ncbi.id": "7157"}],
-                               requested_outputs=frozenset({ACC}),
-                               groups_to_compute=frozenset()))[0]
+    backend = _idmap_backend(
+        {
+            ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
+            ("GeneID", "UniProtKB"): {"7157": ["A0A087WT22", "P04637"]},
+        }
+    )
+    rec = (
+        await backend.fetch(
+            "map_to_accession",
+            [{"gene.ncbi.id": "7157"}],
+            requested_outputs=frozenset({ACC}),
+            groups_to_compute=frozenset(),
+        )
+    )[0]
     assert rec.found and rec.values[ACC] == ["P04637", "A0A087WT22"]
     assert rec.values[RECORDS][0] == {"id": "P04637", "reviewed": True}
 
 
 async def test_map_to_accession_groups_inputs_by_source_db():
     run_calls: list = []
-    backend = _idmap_backend({
-        ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
-        ("GeneID", "UniProtKB"): {"7157": ["P04637"]},
-        ("Ensembl", "UniProtKB-Swiss-Prot"): {"ENSG1": ["P04637"]},
-        ("Ensembl", "UniProtKB"): {"ENSG1": ["P04637"]},
-    }, run_calls=run_calls)
+    backend = _idmap_backend(
+        {
+            ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["P04637"]},
+            ("GeneID", "UniProtKB"): {"7157": ["P04637"]},
+            ("Ensembl", "UniProtKB-Swiss-Prot"): {"ENSG1": ["P04637"]},
+            ("Ensembl", "UniProtKB"): {"ENSG1": ["P04637"]},
+        },
+        run_calls=run_calls,
+    )
     recs = await backend.fetch(
         "map_to_accession",
         [{"gene.ncbi.id": "7157"}, {"gene.ensembl.id": "ENSG1"}],
-        requested_outputs=frozenset({ACC}), groups_to_compute=frozenset(),
+        requested_outputs=frozenset({ACC}),
+        groups_to_compute=frozenset(),
     )
     assert [r.values[ACC] for r in recs] == [["P04637"], ["P04637"]]
     # two source dbs × reviewed+full = 4 jobs; the from db is chosen per input type.
-    assert set(run_calls) == {("GeneID", "UniProtKB-Swiss-Prot"), ("GeneID", "UniProtKB"),
-                              ("Ensembl", "UniProtKB-Swiss-Prot"), ("Ensembl", "UniProtKB")}
+    assert set(run_calls) == {
+        ("GeneID", "UniProtKB-Swiss-Prot"),
+        ("GeneID", "UniProtKB"),
+        ("Ensembl", "UniProtKB-Swiss-Prot"),
+        ("Ensembl", "UniProtKB"),
+    }
 
 
 async def test_map_from_accession_picks_to_db_from_requested_output():
     run_calls: list = []
-    backend = _idmap_backend({("UniProtKB_AC-ID", "KEGG"): {"P04637": ["hsa:7157"]}},
-                             run_calls=run_calls)
-    rec = (await backend.fetch("map_from_accession", [{ACC: "P04637"}],
-                               requested_outputs=frozenset({"pathway.kegg.id"}),
-                               groups_to_compute=frozenset()))[0]
+    backend = _idmap_backend(
+        {("UniProtKB_AC-ID", "KEGG"): {"P04637": ["hsa:7157"]}}, run_calls=run_calls
+    )
+    rec = (
+        await backend.fetch(
+            "map_from_accession",
+            [{ACC: "P04637"}],
+            requested_outputs=frozenset({"pathway.kegg.id"}),
+            groups_to_compute=frozenset(),
+        )
+    )[0]
     assert rec.values["pathway.kegg.id"] == ["hsa:7157"]
     assert run_calls == [("UniProtKB_AC-ID", "KEGG")]  # single job, only the requested target
 
 
-async def test_map_from_accession_unrequested_target_is_no_match():
+async def test_map_from_accession_summary_only_reports_observed_zero():
     backend = _idmap_backend({})
-    rec = (await backend.fetch("map_from_accession", [{ACC: "P04637"}],
-                               requested_outputs=frozenset({COUNT}),  # nothing routable
-                               groups_to_compute=frozenset()))[0]
-    assert rec.found is False
+    rec = (
+        await backend.fetch(
+            "map_from_accession",
+            [{ACC: "P04637"}],
+            requested_outputs=frozenset({COUNT}),  # full supported-target summary
+            groups_to_compute=frozenset(),
+        )
+    )[0]
+    assert rec.found and rec.values[COUNT] == 0 and rec.values[RECORDS] == []
 
 
 async def test_map_to_accession_miss_and_blank():
     backend = _idmap_backend({})
     recs = await backend.fetch(
-        "map_to_accession", [{"gene.ncbi.id": "999"}, {"gene.ncbi.id": "  "}],
-        requested_outputs=frozenset({ACC}), groups_to_compute=frozenset(),
+        "map_to_accession",
+        [{"gene.ncbi.id": "999"}, {"gene.ncbi.id": "  "}],
+        requested_outputs=frozenset({ACC}),
+        groups_to_compute=frozenset(),
     )
     assert recs[0].found is False and recs[1].found is False
 
 
 async def test_map_job_failure_is_per_query_error():
     backend = _idmap_backend({}, run_status=500)
-    recs = await backend.fetch("map_to_accession", [{"gene.ncbi.id": "7157"}],
-                               requested_outputs=frozenset({ACC}), groups_to_compute=frozenset())
+    recs = await backend.fetch(
+        "map_to_accession",
+        [{"gene.ncbi.id": "7157"}],
+        requested_outputs=frozenset({ACC}),
+        groups_to_compute=frozenset(),
+    )
     assert recs[0].error is not None and "ID-mapping" in recs[0].error
+
+
+async def test_lookup_batch_is_bounded_concurrent_and_keeps_query_order():
+    import asyncio
+
+    accessions = [f"P{i:05d}" for i in range(6)]
+    active = peak = calls = 0
+
+    async def handler(request):
+        nonlocal active, peak, calls
+        accession = next(a for a in accessions if a in request.url.params["query"])
+        assert "organism_id:9606" in request.url.params["query"]
+        active += 1
+        peak = max(peak, active)
+        calls += 1
+        try:
+            await asyncio.sleep(0.02 if accession == accessions[0] else 0.001)
+            if accession == accessions[3]:
+                return httpx.Response(503, json={})
+            return httpx.Response(200, json={"results": [{**_TP53, "primaryAccession": accession}]})
+        finally:
+            active -= 1
+
+    backend = UniprotApiBackend(
+        client=httpx.AsyncClient(
+            base_url="https://fixture",
+            transport=httpx.MockTransport(handler),
+        ),
+        max_concurrency=2,
+    )
+    queries = [{"protein.query": accession} for accession in accessions]
+    records = await backend.fetch(
+        CAP,
+        queries,
+        requested_outputs=ALL_OUTPUTS,
+        groups_to_compute=frozenset(),
+        params={"organism": "9606"},
+    )
+    assert peak == 2 and active == 0 and calls == len(queries)
+    assert [record.query for record in records] == queries
+    for accession, record in zip(accessions, records):
+        if accession == accessions[3]:
+            assert record.error and not record.found
+        else:
+            assert record.found and record.values["protein.uniprot.accession"] == accession
+
+
+async def test_explicit_unreviewed_accession_never_falls_through_to_reviewed_gene():
+    calls = []
+    exact = {
+        **_TP53,
+        "primaryAccession": "A0A087WT22",
+        "entryType": "UniProtKB unreviewed (TrEMBL)",
+    }
+    record = await _one(_backend(reviewed=_TP53, unreviewed=exact, calls=calls), "a0a087wt22")
+    assert record.values[ACC] == "A0A087WT22"
+    assert len(calls) == 1
+    assert "gene_exact" not in calls[0]
+
+
+async def test_explicit_accession_rejects_wrong_identity_and_species():
+    backend = _backend(unreviewed=_TP53)
+    assert not (await _one(backend, "Q99999")).found
+    records = await backend.fetch(
+        CAP,
+        [{"protein.query": "P04637"}],
+        requested_outputs=ALL_OUTPUTS,
+        groups_to_compute=frozenset(),
+        params={"organism": "10090"},
+    )
+    assert not records[0].found
+    assert (await _one(backend, "P04637")).values[ACC] == "P04637"
+
+
+async def test_mapping_sets_are_distinct_sorted_with_reviewed_first():
+    for targets in (
+        ["Q99999", "A0A087WT22", "Q99999", "P04637"],
+        ["P04637", "Q99999", "A0A087WT22", "Q99999"],
+    ):
+        backend = _idmap_backend(
+            {
+                ("GeneID", "UniProtKB-Swiss-Prot"): {"7157": ["Q99999", "P04637", "P04637"]},
+                ("GeneID", "UniProtKB"): {"7157": targets},
+            }
+        )
+        record = (
+            await backend.fetch(
+                "map_to_accession",
+                [{"gene.ncbi.id": "7157"}],
+                requested_outputs=frozenset({ACC}),
+                groups_to_compute=frozenset(),
+            )
+        )[0]
+        assert record.values[ACC] == ["P04637", "Q99999", "A0A087WT22"]
+        assert record.values[COUNT] == 3
+        assert [r["reviewed"] for r in record.values[RECORDS]] == [True, True, False]
+
+
+async def test_idmapping_deduplicates_across_result_pages():
+    def handler(request):
+        if request.url.path.endswith("/run"):
+            return httpx.Response(200, json={"jobId": "job"})
+        if "/status/" in request.url.path:
+            return httpx.Response(200, json={"jobStatus": "FINISHED"})
+        targets = (
+            ["Q99999", "P04637"] if request.url.path.endswith("/job") else ["P04637", "A0A087WT22"]
+        )
+        headers = (
+            {"Link": '<https://u/page2>; rel="next"'} if request.url.path.endswith("/job") else {}
+        )
+        return httpx.Response(
+            200,
+            headers=headers,
+            json={"results": [{"from": "7157", "to": target} for target in targets]},
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://u", transport=httpx.MockTransport(handler)
+    ) as client:
+        result = await UniprotApiBackend(client=client)._idmap("GeneID", "UniProtKB", ["7157"])
+    assert result == {"7157": ["A0A087WT22", "P04637", "Q99999"]}
+
+
+async def test_string_ids_use_exact_bulk_mapping_without_name_search():
+    calls = []
+    backend = _idmap_backend(
+        {
+            ("STRING", "UniProtKB-Swiss-Prot"): {
+                "9606.PROTEIN_A": ["P04637"],
+                "10090.PROTEIN_A": ["P02340"],
+            },
+            ("STRING", "UniProtKB"): {"9606.PROTEIN_A": ["P04637"], "10090.PROTEIN_A": ["P02340"]},
+        },
+        run_calls=calls,
+    )
+    records = await backend.fetch(
+        "map_to_accession",
+        [{"string.id": identity} for identity in ["9606.PROTEIN_A", "10090.PROTEIN_A"]],
+        requested_outputs=frozenset({ACC}),
+        groups_to_compute=frozenset(),
+    )
+    assert [record.values[ACC] for record in records] == [["P04637"], ["P02340"]]
+    assert calls == [("STRING", "UniProtKB-Swiss-Prot"), ("STRING", "UniProtKB")]

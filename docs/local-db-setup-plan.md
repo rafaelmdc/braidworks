@@ -1,5 +1,9 @@
 # Plan: Local taxonomy DB auto-setup
 
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [NCBI setup](database.md).
+> This record is retained for its rationale; it is not an operating guide.
+
 **Status:** Implemented (2026-06-06). `weavers/ncbi_weaver/src/ncbi_weaver/setup.py`
 (`ensure_taxonomy_db`, `check_for_update`), factory `auto_setup`, the
 `ncbi-weaver ensure` CLI subcommand, the actionable local-backend error, and

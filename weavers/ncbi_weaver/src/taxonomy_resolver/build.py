@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from pathlib import Path
+import os
 import sqlite3
+import tempfile
+from collections.abc import Callable, Iterator
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from tarfile import TarFile, TarInfo, is_tarfile
-from typing import BinaryIO, Iterator
+from typing import BinaryIO
+
+from braidworks.core.localdb import BuildLock
+from braidworks.core.sqlite import connection_scope
 
 from .db import (
     clear_reference_tables,
-    connect,
     initialize_database,
     insert_taxa_rows,
     insert_taxon_name_rows,
@@ -284,9 +288,7 @@ def _count_rows(table_name: str, db_handle: sqlite3.Connection) -> int:
 def _get_root_taxid_count(db_handle: sqlite3.Connection) -> int:
     """Return the number of root rows present in the loaded taxonomy."""
 
-    row = db_handle.execute(
-        "SELECT COUNT(*) AS row_count FROM taxa WHERE is_root = 1"
-    ).fetchone()
+    row = db_handle.execute("SELECT COUNT(*) AS row_count FROM taxa WHERE is_root = 1").fetchone()
     return int(row["row_count"])
 
 
@@ -317,8 +319,7 @@ def _validate_build(
         "taxa_loaded": taxa_count == expected_taxa_count and taxa_count > 0,
         "names_loaded": name_count == expected_name_count and name_count > 0,
         "scientific_names_loaded": (
-            scientific_name_count == expected_scientific_name_count
-            and scientific_name_count > 0
+            scientific_name_count == expected_scientific_name_count and scientific_name_count > 0
         ),
         "root_present": root_taxid_count >= 1,
     }
@@ -348,7 +349,7 @@ def _optimize_database(
     db_handle.commit()
 
 
-def build_taxonomy_database(
+def _build_staged_database(
     dump_path: Path | str,
     db_path: Path | str,
     *,
@@ -371,13 +372,13 @@ def build_taxonomy_database(
         message="Initializing SQLite schema",
         final=True,
     )
-    built_at_utc = datetime.now(timezone.utc).isoformat()
+    built_at_utc = datetime.now(UTC).isoformat()
     source_dump_sha256 = sha256_file(dump_path)
     taxonomy_build_version = _build_taxonomy_version(built_at_utc, source_dump_sha256)
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path, create_indexes=False)
-    with connect(db_path) as build_connection:
+    with connection_scope(db_path) as build_connection:
         _notify_progress(
             progress_callback,
             stage="prepare",
@@ -409,12 +410,39 @@ def build_taxonomy_database(
                 message="Starting names.dmp load",
                 current=0,
             )
-            _scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = _insert_names(
-                archive,
-                db_handle=build_connection,
-                progress_callback=progress_callback,
+            _scientific_name_by_taxid, name_count, scientific_name_count, synonym_count = (
+                _insert_names(
+                    archive,
+                    db_handle=build_connection,
+                    progress_callback=progress_callback,
+                )
             )
             build_connection.commit()
+            from .history import parse_history
+
+            history_rows = {}
+            for filename in ("merged.dmp", "delnodes.dmp"):
+                if filename in available_members:
+                    handle = archive.extractfile(_find_member(archive, filename))
+                    if handle is None:
+                        raise ValueError(f"Unable to read {filename}")
+                    with handle:
+                        history_rows[filename] = list(_iter_dmp_rows(handle))
+            merged, deleted = parse_history(
+                history_rows.get("merged.dmp", []), history_rows.get("delnodes.dmp", [])
+            )
+            if (set(merged) | deleted) & set(_parent_by_taxid):
+                raise ValueError("Historical taxids conflict with current nodes.dmp identities")
+            build_connection.execute(
+                "CREATE TABLE taxon_merged (old_taxid INTEGER PRIMARY KEY, new_taxid INTEGER NOT NULL)"
+            )
+            build_connection.execute("CREATE TABLE taxon_deleted (taxid INTEGER PRIMARY KEY)")
+            build_connection.executemany(
+                "INSERT INTO taxon_merged VALUES (?, ?)", sorted(merged.items())
+            )
+            build_connection.executemany(
+                "INSERT INTO taxon_deleted VALUES (?)", [(taxid,) for taxid in sorted(deleted)]
+            )
 
         build_connection.commit()
         _notify_progress(
@@ -441,6 +469,8 @@ def build_taxonomy_database(
             expected_scientific_name_count=scientific_name_count,
         )
         root_taxid_count = _get_root_taxid_count(build_connection)
+        if not all(validation_checks.values()):
+            raise ValueError(f"Taxonomy database failed validation: {validation_checks}")
 
         _notify_progress(
             progress_callback,
@@ -462,6 +492,8 @@ def build_taxonomy_database(
                 "scientific_name_count": str(scientific_name_count),
                 "synonym_count": str(synonym_count),
                 "root_taxid_count": str(root_taxid_count),
+                "merged_history_present": str("merged.dmp" in available_members).lower(),
+                "deleted_history_present": str("delnodes.dmp" in available_members).lower(),
                 "rankedlineage_present": str("rankedlineage.dmp" in available_members).lower(),
                 "sqlite_build_pragmas_json": json.dumps(BUILD_PRAGMA_STATEMENTS),
                 "sqlite_post_build_optimized": "true",
@@ -478,12 +510,6 @@ def build_taxonomy_database(
         )
         _apply_sqlite_pragmas(build_connection, RUNTIME_PRAGMA_STATEMENTS)
         build_connection.commit()
-        _notify_progress(
-            progress_callback,
-            stage="done",
-            message="Build complete",
-            final=True,
-        )
 
     return TaxonomyBuildSummary(
         db_path=str(db_path),
@@ -500,3 +526,32 @@ def build_taxonomy_database(
         rankedlineage_present="rankedlineage.dmp" in available_members,
         validation_checks=validation_checks,
     )
+
+
+def build_taxonomy_database(
+    dump_path: Path | str,
+    db_path: Path | str,
+    *,
+    progress_callback: ProgressCallback | None = None,
+) -> TaxonomyBuildSummary:
+    """Build and validate a replacement before atomically publishing it.
+
+    Existing targets are never modified on parse, validation or publication failure.
+    Builders for the same target share the acquisition lock. Staging requires space
+    for the complete new database alongside any existing database. Close writable
+    SQLite connections to the target before rebuilding it.
+    """
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        BuildLock(db_path),
+        tempfile.TemporaryDirectory(prefix=".taxonomy-build-", dir=db_path.parent) as tmp,
+    ):
+        staged_path = Path(tmp) / db_path.name
+        summary = _build_staged_database(
+            dump_path, staged_path, progress_callback=progress_callback
+        )
+        os.replace(staged_path, db_path)
+    summary.db_path = str(db_path)
+    _notify_progress(progress_callback, stage="done", message="Build complete", final=True)
+    return summary

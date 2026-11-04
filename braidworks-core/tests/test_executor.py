@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from braidworks.core.braid import Braid, CapabilityInvocation, FallbackCondition
 from braidworks.core.exceptions import (
     BackendConfigurationError,
@@ -14,12 +13,10 @@ from braidworks.core.exceptions import (
     ReviewRequired,
 )
 from braidworks.core.executor import ErrorPolicy, LocalExecutor, ReviewPolicy
-from braidworks.core.registry import BraidRegistry
-from braidworks.core.strand import Strand, StrandSet
-
 from braidworks.core.planner import Braider
+from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
-
+from braidworks.core.strand import Strand, StrandSet
 from helpers import (
     ScriptedWeaver,
     ambiguous_result,
@@ -34,19 +31,28 @@ from helpers import (
 
 
 def _ok2(cap_id, *strands):
-    return WeaveResult(cap_id, "1.0.0", "local", frozenset({"g"}),
-                       status=WeaveStatus.OK, strands=tuple(strands))
+    return WeaveResult(
+        cap_id, "1.0.0", "local", frozenset({"g"}), status=WeaveStatus.OK, strands=tuple(strands)
+    )
 
 
 async def test_on_event_fires_per_wave_and_is_optional():
     """The optional on_event hook reports each wave's capabilities; omitting it is a no-op."""
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok2("s1", Strand("b", "B")),
-        capability=simple_capability("s1", {"a"}, {"b"}), weaver_id="w1"))
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok2("s2", Strand("c", "C")),
-        capability=simple_capability("s2", {"b"}, {"c"}), weaver_id="w2"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok2("s1", Strand("b", "B")),
+            capability=simple_capability("s1", {"a"}, {"b"}),
+            weaver_id="w1",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok2("s2", Strand("c", "C")),
+            capability=simple_capability("s2", {"b"}, {"c"}),
+            weaver_id="w2",
+        )
+    )
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     inp = [StrandSet.from_strands("e0", [Strand("a", "A")])]
 
@@ -61,6 +67,7 @@ async def test_on_event_fires_per_wave_and_is_optional():
     # omitting the hook changes nothing (no crash, same result)
     res2 = await LocalExecutor(reg).execute(braid, inp)
     assert res2.resolved[0].get("c").value == "C"
+
 
 ID = "ncbi.taxon.id"
 LINEAGE = "ncbi.taxon.lineage"
@@ -107,15 +114,16 @@ async def test_execution_result_carries_references():
 
 
 async def test_execution_result_no_references_without_provenance():
-    reg, _weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
     res = await ex.execute(single_step_braid({ID}), name_strand_sets("a"))
     assert res.references == []
 
 
 # --- happy path + caching ------------------------------------------------------
 
+
 async def test_all_misses_resolve():
-    reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    _reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
     res = await ex.execute(single_step_braid({ID}), name_strand_sets("a", "b", "c"))
     assert len(res.resolved) == 3
     assert all(ss.has(ID) for ss in res.resolved)
@@ -123,7 +131,7 @@ async def test_all_misses_resolve():
 
 
 async def test_second_pass_hits_cache():
-    reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    _reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
     braid = single_step_braid({ID})
     await ex.execute(braid, name_strand_sets("a", "b"))
     assert weaver.batch_calls == 1
@@ -139,7 +147,7 @@ async def test_cache_superset_miss_for_richer_request():
             strands.append(Strand(LINEAGE, [{"taxid": 1}]))
         return ok_result(requested, *strands)
 
-    reg, weaver, ex = _setup(resolver)
+    _reg, weaver, ex = _setup(resolver)
     await ex.execute(single_step_braid({ID}), name_strand_sets("a"))  # caches {"core"}
     assert weaver.batch_calls == 1
     await ex.execute(single_step_braid({LINEAGE}), name_strand_sets("a"))  # needs lineage
@@ -153,7 +161,7 @@ async def test_third_pass_core_subset_hits_lineage_entry():
             strands.append(Strand(LINEAGE, [{"taxid": 1}]))
         return ok_result(requested, *strands)
 
-    reg, weaver, ex = _setup(resolver)
+    _reg, weaver, ex = _setup(resolver)
     await ex.execute(single_step_braid({LINEAGE}), name_strand_sets("a"))  # caches core+lineage
     assert weaver.batch_calls == 1
     await ex.execute(single_step_braid({RANK}), name_strand_sets("a"))  # core subset → hit
@@ -161,7 +169,7 @@ async def test_third_pass_core_subset_hits_lineage_entry():
 
 
 async def test_cached_no_match_routes_to_unresolved():
-    reg, weaver, ex = _setup(lambda ss, b, r: no_match_result(r))
+    _reg, weaver, ex = _setup(lambda ss, b, r: no_match_result(r))
     braid = single_step_braid({ID})
     r1 = await ex.execute(braid, name_strand_sets("ghost"))
     assert len(r1.unresolved) == 1 and not r1.resolved
@@ -173,7 +181,7 @@ async def test_cached_no_match_routes_to_unresolved():
 async def test_cached_ambiguous_no_candidates_routes_to_review():
     # AMBIGUOUS with no candidates has nothing to pick/fork, so it still routes to
     # the review queue under the default ExpandPolicy.TOP (and the result is cached).
-    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
+    _reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
     braid = single_step_braid({ID})
     await ex.execute(braid, name_strand_sets("amb"))
     r2 = await ex.execute(braid, name_strand_sets("amb"))
@@ -183,8 +191,9 @@ async def test_cached_ambiguous_no_candidates_routes_to_review():
 
 # --- preflight + guard ---------------------------------------------------------
 
+
 async def test_preflight_missing_input_goes_to_errors():
-    reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, 1)))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, 1)))
     good = StrandSet.from_strands("g", [Strand("organism.name", "Homo sapiens")])
     bad = StrandSet.from_strands("b", [Strand("sample.id", "S-1")])  # no organism.name
     res = await ex.execute(single_step_braid({ID}), [good, bad])
@@ -195,10 +204,8 @@ async def test_preflight_missing_input_goes_to_errors():
 
 
 async def test_guard1_skips_already_satisfied_entity():
-    reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
-    pre = StrandSet.from_strands(
-        "pre", [Strand("organism.name", "Homo sapiens"), Strand(ID, 9606)]
-    )
+    _reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    pre = StrandSet.from_strands("pre", [Strand("organism.name", "Homo sapiens"), Strand(ID, 9606)])
     fresh = name_strand_sets("Mus musculus")[0]
     res = await ex.execute(single_step_braid({ID}), [pre, fresh])
     assert len(res.resolved) == 2
@@ -208,15 +215,16 @@ async def test_guard1_skips_already_satisfied_entity():
 
 # --- outcome routing -----------------------------------------------------------
 
+
 async def test_no_match_goes_to_unresolved_not_errors():
-    reg, weaver, ex = _setup(lambda ss, b, r: no_match_result(r))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: no_match_result(r))
     res = await ex.execute(single_step_braid({ID}), name_strand_sets("ghost"))
     assert len(res.unresolved) == 1 and not res.errors and not res.resolved
 
 
 async def test_ambiguous_no_candidates_halts_even_with_allow_continue():
     # No candidates → nothing to fan out → review path; ALLOW_CONTINUE never rescues it.
-    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
     res = await ex.execute(
         single_step_braid({ID}), name_strand_sets("amb"), review_policy=ReviewPolicy.ALLOW_CONTINUE
     )
@@ -224,7 +232,7 @@ async def test_ambiguous_no_candidates_halts_even_with_allow_continue():
 
 
 async def test_ambiguous_raise():
-    reg, weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: ambiguous_result(r))
     with pytest.raises(ReviewRequired):
         await ex.execute(
             single_step_braid({ID}), name_strand_sets("amb"), review_policy=ReviewPolicy.RAISE
@@ -232,7 +240,7 @@ async def test_ambiguous_raise():
 
 
 async def test_ok_requires_review_allow_continue_resolves():
-    reg, weaver, ex = _setup(
+    _reg, _weaver, ex = _setup(
         lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss)), requires_review=True)
     )
     res = await ex.execute(
@@ -253,10 +261,10 @@ async def test_review_queue_item_remaining_steps():
         output_types=frozenset({"x.y"}),
         primary_backend="local",
     )
-    braid = Braid(steps=(step0, step1), from_types=frozenset({"organism.name"}), to_types=frozenset({"x.y"}))
-    reg, weaver, ex = _setup(
-        lambda ss, b, r: ok_result(r, Strand(ID, 1), requires_review=True)
+    braid = Braid(
+        steps=(step0, step1), from_types=frozenset({"organism.name"}), to_types=frozenset({"x.y"})
     )
+    _reg, _weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, 1), requires_review=True))
     res = await ex.execute(braid, name_strand_sets("syn"))
     assert len(res.review_queue) == 1
     assert res.review_queue[0].remaining_steps == (step1,)
@@ -264,11 +272,12 @@ async def test_review_queue_item_remaining_steps():
 
 # --- backend failures + fallback ----------------------------------------------
 
+
 async def test_backend_configuration_error_aborts_run():
     def resolver(ss, backend, requested):
         raise BackendConfigurationError("corrupt db")
 
-    reg, weaver, ex = _setup(resolver)
+    _reg, _weaver, ex = _setup(resolver)
     with pytest.raises(BackendConfigurationError):
         await ex.execute(single_step_braid({ID}), name_strand_sets("a", "b"))
 
@@ -280,7 +289,7 @@ async def test_backend_unavailable_retries_entire_batch_on_fallback():
         return ok_result(requested, Strand(ID, _taxid_for(ss)), backend="api")
 
     cap = resolve_name_capability(backends=("local", "api"))
-    reg, weaver, ex = _setup(resolver, capability=cap)
+    _reg, weaver, ex = _setup(resolver, capability=cap)
     braid = single_step_braid(
         {ID},
         primary="local",
@@ -300,7 +309,7 @@ async def test_error_fallback_retries_only_affected_entity():
         return ok_result(requested, Strand(ID, _taxid_for(ss)), backend=backend)
 
     cap = resolve_name_capability(backends=("local", "api"))
-    reg, weaver, ex = _setup(resolver, capability=cap)
+    _reg, weaver, ex = _setup(resolver, capability=cap)
     braid = single_step_braid(
         {ID},
         primary="local",
@@ -320,7 +329,7 @@ async def test_no_match_fallback_retries_only_affected_entity():
         return ok_result(requested, Strand(ID, _taxid_for(ss)), backend=backend)
 
     cap = resolve_name_capability(backends=("local", "api"))
-    reg, weaver, ex = _setup(resolver, capability=cap)
+    _reg, weaver, ex = _setup(resolver, capability=cap)
     braid = single_step_braid(
         {ID},
         primary="local",
@@ -334,13 +343,14 @@ async def test_no_match_fallback_retries_only_affected_entity():
 
 # --- error policy --------------------------------------------------------------
 
+
 async def test_error_record_and_continue():
     def resolver(ss, backend, requested):
         if ss.get("organism.name").value == "bad":
             return error_result(requested, "boom")
         return ok_result(requested, Strand(ID, _taxid_for(ss)))
 
-    reg, weaver, ex = _setup(resolver)
+    _reg, _weaver, ex = _setup(resolver)
     res = await ex.execute(single_step_braid({ID}), name_strand_sets("good", "bad"))
     assert len(res.resolved) == 1
     assert len(res.errors) == 1
@@ -349,7 +359,7 @@ async def test_error_record_and_continue():
 
 
 async def test_error_raise_aborts():
-    reg, weaver, ex = _setup(lambda ss, b, r: error_result(r, "boom"))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: error_result(r, "boom"))
     with pytest.raises(BraidworksError):
         await ex.execute(
             single_step_braid({ID}), name_strand_sets("bad"), error_policy=ErrorPolicy.RAISE
@@ -357,16 +367,17 @@ async def test_error_raise_aborts():
 
 
 async def test_execution_error_is_json_serializable():
-    reg, weaver, ex = _setup(lambda ss, b, r: error_result(r, "boom"))
+    _reg, _weaver, ex = _setup(lambda ss, b, r: error_result(r, "boom"))
     res = await ex.execute(single_step_braid({ID}), name_strand_sets("bad"))
     json.dumps(res.errors[0].to_json())  # must not raise
 
 
 # --- batching + chunking -------------------------------------------------------
 
+
 async def test_max_batch_size_splits_calls():
     cap = resolve_name_capability(max_batch_size=3)
-    reg, weaver, ex = _setup(
+    _reg, weaver, ex = _setup(
         lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))), capability=cap
     )
     names = [f"n{i}" for i in range(10)]
@@ -379,11 +390,9 @@ async def test_max_batch_size_splits_calls():
 
 
 async def test_chunking_three_chunks():
-    reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
+    _reg, weaver, ex = _setup(lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss))))
     names = [f"n{i}" for i in range(25_000)]
-    res = await ex.execute(
-        single_step_braid({ID}), name_strand_sets(*names), chunk_size=10_000
-    )
+    res = await ex.execute(single_step_braid({ID}), name_strand_sets(*names), chunk_size=10_000)
     assert len(res.resolved) == 25_000
     assert weaver.batch_calls == 3
     assert weaver.batch_sizes == [10_000, 10_000, 5_000]
@@ -391,8 +400,9 @@ async def test_chunking_three_chunks():
 
 # --- confidence threshold ------------------------------------------------------
 
+
 async def test_confidence_threshold_halts():
-    reg, weaver, ex = _setup(
+    _reg, _weaver, ex = _setup(
         lambda ss, b, r: ok_result(r, Strand(ID, _taxid_for(ss), confidence=0.75))
     )
     res = await ex.execute(
@@ -402,7 +412,7 @@ async def test_confidence_threshold_halts():
 
 
 async def test_confidence_and_review_independent_single_halt():
-    reg, weaver, ex = _setup(
+    _reg, _weaver, ex = _setup(
         lambda ss, b, r: ok_result(
             r, Strand(ID, _taxid_for(ss), confidence=0.75), requires_review=True
         )
@@ -412,8 +422,8 @@ async def test_confidence_and_review_independent_single_halt():
         single_step_braid({ID}), name_strand_sets("both"), confidence_threshold=0.8
     )
     assert len(res.review_queue) == 1
-    # And with ALLOW_CONTINUE the entity resolves exactly once.
-    reg2, weaver2, ex2 = _setup(
+    # ALLOW_CONTINUE permits review flags but cannot override an explicit confidence floor.
+    _reg2, _weaver2, ex2 = _setup(
         lambda ss, b, r: ok_result(
             r, Strand(ID, _taxid_for(ss), confidence=0.75), requires_review=True
         )
@@ -424,10 +434,11 @@ async def test_confidence_and_review_independent_single_halt():
         confidence_threshold=0.8,
         review_policy=ReviewPolicy.ALLOW_CONTINUE,
     )
-    assert len(res2.resolved) == 1
+    assert not res2.resolved and len(res2.review_queue) == 1
 
 
 # --- exhaustiveness ------------------------------------------------------------
+
 
 async def test_buckets_are_exhaustive_for_mixed_batch():
     def resolver(ss, backend, requested):
@@ -440,7 +451,7 @@ async def test_buckets_are_exhaustive_for_mixed_batch():
             return ambiguous_result(requested)  # no candidates → review queue
         return error_result(requested, "boom")  # name == "err"
 
-    reg, weaver, ex = _setup(resolver)
+    _reg, _weaver, ex = _setup(resolver)
     inputs = name_strand_sets("ok", "nm", "amb", "err")
     missing = StrandSet.from_strands("pf", [Strand("sample.id", "x")])  # preflight failure
     inputs.append(missing)

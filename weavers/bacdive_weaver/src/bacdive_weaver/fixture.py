@@ -22,13 +22,21 @@ import httpx
 _TAXON = {"count": 2, "next": None, "previous": None, "results": [1, 2]}
 
 _NON_TYPE_STRAIN = {
-    "Name and taxonomic classification": {"genus": "Escherichia", "type strain": "no"},
+    "Name and taxonomic classification": {
+        "genus": "Escherichia",
+        "species": "Escherichia coli",
+        "type strain": "no",
+    },
     "Morphology": {"cell morphology": {"gram stain": "negative", "cell shape": "rod-shaped"}},
 }
 
 _TYPE_STRAIN = {
     "General": {"NCBI tax id": {"NCBI tax id": 562}},
-    "Name and taxonomic classification": {"genus": "Escherichia", "type strain": "yes"},
+    "Name and taxonomic classification": {
+        "genus": "Escherichia",
+        "species": "Escherichia coli",
+        "type strain": "yes",
+    },
     "Morphology": {
         "cell morphology": {
             "gram stain": "negative",
@@ -36,9 +44,7 @@ _TYPE_STRAIN = {
             "motility": "yes",
         }
     },
-    "Physiology and metabolism": {
-        "oxygen tolerance": {"oxygen tolerance": "facultative anaerobe"}
-    },
+    "Physiology and metabolism": {"oxygen tolerance": {"oxygen tolerance": "facultative anaerobe"}},
     "Culture and growth conditions": {
         "culture temp": [
             {"growth": "positive", "type": "optimum", "temperature": "37"},

@@ -29,14 +29,14 @@ from braidworks_arq.tasks import weave_step
 from braidworks_arq.worker import WorkerSettings
 
 __all__ = [
-    "weave_step",
     "ArqStepRunner",
-    "build_distributed_executor",
     "WorkerSettings",
-    "queue_for",
-    "redis_settings",
+    "build_distributed_executor",
     "build_registry_from_entry_points",
     "get_registry",
-    "set_registry",
     "iter_weaver_builders",
+    "queue_for",
+    "redis_settings",
+    "set_registry",
+    "weave_step",
 ]

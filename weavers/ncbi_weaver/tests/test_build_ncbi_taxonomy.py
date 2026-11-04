@@ -11,7 +11,6 @@ from pathlib import Path
 from taxonomy_resolver.build import build_taxonomy_database
 from taxonomy_resolver.lineage import get_lineage_for_taxid
 
-
 NODES_DMP = """1\t|\t1\t|\tno rank\t|\t\t|\t8\t|\t0\t|\t1\t|\t0\t|\t1\t|\t0\t|\t0\t|\t0\t|\troot\t|
 2\t|\t1\t|\tsuperkingdom\t|\t\t|\t0\t|\t0\t|\t11\t|\t0\t|\t11\t|\t0\t|\t0\t|\t0\t|\t\t|
 1224\t|\t2\t|\tphylum\t|\t\t|\t0\t|\t0\t|\t11\t|\t0\t|\t11\t|\t0\t|\t0\t|\t0\t|\t\t|

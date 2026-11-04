@@ -18,9 +18,9 @@ import sqlite3
 from pathlib import Path
 
 from braidworks.core import BackendConfigurationError
-from braidworks.core.localdb import auto_consented, default_db_path as _core_default_db_path
+from braidworks.core.localdb import auto_consented, ensure_local_db
+from braidworks.core.localdb import default_db_path as _core_default_db_path
 from braidworks.core.localdb import download as _download
-from braidworks.core.localdb import ensure_local_db
 from braidworks.core.localdb import fetch_remote_md5 as _fetch_remote_md5
 from braidworks.core.localdb import md5_file as _md5_file
 from taxonomy_resolver.build import ProgressCallback, build_taxonomy_database
@@ -38,12 +38,12 @@ _MIN_FREE_BYTES = 4 * 1024**3
 
 # Re-export the generic consent helper so existing imports keep working.
 __all__ = [
+    "DEFAULT_TAXDUMP_URL",
     "auto_consented",
     "check_for_update",
     "db_is_valid",
     "default_db_path",
     "ensure_taxonomy_db",
-    "DEFAULT_TAXDUMP_URL",
 ]
 
 

@@ -7,7 +7,8 @@ does it; call it from wherever you assemble the factory (see the README).
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from braidworks.core import BaseWeaver, WeaverFactory
 

@@ -18,13 +18,16 @@ Guide: weaverkit/docs/implementing-backends.md
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
-from braidworks.core import BackendBase
-from braidworks.core import LookupRecord
+from braidworks.core import BackendBase, BackendConfigurationError, LookupRecord
+from braidworks.core.source_identity import SourceBinding
 
 from gtdb_weaver import taxonomy, tree
+from gtdb_weaver.releases import file_hash
 
 _TREE_PLACEMENT = "describe_gtdb_tree_placement"
 
@@ -42,22 +45,40 @@ class GtdbLocalBackend(BackendBase):
         # ``None`` means "the default DB path, present-or-not" (introspection form).
         self._db_path = Path(db_path) if db_path is not None else _default_db_path()
         self._tree_paths = [Path(p) for p in (tree_paths or [])]
-        self._rootpaths: dict[str, tree.RootPath] | None = None  # lazy, cached per instance
+        self._source = SourceBinding(
+            self._db_path,
+            lambda con: dict(con.execute("SELECT key, value FROM meta")),
+            components=tuple(self._tree_paths),
+        )
+        self._rootpaths: tree._RootPathIndex | None = None  # lazy, cached per instance
 
     def is_configured(self) -> bool:
         return self._db_path.exists() and self._db_path.stat().st_size > 0
 
     def fingerprint(self) -> str:
-        # The GTDB release recorded at DB build is the source of truth; falls back to
-        # a stable non-empty sentinel so conformance never sees "" / "unknown".
-        release = taxonomy.db_release(self._db_path) if self.is_configured() else None
-        return f"gtdb-local-{release or 'none'}"
+        return self._source.fingerprint() if self.is_configured() else "gtdb-local-none"
 
-    def _reference_rootpaths(self) -> dict[str, tree.RootPath]:
+    def _reference_rootpaths(self, con: Any) -> tree._RootPathIndex:
         """Leaf-accession → root path for the wired reference tree(s); {} if none present."""
         if self._rootpaths is None:
-            texts = [p.read_text(encoding="utf-8") for p in self._tree_paths if p.exists()]
-            self._rootpaths = tree.load_rootpaths(texts) if texts else {}
+            row = con.execute("SELECT value FROM meta WHERE key='source_bundle'").fetchone()
+            if row:
+                bundle = json.loads(row[0])
+                if bundle.get("kind") == "official-release":
+                    expected = {
+                        r["md5"]
+                        for label, r in bundle["resources"].items()
+                        if label.endswith("_tree")
+                    }
+                    if any(
+                        not path.exists() or file_hash(path, "md5") not in expected
+                        for path in self._tree_paths
+                    ):
+                        raise BackendConfigurationError(
+                            "GTDB trees do not match the crosswalk release/checksum bundle"
+                        )
+            texts = (p.read_text(encoding="utf-8") for p in self._tree_paths if p.exists())
+            self._rootpaths = tree.load_rootpath_index(texts)
         return self._rootpaths
 
     async def fetch(
@@ -69,37 +90,57 @@ class GtdbLocalBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
-        con = taxonomy.open_ro(self._db_path)
-        try:
+        if "representative" in groups_to_compute:
+            return await asyncio.to_thread(self._fetch_sync, capability_id, queries, True)
+        return await asyncio.to_thread(self._fetch_sync, capability_id, queries)
+
+    def _fetch_sync(
+        self, capability_id: str, queries: list[dict[str, Any]], representative: bool = False
+    ) -> list[LookupRecord]:
+        with self._source.session() as con:
             if capability_id == _TREE_PLACEMENT:
                 return self._fetch_tree_placement(con, queries)
-            return self._fetch_taxonomy(con, queries)
-        finally:
-            con.close()
+            return self._fetch_taxonomy(con, queries, representative)
 
-    def _fetch_taxonomy(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
+    def _fetch_taxonomy(
+        self, con: Any, queries: list[dict[str, Any]], representative: bool = False
+    ) -> list[LookupRecord]:
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
-            gtdb_taxonomy = taxonomy.lookup(con, query)
+            try:
+                gtdb_taxonomy = taxonomy.lookup(con, query)
+            except taxonomy.AmbiguousClassification as exc:
+                records.append(LookupRecord(query=query, error=str(exc)))
+                continue
             if not gtdb_taxonomy:
                 records.append(LookupRecord(query=query, found=False))  # a miss is normal
                 continue
             taxon_id, lineage = taxonomy.parse_gtdb_taxonomy(gtdb_taxonomy)
-            records.append(
-                LookupRecord(
-                    query=query,
-                    found=True,
-                    values={"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage},
-                )
-            )
+            values = {"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage}
+            if representative:
+                release_row = con.execute("SELECT value FROM meta WHERE key='release'").fetchone()
+                accession = taxonomy.rep_accession(con, query)
+                values["gtdb.genome.representative"] = {
+                    "gtdb_taxon_id": taxon_id,
+                    "source_accession": accession,
+                    "release": release_row[0] if release_row else None,
+                    "relation": "representative of the resolved GTDB species, not necessarily the input strain",
+                    "source": "local crosswalk",
+                    "available": accession is not None,
+                }
+            records.append(LookupRecord(query=query, found=True, values=values))
         return records
 
     def _fetch_tree_placement(self, con: Any, queries: list[dict[str, Any]]) -> list[LookupRecord]:
-        rootpaths = self._reference_rootpaths()
+        rootpaths = self._reference_rootpaths(con)
         records: list[LookupRecord] = []
         for query in queries:  # one record per query, in order — never reorder/drop
-            accession = taxonomy.rep_accession(con, query)
-            path = rootpaths.get(accession) if accession else None
+            try:
+                accession = taxonomy.rep_accession(con, query)
+            except taxonomy.AmbiguousClassification as exc:
+                records.append(LookupRecord(query=query, error=str(exc)))
+                continue
+            path = rootpaths.path_for(accession) if accession else None
             if not path:  # unknown organism, or its species' leaf isn't in the tree
                 records.append(LookupRecord(query=query, found=False))
                 continue

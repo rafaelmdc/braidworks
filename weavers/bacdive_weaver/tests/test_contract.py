@@ -8,11 +8,12 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-from braidworks.core import Strand, StrandSet
-from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
+from typing import ClassVar
 
 from bacdive_weaver import vocab
 from bacdive_weaver.factory import build_bacdive_weaver_fixture
+from braidworks.core import Strand, StrandSet
+from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
 
 _MANIFEST = vocab.build_manifest(backends=("api",))
 
@@ -45,7 +46,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 class TestResolveTraitsCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("describe_traits")
-    consumed_values_a = {"organism.scientific_name": "Escherichia coli"}
-    consumed_values_b = {"organism.scientific_name": "sample-b-organism.scientific_name"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"organism.scientific_name": "Escherichia coli"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"organism.scientific_name": "sample-b-organism.scientific_name"}
     group_subset = "morphology"
     group_superset = "physiology"

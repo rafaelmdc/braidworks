@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 
 import pytest
-
 from taxonomy_tools import ensure as ensure_cmd
 from taxonomy_tools.cli import build_parser
 

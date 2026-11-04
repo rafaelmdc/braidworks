@@ -8,9 +8,7 @@ sequences endpoint is hit only when that group is requested), and the misses.
 from __future__ import annotations
 
 import httpx
-
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from ncbi_weaver import build_ncbi_weaver, vocab
 
 ASSEMBLIES = {

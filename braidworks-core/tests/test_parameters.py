@@ -4,10 +4,9 @@ the cache-key fold, and end-to-end threading through the executor."""
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core import (
-    BraidRegistry,
     Braider,
+    BraidRegistry,
     Capability,
     LocalExecutor,
     OutputGroup,
@@ -17,9 +16,7 @@ from braidworks.core import (
 )
 from braidworks.core.cache import compute_cache_key
 from braidworks.core.result import WeaveResult, WeaveStatus
-
 from tests.helpers import ScriptedWeaver
-
 
 # --- Parameter model ---------------------------------------------------------------
 
@@ -89,7 +86,7 @@ def test_capability_parameters_roundtrip_json():
 def test_cache_key_differs_by_params():
     cap = _cap(parameters=(Parameter("level"),))
     ss = StrandSet.from_strands("e1", [Strand("a", "x")])
-    common = dict(weaver_id="w", weaver_version="1", backend="api", backend_fingerprint="fp")
+    common = {"weaver_id": "w", "weaver_version": "1", "backend": "api", "backend_fingerprint": "fp"}
     k_none = compute_cache_key(cap, ss, **common)
     k_a = compute_cache_key(cap, ss, params={"level": "complete"}, **common)
     k_b = compute_cache_key(cap, ss, params={"level": "contig"}, **common)

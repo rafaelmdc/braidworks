@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
-
 from helpers import manifest, resolve_name_capability
 
 

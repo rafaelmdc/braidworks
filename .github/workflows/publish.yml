@@ -1,0 +1,97 @@
+name: Prepare or publish a package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Workspace package to prepare
+        type: choice
+        required: true
+        options:
+          - braidworks-core
+          - weaverkit
+          - braidworks-arq
+          - agora_weaver
+          - alphafold_weaver
+          - bacdive_weaver
+          - disbiome_weaver
+          - example_weaver
+          - faprotax_weaver
+          - gmrepo_weaver
+          - gtdb_weaver
+          - mondo_weaver
+          - ncbi_weaver
+          - pdbe_weaver
+          - quickgo_weaver
+          - reactome_weaver
+          - string_weaver
+          - uniprot_weaver
+          - wikidata_weaver
+          - wikipedia_weaver
+      publish:
+        description: Publish the selected package (requires its exact version tag and PyPI setup)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-release-${{ inputs.package }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.12"
+      - name: Test the release checkout
+        run: |
+          uv sync --all-extras --locked
+          make lint
+          make test
+      - name: Build and verify the workspace distributions
+        run: |
+          uv build --all-packages --out-dir "$RUNNER_TEMP/workspace-dist"
+          uv run --no-project --python 3.12 python tools/check_artifacts.py "$RUNNER_TEMP/workspace-dist" --python 3.12
+      - name: Stage only the selected package
+        env:
+          PACKAGE: ${{ inputs.package }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          if [ "$PUBLISH" = "true" ]; then
+            uv run --no-project --python 3.12 python tools/stage_release.py "$PACKAGE" "$RUNNER_TEMP/workspace-dist" "$RUNNER_TEMP/release-dist" --require-ref "$GITHUB_REF"
+            uv venv --python 3.12 "$RUNNER_TEMP/index-install"
+            uv pip install --python "$RUNNER_TEMP/index-install/bin/python" "$RUNNER_TEMP/release-dist/"*.whl
+          else
+            uv run --no-project --python 3.12 python tools/stage_release.py "$PACKAGE" "$RUNNER_TEMP/workspace-dist" "$RUNNER_TEMP/release-dist"
+          fi
+      - name: Check package descriptions
+        run: uvx --from twine twine check --strict "$RUNNER_TEMP/release-dist/"*
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-dist
+          path: ${{ runner.temp }}/release-dist/*
+          if-no-files-found: error
+
+  publish:
+    if: inputs.publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ inputs.package }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-dist
+          path: dist
+      - name: Publish the validated pair with trusted publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1

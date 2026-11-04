@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from gtdb_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("local", "api"))
@@ -109,7 +109,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 class TestDescribeGtdbTaxonomyCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("describe_gtdb_taxonomy")
-    consumed_values_a = {"ncbi.taxon.id": "562"}
-    consumed_values_b = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "562"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"ncbi.taxon.id": "sample-b-ncbi.taxon.id"}
     group_subset = "core"
     group_superset = "lineage"

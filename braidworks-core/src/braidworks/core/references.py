@@ -10,8 +10,9 @@ render it in the visualizer.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from braidworks.core.licenses import (
     ATTRIBUTION_REQUIRED,
@@ -43,6 +44,8 @@ class Reference:
             note = "attribution required"
         elif self.requirement == CITE_REQUESTED:
             note = "citation requested"
+        elif self.license == "CC-BY-NC-4.0":
+            note = "attribution required; noncommercial reuse only, confirm license terms"
         else:
             note = "reuse terms unverified, confirm before redistribution"
         lic = self.license or "unspecified"
@@ -71,9 +74,7 @@ class Reference:
         )
 
 
-def references_for(
-    weaver_ids: Iterable[str], registry: BraidRegistry
-) -> tuple[Reference, ...]:
+def references_for(weaver_ids: Iterable[str], registry: BraidRegistry) -> tuple[Reference, ...]:
     """References for the given weavers, deduped and ordered by weaver_id.
 
     Weavers with no provenance (or empty provenance) contribute nothing — a missing

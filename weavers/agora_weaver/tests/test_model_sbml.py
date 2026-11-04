@@ -10,12 +10,10 @@ import os
 from pathlib import Path
 
 import pytest
-
-from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from agora_weaver.backends.local import AgoraLocalBackend
 from agora_weaver.setup import individual_sbml_url
 from agora_weaver.weaver import AgoraWeaver
+from braidworks.core import Strand, StrandSet, WeaveStatus
 
 _TAXID = "592010"  # Abiotrophia defectiva -> Abiotrophia_defectiva_ATCC_49176
 _RECON = "Abiotrophia_defectiva_ATCC_49176"
@@ -34,7 +32,7 @@ async def _resolve(weaver: AgoraWeaver, taxid: str):
 
 async def test_model_group_returns_cached_sbml_path(tmp_path: Path):
     # Seed the cache so no download is attempted (auto_download_models stays False).
-    (tmp_path / f"{_RECON}.xml").write_text("<sbml>fake</sbml>")
+    (tmp_path / f"{_RECON}.xml").write_text(f'<sbml><model id="{_RECON}"/></sbml>')
     weaver = AgoraWeaver({"local": AgoraLocalBackend(sbml_cache_dir=tmp_path)})
     r = await _resolve(weaver, _TAXID)
     assert r.status is WeaveStatus.OK
@@ -45,11 +43,12 @@ async def test_model_group_returns_cached_sbml_path(tmp_path: Path):
     assert models[0]["source_url"] == individual_sbml_url(_RECON)
 
 
-async def test_model_group_omitted_when_uncached_and_no_download(tmp_path: Path):
-    # Empty cache + downloads disabled -> the model output is simply absent (core still fine).
+async def test_model_group_errors_when_uncached_and_no_download(tmp_path: Path):
+    # Missing requested data must not claim a successfully computed model group.
     weaver = AgoraWeaver({"local": AgoraLocalBackend(sbml_cache_dir=tmp_path)})
     r = await _resolve(weaver, _TAXID)
-    assert r.status is WeaveStatus.OK
+    assert r.status is WeaveStatus.ERROR
+    assert not r.computed_groups
     assert _SBML not in {s.type_id for s in r.strands}
 
 

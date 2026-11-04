@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core.capability import Capability, OutputGroup
 from braidworks.core.exceptions import InvalidManifestError
 from braidworks.core.registry import BraidRegistry
-
 from helpers import make_weaver, resolve_name_capability, simple_capability
 
 

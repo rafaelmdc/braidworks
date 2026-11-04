@@ -13,9 +13,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus
-
 from gtdb_weaver import build_gtdb_weaver, cophenetic
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -74,3 +72,61 @@ async def test_live_tree_placement_distances_are_sane():
     close = cophenetic(paths["562"], paths["28901"])
     far = cophenetic(paths["562"], paths["817"])
     assert 0.0 < close < far
+
+
+def test_live_pinned_release_manifest():
+    """Probe only the small release manifests; no metadata/tree bulk download."""
+    from gtdb_weaver.releases import DEFAULT_RELEASE, release_bundle
+
+    bundle = release_bundle(DEFAULT_RELEASE)
+    assert bundle["release"] == DEFAULT_RELEASE
+    assert len(bundle["resources"]) == 4
+    assert all(
+        len(resource["md5"]) == 32 and "latest" not in resource["url"]
+        for resource in bundle["resources"].values()
+    )
+
+
+async def test_live_representative_scope_does_not_invent_release():
+    async with build_gtdb_weaver(enable_api=True) as weaver:
+        inputs = [
+            StrandSet.from_strands(
+                "taxon", [Strand("organism.scientific_name", "Escherichia coli")]
+            )
+        ]
+        result = (
+            await weaver.execute_batch(
+                "describe_gtdb_taxonomy",
+                inputs,
+                requested_outputs=frozenset({"gtdb.genome.representative"}),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK
+        record = next(s.value for s in result.strands if s.type_id == "gtdb.genome.representative")
+        assert record["release"] is None
+        assert record["gtdb_taxon_id"] == "s__Escherichia coli"
+
+
+async def test_live_genome_quality_and_release_history():
+    async with build_gtdb_weaver(enable_api=True) as weaver:
+        result = (
+            await weaver.execute_batch(
+                "describe_genome",
+                [StrandSet.from_strands("genome", [Strand("genome.accession", "GCF_000005845.2")])],
+                requested_outputs=frozenset(
+                    {"gtdb.genome.quality", "gtdb.genome.history", "gtdb.genome.synonyms"}
+                ),
+                backend="api",
+            )
+        )[0]
+        assert result.status is WeaveStatus.OK, result.to_json()
+        values = {strand.type_id: strand.value for strand in result.strands}
+        quality = values["gtdb.genome.quality"]["gene"]
+        assert quality["checkm_completeness"] > 95 and quality["checkm2_completeness"] > 95
+        history = values["gtdb.genome.history"]["records"]
+        assert any(
+            row["release"] == "R226" and row["s"] == "s__Escherichia coli" for row in history
+        )
+        assert len(history) > 1
+        assert "synonyms" in values["gtdb.genome.synonyms"]

@@ -11,6 +11,7 @@ category at the source for precision, but this gives broad coverage with no weav
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 
 
@@ -32,27 +33,49 @@ class ErrorCategory(Enum):
 # Substrings (lower-cased) that map a raw message to a category, most-specific first.
 # Order matters: a "503 ... timeout" reads as UPSTREAM_UNAVAILABLE before TIMEOUT.
 _SIGNATURES: tuple[tuple[ErrorCategory, tuple[str, ...]], ...] = (
-    (ErrorCategory.RATE_LIMITED, ("429", "too many requests", "rate limit")),
-    (ErrorCategory.AUTH, ("401", "403", "unauthorized", "forbidden", "api key", "apikey")),
+    (ErrorCategory.RATE_LIMITED, ("too many requests", "rate limit")),
+    (ErrorCategory.CONFIG, ("not configured", "misconfigur", "no api key", "missing config")),
+    (ErrorCategory.AUTH, ("unauthorized", "forbidden", "api key", "apikey")),
     (
         ErrorCategory.UPSTREAM_UNAVAILABLE,
-        ("500", "502", "503", "504", "internal server error", "bad gateway",
-         "service unavailable", "serviceunavailable", "server error"),
+        (
+            "internal server error",
+            "bad gateway",
+            "service unavailable",
+            "serviceunavailable",
+            "server error",
+        ),
     ),
     (ErrorCategory.TIMEOUT, ("timeout", "timed out", "read timeout", "connect timeout")),
     (
         ErrorCategory.NETWORK,
-        ("connection", "connecterror", "name or service not known", "getaddrinfo",
-         "failed to resolve", "network is unreachable", "could not reach"),
+        (
+            "connection",
+            "connecterror",
+            "name or service not known",
+            "getaddrinfo",
+            "failed to resolve",
+            "network is unreachable",
+            "could not reach",
+        ),
     ),
-    (ErrorCategory.NOT_FOUND, ("404", "not found")),
+    (ErrorCategory.NOT_FOUND, ("not found",)),
     (
         ErrorCategory.BAD_RESPONSE,
-        ("jsondecode", "expecting value", "invalid json", "unexpected", "keyerror",
-         "schema", "missing key"),
+        (
+            "jsondecode",
+            "expecting value",
+            "invalid json",
+            "unexpected",
+            "keyerror",
+            "schema",
+            "missing key",
+        ),
     ),
-    (ErrorCategory.CONFIG, ("not configured", "misconfigur", "no api key", "missing config")),
 )
+
+
+_HTTP_STATUS_TOKEN = re.compile(r"(?<![\w.])([45]\d{2})(?![\w.])")
 
 
 def classify_error(message: str | None) -> ErrorCategory:
@@ -60,6 +83,11 @@ def classify_error(message: str | None) -> ErrorCategory:
     if not message:
         return ErrorCategory.UNKNOWN
     text = message.lower()
+    # Identifiers, accessions and version fragments must not become HTTP statuses.
+    for match in _HTTP_STATUS_TOKEN.finditer(text):
+        category = classify_status(int(match.group(1)))
+        if category is not ErrorCategory.UNKNOWN:
+            return category
     for category, needles in _SIGNATURES:
         if any(n in text for n in needles):
             return category
@@ -148,12 +176,10 @@ def explain_error(category: ErrorCategory, *, source: str | None = None) -> str:
             f"source's side, so retry later."
         ),
         ErrorCategory.RATE_LIMITED: (
-            f"{who} rate-limited the request (too many requests) — slow down or supply "
-            f"an API key."
+            f"{who} rate-limited the request (too many requests) — slow down or supply an API key."
         ),
         ErrorCategory.TIMEOUT: (
-            f"{who} did not respond in time (timeout) — the service may be slow or "
-            f"unreachable."
+            f"{who} did not respond in time (timeout) — the service may be slow or unreachable."
         ),
         ErrorCategory.NETWORK: (
             f"could not reach {who} (network/connection error) — check connectivity."

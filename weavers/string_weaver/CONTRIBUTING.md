@@ -1,6 +1,6 @@
 # Contributing to string_weaver
 
-STRING protein-protein interactions (accession -> partners + scores). Source: https://string-db.org (CC BY 4.0 (STRING; Szklarczyk et al., cite https://doi.org/10.1093/nar/gkac1000)). Kind: `lookup`. Capabilities: `list_interactions`.
+STRING protein-protein interactions (accession -> partners + scores). Source: https://string-db.org (CC-BY-4.0). Kind: `lookup`. Capabilities: `list_interactions`.
 
 This weaver is **spec-driven**: `weaver.spec.toml` is the source of truth and
 `vocab.py` is generated from it — never hand-edit `vocab.py`. The repo-wide loop
@@ -20,17 +20,39 @@ weaverkit verify --spec weaver.spec.toml --package string_weaver --strict
    (or add a new group).
 2. If it's a new *leaf* output, catalog it in `weaverkit.keys.OUTPUT_KEYS`; if it's a
    genuine *join key* others will consume, add it to `SHARED_KEYS` instead.
-3. Regenerate vocab: `weaverkit new --spec weaver.spec.toml --dest . --force`
-   (this only re-stamps generated files; your backend code is yours to edit).
+3. Follow the scratch-generation workflow below; selectively copy the generated vocab.
 4. Map it in each backend's `fetch` (`record.values[<type_id>] = ...`).
 5. Add/adjust a `[[golden]]` example so the new output is verified.
 
 ## Add a capability or a backend
 
 - **Capability:** add a `[[capability]]` block (consume a registered shared key),
-  regenerate, and handle it in `fetch` (branch on `capability_id` if needed).
-- **Backend:** add its name to `[weaver].backends`, regenerate, and implement the
+  generate in scratch, review the diff, and handle it in `fetch` (branch on `capability_id` if needed).
+- **Backend:** add its name to `[weaver].backends`, generate in scratch, and selectively add the
   new `src/string_weaver/backends/<name>.py` (`is_configured` / `fingerprint` / `fetch`).
+
+## Safe regeneration of an implemented package
+
+Run from this package directory after editing the spec:
+
+```bash
+scratch_dir=$(mktemp -d)
+weaverkit new --spec weaver.spec.toml --dest "$scratch_dir/package"
+diff -ru --exclude=.git --exclude=__pycache__ --exclude=.pytest_cache . "$scratch_dir/package"
+# diff exits 1 when differences exist; review them before the next command.
+cp "$scratch_dir/package/src/string_weaver/vocab.py" src/string_weaver/vocab.py
+```
+
+Copy only the reviewed generated vocab. Merge capability/backend additions
+selectively into the existing implementation, factories, tests and metadata;
+do not copy placeholder backends over working code. Preserve your configuration
+builders, source-specific policies and contributor notes. Inspect `git diff`,
+run package tests and strict verification, then remove the scratch directory.
+
+`weaverkit new --force` overwrites generated paths, including implemented
+backends, factories and tests. It does not merge or preserve your edits.
+Never run it against an implemented package. The handwritten NCBI reference
+is exempt: edit its custom vocab manually instead of copying scaffold vocab.
 
 ## Keep the fixture & golden honest
 
@@ -40,10 +62,15 @@ weaverkit verify --spec weaver.spec.toml --package string_weaver --strict
 
 ## Current outputs
 
-See [README.md](README.md) and the `weaver.spec.toml` for this weaver's current capabilities and outputs — the spec is the source of truth (a frozen copy here only drifts).
+See [README.md](README.md) and `weaver.spec.toml` for the current output keys and groups.
 
 ## Expansion notes
 
-<!-- Weaver-specific notes: what's intentionally left out, what's easy to add next,
-     data quirks, columns not yet mapped, etc. Fill this in as you build. -->
-- Record source-specific quirks, columns not yet mapped, and next-capability ideas here as they surface.
+- Mapping and partner requests support bulk identifiers; preserve distinct-ID chunking,
+  explicit `echo_query=1`, validated query-index fallback and chunk-local error records.
+- Keep `caller_identity=braidworks` and the provider's one-request-per-second default;
+  source pacing uses the shared request hook and respects explicit caller budgets.
+- The pinned 12.5 endpoint currently exposes functional associations. Score/network/species
+  query parameters (#219) require observed schema and declared deterministic defaults.
+- Retrieval limit bounds upstream partners; retain coverage warnings and taxon-scoped IDs.
+  Updating the source release requires checking known-truth live examples and evidence fields.

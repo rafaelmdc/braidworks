@@ -5,8 +5,8 @@ from mondo_weaver.provider import MondoWeaverProvider, register
 from mondo_weaver.weaver import MondoWeaver
 
 __all__ = [
-    "build_mondo_weaver",
-    "register",
     "MondoWeaver",
     "MondoWeaverProvider",
+    "build_mondo_weaver",
+    "register",
 ]

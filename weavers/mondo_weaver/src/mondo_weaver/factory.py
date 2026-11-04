@@ -12,18 +12,21 @@ from pathlib import Path
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from mondo_weaver.backends.local import MondoLocalBackend
 from mondo_weaver.setup import ensure_mondo_db
 from mondo_weaver.weaver import MondoWeaver
 
 
-def build_mondo_weaver(**_config: Any) -> BaseWeaver:
+def build_mondo_weaver(**config: Any) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
 
     Wires the local backend present-but-possibly-unconfigured (``is_configured() == False``
     until the DB is built). For real use call ``build_mondo_weaver_configured``.
     """
+    if config:
+        return build_mondo_weaver_configured(**config)
     return MondoWeaver({"local": MondoLocalBackend()})
 
 
@@ -32,6 +35,9 @@ def build_mondo_weaver_configured(
     db_path: str | Path | None = None,
     auto_setup: bool = False,
     refresh: bool = False,
+    expected_version: str | None = None,
+    mapping_path: str | Path | None = None,
+    mapping_release: str | None = None,
     **_config: Any,
 ) -> BaseWeaver:
     """Configured builder for real use: ensures the local DB, then wires the backend.
@@ -40,7 +46,15 @@ def build_mondo_weaver_configured(
     downloaded and parsed on first use; otherwise an explicit ``db_path`` must already
     point at a built DB, or an actionable error is raised. ``refresh=True`` re-downloads.
     """
-    path = ensure_mondo_db(db_path, auto=auto_setup, refresh=refresh)
+    reject_unknown_options(_config)
+    path = ensure_mondo_db(
+        db_path,
+        auto=auto_setup,
+        refresh=refresh,
+        expected_version=expected_version,
+        mapping_path=mapping_path,
+        mapping_release=mapping_release,
+    )
     return MondoWeaver({"local": MondoLocalBackend(path)})
 
 

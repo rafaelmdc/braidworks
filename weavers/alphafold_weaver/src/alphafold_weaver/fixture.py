@@ -27,6 +27,11 @@ _PREDICTIONS = {
         },
         {
             "entryId": "AF-P04637-F1",
+            "paeDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-predicted_aligned_error_v6.json",
+            "plddtDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-confidence_v6.json",
+            "uniprotStart": 1,
+            "uniprotEnd": 393,
+            "uniprotSequence": "MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDIEQWFTEDPGPDEAPRMPEAAPPVAPAPAAPTPAAPAPAPSWPLSSSVPSQKTYQGSYGFRLGFLHSGTAKSVTCTYSPALNKMFCQLAKTCPVQLWVDSTPPPGTRVRAMAIYKQSQHMTEVVRRCPHHERCSDSDGLAPPQHLIRVEGNLRVEYLDDRNTFRHSVVVPYEPPEVGSDCTTIHYNYMCNSSCMGGMNRRPILTIITLEDSSGNLLGRNSFEVRVCACPGRDRRTEEENLRKKGEPHHELPPGSTKRALPNNTSSSPQPKKKPLDGEYFTLQIRGRERFEMFRELNEALELKDAQAGKEPGGSRAHSSHLKSKKGQSTSRHKKLMFKTEGPDSD",
             "uniprotAccession": "P04637",
             "latestVersion": 6,
             "globalMetricValue": 75.06,
@@ -46,6 +51,10 @@ def _handler(request: httpx.Request) -> httpx.Response:
         acc = request.url.path.rsplit("/", 1)[1]
         if acc in _PREDICTIONS:
             return httpx.Response(200, content=json.dumps(_PREDICTIONS[acc]))
+        for entries in _PREDICTIONS.values():
+            selected = [entry for entry in entries if entry["entryId"] == acc]
+            if selected:
+                return httpx.Response(200, json=selected)
         return httpx.Response(404, content=json.dumps({"detail": "no model"}))
     return httpx.Response(404, content=json.dumps({"detail": "not found"}))
 

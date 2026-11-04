@@ -21,10 +21,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from braidworks.core.exceptions import BatchContractError
+
 if TYPE_CHECKING:
     from braidworks.core.registry import BraidRegistry
     from braidworks.core.result import WeaveResult
     from braidworks.core.strand import StrandSet
+
+
+def validate_batch_size(expected: int, actual: int, *, context: str) -> None:
+    """Reject missing/extra responses before positional alignment can corrupt entities."""
+    if actual != expected:
+        raise BatchContractError(f"{context} returned {actual} results for {expected} inputs")
 
 
 @runtime_checkable

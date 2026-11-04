@@ -20,15 +20,22 @@ keys, since unreviewed entries omit recommendedName / gene / function.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import math
 import re
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase, LookupRecord, format_exc
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status, map_bounded
+from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 from uniprot_weaver import mapping
+from uniprot_weaver.backends.description import ANNOTATIONS, SEQUENCE, describe_batch
+from uniprot_weaver.backends.jobs import MappingJobClient
+from uniprot_weaver.backends.validation import _InvalidResponse, _object, _rows
 
 logger = logging.getLogger("uniprot_weaver.api")
 
@@ -36,9 +43,8 @@ logger = logging.getLogger("uniprot_weaver.api")
 # The ID-mapping endpoint is async (submit a job, poll, fetch) AND a batch endpoint
 # (many ids per job), so a whole batch resolves in one or two jobs. into-hub mapping
 # runs two jobs (reviewed Swiss-Prot + full UniProtKB) and orders reviewed-first.
-_IDMAP_RESULT_PAGE = 500  # max page size the results endpoint allows
 _IDMAP_POLL_DELAY = 1.0  # seconds between status polls
-_IDMAP_POLL_TRIES = 60  # ~60s ceiling before giving up on a job
+_IDMAP_POLL_TRIES = 60  # finite poll budget; HTTP/pacing time is additional
 
 DEFAULT_BASE_URL = "https://rest.uniprot.org"
 # Compact projection — the fields the mapper reads, plus annotation_score (the
@@ -54,17 +60,56 @@ _PAGE = 25
 _ACCESSION = re.compile(r"[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}")
 
 
-def _next_link(resp: httpx.Response) -> str | None:
-    """The ``rel="next"`` URL from a paginated UniProt response's ``Link`` header, if any."""
-    link = resp.headers.get("link")
-    if not link:
-        return None
-    for part in link.split(","):
-        if 'rel="next"' in part:
-            start, end = part.find("<"), part.find(">")
-            if 0 <= start < end:
-                return part[start + 1 : end]
-    return None
+def _validate_entry(entry: dict[str, Any]) -> None:
+    if not isinstance(entry.get("primaryAccession"), str) or not entry["primaryAccession"]:
+        raise _InvalidResponse("UniProt entry must contain primaryAccession")
+    score = entry.get("annotationScore")
+    if score is not None and (
+        isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score)
+    ):
+        raise _InvalidResponse("UniProt annotationScore must be a finite number")
+    for field in ("organism", "sequence", "proteinDescription"):
+        if entry.get(field) is not None:
+            _object(entry[field], field)
+    if entry.get("entryType") is not None and not isinstance(entry["entryType"], str):
+        raise _InvalidResponse("UniProt entryType must be a string")
+    organism = entry.get("organism") or {}
+    if organism.get("scientificName") is not None and not isinstance(
+        organism["scientificName"], str
+    ):
+        raise _InvalidResponse("UniProt scientificName must be a string")
+    for label, value in (
+        ("taxonId", organism.get("taxonId")),
+        ("length", (entry.get("sequence") or {}).get("length")),
+    ):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise _InvalidResponse(f"UniProt {label} must be a non-negative integer")
+    description = entry.get("proteinDescription") or {}
+    names = []
+    if description.get("recommendedName") is not None:
+        names.append(_object(description["recommendedName"], "recommendedName"))
+    for field in ("submittedName", "alternativeNames"):
+        if description.get(field) is not None:
+            names.extend(_rows(description[field], field))
+    for name in names:
+        if name.get("fullName") is not None:
+            full = _object(name["fullName"], "fullName")
+            if full.get("value") is not None and not isinstance(full["value"], str):
+                raise _InvalidResponse("UniProt fullName value must be a string")
+    if entry.get("genes") is not None:
+        for gene in _rows(entry["genes"], "genes"):
+            if gene.get("geneName") is not None:
+                value = _object(gene["geneName"], "geneName").get("value")
+                if value is not None and not isinstance(value, str):
+                    raise _InvalidResponse("UniProt geneName value must be a string")
+    if entry.get("comments") is not None:
+        for comment in _rows(entry["comments"], "comments"):
+            if comment.get("texts") is not None:
+                for text in _rows(comment["texts"], "texts"):
+                    if text.get("value") is not None and not isinstance(text["value"], str):
+                        raise _InvalidResponse("UniProt comment text must be a string")
 
 
 def _mapping_record(
@@ -79,9 +124,7 @@ def _mapping_record(
         values={
             type_id: ordered,  # the fan dimension (set output)
             mapping.MAPPING_COUNT: len(ordered),
-            mapping.MAPPING_RECORDS: [
-                {"id": i, "reviewed": i in reviewed_set} for i in ordered
-            ],
+            mapping.MAPPING_RECORDS: [{"id": i, "reviewed": i in reviewed_set} for i in ordered],
         },
     )
 
@@ -113,29 +156,31 @@ def _pick(results: list[dict[str, Any]]) -> dict[str, Any]:
         results,
         key=lambda r: (-float(r.get("annotationScore") or 0.0), r.get("primaryAccession", "")),
     )
+
+
 # Evidence parentheticals UniProt appends to FUNCTION text — noise on a dossier card.
 _EVIDENCE = re.compile(r"\s*\((?:PubMed:[^)]*|By similarity|Probable|Potential|Reviewed[^)]*)\)")
 
 
 def _recommended_name(desc: dict[str, Any]) -> str | None:
     """Best display name: recommended, else submitted, else first alternative."""
-    recommended = desc.get("recommendedName", {})
-    if isinstance(recommended, dict) and recommended.get("fullName", {}).get("value"):
+    recommended = desc.get("recommendedName") or {}
+    if isinstance(recommended, dict) and (recommended.get("fullName") or {}).get("value"):
         return recommended["fullName"]["value"]
     submitted = desc.get("submittedName")
     if isinstance(submitted, list) and submitted:
-        full = submitted[0].get("fullName", {})
+        full = submitted[0].get("fullName") or {}
         if full.get("value"):
             return full["value"]
     alternatives = desc.get("alternativeNames")
     if isinstance(alternatives, list) and alternatives:
-        return alternatives[0].get("fullName", {}).get("value")
+        return (alternatives[0].get("fullName") or {}).get("value")
     return None
 
 
 def _primary_gene(genes: Any) -> str | None:
     if isinstance(genes, list) and genes:
-        return genes[0].get("geneName", {}).get("value")
+        return (genes[0].get("geneName") or {}).get("value")
     return None
 
 
@@ -171,16 +216,22 @@ def _extract(entry: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in candidates.items() if v is not None}
 
 
-class UniprotApiBackend(BackendBase):
+class UniprotApiBackend(HTTPClientLifecycle, BackendBase):
     """UniProtKB REST backend. Always configured — the API is free, no key."""
 
     name = "api"
 
     def __init__(
-        self, *, base_url: str = DEFAULT_BASE_URL, client: httpx.AsyncClient | None = None
+        self,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        client: httpx.AsyncClient | None = None,
+        max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        self._max_concurrency = max_concurrency
 
     def is_configured(self) -> bool:
         """UniProtKB REST needs no key or local data, so it's always usable."""
@@ -188,16 +239,19 @@ class UniprotApiBackend(BackendBase):
 
     def fingerprint(self) -> str:
         """A live service; the fingerprint pins the REST API/JSON contract version."""
-        return "uniprot-rest-v1"
+        return remote_fingerprint("uniprot_weaver-api", self._base_url, contract="uniprot-rest-v1")
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
+        self._ensure_open()
         if self._client is None:
             # follow_redirects: the ID-mapping results endpoint 303-redirects to its
             # stream variant when a job finishes.
             self._client = httpx.AsyncClient(
                 base_url=self._base_url, timeout=30.0, follow_redirects=True
             )
-        return self._client
+        return PacedHTTPClient(self._client, "uniprot")
 
     async def fetch(
         self,
@@ -208,6 +262,21 @@ class UniprotApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "describe_protein":
+            groups = groups_to_compute | {"identity"}
+            if SEQUENCE in requested_outputs:
+                groups |= {"sequence"}
+            if ANNOTATIONS in requested_outputs:
+                groups |= {"annotations"}
+            return await describe_batch(
+                self._http(),
+                queries,
+                groups=frozenset(groups),
+                fields=_FIELDS,
+                accession_pattern=_ACCESSION,
+                validate_entry=_validate_entry,
+                extract_identity=_extract,
+            )
         if capability_id == mapping.TO_ACCESSION:
             return await self._map_to_accession(queries)
         if capability_id == mapping.FROM_ACCESSION:
@@ -215,11 +284,13 @@ class UniprotApiBackend(BackendBase):
         # resolve_protein: one search per query; the whole entry arrives at once, so we
         # compute every field and let the shared mapper filter to requested_outputs.
         organism = str((params or {}).get("organism") or "").strip() or None
-        records: list[LookupRecord] = []
-        for query in queries:
-            term = str(query.get("protein.query", "")).strip()
-            records.append(await self._resolve_one(query, term, organism))
-        return records
+
+        async def resolve(query: dict[str, Any]) -> LookupRecord:
+            return await self._resolve_one(
+                query, str(query.get("protein.query", "")).strip(), organism
+            )
+
+        return await map_bounded(queries, resolve, limit=self._max_concurrency)
 
     # --- ID mapping ----------------------------------------------------------
 
@@ -243,20 +314,33 @@ class UniprotApiBackend(BackendBase):
                     break
             per_query.append(hit)
 
-        try:
-            resolved: dict[str, dict[str, list[str]]] = {}
-            reviewed: dict[str, dict[str, list[str]]] = {}
-            for from_db, ids in by_db.items():
-                rev, allm = await asyncio.gather(
-                    self._idmap(from_db, mapping.UNIPROT_TO_REVIEWED, sorted(ids)),
-                    self._idmap(from_db, mapping.UNIPROT_TO, sorted(ids)),
-                )
+        resolved: dict[str, dict[str, list[str]]] = {}
+        reviewed: dict[str, dict[str, list[str]]] = {}
+        errors: dict[str, str] = {}
+        for from_db, ids in by_db.items():
+            try:
+                jobs = [
+                    asyncio.create_task(self._idmap(from_db, target, sorted(ids)))
+                    for target in (mapping.UNIPROT_TO_REVIEWED, mapping.UNIPROT_TO)
+                ]
+                try:
+                    rev, allm = await asyncio.gather(*jobs)
+                finally:
+                    # A failed pair must not leave its other HTTP job running after
+                    # returning an error or propagating cancellation/programming faults.
+                    for job in jobs:
+                        if not job.done():
+                            job.cancel()
+                    await asyncio.gather(*jobs, return_exceptions=True)
                 reviewed[from_db] = rev
                 resolved[from_db] = allm
-        except httpx.HTTPError as exc:
-            logger.warning("UniProt ID-mapping (to accession) failed: %s", exc)
-            err = f"UniProt ID-mapping error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+            except (
+                httpx.HTTPError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                _InvalidResponse,
+            ) as exc:
+                errors[from_db] = f"UniProt ID-mapping error: {format_exc(exc)}"
 
         records: list[LookupRecord] = []
         for q, hit in zip(queries, per_query):
@@ -264,19 +348,22 @@ class UniprotApiBackend(BackendBase):
                 records.append(LookupRecord(query=q, found=False))
                 continue
             from_db, src = hit
-            rev = reviewed[from_db].get(src, [])
+            if from_db in errors:
+                records.append(LookupRecord(query=q, error=errors[from_db]))
+                continue
+            rev = sorted(set(reviewed[from_db].get(src, [])))
             rev_set = set(rev)
-            ordered = rev + [a for a in resolved[from_db].get(src, []) if a not in rev_set]
-            records.append(_mapping_record(q, mapping.ACCESSION, ordered,
-                                           reviewed_set=rev_set))
+            ordered = rev + sorted(set(resolved[from_db].get(src, [])) - rev_set)
+            records.append(_mapping_record(q, mapping.ACCESSION, ordered, reviewed_set=rev_set))
         return records
 
     async def _map_from_accession(
         self, queries: list[dict[str, Any]], requested_outputs: frozenset[str]
     ) -> list[LookupRecord]:
         """UniProt accession -> any requested target id type(s). Picks the `to` db per output."""
-        targets = {t: mapping.TO_DB[t] for t in requested_outputs if t in mapping.TO_DB}
-        if not targets:  # nothing routable requested (e.g. only count/records)
+        summary = bool(requested_outputs & {mapping.MAPPING_COUNT, mapping.MAPPING_RECORDS})
+        targets = {t: db for t, db in mapping.TO_DB.items() if summary or t in requested_outputs}
+        if not targets:
             return [LookupRecord(query=q, found=False) for q in queries]
 
         accs = sorted({str(q.get(mapping.ACCESSION, "") or "").strip() for q in queries} - {""})
@@ -284,10 +371,15 @@ class UniprotApiBackend(BackendBase):
             maps: dict[str, dict[str, list[str]]] = {}
             for type_id, to_db in targets.items():
                 maps[type_id] = await self._idmap(mapping.UNIPROT_FROM, to_db, accs) if accs else {}
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError, _InvalidResponse) as exc:
             logger.warning("UniProt ID-mapping (from accession) failed: %s", exc)
             err = f"UniProt ID-mapping error: {format_exc(exc)}"
-            return [LookupRecord(query=q, error=err) for q in queries]
+            return [
+                LookupRecord(query=q, error=err)
+                if str(q.get(mapping.ACCESSION) or "").strip()
+                else LookupRecord(query=q, found=False)
+                for q in queries
+            ]
 
         records: list[LookupRecord] = []
         for q in queries:
@@ -299,59 +391,22 @@ class UniprotApiBackend(BackendBase):
                 if ids:
                     values[type_id] = ids
                     recs.extend({"id": i, "db": to_db} for i in ids)
-            if not values:
+            if not acc or (not values and not summary):
                 records.append(LookupRecord(query=q, found=False))
                 continue
-            values[mapping.MAPPING_COUNT] = len(recs)
-            values[mapping.MAPPING_RECORDS] = recs
+            if summary:
+                values[mapping.MAPPING_COUNT] = len(recs)
+                values[mapping.MAPPING_RECORDS] = recs
             records.append(LookupRecord(query=q, found=True, values=values))
         return records
 
     async def _idmap(self, from_db: str, to_db: str, ids: list[str]) -> dict[str, list[str]]:
-        """Run one ID-mapping job (``from_db`` -> ``to_db``); return source id -> target ids.
-
-        Submit the whole batch, poll until the job finishes, then page the results,
-        preserving the API's order so per-source target order is stable.
-        """
+        """Delegate source-local mapping transport without transferring client ownership."""
         if not ids:
             return {}
-        http = self._http()
-        run = await http.post(
-            "/idmapping/run", data={"from": from_db, "to": to_db, "ids": ",".join(ids)}
-        )
-        run.raise_for_status()
-        job = run.json()["jobId"]
-        await self._await_job(http, job)
-
-        out: dict[str, list[str]] = {}
-        url: str | None = f"/idmapping/results/{job}"
-        req_params: dict[str, Any] | None = {"format": "json", "size": _IDMAP_RESULT_PAGE}
-        while url:
-            resp = await http.get(url, params=req_params)
-            resp.raise_for_status()
-            for row in resp.json().get("results", []):
-                to_val = row.get("to")
-                target = to_val if isinstance(to_val, str) else (to_val or {}).get("primaryAccession")
-                src = str(row.get("from", ""))
-                if target and src:
-                    out.setdefault(src, []).append(target)
-            url = _next_link(resp)  # follow paginated results; absolute URL, no params
-            req_params = None
-        return out
-
-    async def _await_job(self, http: httpx.AsyncClient, job: str) -> None:
-        """Poll ``/idmapping/status/{job}`` until the job finishes (or raise on failure)."""
-        for _ in range(_IDMAP_POLL_TRIES):
-            resp = await http.get(f"/idmapping/status/{job}")
-            resp.raise_for_status()
-            status = resp.json().get("jobStatus")
-            if status is None or status == "FINISHED":  # absent => results inline / ready
-                return
-            if status in ("RUNNING", "NEW", "QUEUED"):
-                await asyncio.sleep(_IDMAP_POLL_DELAY)
-                continue
-            raise httpx.HTTPError(f"ID-mapping job {job} failed with status {status!r}")
-        raise httpx.HTTPError(f"ID-mapping job {job} did not finish in time")
+        return await MappingJobClient(
+            self._http(), poll_tries=_IDMAP_POLL_TRIES, poll_delay=_IDMAP_POLL_DELAY
+        ).run(from_db, to_db, ids)
 
     async def _resolve_one(
         self, query: dict[str, Any], term: str, organism: str | None = None
@@ -360,7 +415,12 @@ class UniprotApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         try:
             entry = await self._best_hit(term, organism)
-        except httpx.HTTPError as exc:  # network/HTTP problem is a per-entity error
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            _InvalidResponse,
+        ) as exc:  # network/HTTP problem is a per-entity error
             logger.warning("UniProt lookup failed for %r: %s", term, exc)
             return LookupRecord(query=query, error=f"UniProt API error: {format_exc(exc)}")
 
@@ -368,16 +428,28 @@ class UniprotApiBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         return LookupRecord(query=query, found=True, values=_extract(entry))
 
-    async def _best_hit(
-        self, term: str, organism: str | None = None
-    ) -> dict[str, Any] | None:
-        """Deterministic hit: prefer reviewed, escalate accession -> gene -> free text.
+    async def _best_hit(self, term: str, organism: str | None = None) -> dict[str, Any] | None:
+        """Preserve explicit accessions; otherwise prefer reviewed gene/text hits.
 
-        The first variant that returns any results wins; ``_pick`` then chooses the
-        representative from that page by a fixed total order (so the result is stable).
-        ``organism`` (an NCBI taxid) constrains the species — without it a bare gene
-        symbol resolves to whichever species UniProt ranks first (e.g. TP53 -> hamster).
+        Non-accession queries retain their representative policy. ``organism``
+        constrains the species, including when an explicit accession was supplied.
         """
+        accession = term.upper()
+        if _ACCESSION.fullmatch(accession):
+            # An explicit identity must never fall through to a different gene or
+            # free-text hit, even when it is unreviewed or absent in this species.
+            results = await self._search(
+                f"accession:{accession}", reviewed=False, organism=organism
+            )
+            exact = [
+                row
+                for row in results
+                if row["primaryAccession"].upper() == accession
+                and (
+                    not organism or str((row.get("organism") or {}).get("taxonId")) == str(organism)
+                )
+            ]
+            return _pick(exact) if exact else None
         for reviewed in (True, False):
             for base in _query_variants(term):
                 results = await self._search(base, reviewed=reviewed, organism=organism)
@@ -406,5 +478,11 @@ class UniprotApiBackend(BackendBase):
                 "sort": "annotation_score desc",
             },
         )
+        if is_not_found_status(resp.status_code):
+            return []
         resp.raise_for_status()
-        return resp.json().get("results", [])
+        body = _object(resp.json(), "search response")
+        rows = _rows(body.get("results"), "search results")
+        for row in rows:
+            _validate_entry(row)
+        return rows

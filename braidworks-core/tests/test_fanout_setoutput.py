@@ -8,13 +8,15 @@ lineage scheme. ``expand_by_type`` overrides the policy per join key.
 
 from __future__ import annotations
 
+import json
+
+import pytest
 from braidworks.core.braid import Braid, CapabilityInvocation
 from braidworks.core.capability import Capability, OutputGroup
-from braidworks.core.executor import ExpandPolicy, LocalExecutor
+from braidworks.core.executor import ExecutionResult, ExpandPolicy, LocalExecutor
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
-
 from helpers import ScriptedWeaver, simple_capability
 
 INPUT = "protein.uniprot.accession"
@@ -73,7 +75,7 @@ def _one_step(output_types):
 
 async def test_top_collapses_set_output_in_place():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-3", "R-1", "R-2"])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-3", "R-1", "R-2"])), cap)
     res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"))  # default ExpandPolicy.TOP
     assert len(res.resolved) == 1
     leaf = res.resolved[0]
@@ -86,7 +88,7 @@ async def test_set_output_same_as_consumed_key_forks_on_produced_list():
     # the produced list must win over the input scalar so it can fan (regression). The
     # target is a *different* output ("n") so the step isn't skipped as already-satisfied.
     cap = _set_cap({INPUT, "n"}, {INPUT}, consumes=(INPUT,))
-    reg, ex = _setup(
+    _reg, ex = _setup(
         lambda ss, b, r: _ok(Strand(INPUT, ["c1", "c2", "c3"]), Strand("n", 3)), cap
     )
     res = await ex.execute(_one_step({INPUT, "n"}), _inputs("parent"),
@@ -100,7 +102,7 @@ async def test_set_output_same_as_consumed_key_forks_on_produced_list():
 
 async def test_all_forks_one_child_per_value():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3"])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3"])), cap)
     res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"), expand_policy=ExpandPolicy.all())
     assert len(res.resolved) == 3
     assert sorted(leaf.get(PATHWAY).value for leaf in res.resolved) == ["R-1", "R-2", "R-3"]
@@ -112,14 +114,14 @@ async def test_all_forks_one_child_per_value():
 
 async def test_top_k_keeps_best_k():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3", "R-4"])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3", "R-4"])), cap)
     res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"), expand_policy=ExpandPolicy.top_k(2))
     assert sorted(leaf.get(PATHWAY).value for leaf in res.resolved) == ["R-1", "R-2"]
 
 
 async def test_expand_by_type_overrides_default():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])), cap)
     res = await ex.execute(
         _one_step({PATHWAY}),
         _inputs("P1"),
@@ -131,7 +133,7 @@ async def test_expand_by_type_overrides_default():
 
 async def test_single_value_set_output_does_not_fork():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-only"])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-only"])), cap)
     res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"), expand_policy=ExpandPolicy.all())
     assert len(res.resolved) == 1
     assert res.resolved[0].entity_id == "e0"  # no spurious "#0" child
@@ -142,7 +144,7 @@ async def test_single_value_set_output_does_not_fork():
 
 async def test_two_set_dimensions_cross_product():
     cap = _set_cap({PATHWAY, PDB}, {PATHWAY, PDB})
-    reg, ex = _setup(
+    _reg, ex = _setup(
         lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"]), Strand(PDB, ["1ABC", "2XYZ"])), cap
     )
     res = await ex.execute(_one_step({PATHWAY, PDB}), _inputs("P1"), expand_policy=ExpandPolicy.all())
@@ -153,7 +155,7 @@ async def test_two_set_dimensions_cross_product():
 
 async def test_mixed_policy_per_dimension():
     cap = _set_cap({PATHWAY, PDB}, {PATHWAY, PDB})
-    reg, ex = _setup(
+    _reg, ex = _setup(
         lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"]), Strand(PDB, ["1ABC", "2XYZ"])), cap
     )
     res = await ex.execute(
@@ -216,11 +218,74 @@ async def test_set_fork_children_continue_to_next_wave():
 
 async def test_max_expansion_caps_set_fork():
     cap = _set_cap({PATHWAY}, {PATHWAY})
-    reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, [f"R-{i}" for i in range(6)])), cap)
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, [f"R-{i}" for i in range(6)])), cap)
     res = await ex.execute(
         _one_step({PATHWAY}), _inputs("P1"), expand_policy=ExpandPolicy.all(), max_expansion=3
     )
     assert len(res.resolved) == 3  # capped from 6
+
+
+async def test_cross_product_is_bounded_before_cloning(monkeypatch):
+    cap = _set_cap({PATHWAY, PDB}, {PATHWAY, PDB})
+    _, executor = _setup(
+        lambda ss, b, r: _ok(Strand(PATHWAY, [f"R-{i}" for i in range(20)]),
+                            Strand(PDB, [f"P-{i}" for i in range(20)])), cap,
+    )
+    clones = []
+    original = StrandSet.clone
+
+    def counting_clone(self, **kwargs):
+        clones.append(kwargs.get("entity_id"))
+        return original(self, **kwargs)
+
+    monkeypatch.setattr(StrandSet, "clone", counting_clone)
+    inputs = _inputs("P1")
+    inputs[0].source_row = 1
+    result = await executor.execute(_one_step({PATHWAY, PDB}), inputs,
+                                    expand_policy=ExpandPolicy.all(), max_expansion=10)
+    assert len(clones) <= 10
+    assert len(result.resolved) == 10
+    restored = ExecutionResult.from_json(json.loads(json.dumps(result.to_json())))
+    truncation = restored.truncations[0]
+    assert (truncation.requested, truncation.kept, truncation.omitted) == (400, 10, 390)
+    assert truncation.source_row == 1 and truncation.entity_id == "e0"
+    assert truncation.capability_id == CAP
+    assert all(any("expansion limit" in warning for warning in leaf.warnings)
+               for leaf in result.resolved)
+    assert [(leaf.get(PATHWAY).value, leaf.get(PDB).value) for leaf in result.resolved] == [
+        ("R-0", f"P-{i}") for i in range(10)
+    ]
+
+
+async def test_expansion_budget_is_shared_across_input_chunks():
+    cap = _set_cap({PATHWAY}, {PATHWAY})
+    _, executor = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3"])), cap)
+    result = await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2", "P3"),
+                                    expand_policy=ExpandPolicy.all(), max_expansion=5, chunk_size=1)
+    assert len(result.resolved) == 5
+    assert {leaf.parent_id for leaf in result.resolved} == {"e0", "e1", "e2"}
+    assert [(item.entity_id, item.kept, item.omitted) for item in result.truncations] == [
+        ("e1", 1, 2), ("e2", 1, 2),
+    ]
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 1.5])
+async def test_invalid_expansion_budget_rejected_before_io(limit):
+    cap = _set_cap({PATHWAY}, {PATHWAY})
+    _registry, executor = _setup(lambda *_: pytest.fail("unexpected backend call"), cap)
+    with pytest.raises(ValueError, match="max_expansion"):
+        await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2"),
+                               expand_policy=ExpandPolicy.all(), max_expansion=limit)
+
+
+async def test_input_batch_larger_than_cap_preserves_roots_without_growing():
+    cap = _set_cap({PATHWAY}, {PATHWAY})
+    _, executor = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])), cap)
+    result = await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2"),
+                                    expand_policy=ExpandPolicy.all(), max_expansion=1)
+    assert len(result.resolved) == 2
+    assert {ss.parent_id for ss in result.resolved} == {"e0", "e1"}
+    assert len(result.truncations) == 2
 
 
 # --- declaration validity + serialization --------------------------------------

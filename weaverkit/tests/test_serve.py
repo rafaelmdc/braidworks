@@ -7,6 +7,8 @@ is skipped when the optional ``[serve]`` extra is not installed.
 
 from __future__ import annotations
 
+import shlex
+
 import pytest
 from braidworks.core import Provenance
 from braidworks.core.capability import Capability, OutputGroup, WeaverManifest
@@ -14,7 +16,6 @@ from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
-
 from weaverkit.serve import plan_response, run_response
 
 
@@ -68,10 +69,11 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     # two-step route projected
     assert out["path"]["step_count"] == 2
     arts = out["artifacts"]
-    assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession"
-    assert "--have organism.name=<value>" in arts["cli_weave"]
+    assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
+    assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
-    assert "Braider(registry).plan" in arts["python"]
+    assert "prepare_query(registry, request)" in arts["python"]
+    assert "execute_managed_query(registry, prepared, options" in arts["python"]
     assert arts["braid"] is out["path"]
 
 
@@ -223,3 +225,19 @@ def test_run_stream_emits_sse_done_event():
         params={"have": '{"protein.query": "P04637"}', "want": "protein.query"},
     ).text
     assert '"event": "done"' in body and '"ok": true' in body
+
+
+def test_plan_disabled_backend_context():
+    from dataclasses import replace
+
+    weaver = _weaver("disabled", "describe", {"a"}, {"b"})
+    full = replace(
+        weaver.MANIFEST, capabilities=(replace(weaver.MANIFEST.capabilities[0], backends=("api",)),)
+    )
+    weaver.MANIFEST = replace(full, capabilities=())
+    weaver.declared_manifest = lambda: full
+    reg = BraidRegistry()
+    reg.register(weaver)
+    response = plan_response(reg, ["a"], ["b"])
+    assert response["ok"] is False
+    assert "not enabled: api" in response["error"]

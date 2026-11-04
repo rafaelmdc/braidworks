@@ -8,16 +8,18 @@ otherwise it is reported. NO_MATCH stays valid data; only ErrorPolicy.RAISE abor
 
 from __future__ import annotations
 
-import pytest
+import json
+from dataclasses import replace
 
+import pytest
 from braidworks.core import ErrorCategory, classify_error, explain_error
+from braidworks.core.capability import Provenance
 from braidworks.core.exceptions import BraidworksError
-from braidworks.core.executor import ErrorPolicy, LocalExecutor
+from braidworks.core.executor import ErrorPolicy, ExecutionResult, LocalExecutor
 from braidworks.core.planner import Braider
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.result import WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
-
 from helpers import ScriptedWeaver, simple_capability
 
 
@@ -99,10 +101,18 @@ def _reroute_registry() -> BraidRegistry:
 
 async def test_reroutes_around_failed_node():
     reg = _reroute_registry()
+    with_provenance = BraidRegistry()
+    for wid in ("w_direct", "w_s1", "w_s2"):
+        weaver = reg.get_weaver(wid)
+        weaver._manifest = replace(weaver.MANIFEST,
+            provenance=Provenance(source_url=f"https://{wid}.test", license="CC0-1.0"))
+        with_provenance.register(weaver)
+    reg = with_provenance
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     assert [s.capability_id for s in braid.steps] == ["direct"]  # cheapest path chosen first
 
     res = await LocalExecutor(reg).execute(braid, _input())
+    assert [ref.weaver_id for ref in res.references] == ["w_direct", "w_s1", "w_s2"]
 
     # the direct node failed, but the weave rerouted a->x->c and reached the target
     assert len(res.resolved) == 1
@@ -172,9 +182,13 @@ async def test_execution_error_json_roundtrip():
     from braidworks.core.executor import ExecutionError
 
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("only", "503 Service Unavailable"),
-        capability=simple_capability("only", {"a"}, {"c"}), weaver_id="w_only"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("only", "503 Service Unavailable"),
+            capability=simple_capability("only", {"a"}, {"c"}),
+            weaver_id="w_only",
+        )
+    )
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     res = await LocalExecutor(reg).execute(braid, _input())
     restored = ExecutionError.from_json(res.errors[0].to_json())
@@ -182,7 +196,68 @@ async def test_execution_error_json_roundtrip():
     assert restored.recovered is False
 
 
+async def test_partial_success_accounting_survives_json_with_duplicate_entity_labels():
+    reg = BraidRegistry()
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("bad", "503 Service Unavailable"),
+            capability=simple_capability("bad", {"a"}, {"b"}),
+            weaver_id="bad",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: (
+                _ok("good", Strand("c", "C"))
+                if ss.get("a").value == "success"
+                else _err("good", "500")
+            ),
+            capability=simple_capability("good", {"a"}, {"c"}),
+            weaver_id="good",
+        )
+    )
+    inputs = [
+        StrandSet.from_strands("same-label", [Strand("a", value)])
+        for value in ("success", "failure")
+    ]
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"b", "c"}))
+    result = await LocalExecutor(reg).execute(braid, inputs, reroute=False)
+    restored = ExecutionResult.from_json(json.loads(json.dumps(result.to_json())))
+    assert len(result.resolved) == len(restored.resolved) == 1
+    # Two failed branches on one input are diagnostics for ONE terminal entity.
+    assert result.total() == restored.total() == 2
+    assert len(result.fatal_errors()) == len(restored.fatal_errors()) == 2
+    assert all(e.strand_set.get("a").value == "failure" for e in restored.fatal_errors())
+
+
+async def test_identical_failed_inputs_remain_distinct_after_json():
+    reg = BraidRegistry()
+    for cap_id, output in (("bad1", "b"), ("bad2", "c")):
+        reg.register(
+            ScriptedWeaver(
+                lambda ss, b, r, cid=cap_id: _err(cid, "503"),
+                capability=simple_capability(cap_id, {"a"}, {output}),
+                weaver_id=cap_id,
+            )
+        )
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"b", "c"}))
+    result = await LocalExecutor(reg).execute(braid, _input() + _input(), reroute=False)
+    restored = ExecutionResult.from_json(json.loads(json.dumps(result.to_json())))
+    assert len(result.errors) == len(restored.errors) == 4
+    assert result.total() == restored.total() == 2
+
+
+async def test_recovered_error_is_not_an_additional_terminal_outcome():
+    reg = _reroute_registry()
+    braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
+    result = await LocalExecutor(reg).execute(braid, _input())
+    restored = ExecutionResult.from_json(json.loads(json.dumps(result.to_json())))
+    assert result.total() == restored.total() == 1
+    assert restored.fatal_errors() == []
+
+
 # --- exception classification + transient green-lighting -------------------------
+
 
 class _FakeResp:
     def __init__(self, code):
@@ -196,7 +271,7 @@ class _StatusErr(Exception):
 
 
 def test_classify_exception_by_type_even_with_empty_message():
-    from braidworks.core import classify_exception, ErrorCategory
+    from braidworks.core import ErrorCategory, classify_exception
 
     class ReadTimeout(Exception):
         def __str__(self): return ""  # httpx timeouts stringify empty
@@ -212,7 +287,7 @@ def test_classify_exception_by_type_even_with_empty_message():
 
 
 def test_format_exc_is_never_empty_and_classifies():
-    from braidworks.core import format_exc, classify_error, ErrorCategory
+    from braidworks.core import ErrorCategory, classify_error, format_exc
 
     class ReadTimeout(Exception):
         def __str__(self): return ""
@@ -223,7 +298,8 @@ def test_format_exc_is_never_empty_and_classifies():
 
 
 def test_greenlightable_set_excludes_server_and_schema_errors():
-    from braidworks.core import is_greenlightable, ErrorCategory as E
+    from braidworks.core import ErrorCategory as E
+    from braidworks.core import is_greenlightable
 
     assert is_greenlightable(E.TIMEOUT)
     assert is_greenlightable(E.NETWORK)

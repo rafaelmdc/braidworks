@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gtdb"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.11"
 WEAVER_TITLE = "GTDB genome-based taxonomy (NCBI taxid / name -> GTDB species + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,10 +38,13 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
             Capability(
                 id="describe_gtdb_taxonomy",
                 consumes=frozenset({"ncbi.taxon.id", "organism.scientific_name"}),
-                produces=frozenset({"gtdb.lineage", "gtdb.taxon.id"}),
+                produces=frozenset({"gtdb.genome.representative", "gtdb.lineage", "gtdb.taxon.id"}),
                 output_groups=(
                     OutputGroup(id="core", outputs=frozenset({"gtdb.taxon.id"})),
                     OutputGroup(id="lineage", outputs=frozenset({"gtdb.lineage"})),
+                    OutputGroup(
+                        id="representative", outputs=frozenset({"gtdb.genome.representative"})
+                    ),
                 ),
                 backends=backends,
                 max_batch_size=50,
@@ -52,9 +55,30 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"ncbi.taxon.id", "organism.scientific_name"}),
                 produces=frozenset({"gtdb.tree.rootpath"}),
                 output_groups=(OutputGroup(id="core", outputs=frozenset({"gtdb.tree.rootpath"})),),
-                backends=("local",),
+                backends=tuple(b for b in ("local",) if b in backends),
                 max_batch_size=50,
                 consumes_any=True,
+            ),
+            Capability(
+                id="describe_genome",
+                consumes=frozenset({"genome.accession"}),
+                produces=frozenset(
+                    {
+                        "gtdb.genome.history",
+                        "gtdb.genome.identity",
+                        "gtdb.genome.quality",
+                        "gtdb.genome.synonyms",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(id="identity", outputs=frozenset({"gtdb.genome.identity"})),
+                    OutputGroup(id="quality", outputs=frozenset({"gtdb.genome.quality"})),
+                    OutputGroup(id="synonyms", outputs=frozenset({"gtdb.genome.synonyms"})),
+                    OutputGroup(id="history", outputs=frozenset({"gtdb.genome.history"})),
+                ),
+                backends=tuple(b for b in ("api",) if b in backends),
+                max_batch_size=50,
+                always_computed_groups=frozenset({"identity"}),
             ),
         ),
     )

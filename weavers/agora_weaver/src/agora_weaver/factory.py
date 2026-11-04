@@ -17,9 +17,16 @@ from pathlib import Path
 from typing import Any
 
 from braidworks.core import BaseWeaver
+from braidworks.core.lifecycle import reject_unknown_options
 
 from agora_weaver.backends.local import AgoraLocalBackend
-from agora_weaver.setup import auto_consented, db_is_valid, default_db_path, ensure_agora_db
+from agora_weaver.setup import (
+    DEFAULT_INDIVIDUAL_SBML_BASE,
+    auto_consented,
+    db_is_valid,
+    default_db_path,
+    ensure_agora_db,
+)
 from agora_weaver.weaver import AgoraWeaver
 
 
@@ -30,6 +37,7 @@ def build_agora_weaver(
     refresh: bool = False,
     sbml_cache_dir: str | Path | None = None,
     auto_download_models: bool = False,
+    model_download_base_url: str = DEFAULT_INDIVIDUAL_SBML_BASE,
     **_config: Any,
 ) -> BaseWeaver:
     """Build an AgoraWeaver with the local backend.
@@ -42,10 +50,11 @@ def build_agora_weaver(
 
     The ``model`` group (genome-scale SBML) fetches each ~8 MB model on demand into
     ``sbml_cache_dir``; ``auto_download_models`` (or ``BRAIDWORKS_AUTO_DOWNLOAD``) permits the
-    download, else a not-yet-cached model is simply omitted.
+    download, else a requested uncached model returns an explicit resource error.
     """
+    reject_unknown_options(_config)
     reaction_db: str | Path | None = db_path
-    if db_path is not None or auto_setup:
+    if db_path is not None or auto_setup or refresh:
         reaction_db = _ensure_reaction_db(db_path, auto_setup=auto_setup, refresh=refresh)
     return AgoraWeaver(
         {
@@ -53,6 +62,7 @@ def build_agora_weaver(
                 reaction_db,
                 sbml_cache_dir=sbml_cache_dir,
                 auto_download_models=auto_download_models,
+                model_download_base_url=model_download_base_url,
             )
         }
     )
@@ -95,4 +105,4 @@ def build_agora_weaver_fixture() -> BaseWeaver:
 
 def build_agora_weaver_configured(**config: Any) -> BaseWeaver:
     """Configured builder — ensures the reaction DB (raises without consent if it must download)."""
-    return build_agora_weaver(auto_setup=True, **config)
+    return build_agora_weaver(**config)

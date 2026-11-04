@@ -4,7 +4,7 @@ test:  ## Run the suite (inline; no Redis needed)
 	uv run --extra test python -m pytest -q
 
 lint:  ## Lint with ruff
-	uvx ruff check src tests
+	uvx ruff==0.16.10 check src tests
 
 worker:  ## Run a worker serving one weaver's queue: make worker WEAVER=ncbi
 	BRAIDWORKS_QUEUE=weaver.$(WEAVER) BRAIDWORKS_WEAVERS=$(WEAVER) \

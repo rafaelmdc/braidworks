@@ -8,11 +8,11 @@ inputs below with real, distinct inputs from the source.
 
 from __future__ import annotations
 
-import pytest
+from typing import ClassVar
 
+import pytest
 from braidworks.core import Strand, StrandSet
 from braidworks.testing.contract import CacheFingerprintTests, WeaverOrderContractTests
-
 from wikidata_weaver import factory, vocab
 
 _MANIFEST = vocab.build_manifest(backends=("api",))
@@ -56,7 +56,7 @@ class TestApiOrder(WeaverOrderContractTests):
 
 class TestResolveTaxonCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("resolve_taxon")
-    consumed_values_a = {"organism.scientific_name": "Ursus arctos"}
-    consumed_values_b = {"organism.scientific_name": "sample-b-organism.scientific_name"}
+    consumed_values_a: ClassVar[dict[str, object]] = {"organism.scientific_name": "Ursus arctos"}
+    consumed_values_b: ClassVar[dict[str, object]] = {"organism.scientific_name": "sample-b-organism.scientific_name"}
     group_subset = "core"
     group_superset = "names"

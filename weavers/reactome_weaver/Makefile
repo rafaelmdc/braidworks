@@ -15,7 +15,7 @@ verify:
 	uv run --extra test weaverkit verify --spec weaver.spec.toml --package reactome_weaver
 
 lint:
-	uv run ruff check .
+	uvx ruff==0.16.10 check .
 
 fmt:
-	uv run ruff format .
+	uvx ruff==0.16.10 format .

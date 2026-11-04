@@ -8,7 +8,6 @@ type planner can't route on its own because the produced type equals the input t
 from __future__ import annotations
 
 import pytest
-
 from braidworks.core.capability import Capability, OutputGroup
 from braidworks.core.exceptions import NoPlanError
 from braidworks.core.executor import ExpandPolicy
@@ -22,7 +21,6 @@ from braidworks.core.traverse import (
     resolve_traversal,
     run_traversed,
 )
-
 from helpers import ScriptedWeaver, simple_capability
 
 GENE = "gene.ncbi.id"
@@ -30,6 +28,18 @@ SYMBOL = "gene.symbol"
 COUNT = "gene.ortholog.count"
 ORTHOLOGS = "ncbi.list_orthologs"
 DESCRIBE = "ncbi.describe_gene"
+
+
+async def test_successive_traversals_share_leaf_budget_and_keep_truncation():
+    inputs = _inputs("7157")
+    inputs[0].source_row = 1
+    result = await run_traversed(_registry(), inputs,
+                                 [("ncbi", ORTHOLOGS), ("ncbi", ORTHOLOGS)],
+                                 frozenset(), max_expansion=3)
+    assert len(result.resolved) <= 3
+    assert result.truncations
+    assert all(item.source_row == 1 for item in result.truncations)
+    assert all(leaf.source_row == 1 for leaf in result.resolved)
 
 
 def _orthologs_cap() -> Capability:
@@ -192,6 +202,36 @@ async def test_no_want_returns_the_fanned_children():
     assert sorted(s.get(GENE).value for s in res.resolved) == [100, 200, 300]
 
 
+async def test_traversal_discards_annotations_when_join_key_is_already_present():
+    inputs = [StrandSet.from_strands("e0", [Strand(GENE, "7157"), Strand(SYMBOL, "TP53")])]
+    res = await run_traversed(
+        _registry(), inputs, [("ncbi", ORTHOLOGS)], frozenset({SYMBOL})
+    )
+    assert sorted(s.get(SYMBOL).value for s in res.resolved) == [
+        "SYM-100", "SYM-200", "SYM-300",
+    ]
+    assert {s.parent_id for s in res.resolved} == {"e0"}
+    assert inputs[0].get(SYMBOL).value == "TP53"
+
+
+async def test_each_traversal_discards_previous_relationship_attributes():
+    def orthologs(ss, backend, requested):
+        assert ss.get(COUNT) is None
+        return _ortholog_result(["100", "200", "300"])
+
+    registry = BraidRegistry()
+    registry.register(
+        ScriptedWeaver(orthologs, capability=_orthologs_cap(), weaver_id="ncbi")
+    )
+    res = await run_traversed(
+        registry, _inputs(), [("ncbi", ORTHOLOGS), ("ncbi", ORTHOLOGS)], frozenset()
+    )
+    assert len(res.resolved) == 9
+    # Re-rooting must discard the previous relationship's count before the next
+    # same-key fan; the new count is computed for that child, not inherited.
+    assert {s.parent_id for s in res.resolved} == {"e0"}
+
+
 async def test_top_k_limits_the_fan():
     res = await run_traversed(
         _registry(),
@@ -255,3 +295,22 @@ async def test_plan_capability_builds_one_step_braid():
     assert step.capability_id == ORTHOLOGS
     assert step.input_types == frozenset({GENE})
     assert step.primary_backend == "api"
+
+
+async def test_python_traversal_handles_mixed_direct_and_unresolved_inputs():
+    result = await run_traversed(
+        _registry_with_resolver(),
+        _inputs() + [StrandSet.from_strands("e1", [Strand(NAME, "TP53")])],
+        [("ncbi", ORTHOLOGS)], frozenset({SYMBOL}),
+    )
+    assert len(result.resolved) == 6
+    assert result.errors == []
+    assert {s.parent_id for s in result.resolved} == {"e0", "e1"}
+
+
+async def test_python_traversal_rejects_unused_parameter_scope_before_io():
+    registry = _registry()
+    with pytest.raises(ValueError, match="wrong"):
+        await run_traversed(registry, _inputs(), [("ncbi", ORTHOLOGS)], frozenset({SYMBOL}),
+                            params={"wrong": {"organism": 9606}})
+    assert registry.get_weaver("ncbi").batch_calls == 0

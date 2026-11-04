@@ -18,7 +18,7 @@ ensure:  ## Build/refresh the local taxonomy DB in the user cache (ncbi-weaver e
 	uv run ncbi-weaver ensure
 
 lint:  ## Lint this package with ruff
-	uvx ruff check src tests
+	uvx ruff==0.16.10 check src tests
 
 fmt:  ## Auto-format this package with ruff
-	uvx ruff format src tests
+	uvx ruff==0.16.10 format src tests

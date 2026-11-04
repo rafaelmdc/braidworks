@@ -1,0 +1,28 @@
+# gtdb source correctness implementation
+
+Issue #237; package version 0.2.9. Implemented locally on `fix/source-audit-correctness-batch`.
+
+Newick parsing requires complete input, nonempty unique leaf labels and finite nonnegative provided branch lengths, including finite cumulative depth. Missing lengths remain zero, and optional semicolons and quoted labels remain supported. Forest loaders reject labels repeated across trees instead of silently overwriting them.
+
+Pinned tree acquisition validates syntax and usable leaf identity as well as the checksum before publication; a malformed checksum-valid download leaves an existing tree intact. Tests cover malformed syntax, empty trees, negative/non-finite/overflow geometry, duplicate labels, valid dialect cases and failed replacement. This establishes structural leaf coverage, not a new guarantee that every crosswalk genome occurs in a reference tree.
+
+The separate cross-tree/release comparability contract (#234) and additional capability/documentation scope (#240) remain open.
+
+## Verification
+
+Package suite: **86 passed, 3 skipped**. Strict verification and repository checks are recorded with the issue closure. Other source findings remain open; this report closes only the issue named above.
+
+Repository verification: `make lint` passed; `make test` passed (2045 pytest cases, 56 opt-in skips, plus the tool unittest suite). `weaverkit verify --strict` passed for this package. All tooling used the isolated audit environment.
+
+## Approved representative scope — #240
+
+Version 0.2.10 adds the requested `representative` group to taxonomy lookup.
+It reports the selected species representative accession, its relationship to the
+resolved taxon, and local crosswalk release provenance. A nonrepresentative API
+row is not relabeled as a representative; the API's absent release remains null.
+Default taxonomy queries retain their existing call path. Tree placement and
+distance code are unchanged; #234 remains deferred.
+
+Verification: 88 package tests passed, four opt-in tests skipped; strict verification
+passed; two live API checks passed. The tree download tests were not run for this
+metadata change.

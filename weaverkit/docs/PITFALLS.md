@@ -20,7 +20,9 @@ do/don't pair. Keep this list short; if it grows, the important ones get lost.
 
 4. **Don't hand-edit `vocab.py`.**
    It's generated from `weaver.spec.toml`. Edit the spec and re-run
-   `weaverkit new --force`; `verify` checks the two stay in sync.
+   scratch generation and selective vocab copying; `verify` checks the two stay in sync.
+   Never force-regenerate an implemented package: backends/factories/tests are overwritten.
+   See [safe regeneration](safe-regeneration.md).
 
 5. **`consumes` must be a registered shared key (but an unmet key is OK).**
    Don't invent a private input type. Do pick from `weaverkit/src/weaverkit/keys.py`,

@@ -7,7 +7,7 @@ without adding a heavy dependency before it is justified.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -138,7 +138,7 @@ class DecisionRecord:
     warnings: list[WarningCode] = field(default_factory=list)
     notes: str | None = None
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def to_dict(self) -> dict[str, Any]:

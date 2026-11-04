@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from braidworks.core import Strand, StrandSet, WeaveStatus, skip_if_transient
-
 from reactome_weaver import build_reactome_weaver
 
 RUN_LIVE = os.environ.get("BRAIDWORKS_RUN_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -75,10 +73,15 @@ async def test_live_describe_pathway():
     ss = StrandSet.from_strands("p1", [Strand("pathway.reactome.id", "R-HSA-69541")])
     result = (
         await weaver.execute_batch(
-            "describe_pathway", [ss],
+            "describe_pathway",
+            [ss],
             requested_outputs=frozenset(
-                {"pathway.reactome.display_name", "pathway.reactome.species",
-                 "pathway.reactome.in_disease", "pathway.reactome.detail"}
+                {
+                    "pathway.reactome.display_name",
+                    "pathway.reactome.species",
+                    "pathway.reactome.in_disease",
+                    "pathway.reactome.detail",
+                }
             ),
             backend="api",
         )
@@ -89,3 +92,63 @@ async def test_live_describe_pathway():
     assert produced["pathway.reactome.display_name"] == "Stabilization of p53"
     assert produced["pathway.reactome.species"] == "Homo sapiens"
     assert produced["pathway.reactome.detail"]["st_id"] == "R-HSA-69541"
+
+
+async def test_live_requested_hierarchy_and_typed_participants():
+    async with build_reactome_weaver() as weaver:
+        results = await weaver.execute_batch(
+            "describe_pathway",
+            [
+                StrandSet.from_strands(pid, [Strand("pathway.reactome.id", pid)])
+                for pid in ["R-HSA-69541", "R-HSA-141409"]
+            ],
+            requested_outputs=frozenset(
+                {"pathway.reactome.hierarchy", "pathway.reactome.participants"}
+            ),
+            backend="api",
+        )
+        for result in results:
+            skip_if_transient(result)
+            assert result.status is WeaveStatus.OK
+        pathway = {s.type_id: s.value for s in results[0].strands}
+        assert pathway["pathway.reactome.hierarchy"]["children"]
+        reaction = {s.type_id: s.value for s in results[1].strands}
+        records = reaction["pathway.reactome.participants"]["records"]
+        assert records and all(r["observed_release"] > 0 and r["type"] for r in records)
+        assert any(
+            ref.get("identifier") == "Q9Y6D9" for row in records for ref in row["references"] or []
+        )
+
+
+async def test_live_recursive_reactions_and_source_evidence():
+    import httpx
+    from reactome_weaver.backends.api import ReactomeApiBackend
+
+    async with httpx.AsyncClient(
+        base_url="https://reactome.org/ContentService", timeout=30
+    ) as client:
+        backend = ReactomeApiBackend(client=client, limit=5)
+        listing = (
+            await backend.fetch(
+                "list_reactions",
+                [{"pathway.reactome.id": "R-HSA-109581"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(),
+            )
+        )[0]
+        assert not listing.error, listing.error
+        ids = listing.values["reaction.reactome.id"]
+        assert "R-HSA-141159" in ids and len(ids) > 5
+        assert listing.values["pathway.reactome.reactions"]["count"] == len(ids)
+        reaction = (
+            await backend.fetch(
+                "describe_reaction",
+                [{"reaction.reactome.id": "R-HSA-141159"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset({"detail"}),
+            )
+        )[0]
+        assert not reaction.error, reaction.error
+        detail = reaction.values["reaction.reactome.detail"]
+        assert detail["type"] == "Reaction" and detail["is_inferred"] is False
+        assert detail["literature"] or detail["summation"]

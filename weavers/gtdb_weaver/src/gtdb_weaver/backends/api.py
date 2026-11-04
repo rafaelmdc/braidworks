@@ -3,7 +3,7 @@
 Resolves a GTDB *species name* via ``GET /search/gtdb?search=<name>`` on
 ``gtdb-api.ecogenomic.org`` — the online fallback when the local crosswalk isn't
 built. It is name-based only: a query carrying just an NCBI taxid (no name) is a
-miss here (the local backend is authoritative for taxids). The HTTP client is
+miss here (the local backend serves observed genome classifications for taxids). The HTTP client is
 **injectable** (``client=``) so tests drive it offline with an ``httpx.MockTransport``
 (see ``fixture.py`` / ``build_gtdb_weaver_fixture``).
 
@@ -13,45 +13,66 @@ Worked example: weavers/ncbi_weaver/src/ncbi_weaver/backends/datasets_v2.py
 
 from __future__ import annotations
 
-import asyncio
+import json
+from copy import deepcopy
 from typing import Any
 
 import httpx
-
-from braidworks.core import BackendBase
-from braidworks.core import LookupRecord
-from braidworks.core import format_exc, is_not_found_status
+from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core.concurrency import map_bounded
+from braidworks.core.http_pacing import PacedHTTPClient
+from braidworks.core.lifecycle import HTTPClientLifecycle
+from braidworks.core.source_identity import remote_fingerprint
 
 from gtdb_weaver import taxonomy
+from gtdb_weaver.genome_detail import (
+    GenomeFormatError,
+    normalize_accession,
+    project_card,
+    project_history,
+)
 
 # Base URL of the GTDB API (the api.gtdb.ecogenomic.org host has a broken cert).
 BASE_URL = "https://gtdb-api.ecogenomic.org"
 
 
-class GtdbApiBackend(BackendBase):
+class GtdbApiBackend(HTTPClientLifecycle, BackendBase):
     """api backend — the keyless GTDB name-search API."""
 
     name = "api"
 
     def __init__(
-        self, *, base_url: str = BASE_URL, client: httpx.AsyncClient | None = None
+        self,
+        *,
+        base_url: str = BASE_URL,
+        client: httpx.AsyncClient | None = None,
+        max_concurrency: int = 4,
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._client = client
+        self._configure_client(client, base_url)
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency < 1
+        ):
+            raise ValueError("max_concurrency must be a positive integer")
+        self._max_concurrency = max_concurrency
         # A keyless API is usable as-is; an injected client (the fixture) also counts.
         self._configured = True
 
     def is_configured(self) -> bool:
         return self._configured or self._client is not None
 
-    def _http(self) -> httpx.AsyncClient:
+    supports_request_pacing = True
+
+    def _http(self) -> PacedHTTPClient:
         """The HTTP client, lazily created if none was injected."""
+        self._ensure_open()
         if self._client is None:
             self._client = httpx.AsyncClient(base_url=self._base_url, timeout=30.0)
-        return self._client
+        return PacedHTTPClient(self._client, "gtdb", default_rate=5.0)
 
     def fingerprint(self) -> str:
-        return "gtdb_weaver-api-v1"
+        return remote_fingerprint("gtdb_weaver-api", self._base_url, contract="gtdb_weaver-api-v1")
 
     async def fetch(
         self,
@@ -62,14 +83,28 @@ class GtdbApiBackend(BackendBase):
         groups_to_compute: frozenset[str],
         params: dict[str, Any] | None = None,
     ) -> list[LookupRecord]:
+        if capability_id == "describe_genome":
+            return await self._genomes(queries, groups_to_compute)
         # One record per query, in order — the API search is per-name, so fire the
         # distinct names concurrently and map results back positionally.
         names = [_query_name(q) for q in queries]
         distinct = sorted({n for n in names if n})
-        fetched = await asyncio.gather(
-            *(self._search(name) for name in distinct), return_exceptions=True
-        )
-        by_name: dict[str, LookupRecord | Exception] = dict(zip(distinct, fetched))
+
+        async def search(name: str) -> LookupRecord:
+            try:
+                return (
+                    await self._search(name, representative=True)
+                    if "representative" in groups_to_compute
+                    else await self._search(name)
+                )
+            except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                return LookupRecord(
+                    query={"organism.scientific_name": name},
+                    error=f"GTDB API error: {format_exc(exc)}",
+                )
+
+        fetched = await map_bounded(distinct, search, limit=self._max_concurrency)
+        by_name = dict(zip(distinct, fetched))
 
         records: list[LookupRecord] = []
         for query, name in zip(queries, names):
@@ -86,7 +121,45 @@ class GtdbApiBackend(BackendBase):
             records.append(_relabel(result, query))
         return records
 
-    async def _search(self, name: str) -> LookupRecord:
+    async def _genomes(self, queries, groups):
+        ids = [normalize_accession(q.get("genome.accession")) for q in queries]
+        distinct = sorted({identifier for identifier in ids if identifier})
+
+        async def acquire(accession):
+            try:
+                response = await self._http().get(f"/genome/{accession}/card")
+                response.raise_for_status()
+                values = project_card(response.json(), accession)
+                if "history" in groups:
+                    response = await self._http().get(f"/genome/{accession}/taxon-history")
+                    if is_not_found_status(response.status_code):
+                        values["gtdb.genome.history"] = {
+                            "requested_accession": accession,
+                            "available": False,
+                            "records": None,
+                            "source": f"/genome/{accession}/taxon-history",
+                        }
+                    else:
+                        response.raise_for_status()
+                        values["gtdb.genome.history"] = project_history(response.json(), accession)
+                return LookupRecord(query={}, found=True, values=values)
+            except httpx.HTTPStatusError as exc:
+                if is_not_found_status(exc.response.status_code):
+                    return LookupRecord(query={}, found=False)
+                return LookupRecord(query={}, error=f"GTDB genome error: {format_exc(exc)}")
+            except (httpx.HTTPError, ValueError, GenomeFormatError) as exc:
+                return LookupRecord(query={}, error=f"GTDB genome error: {format_exc(exc)}")
+
+        fetched = await map_bounded(distinct, acquire, limit=self._max_concurrency)
+        mapped = dict(zip(distinct, fetched))
+        return [
+            _relabel(mapped[identifier], query)
+            if identifier
+            else LookupRecord(query=query, found=False)
+            for query, identifier in zip(queries, ids)
+        ]
+
+    async def _search(self, name: str, *, representative: bool = False) -> LookupRecord:
         """Resolve one GTDB species name to a record (found/miss); raises only on HTTP errors."""
         try:
             resp = await self._http().get(
@@ -99,18 +172,32 @@ class GtdbApiBackend(BackendBase):
                 return LookupRecord(query={"organism.scientific_name": name}, found=False)
             raise
         rows = resp.json().get("rows") or []
-        row = _best_row(rows, name)
+        try:
+            row = _best_row(rows, name)
+        except taxonomy.AmbiguousClassification as exc:
+            return LookupRecord(query={"organism.scientific_name": name}, error=str(exc))
         if row is None:
             return LookupRecord(query={"organism.scientific_name": name}, found=False)
         gtdb_taxonomy = row.get("gtdbTaxonomy") or ""
         taxon_id, lineage = taxonomy.parse_gtdb_taxonomy(gtdb_taxonomy)
         if taxon_id is None:
             return LookupRecord(query={"organism.scientific_name": name}, found=False)
-        return LookupRecord(
-            query={"organism.scientific_name": name},
-            found=True,
-            values={"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage},
-        )
+        values = {"gtdb.taxon.id": taxon_id, "gtdb.lineage": lineage}
+        if representative:
+            accession = (
+                (row.get("accession") or row.get("gid"))
+                if row.get("isGtdbSpeciesRep") is True
+                else None
+            )
+            values["gtdb.genome.representative"] = {
+                "gtdb_taxon_id": taxon_id,
+                "source_accession": accession,
+                "release": None,
+                "relation": "representative of the resolved GTDB species, not necessarily the input strain",
+                "source": "observed search response; release not supplied",
+                "available": accession is not None,
+            }
+        return LookupRecord(query={"organism.scientific_name": name}, found=True, values=values)
 
 
 def _query_name(query: dict[str, Any]) -> str | None:
@@ -122,7 +209,7 @@ def _query_name(query: dict[str, Any]) -> str | None:
 
 
 def _best_row(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
-    """Pick the row best matching ``name``: exact species match wins, then a rep, then first."""
+    """Accept exact species matches only; reject competing classifications."""
     if not rows:
         return None
     target = name.strip().lower()
@@ -134,17 +221,27 @@ def _best_row(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
         return None
 
     exact = [r for r in rows if species_of(r) == target]
-    pool = exact or rows
-    for r in pool:
-        if r.get("isGtdbSpeciesRep"):
-            return r
-    return pool[0]
+    if not exact:
+        return None
+    taxonomies = sorted({r.get("gtdbTaxonomy") or "" for r in exact})
+    if len(taxonomies) > 1:
+        raise taxonomy.AmbiguousClassification(
+            "Conflicting GTDB API classifications require review: " + json.dumps(taxonomies)
+        )
+    return min(
+        exact,
+        key=lambda row: (
+            not bool(row.get("isGtdbSpeciesRep")),
+            str(row.get("accession") or row.get("gid") or ""),
+            json.dumps(row, sort_keys=True),
+        ),
+    )
 
 
 def _relabel(record: LookupRecord, query: dict[str, Any]) -> LookupRecord:
     """Re-key a per-name record onto the caller's original query dict."""
     if record.found:
-        return LookupRecord(query=query, found=True, values=dict(record.values))
+        return LookupRecord(query=query, found=True, values=deepcopy(record.values))
     if record.error:
         return LookupRecord(query=query, error=record.error)
     return LookupRecord(query=query, found=False)

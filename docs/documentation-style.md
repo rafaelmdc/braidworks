@@ -1,0 +1,62 @@
+# Write documentation for the reader's task
+
+For contributors editing Braidworks documentation. The [first-pass audit](audits/documentation-readability.md)
+records the research and repository findings behind these conventions.
+
+## Give each page one job
+
+Use [Diátaxis](https://diataxis.fr/start-here/) to choose that job: a tutorial teaches
+through a guided exercise, a how-to guide completes a task, reference supplies exact
+facts, and explanation connects concepts and reasons. The
+[documentation map](audits/documentation-diataxis.md) classifies existing pages and
+records the next edits. Improve a reader path before creating new folders.
+
+Apply the guidance for the chosen type:
+
+- [Tutorials](https://diataxis.fr/tutorials/): choose one concrete exercise, show visible
+  results at each stage, and guide the reader through observations. Link alternatives
+  and long explanations rather than interrupting the lesson.
+- [How-to guides](https://diataxis.fr/how-to-guides/): state the task and prerequisites,
+  then provide steps and relevant branches for someone already using the tool.
+- [Reference](https://diataxis.fr/reference/): organize facts by the interface they
+  describe. Keep exact defaults, fields and constraints findable and consistent.
+- [Explanation](https://diataxis.fr/explanation/): connect concepts, consequences and
+  reasons. Link instructions and exact contracts rather than embedding full workflows.
+
+The README answers what the tool does, how its sources connect, and how to try it.
+The index routes readers to tasks. Usage guides show working steps; architecture
+explains relationships; reference pages hold exact contracts and options. Keep audit
+records and proposals separate from instructions for current behavior.
+
+## Put context before mechanics
+
+Explain what the reader has, what they want, and why the result matters before
+introducing commands or classes. Define unfamiliar terms where they first help.
+Use a short successful path before showing exceptional cases. Put prerequisites
+before code, and say whether a snippet is a complete script, notebook cell, or
+fragment. Link to details rather than repeating them.
+
+## Make scientific examples honest
+
+Use real identifiers and declare source/setup requirements. Describe expected output
+shape without presenting invented data or mutable counts as verified results. Explain
+missing data, representative selections, source evidence, and ambiguity where they
+affect interpretation. Preserve coverage rows in analysis examples.
+
+## Keep guidance maintainable
+
+Keep details that affect a choice, action, interpretation or recovery. Move useful
+facts to the appropriate page and link them; remove filler and obsolete claims after
+checking their replacements. Preserve prerequisites, defaults, limitations and side
+effects. Reducing length is useful only when the reader can still complete the task.
+
+Install with `uv sync --all-extras` and run with `uv run`; never document per-package
+`uv sync --package` selections, because each one removes the packages it does not name. Check current command help,
+public signatures, and generated catalogues before documenting behavior. Link to the
+canonical reference instead of copying signatures or whole field lists into a guide.
+If a detail must be duplicated, verify both locations in the same change.
+
+Check local paths and heading anchors when moving content. Mark historical status
+explicitly. A documentation-only edit normally needs example/link verification,
+not a new runtime test suite. Reader testing is separate: ask someone to complete
+the documented task and observe where the guide fails them.

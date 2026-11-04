@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "mondo"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.2.9"
 WEAVER_TITLE = (
     "MONDO disease ontology (MeSH/MedDRA id or disease name -> unified MONDO id + is-a ancestors)"
 )
@@ -45,25 +45,30 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
             Capability(
                 id="mondo.lookup_by_meddra",
@@ -73,25 +78,30 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
             Capability(
                 id="mondo.lookup_by_name",
@@ -101,25 +111,62 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "disease.mondo.id",
                         "disease.ontology.ancestors",
                         "disease.ontology.depth",
+                        "disease.ontology.mapping.records",
                         "disease.ontology.name",
                         "disease.ontology.parents",
                     }
                 ),
                 output_groups=(
                     OutputGroup(
-                        id="term",
+                        id="identity",
                         outputs=frozenset(
                             {
                                 "disease.mondo.id",
-                                "disease.ontology.depth",
+                                "disease.ontology.mapping.records",
                                 "disease.ontology.name",
-                                "disease.ontology.parents",
                             }
                         ),
+                    ),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
                     ),
                     OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
                 ),
                 backends=backends,
+                always_computed_groups=frozenset({"identity"}),
+            ),
+            Capability(
+                id="describe_disease",
+                consumes=frozenset({"disease.mondo.id"}),
+                produces=frozenset(
+                    {
+                        "disease.ontology.ancestors",
+                        "disease.ontology.definition",
+                        "disease.ontology.depth",
+                        "disease.ontology.external_mappings",
+                        "disease.ontology.history",
+                        "disease.ontology.name",
+                        "disease.ontology.parents",
+                    }
+                ),
+                output_groups=(
+                    OutputGroup(id="identity", outputs=frozenset({"disease.ontology.name"})),
+                    OutputGroup(
+                        id="definition", outputs=frozenset({"disease.ontology.definition"})
+                    ),
+                    OutputGroup(id="history", outputs=frozenset({"disease.ontology.history"})),
+                    OutputGroup(
+                        id="term",
+                        outputs=frozenset({"disease.ontology.depth", "disease.ontology.parents"}),
+                    ),
+                    OutputGroup(id="ancestors", outputs=frozenset({"disease.ontology.ancestors"})),
+                    OutputGroup(
+                        id="mappings", outputs=frozenset({"disease.ontology.external_mappings"})
+                    ),
+                ),
+                backends=backends,
+                always_computed_groups=frozenset({"identity"}),
             ),
         ),
     )

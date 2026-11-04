@@ -23,6 +23,10 @@ class BraidworksError(Exception):
     """Base class for all Braidworks errors."""
 
 
+class BatchContractError(BraidworksError):
+    """A backend or runner returned a malformed batch. Aborts without fallback."""
+
+
 class BackendConfigurationError(BraidworksError):
     """A configured backend is broken at runtime. Run-level: aborts the executor.
 

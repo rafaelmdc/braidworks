@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from braidworks.core.braid import (
     Braid,
     CapabilityInvocation,
@@ -12,8 +13,7 @@ from braidworks.core.braid import (
 from braidworks.core.executor import ExecutionError, ExecutionResult, ReviewQueueItem
 from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand, StrandSet
-
-from helpers import resolve_name_capability, manifest
+from helpers import manifest, resolve_name_capability
 
 
 def _json_stable(obj) -> str:
@@ -39,12 +39,16 @@ def test_strandset_roundtrip():
 
     ss = StrandSet.from_strands("e1", [Strand("organism.name", "Mus musculus")])
     ss.requires_review = True
+    ss.source_row = 7
     ss.warnings.append("w")
     ss.errors.append("err")
     ss.completion.append(StepOutcome("bacdive.traits", "local", "ok", ("microbe.trait.gram_stain",)))
     ss.completion.append(StepOutcome("disbiome.assoc", "local", "no_match"))
     again = StrandSet.from_json(ss.to_json())
     assert again.entity_id == "e1"
+    assert again.source_row == 7
+    assert ss.clone(entity_id="child", parent_id="e1").source_row == 7
+    assert ss.restricted_to({"organism.name"}).source_row == 7
     assert again.get("organism.name").value == "Mus musculus"
     assert again.requires_review is True
     assert again.warnings == ["w"] and again.errors == ["err"]
@@ -161,3 +165,41 @@ def test_execution_result_roundtrip():
     assert again.unresolved[0][1].status is WeaveStatus.NO_MATCH
     assert again.total() == 2
     _json_stable(res)
+
+
+def test_execution_result_accepts_legacy_json_without_entity_references():
+    res = ExecutionResult(resolved=[StrandSet.from_strands("e1", [Strand("x", "value")])])
+    data = res.to_json()
+    del data["entity_refs"]
+    assert ExecutionResult.from_json(data).total() == 1
+
+
+@pytest.mark.parametrize("reference", [-1, True, "0"])
+def test_execution_result_rejects_invalid_entity_references(reference):
+    data = ExecutionResult(resolved=[StrandSet("e1")]).to_json()
+    data["entity_refs"]["resolved"] = [reference]
+    with pytest.raises(ValueError, match="non-negative integers"):
+        ExecutionResult.from_json(data)
+
+
+def test_execution_result_rejects_conflicting_snapshots_for_one_reference():
+    data = ExecutionResult(resolved=[StrandSet("e1"), StrandSet("e2")]).to_json()
+    data["entity_refs"]["resolved"] = [0, 0]
+    with pytest.raises(ValueError, match="conflicting entity snapshots"):
+        ExecutionResult.from_json(data)
+
+
+def test_execution_result_rejects_reference_bucket_length_mismatch():
+    data = ExecutionResult(resolved=[StrandSet("e1")]).to_json()
+    data["entity_refs"]["resolved"] = []
+    with pytest.raises(ValueError, match="bucket length"):
+        ExecutionResult.from_json(data)
+
+
+def test_execution_result_counts_fanout_leaves_without_collapsing_equal_labels():
+    children = [StrandSet("e1#0", parent_id="e1") for _ in range(2)]
+    res = ExecutionResult(resolved=children)
+    again = ExecutionResult.from_json(json.loads(json.dumps(res.to_json())))
+    assert res.total() == again.total() == 2
+    assert again.resolved[0] is not again.resolved[1]
+    assert again.to_json() == res.to_json()

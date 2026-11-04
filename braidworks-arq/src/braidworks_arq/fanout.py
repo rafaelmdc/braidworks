@@ -8,8 +8,7 @@ expansion, and it lives entirely in ``LocalExecutor``'s orchestration — which
 workers. The two **compose**: batch-parallelism (here) × cardinality-expansion (core).
 See ``braidworks-arq/tests/test_fanout.py::test_cardinality_fanout_through_distributed_executor``.
 
-Fan-out is **opt-in per ``weaver:backend``** and **gated on a rate budget**, so it can
-never cause an uncontrolled API rate-storm. The dangerous case — fanning a rate-limited
+Fan-out is **opt-in per ``weaver:backend``** and **gated on a rate budget**, to slow input dispatch. It does not count HTTP requests inside a backend. The dangerous case — fanning a rate-limited
 external backend out across many workers with no budget — is refused loudly with
 :class:`FanoutConfigError` rather than silently degraded.
 
@@ -23,8 +22,7 @@ Environment:
 - ``BRAIDWORKS_FANOUT_CHUNK`` — optional ``weaver[:backend]=N`` override for entities
   per task. Default: 1 for budgeted backends (≈ per-call rate granularity), else an
   even split across ``width``.
-- ``BRAIDWORKS_RATE_LIMITS`` (existing) — declares the budget that makes external
-  fan-out safe.
+- ``BRAIDWORKS_RATE_LIMITS`` (existing) — declares the input dispatch budget for external fan-out.
 
 A ``weaver:backend`` key always beats a bare ``weaver`` key (most specific wins).
 """
@@ -99,9 +97,7 @@ def plan_fanout(
         if unbudgeted is None
         else unbudgeted
     )
-    chunks = (
-        _parse_widths(os.environ.get("BRAIDWORKS_FANOUT_CHUNK")) if chunks is None else chunks
-    )
+    chunks = _parse_widths(os.environ.get("BRAIDWORKS_FANOUT_CHUNK")) if chunks is None else chunks
     if budgeted is None:
         budgeted = rate_for(load_limits(), weaver_id, backend) is not None
 
@@ -118,7 +114,6 @@ def plan_fanout(
 
     chunk = _lookup(chunks, weaver_id, backend)
     if chunk is None:
-        # Budgeted → 1 entity/task (≈ per-call rate granularity, smoothest burst).
-        # Unbudgeted → even split so each worker gets a fair share.
-        chunk = 1 if budgeted else max(1, math.ceil(batch_size / width))
+        # Preserve upstream bulk lookups: pace actual requests inside each chunk.
+        chunk = max(1, math.ceil(batch_size / width))
     return FanoutPlan(width=width, chunk=max(1, chunk))

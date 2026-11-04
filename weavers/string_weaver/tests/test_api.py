@@ -10,13 +10,16 @@ from __future__ import annotations
 import json
 
 import httpx
-
 from string_weaver.backends.api import StringApiBackend
 
 CAP = "list_interactions"
 ALL = frozenset(
-    {"protein.query", "protein.interaction.partners", "protein.interaction.count",
-     "protein.interaction.records"}
+    {
+        "string.id",
+        "protein.interaction.partners",
+        "protein.interaction.count",
+        "protein.interaction.records",
+    }
 )
 
 
@@ -24,8 +27,14 @@ STRING_ID = "9606.ENSP_TP53"  # the resolved STRING id partners are grouped unde
 
 
 def _edge(name, score, **channels):
-    return {"preferredName_A": "TP53", "preferredName_B": name, "stringId_A": STRING_ID,
-            "stringId_B": f"id_{name}", "score": score, **channels}
+    return {
+        "preferredName_A": "TP53",
+        "preferredName_B": name,
+        "stringId_A": STRING_ID,
+        "stringId_B": f"9606.id_{name}",
+        "score": score,
+        **channels,
+    }
 
 
 def _backend(payload, *, status=200, calls=None, idmap=None):
@@ -48,7 +57,9 @@ def _backend(payload, *, status=200, calls=None, idmap=None):
 
 async def _one(backend, accession):
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": accession}], requested_outputs=ALL,
+        CAP,
+        [{"protein.uniprot.accession": accession}],
+        requested_outputs=ALL,
         groups_to_compute=frozenset(),
     )
     assert len(records) == 1
@@ -64,7 +75,7 @@ async def test_extracts_partners_count_records():
     assert v["protein.interaction.records"][0]["partner"] == "MDM2"
     assert v["protein.interaction.records"][0]["channels"] == {"experimental": 0.9}
     # the fan dimension: each partner name as a protein.query (chains into uniprot)
-    assert v["protein.query"] == ["MDM2", "SFN"]
+    assert v["string.id"] == ["9606.id_MDM2", "9606.id_SFN"]
 
 
 async def test_ordering_is_deterministic_score_then_name():
@@ -74,10 +85,11 @@ async def test_ordering_is_deterministic_score_then_name():
     assert v["protein.interaction.partners"] == ["AAA", "BBB", "ZZZ"]
 
 
-async def test_nameless_edge_is_skipped():
+async def test_uncorrelatable_nameless_edge_is_error():
     payload = [_edge("MDM2", 0.9), {"preferredName_A": "TP53", "score": 0.8}]
-    v = (await _one(_backend(payload), "P04637")).values
-    assert v["protein.interaction.partners"] == ["MDM2"]
+    record = await _one(_backend(payload), "P04637")
+    assert record.error and not record.found
+    assert "correlated" in record.error
 
 
 async def test_empty_list_is_a_miss():
@@ -107,15 +119,23 @@ async def test_resolves_batch_in_two_bulk_calls():
     partner edges grouped back to each query by stringId_A."""
     payload = [
         _edge("MDM2", 0.99),  # stringId_A = STRING_ID (P04637/TP53)
-        {"preferredName_A": "BRCA1", "preferredName_B": "BARD1",
-         "stringId_A": "9606.ENSP_BRCA1", "stringId_B": "id_BARD1", "score": 0.9},
+        {
+            "preferredName_A": "BRCA1",
+            "preferredName_B": "BARD1",
+            "stringId_A": "9606.ENSP_BRCA1",
+            "stringId_B": "9606.id_BARD1",
+            "score": 0.9,
+        },
     ]
     calls: list[str] = []
-    backend = _backend(payload, calls=calls,
-                       idmap={"P04637": STRING_ID, "P38398": "9606.ENSP_BRCA1"})
+    backend = _backend(
+        payload, calls=calls, idmap={"P04637": STRING_ID, "P38398": "9606.ENSP_BRCA1"}
+    )
     records = await backend.fetch(
-        CAP, [{"protein.uniprot.accession": "P04637"}, {"protein.uniprot.accession": "P38398"}],
-        requested_outputs=ALL, groups_to_compute=frozenset(),
+        CAP,
+        [{"protein.uniprot.accession": "P04637"}, {"protein.uniprot.accession": "P38398"}],
+        requested_outputs=ALL,
+        groups_to_compute=frozenset(),
     )
     assert [r.found for r in records] == [True, True]
     assert records[0].values["protein.interaction.partners"] == ["MDM2"]
@@ -126,3 +146,47 @@ async def test_resolves_batch_in_two_bulk_calls():
 def test_fingerprint_is_stable_and_real():
     fp = StringApiBackend().fingerprint()
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
+
+
+async def test_short_response_does_not_claim_complete_network():
+    record = await _one(_backend([_edge("MDM2", 0.9)]), "P04637")
+    coverage = record.values["protein.interaction.coverage"]
+    assert coverage["request_limit"] == 25
+    assert coverage["observed_edges"] == coverage["observed_partners"] == 1
+    assert coverage["complete"] is None
+    assert coverage["fan_scope"] == "retrieved_partners"
+    assert record.warnings
+
+
+def test_retrieval_limit_changes_fingerprint():
+    assert StringApiBackend(limit=1).fingerprint() != StringApiBackend(limit=25).fingerprint()
+
+
+async def test_same_name_distinct_partners_and_duplicate_edges_preserve_ids():
+    rows = [{**_edge("SAME", 0.9), "stringId_B": identity} for identity in ["9606.B", "9606.A"]]
+    values = []
+    for permuted in (rows, list(reversed(rows)), rows + [rows[0]]):
+        record = await _one(_backend(permuted), "P04637")
+        values.append(record.values)
+    assert values[0] == values[1] == values[2]
+    assert values[0]["string.id"] == ["9606.A", "9606.B"]
+    assert values[0]["protein.interaction.count"] == 2
+    assert values[0]["protein.interaction.partners"] == ["SAME", "SAME"]
+    assert [row["taxon_id"] for row in values[0]["protein.interaction.records"]] == [9606, 9606]
+
+
+async def test_conflicting_edge_measurements_have_stable_display_and_full_evidence():
+    rows = [_edge("MDM2", 0.8), _edge("MDM2", 0.9)]
+    records = [
+        (await _one(_backend(permuted), "P04637")).values
+        for permuted in (rows, list(reversed(rows)))
+    ]
+    assert records[0] == records[1]
+    assert records[0]["protein.interaction.count"] == 1
+    edge = records[0]["protein.interaction.records"][0]
+    assert edge["score"] == 0.9 and len(edge["evidence"]) == 2
+
+
+async def test_edge_taxon_mismatch_is_an_error():
+    record = await _one(_backend([{**_edge("MDM2", 0.9), "ncbiTaxonId": 10090}]), "P04637")
+    assert record.error and not record.found
