@@ -24,7 +24,12 @@ from pathlib import Path
 
 from braidworks.core import ATTRIBUTION_REQUIRED, citation_requirement, is_known_license
 
-from weaverkit.conformance import check_fingerprints, check_golden, check_manifest
+from weaverkit.conformance import (
+    check_fingerprints,
+    check_golden,
+    check_manifest,
+    description_warnings,
+)
 from weaverkit.index import uncatalogued_outputs, write_index, write_key_index
 from weaverkit.scaffold import ScaffoldError, scaffold
 from weaverkit.spec import SpecError, WeaverSpec, load_spec, validate_spec
@@ -265,7 +270,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         _print_problems(f"{package} does not conform to {args.spec}:", conformance)
         return 1
 
-    for w in _provenance_warnings(spec) + _version_drift_warning(spec, args.spec):
+    advisories = _provenance_warnings(spec) + _version_drift_warning(spec, args.spec)
+    advisories += description_warnings(weaver.MANIFEST, spec)
+    for w in advisories:
         print(f"warning: {w}", file=sys.stderr)
 
     if args.strict:

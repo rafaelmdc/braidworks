@@ -7,6 +7,7 @@ from weaverkit.conformance import (
     check_fingerprints,
     check_golden,
     check_manifest,
+    description_warnings,
     run_golden,
 )
 from weaverkit.index import (
@@ -29,6 +30,8 @@ from weaverkit.spec import (
     SpecError,
     WeaverSpec,
     load_spec,
+    type_descriptions,
+    undescribed_types,
     validate_spec,
 )
 
@@ -50,6 +53,7 @@ __all__ = [
     "check_fingerprints",
     "check_golden",
     "check_manifest",
+    "description_warnings",
     "discover_specs",
     "generate_files",
     "is_known_output",
@@ -58,7 +62,9 @@ __all__ = [
     "render",
     "run_golden",
     "scaffold",
+    "type_descriptions",
     "uncatalogued_outputs",
+    "undescribed_types",
     "validate_files",
     "validate_spec",
     "write_files",

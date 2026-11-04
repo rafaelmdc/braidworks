@@ -405,3 +405,49 @@ def test_invalid_api_key_is_rejected_without_echoing_the_value():
     problems = validate_spec(WeaverSpec.from_dict(data))
     assert any(p.startswith("api_key must be") for p in problems)
     assert not any("sk-live" in p for p in problems)
+
+
+# --- type descriptions ([types] table + registry defaults) -------------------
+
+
+def test_type_descriptions_default_to_the_key_registry():
+    from weaverkit.keys import OUTPUT_KEYS, SHARED_KEYS
+    from weaverkit.spec import type_descriptions
+
+    spec = WeaverSpec.from_dict(_valid_dict())
+    described = type_descriptions(spec)
+    assert set(described) == {
+        "ncbi.taxon.id",
+        "microbe.trait.gram_stain",
+        "microbe.trait.optimum_temp",
+    }
+    assert described["ncbi.taxon.id"] == SHARED_KEYS["ncbi.taxon.id"]
+    assert described["microbe.trait.gram_stain"] == OUTPUT_KEYS["microbe.trait.gram_stain"]
+
+
+def test_spec_types_table_overrides_the_registry():
+    from weaverkit.spec import type_descriptions
+
+    data = _valid_dict()
+    data["types"] = {"microbe.trait.gram_stain": "Gram stain reported by Madin et al."}
+    spec = WeaverSpec.from_dict(data)
+    assert validate_spec(spec) == []
+    assert type_descriptions(spec)["microbe.trait.gram_stain"] == (
+        "Gram stain reported by Madin et al."
+    )
+
+
+def test_spec_types_table_rejects_foreign_and_empty_entries():
+    data = _valid_dict()
+    data["types"] = {"protein.name": "Not used by this weaver.", "microbe.trait.gram_stain": " "}
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("[types] describes 'protein.name'" in p for p in problems)
+    assert any("[types] description for 'microbe.trait.gram_stain' is empty" in p for p in problems)
+
+
+def test_types_without_any_description_are_reported():
+    from weaverkit.spec import undescribed_types
+
+    data = _valid_dict()
+    data["capability"][0]["group"][0]["outputs"].append("microbe.trait.made_up")
+    assert undescribed_types(WeaverSpec.from_dict(data)) == ["microbe.trait.made_up"]

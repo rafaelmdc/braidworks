@@ -38,6 +38,16 @@ blocks (per-query knobs — filters/sort/thresholds — `name`, `type` ∈
 `filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB
 local DB.
 
+**`[types]`** (optional) — `"type.id" = "one-line meaning"` for types this weaver
+consumes or produces. Every such type is described automatically from the key
+registry (`weaverkit.keys.SHARED_KEYS` / `OUTPUT_KEYS`); add an entry here only to
+override that text for this source. The resolved descriptions are generated into
+`vocab.py` as `TYPE_DESCRIPTIONS` and shipped on the manifest
+(`WeaverManifest.type_descriptions`), so users can search fields by meaning without
+weaverkit installed. `verify` rejects entries for types the weaver does not use and
+warns about types with no description anywhere, or a `vocab.py` generated before
+descriptions existed.
+
 **`[[golden]]`** (optional for `verify`; `--strict` requires ≥1) — `capability`,
 `input` (keys ⊆ that capability's consumes), `expect` (keys ⊆ its produces). Under
 `--strict` each runs against a fixture (`build_<package>_fixture()`) or an

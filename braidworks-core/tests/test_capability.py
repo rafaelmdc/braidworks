@@ -76,3 +76,24 @@ def test_manifest_with_provenance_round_trips():
 def test_provenance_is_empty():
     assert Provenance().is_empty()
     assert not Provenance(license="CC0-1.0").is_empty()
+
+
+# --- type descriptions on the manifest ---------------------------------------
+
+
+def test_manifest_type_descriptions_round_trip_and_stay_optional():
+    from braidworks.core.capability import WeaverManifest
+
+    described = WeaverManifest(
+        weaver_id="w",
+        version="1.0.0",
+        type_descriptions={"protein.name": "Recommended protein name."},
+    )
+    data = described.to_json()
+    assert data["type_descriptions"] == {"protein.name": "Recommended protein name."}
+    assert WeaverManifest.from_json(data) == described
+    hash(described)  # still usable as a frozen value
+
+    plain = WeaverManifest(weaver_id="w", version="1.0.0")
+    assert "type_descriptions" not in plain.to_json()
+    assert WeaverManifest.from_json(plain.to_json()).type_descriptions == {}
