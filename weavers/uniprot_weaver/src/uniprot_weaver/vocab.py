@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.10"
+WEAVER_VERSION = "0.2.11"
 WEAVER_TITLE = "UniProt protein identity, exact sequence/annotation description and ID mapping"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -27,6 +27,39 @@ PROVENANCE = Provenance(
     attribution="UniProt Consortium",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "chembl.id": "This protein's ChEMBL target id.",
+    "drugbank.id": "This protein's DrugBank id.",
+    "eggnog.group": "This protein's eggNOG orthologous-group id.",
+    "gene.ensembl.id": "Ensembl gene id for one gene.",
+    "gene.hgnc.id": "HGNC id for one human gene.",
+    "gene.ncbi.id": "NCBI Gene id for one gene.",
+    "gene.symbol": "A gene's official symbol, e.g. TP53 — joins gene databases.",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "nucleotide.insdc.accession": "INSDC nucleotide accession (GenBank/EMBL/DDBJ).",
+    "orthodb.group": "This protein's OrthoDB orthologous-group id.",
+    "pathway.kegg.id": "A KEGG pathway id.",
+    "pathway.reactome.id": "A Reactome pathway id.",
+    "pdb.id": "A PDB / PDBe structure id.",
+    "protein.annotation.records": "Structured UniProtKB comments/features/references and observed evidence/release metadata.",
+    "protein.ensembl.id": "Ensembl protein id for one protein.",
+    "protein.function": "What this protein does — UniProt's curated summary.",
+    "protein.gene": "The gene that codes for this protein.",
+    "protein.length": "This protein's length in amino acids.",
+    "protein.name": "This protein's recommended name.",
+    "protein.organism": "The organism this protein comes from.",
+    "protein.query": "The text you start from — a gene symbol, protein name, or accession.",
+    "protein.reviewed": "Whether this entry is reviewed (Swiss-Prot) or not (TrEMBL).",
+    "protein.sequence": "Canonical UniProtKB entry amino-acid sequence; produced by describe_protein.",
+    "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "protein.uniprot.mapping.count": "How many ids this protein mapped to.",
+    "protein.uniprot.mapping.records": "The ids this protein mapped to — id plus reviewed/db.",
+    "refseq.protein.id": "NCBI RefSeq protein accession (NP_/XP_) for one protein.",
+    "string.id": "Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -35,6 +68,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="resolve_protein",

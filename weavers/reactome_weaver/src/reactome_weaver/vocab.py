@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.14"
+WEAVER_VERSION = "0.1.15"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,26 @@ PROVENANCE = Provenance(
     attribution="Reactome",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "pathway.reactome.count": "How many Reactome pathways this protein is in.",
+    "pathway.reactome.detail": "Full detail of one Reactome pathway — name, species, disease flag, type.",
+    "pathway.reactome.display_name": "The name of one Reactome pathway.",
+    "pathway.reactome.evidence": "Observed Reactome curation, literature and inference assertions.",
+    "pathway.reactome.hierarchy": "Direct observed hasEvent children with distinct pathway/reaction types.",
+    "pathway.reactome.id": "A Reactome pathway id.",
+    "pathway.reactome.in_disease": "Whether one Reactome pathway is disease-associated.",
+    "pathway.reactome.names": "The Reactome pathways this protein takes part in.",
+    "pathway.reactome.participants": "Typed provider participant references with numeric IDs scoped to observed release.",
+    "pathway.reactome.reactions": "Recursive reaction-like event listing and display accounting.",
+    "pathway.reactome.records": "This protein's Reactome pathways — stable id, name, in-disease flag.",
+    "pathway.reactome.species": "The species of one Reactome pathway.",
+    "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "reaction.reactome.detail": "Source reaction participants, literature, curation and inference assertions.",
+    "reaction.reactome.id": "Reactome reaction-like event stable identifier; produced by recursive pathway listing and consumed by describe_reaction.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +54,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="list_pathways",

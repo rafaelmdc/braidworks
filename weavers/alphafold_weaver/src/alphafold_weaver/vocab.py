@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "alphafold"
-WEAVER_VERSION = "0.1.12"
+WEAVER_VERSION = "0.1.13"
 WEAVER_TITLE = "AlphaFold predicted structure (accession -> model + confidence)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,22 @@ PROVENANCE = Provenance(
     attribution="AlphaFold DB (Google DeepMind & EMBL-EBI)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+    "structure.alphafold.confidence": "Observed PAE/pLDDT references with model version, coverage and metric semantics.",
+    "structure.alphafold.entry_id": "This protein's AlphaFold model id.",
+    "structure.alphafold.mean_plddt": "The AlphaFold model's mean pLDDT confidence, 0–100.",
+    "structure.alphafold.model_coverage": "Observed model/display counts and API-only enumeration scope.",
+    "structure.alphafold.model_id": "Version-qualified AlphaFold entry (entryId@vN); produced by list_models, consumed by describe_prediction.",
+    "structure.alphafold.model_url": "Where to download this protein's AlphaFold model.",
+    "structure.alphafold.models": "Capped display of API-observed AlphaFold models; full identities are a separate fan set.",
+    "structure.alphafold.pae_image_url": "The AlphaFold model's predicted-aligned-error plot.",
+    "structure.alphafold.records": "Full AlphaFold model metadata — id, confidence, URLs.",
+    "structure.alphafold.version": "Which AlphaFold model version this is.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +50,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_model",

@@ -15,17 +15,30 @@ from braidworks.core import (
     WeaverManifest,
 )
 
-WEAVER_ID = 'wikidata'
-WEAVER_VERSION = '0.1.9'
-WEAVER_TITLE = 'Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)'
+WEAVER_ID = "wikidata"
+WEAVER_VERSION = "0.1.10"
+WEAVER_TITLE = "Wikidata taxon names (scientific name -> QID, vernacular names, enwiki title)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
 PROVENANCE = Provenance(
-    source_url='https://www.wikidata.org/',
-    license='CC0-1.0',
-    citation='Wikidata, the free knowledge base. https://www.wikidata.org/',
-    attribution='Wikidata contributors (CC0)',
+    source_url="https://www.wikidata.org/",
+    license="CC0-1.0",
+    citation="Wikidata, the free knowledge base. https://www.wikidata.org/",
+    attribution="Wikidata contributors (CC0)",
 )
+
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "organism.scientific_name": "An organism's canonical scientific name — joins clade-keyed datasets.",
+    "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
+    "wikidata.identity": "Requested/current QID, observed redirect and scientific-name source claims.",
+    "wikidata.localized": "Localized label/description with requested and actual language plus explicit English fallback.",
+    "wikidata.qid": "Wikidata item id (Qxxxx) for one taxon — joins Wikidata/Wikipedia datasets.",
+    "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",
+    "wikipedia.title": "English Wikipedia article title for one taxon — the pageviews join key.",
+}
 
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
@@ -35,44 +48,93 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
-                id='resolve_taxon',
-                consumes=frozenset({'organism.scientific_name'}),
-                produces=frozenset({'organism.vernacular_names', 'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'}),
-                output_groups=(
-                    OutputGroup(id='core', outputs=frozenset({'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'})),
-                    OutputGroup(id='names', outputs=frozenset({'organism.vernacular_names'})),
+                id="resolve_taxon",
+                consumes=frozenset({"organism.scientific_name"}),
+                produces=frozenset(
+                    {
+                        "organism.vernacular_names",
+                        "wikidata.qid",
+                        "wikidata.sitelinks",
+                        "wikipedia.title",
+                    }
                 ),
-                backends=tuple(b for b in ('api',) if b in backends),
-                always_computed_groups=frozenset({'core'}),
+                output_groups=(
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikidata.qid", "wikidata.sitelinks", "wikipedia.title"}
+                        ),
+                    ),
+                    OutputGroup(id="names", outputs=frozenset({"organism.vernacular_names"})),
+                ),
+                backends=tuple(b for b in ("api",) if b in backends),
+                always_computed_groups=frozenset({"core"}),
                 parameters=(
-                    Parameter(name='expected_rank', type='string', enum=(), default=None, description="Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour)."),
+                    Parameter(
+                        name="expected_rank",
+                        type="string",
+                        enum=(),
+                        default=None,
+                        description="Taxon rank (P105 English label, e.g. 'order', 'genus') used to disambiguate a cross-code homonym: when a scientific name resolves to several Wikidata items, the one whose rank matches is chosen. Omit to leave such names ambiguous (the historical behaviour).",
+                    ),
                 ),
             ),
             Capability(
-                id='map_from_taxid',
-                consumes=frozenset({'ncbi.taxon.id'}),
-                produces=frozenset({'organism.vernacular_names', 'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'}),
-                output_groups=(
-                    OutputGroup(id='core', outputs=frozenset({'wikidata.qid', 'wikidata.sitelinks', 'wikipedia.title'})),
-                    OutputGroup(id='names', outputs=frozenset({'organism.vernacular_names'})),
+                id="map_from_taxid",
+                consumes=frozenset({"ncbi.taxon.id"}),
+                produces=frozenset(
+                    {
+                        "organism.vernacular_names",
+                        "wikidata.qid",
+                        "wikidata.sitelinks",
+                        "wikipedia.title",
+                    }
                 ),
-                backends=tuple(b for b in ('api',) if b in backends),
-                always_computed_groups=frozenset({'core'}),
+                output_groups=(
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikidata.qid", "wikidata.sitelinks", "wikipedia.title"}
+                        ),
+                    ),
+                    OutputGroup(id="names", outputs=frozenset({"organism.vernacular_names"})),
+                ),
+                backends=tuple(b for b in ("api",) if b in backends),
+                always_computed_groups=frozenset({"core"}),
             ),
             Capability(
-                id='describe_taxon',
-                consumes=frozenset({'wikidata.qid'}),
-                produces=frozenset({'wikidata.identity', 'wikidata.localized', 'wikidata.sitelinks', 'wikipedia.title'}),
-                output_groups=(
-                    OutputGroup(id='core', outputs=frozenset({'wikidata.identity', 'wikidata.sitelinks', 'wikipedia.title'})),
-                    OutputGroup(id='localized', outputs=frozenset({'wikidata.localized'})),
+                id="describe_taxon",
+                consumes=frozenset({"wikidata.qid"}),
+                produces=frozenset(
+                    {
+                        "wikidata.identity",
+                        "wikidata.localized",
+                        "wikidata.sitelinks",
+                        "wikipedia.title",
+                    }
                 ),
-                backends=tuple(b for b in ('api',) if b in backends),
+                output_groups=(
+                    OutputGroup(
+                        id="core",
+                        outputs=frozenset(
+                            {"wikidata.identity", "wikidata.sitelinks", "wikipedia.title"}
+                        ),
+                    ),
+                    OutputGroup(id="localized", outputs=frozenset({"wikidata.localized"})),
+                ),
+                backends=tuple(b for b in ("api",) if b in backends),
                 max_batch_size=50,
                 parameters=(
-                    Parameter(name='language', type='string', enum=(), default='en', description='Localized label/description language, with explicit English fallback; Wikipedia titles remain English'),
+                    Parameter(
+                        name="language",
+                        type="string",
+                        enum=(),
+                        default="en",
+                        description="Localized label/description language, with explicit English fallback; Wikipedia titles remain English",
+                    ),
                 ),
             ),
         ),

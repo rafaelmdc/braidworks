@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "agora"
-WEAVER_VERSION = "0.2.11"
+WEAVER_VERSION = "0.2.12"
 WEAVER_TITLE = (
     "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
 )
@@ -28,6 +28,25 @@ PROVENANCE = Provenance(
     attribution="AGORA2 / Virtual Metabolic Human (VMH), Heinken et al., Nat Biotechnol 2023 (data CC BY-NC 4.0)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    "microbe.agora.artifact": "Observed local SBML structural status; release verification and remote availability remain explicit.",
+    "microbe.agora.coverage": "AGORA crosswalk release and full observed versus display counts.",
+    "microbe.agora.genome_listing": "Exact model-to-assembly source associations from the pinned crosswalk.",
+    "microbe.agora.reaction_listing": "Processed-model reaction repertoire with full fan and database source identity.",
+    "microbe.agora.reconstruction": "One release-qualified model's source taxid/genome associations.",
+    "microbe.agora.reconstruction_id": "Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it.",
+    "microbe.agora.reconstructions": "Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set.",
+    "microbe.metabolism.reactions": "The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}.",
+    "microbe.metabolism.reconstruction": "This organism's AGORA2 genome-scale metabolic reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome).",
+    "microbe.metabolism.sbml": "The genome-scale metabolic model (AGORA2 SBML) for this microbe — a local path per reconstruction (lazily downloaded per model), the substrate for community-flux / seed-set metabolic-complementarity analysis.",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+    "reaction.vmh.id": "Observed VMH reaction abbreviation; produced by AGORA list_reactions and consumed by describe_reaction.",
+    "reaction.vmh.record": "VMH reaction annotation and observed model membership with database provenance.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -36,6 +55,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_metabolic_reconstruction",

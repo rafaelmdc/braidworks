@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.2.9"
+WEAVER_VERSION = "0.2.10"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -27,6 +27,25 @@ PROVENANCE = Provenance(
     attribution="GMrepo (Wu et al., NAR 2020)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
+    "metagenome.run_id": "Observed sequencing run accession; produced and consumed by GMrepo run workflows.",
+    "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
+    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.coverage": "GMrepo taxon association acquisition outcome and completeness.",
+    "microbe.abundance.overview": "This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo).",
+    "microbe.abundance.phenotype_listing": "Observed source MeSH phenotype identities for a taxon.",
+    "microbe.abundance.phenotype_names": "The gut-metagenome phenotypes (diseases/health) this microbe is reported prevalent in (GMrepo).",
+    "microbe.abundance.records": "Full GMrepo abundance rows for this microbe — the global overview plus every per-phenotype prevalence/abundance record.",
+    "microbe.abundance.run": "One acquired GMrepo sequencing run, metadata and taxonomic profile evidence.",
+    "microbe.abundance.run_listing": "Acquired GMrepo runs and exact metadata filters with retained-scope coverage.",
+    "microbe.abundance.run_metadata": "Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage.",
+    "microbe.abundance.sample_profiles": "Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI).",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -35,6 +54,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="gmrepo.list_abundances",

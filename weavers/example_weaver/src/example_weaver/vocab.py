@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "example"
-WEAVER_VERSION = "1.0.6"
+WEAVER_VERSION = "1.0.7"
 WEAVER_TITLE = "Example reference weaver (taxid -> traits, from a tiny CSV)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,14 @@ PROVENANCE = Provenance(
     attribution="Braidworks bundled sample data",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "microbe.trait.gram_stain": "This microbe's Gram stain — positive or negative.",
+    "microbe.trait.optimum_temp": "The temperature this microbe grows best at.",
+    "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +42,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_traits",
