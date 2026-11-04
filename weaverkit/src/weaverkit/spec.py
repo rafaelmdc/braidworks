@@ -134,9 +134,7 @@ class CapabilitySpec:
                 always_computed_groups=tuple(data.get("always_computed_groups", ())),
                 set_outputs=tuple(data.get("set_outputs", ())),
                 consumes_any=bool(data.get("consumes_any", False)),
-                parameters=tuple(
-                    ParameterSpec.from_dict(p) for p in data.get("parameter", ())
-                ),
+                parameters=tuple(ParameterSpec.from_dict(p) for p in data.get("parameter", ())),
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -306,9 +304,11 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
         )
 
     if spec.api_key not in ("none", "optional", "required"):
+        # Never echo the value: someone may have pasted a real key into this field.
         problems.append(
-            f"api_key {spec.api_key!r} must be 'none' (no key needed), 'optional' "
-            "(works without a key, better with one), or 'required' (unusable without one)"
+            "api_key must be 'none' (no key needed), 'optional' (works without a key, "
+            "better with one), or 'required' (unusable without one). It declares whether "
+            "the source needs a key; never put the key itself in the spec."
         )
 
     for fieldname in ("title", "version", "license", "source_url"):

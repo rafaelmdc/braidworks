@@ -85,10 +85,10 @@ def recording_registry():
     return registry, weaver
 
 
-def client_for(monkeypatch, registry):
+def client_for(monkeypatch, registry, data_dir=None):
     testclient = pytest.importorskip("fastapi.testclient")
     monkeypatch.setattr(serve, "discover_registry", lambda: SimpleNamespace(registry=registry))
-    return testclient.TestClient(serve.create_app())
+    return testclient.TestClient(serve.create_app(data_dir=data_dir))
 
 
 @pytest.mark.parametrize("expand,k,expected", [("top", 3, 1), ("top_k", 3, 3), ("all", 3, 5)])

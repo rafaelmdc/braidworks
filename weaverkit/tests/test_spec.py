@@ -181,8 +181,13 @@ def test_set_outputs_defaults_empty():
 def test_parameter_parsed_and_valid():
     data = _valid_dict()
     data["capability"][0]["parameter"] = [
-        {"name": "level", "type": "string", "enum": ["a", "b"], "default": "a",
-         "description": "pick"}
+        {
+            "name": "level",
+            "type": "string",
+            "enum": ["a", "b"],
+            "default": "a",
+            "description": "pick",
+        }
     ]
     spec = WeaverSpec.from_dict(data)
     p = spec.capabilities[0].parameters[0]
@@ -199,9 +204,7 @@ def test_parameter_rejects_unknown_type():
 
 def test_parameter_rejects_default_outside_enum():
     data = _valid_dict()
-    data["capability"][0]["parameter"] = [
-        {"name": "p", "enum": ["a", "b"], "default": "c"}
-    ]
+    data["capability"][0]["parameter"] = [{"name": "p", "enum": ["a", "b"], "default": "c"}]
     problems = validate_spec(WeaverSpec.from_dict(data))
     assert any("default 'c' is not in its enum" in p for p in problems)
 
@@ -394,3 +397,11 @@ def test_mutating_copy_does_not_share_state():
     clone = copy.deepcopy(base)
     clone["weaver"]["db_name"] = "other"
     assert base["weaver"]["db_name"] == "madin"
+
+
+def test_invalid_api_key_is_rejected_without_echoing_the_value():
+    data = _valid_dict()
+    data["weaver"]["api_key"] = "sk-live-0123456789abcdef"  # a real key pasted by mistake
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any(p.startswith("api_key must be") for p in problems)
+    assert not any("sk-live" in p for p in problems)

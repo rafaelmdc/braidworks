@@ -362,7 +362,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from weaverkit.serve import serve
 
     try:
-        serve(host=args.host, port=args.port, open_browser=not args.no_open)
+        serve(
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_open,
+            data_dir=args.data_dir,
+        )
     except RuntimeError as exc:  # missing [serve] extra
         print(str(exc), file=sys.stderr)
         return 1
@@ -518,6 +523,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument("--port", type=int, default=8765, help="port (default: 8765)")
     p_serve.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost)")
+    p_serve.add_argument(
+        "--data-dir",
+        metavar="DIR",
+        help="folder that browser-chosen cache/run files must live in (default: current dir)",
+    )
     p_serve.add_argument(
         "--no-open", action="store_true", help="do not open a browser automatically"
     )

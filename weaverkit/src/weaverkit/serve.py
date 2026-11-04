@@ -22,7 +22,10 @@ import them lazily and fail with a clear install hint if missing.
 
 import asyncio
 import io
+import os
 import sqlite3
+import sys
+from dataclasses import replace
 
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.exceptions import BraidworksError, NoPathError, NoPlanError
@@ -645,11 +648,46 @@ def _identity_columns(registry, columns):
     ]
 
 
+# --- browser-supplied file paths --------------------------------------------
+
+
+def confine_path(path: str, root: str) -> str:
+    """Resolve a browser-supplied path inside ``root`` (the server's data directory).
+
+    Relative paths resolve against ``root``; anything that resolves outside it (absolute
+    paths elsewhere, ``..``, symlinks out) is refused, so a page that can reach the
+    server cannot make it open or create files elsewhere on its disk.
+    """
+    candidate = os.path.realpath(os.path.join(root, path))
+    if candidate != root and not candidate.startswith(root + os.sep):
+        raise ValueError(
+            f"path {path!r} is outside the server's data directory ({root}); "
+            "use a path inside it, or restart with --data-dir"
+        )
+    return candidate
+
+
+def confine_persistence(value, root: str):
+    """Browser persistence options with their cache/run paths confined to ``root``."""
+    if value is None:
+        return None
+    options = _persistence(value)
+    return replace(
+        options,
+        cache_db=confine_path(options.cache_db, root) if options.cache_db else None,
+        run_db=confine_path(options.run_db, root) if options.run_db else None,
+    ).to_json()
+
+
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
 
 
-def create_app():
-    """Build the FastAPI app. Raises a clear error if the ``[serve]`` extra is missing."""
+def create_app(data_dir: str | os.PathLike | None = None):
+    """Build the FastAPI app. Raises a clear error if the ``[serve]`` extra is missing.
+
+    ``data_dir`` (default: the current directory) bounds every cache/run file path the
+    browser supplies; see :func:`confine_path`.
+    """
     import json as _json
 
     try:
@@ -693,6 +731,7 @@ def create_app():
         persistence: dict
         decisions: list[dict] = Field(default_factory=list)
 
+    root = os.path.realpath(data_dir if data_dir is not None else os.getcwd())
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
     # The page, with the network blob injected (graph reads it; no /api/network) and the
@@ -723,6 +762,7 @@ def create_app():
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         if req.batch is not None or req.persistence is not None:
             try:
+                persistence = confine_persistence(req.persistence, root)
                 return asyncio.run(
                     execute_batch_response(
                         registry,
@@ -737,7 +777,7 @@ def create_app():
                         max_expansion=req.max_expansion,
                         review_policy=req.review_policy,
                         confidence_threshold=req.confidence_threshold,
-                        persistence=req.persistence,
+                        persistence=persistence,
                     )
                 )
             except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
@@ -809,10 +849,8 @@ def create_app():
     @app.get("/api/runs")
     def api_runs(run_db: str):
         try:
-            return {
-                "ok": True,
-                "runs": [run_status(cp) for cp in SQLiteRunStore(run_db, create=False).list()],
-            }
+            store = SQLiteRunStore(confine_path(run_db, root), create=False)
+            return {"ok": True, "runs": [run_status(cp) for cp in store.list()]}
         except (ValueError, OSError, sqlite3.Error) as exc:
             return {"ok": False, "error": str(exc)}
 
@@ -821,7 +859,9 @@ def create_app():
         try:
             return {
                 "ok": True,
-                "run": run_status(SQLiteRunStore(run_db, create=False).load(run_id)),
+                "run": run_status(
+                    SQLiteRunStore(confine_path(run_db, root), create=False).load(run_id)
+                ),
             }
         except (ValueError, OSError, sqlite3.Error, KeyError) as exc:
             return {"ok": False, "error": str(exc)}
@@ -831,7 +871,10 @@ def create_app():
         try:
             return asyncio.run(
                 execute_resume_response(
-                    discover_registry().registry, req.run_id, req.persistence, req.decisions
+                    discover_registry().registry,
+                    req.run_id,
+                    confine_persistence(req.persistence, root),
+                    req.decisions,
                 )
             )
         except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
@@ -843,7 +886,7 @@ def create_app():
             return await execute_resume_response(
                 discover_registry().registry,
                 req.run_id,
-                req.persistence,
+                confine_persistence(req.persistence, root),
                 req.decisions,
                 on_event=on_event,
             )
@@ -866,7 +909,7 @@ def create_app():
                 max_expansion=req.max_expansion,
                 review_policy=req.review_policy,
                 confidence_threshold=req.confidence_threshold,
-                persistence=req.persistence,
+                persistence=confine_persistence(req.persistence, root),
                 on_event=on_event,
             )
 
@@ -913,14 +956,43 @@ def create_app():
     return app
 
 
-def serve(*, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
-    """Run the GUI server on localhost. Requires the ``[serve]`` extra."""
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def exposure_warning(host: str, data_dir: str) -> str | None:
+    """What a non-loopback bind exposes, in plain words; ``None`` for localhost."""
+    if host in LOOPBACK_HOSTS:
+        return None
+    return (
+        f"warning: serving on {host} makes this server reachable from other machines. "
+        "Anyone who can reach it can run queries through your configured sources, read "
+        f"error messages, and create cache/run files inside {data_dir}. "
+        "Use the default --host 127.0.0.1 unless you trust the network."
+    )
+
+
+def serve(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+    data_dir: str | os.PathLike | None = None,
+) -> None:
+    """Run the GUI server on localhost. Requires the ``[serve]`` extra.
+
+    ``data_dir`` (default: the current directory) is the only place browser-supplied
+    cache and run files may live.
+    """
     try:
         import uvicorn
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(_SERVE_EXTRA_HINT) from exc
 
-    app = create_app()
+    root = os.path.realpath(data_dir if data_dir is not None else os.getcwd())
+    warning = exposure_warning(host, root)
+    if warning:
+        print(warning, file=sys.stderr)
+    app = create_app(data_dir=root)
     url = f"http://{host}:{port}"
     if open_browser:
         import threading
