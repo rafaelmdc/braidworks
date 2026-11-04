@@ -1,7 +1,7 @@
 # HTTP pacing contracts
 
 Exact accounting and coordination rules. For setting a source rate, use
-[the pacing guide](../request-pacing.md).
+[the pacing guide](../how-to/set-request-rates.md).
 
 ## Request accounting and coordination
 

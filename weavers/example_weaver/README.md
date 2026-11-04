@@ -104,6 +104,6 @@ licenses. The source license in a weaver manifest describes its data, not this c
 
 Supported builder options are explicit; unknown options raise
 `BackendConfigurationError`. Empty construction remains safe for discovery.
-See [configuration and lifetime](../../docs/weaver-configuration.md) for provider
+See [configuration and lifetime](../../docs/reference/weaver-configuration.md) for provider
 configuration, source selection and owned/borrowed HTTP clients. Use
 `async with weaver:` or `await weaver.aclose()` after requests finish.

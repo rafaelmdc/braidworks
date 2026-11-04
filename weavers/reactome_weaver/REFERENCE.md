@@ -67,7 +67,7 @@ of an unversioned live service.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Listing evidence and source updates

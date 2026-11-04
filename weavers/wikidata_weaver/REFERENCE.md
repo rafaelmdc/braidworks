@@ -47,7 +47,7 @@ the existing candidate/review behavior.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 Stable identity entry points: `map_from_taxid` consumes `ncbi.taxon.id` and

@@ -1,7 +1,7 @@
 # Failure contract
 
 Use this page to distinguish exceptions that stop a run from result values that
-retain an entity's partial data. See [result inspection](../results.md) for commands
+retain an entity's partial data. See [result inspection](../how-to/check-results.md) for commands
 and [result meaning](../explanation/result-meaning.md) for biological interpretation.
 
 ## Exceptions

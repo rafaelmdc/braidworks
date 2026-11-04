@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: capability-docs docs-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+.PHONY: capability-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -40,11 +40,11 @@ new-weaver:  ## Scaffold a weaver: make new-weaver SPEC=path/weaver.spec.toml DE
 verify-weaver:  ## Verify a weaver: make verify-weaver SPEC=path PACKAGE=foo_weaver
 	$(MAKE) -C weaverkit verify SPEC=$(abspath $(SPEC)) PACKAGE=$(PACKAGE)
 
-index:  ## Build the cross-weaver index -> docs/weavers-index.tsv + docs/keys-index.md
-	uv run weaverkit index --root . --out docs/weavers-index.tsv --keys-out docs/keys-index.md
+index:  ## Build the cross-weaver index -> docs/reference/weavers-index.tsv + docs/reference/keys-index.md
+	uv run weaverkit index --root . --out docs/reference/weavers-index.tsv --keys-out docs/reference/keys-index.md
 
 # Where `make view` writes the interactive network view; override with VIEW_OUT=path.html.
-VIEW_OUT ?= docs/braidworks-network.html
+VIEW_OUT ?= docs/network/braidworks-network.html
 # The hero braid embedded in the view by default: a gene name -> what it does
 # (Reactome pathways + GO biological processes). Two wants, both human-readable
 # descriptors — not a raw id dump. Override with FROM=.. TO=...
@@ -71,7 +71,7 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
-	tools/check_artifacts.py tools/stage_release.py tools/benchmark_weaver_work.py tools/tests \
+	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/tests \
 	$(WEAVER_LINT_PATHS)
 
 RUFF_VERSION := 0.16.10
@@ -85,6 +85,9 @@ fmt:  ## Auto-format with ruff
 clean:  ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache
+
+links-check:  ## Check that relative Markdown links and heading anchors resolve
+	python3 tools/check_links.py
 
 quickstart-check:  ## Run the README quickstart offline (LIVE=1 runs the real queries)
 	python3 tools/check_quickstart.py $(if $(LIVE),--live)

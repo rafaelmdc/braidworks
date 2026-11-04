@@ -31,6 +31,8 @@ jobs:
         run: make lint
       - name: Capability documentation
         run: make docs-check
+      - name: Documentation links
+        run: make links-check
       - name: Test
         run: make test
 

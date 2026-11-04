@@ -8,7 +8,7 @@ visual tools.
 ## Run queries in the browser
 
 Install the `serve` extra with your selected sources, then run `weaverkit serve`.
-Follow [the browser guide](../docs/browser.md) to build a route, process a batch,
+Follow [the browser guide](../docs/how-to/use-the-browser.md) to build a route, process a batch,
 export results or continue saved work. The optional server uses FastAPI and uvicorn;
 the base toolkit depends on core and its networkx/platformdirs dependencies.
 
@@ -19,7 +19,7 @@ Set-valued keys are marked as fan dimensions. See `weaverkit view --help`.
 
 ## Build or extend an adapter
 
-Follow [the implementation guide](../docs/weaver-implementation-guide.md):
+Follow [the implementation guide](../docs/how-to/implement-a-weaver.md):
 write a spec, scaffold the package, implement source backends, then verify it.
 The scaffold imports records, mapping and dispatch from core. Conformance checks
 compare the implementation to the spec; strict verification adds completed goldens.
@@ -32,7 +32,7 @@ compare the implementation to the spec; strict verification adds completed golde
 | Implement backend behavior | [Backend reference](docs/implementing-backends.md) |
 | Extend an implemented package safely | [Safe regeneration](docs/safe-regeneration.md) |
 | Inspect/write scaffold artifacts from Python | [Scaffold interfaces](docs/scaffold-reference.md) |
-| Find source connections | `weaverkit index`; [key index](../docs/keys-index.md) |
+| Find source connections | `weaverkit index`; [key index](../docs/reference/keys-index.md) |
 | Inspect source attribution | `weaverkit references` |
 
 The index scans workspace specs and writes capability/input/output/backend metadata;
@@ -55,7 +55,7 @@ for the shared runtime, builder and verification rationale.
 
 ## Installation and interfaces
 
-Use [checkout or wheel installation](../docs/installation.md); publication to a package
+Use [checkout or wheel installation](../docs/how-to/install.md); publication to a package
 index is not assumed. The [browser interface reference](../docs/reference/browser.md)
 records HTTP endpoints and generated artifacts. [Current work](docs/backlog.md) tracks
 pending toolkit changes; it is separate from current usage instructions.

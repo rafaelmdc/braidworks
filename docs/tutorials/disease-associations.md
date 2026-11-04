@@ -12,7 +12,7 @@ From your Braidworks checkout, run:
 uv sync --all-extras
 ```
 
-Use Python 3.12+ and uv, as in [installation](../installation.md). This installs every
+Use Python 3.12+ and uv, as in [installation](../how-to/install.md). This installs every
 source, including Disbiome. Disbiome requires
 a separately acquired local database; the next script downloads its real source tables
 on first use, then reuses the database. Network access is needed for that first build.
@@ -109,4 +109,4 @@ snapshot. This `FetchResult` export is not a CLI run archive or resume checkpoin
 
 For other identifiers and filters, use the
 [Disbiome reference](../../weavers/disbiome_weaver/README.md). For interpretation of
-lookup failures and partial results, use [result interpretation](../results.md).
+lookup failures and partial results, use [result interpretation](../how-to/check-results.md).

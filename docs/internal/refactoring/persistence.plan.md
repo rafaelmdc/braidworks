@@ -1,0 +1,389 @@
+# Round 2 plan: persistence foundations, cache and resume
+
+Spec: [persistence.spec.md](persistence.spec.md). Design:
+[persistence boundaries](../audits/persistence-refactor-design.md).
+Cross-round order: [W01–03, W09–12](implementation.plan.md).
+Status: P01–P03 verified locally; P04 verified locally; P05–P06 verified locally; P07 verified locally. Tracking: #144, #143, #146.
+
+| Task | Requirement | Deliverable | Dependency |
+|---|---|---|---|
+| P01 | PF01 | Connection scopes and real schema initialization — verified | W00 |
+| P02a | PF02 | Owned build locking with recovery/timeout | P01 |
+| P02b | PF02 | Source reader identity/session consistency | P01; coordinate P02a |
+| P03a | PF03 | Separate reviewed-history repository and migration | P01–02 |
+| P03b | PF03 | Batch-local async thread boundary and lifecycle | P01–02; review P03a service lifetime |
+| P04a | PF04 | Versioned cache codec/policy contract | P01; AP01–02 |
+| P04b | PF04 | SQLite cache adapter and retention | P04a |
+| P05 | PF05 | Serializable state and in-memory continuation | AP02; preserve AP04 progress |
+| P06 | PF06 | Transactional run store and ownership | P01–02, P05 |
+| P07 | PF07 | Shared human cache/run/resume interfaces | AP03–05, P04b–06 |
+
+## P01 — Connection scope and schema ownership
+
+Inventory `taxonomy_resolver/db.py` call sites accepting paths/borrowed connections.
+Add minimal helpers in `core/sqlite.py`; implement read-only URI escaping, owned-close
+and explicitly owned transaction semantics. Convert internal helpers to explicit
+handles; leave documented public wrappers. Remove initialized-path global shortcuts
+in favor of inspecting the actual writable connection/version. Separate read and
+schema-initialization paths. Do not commit/rollback another caller's transaction.
+
+Tests: tiny owned/borrowed DBs, exceptions, nested ownership rejection, missing readonly
+path, special path characters, replacement DB and incompatible schema. Reuse the audit
+reproduction as a failing regression where applicable. Run core/NCBI suites.
+Commit boundary: one resource contract plus its callers; no review migration yet.
+Done: all PF01 acceptance passes and legacy wrappers are characterized.
+
+## P02a — Build lock ownership
+
+Inspect supported platforms before choosing the stdlib OS lock implementation and
+fallback. Add bounded wait/progress, safe owner release and process-death recovery.
+Preserve temporary build/publish. Do not reclaim a live lock by age alone or add Redis.
+
+Tests use subprocesses and tiny files: live long-lived owner, contending builders,
+owner exit/crash, waiting timeout and owner release. Avoid flaky sleep-based assertions
+where handshakes can coordinate processes. Retain existing atomic build failure tests.
+Commit independently from source metadata changes.
+
+## P02b — Reader identity/session consistency
+
+Introduce an immutable identity value and source-local metadata readers. Bind backend
+instances to a generation; derive identity from the session that reads results and
+reject replacement mismatch. Start with Wikipedia's reproduced cross-thread mismatch,
+then apply to affected local backends. New builds record meaningful schema/build/content
+identity. Handle legacy metadata with explicit limits, not fabricated content guarantees.
+Include GTDB crosswalk/tree composition; protect existing sessions during replacement.
+
+Tests: fingerprint then replacement then worker read; no miskeyed result; same generation
+reuses; changed component invalidates. No per-call hashing of real multi-GB artifacts.
+Run affected weaver/core contracts and version/core-floor checks.
+Done for PF02 only when both P02a and P02b gates pass.
+
+## P03a — Review repository and migration
+
+Extract NCBI-local reviewed-decision operations into `review_store.py`, using existing
+DecisionRecord and matching rules. Reference readers cease writable review initialization.
+Implement a deterministic separate-path default and compatibility policy; document it.
+Migrate history transactionally and idempotently, keeping the source intact on failure.
+Do not expand a generic CRUD interface or put taxonomy rules in core.
+
+Tests: repeated migration, interruption/rollback, deduplication, conservative reuse,
+readonly reference access, refresh retaining history and old/new constructor paths.
+Migration goes in a reviewable commit with rollback docs, not hidden in a lookup helper.
+
+## P03b — Local batch execution boundary
+
+Extract whole-batch synchronous lookup functions and own connections/services inside
+that scope before scheduling with `asyncio.to_thread`. Apply to GTDB/AGORA where reads
+currently block and simplify other lifetimes as justified. Benchmark representative
+synthetic NCBI batches before retaining complicated thread-local reuse.
+
+Tests: order/cardinality, async heartbeat, cleanup on failure and cancellation limits.
+Do not spawn one task/connection per row. Document that already-running synchronous
+work may complete after cancellation. PF03 completes after both P03 tasks pass.
+
+## P04a — Persistent cache contract
+
+Specify supported canonical JSON values and codec version in `cache_codec.py`. Preserve
+effective params and coverage key rules. Implement the small CachePolicy contract:
+positive 1-hour, negative 5-minute, ambiguous positive TTL, no ERROR admission, configurable
+256 MiB payload budget. Validate numeric options and zero-TTL disabling. Keep in-memory
+default and reviewed history outside the cache.
+
+Shared behavior tests cover canonical equivalence, unsupported/nonfinite values,
+coverage selection, admission and fake-clock expiry. Check existing executor admission
+without introducing a second source of truth for coverage. Commit contract before SQL.
+
+## P04b — SQLite cache adapter
+
+Implement get/put on the existing port with owned short transactions, versioned metadata,
+indexed base-key lookup and deterministic coverage selection. Validate loaded JSON,
+report corrupt misses, implement expiration/oldest-entry retention and clear migration
+or rebuild behavior. Document that payload budget differs from physical file size.
+
+Tests: close/reopen hits, effective-default equivalence, richer/insufficient groups,
+expiry/negative/ambiguous data, corruption, incompatible schema, retention and write
+rollback. Check worker cache safeguards still hold. No persistent default activation.
+Done: PF04 acceptance passes with core and arq integration.
+
+## P05 — Execution state before run database
+
+Extract ExecutionState and versioned snapshots; replace runtime object identity with
+stable internal input/child keys without changing public row identity. Move current
+result application into deterministic transitions while preserving review/expansion
+algorithms. Capture heterogeneous group cursor, traversal/reroute cursor and budget.
+Keep runtime handles out of snapshots. Preserve the legacy executor facade.
+
+Tests compare uninterrupted runs with serialization/reconstruction between every valid
+wave/phase boundary, entirely in memory first. Include duplicates, self-loops, review,
+branch errors, fallback/reroute, capped fan-out and mixed groups. Check post-application
+checkpoint hooks separately from existing progress events.
+Commit state values/transitions before storage. Do not add resume I/O until PF05 passes.
+
+## P06 — Durable run store
+
+Implement RunDefinition/RunCheckpoint JSON values, narrow RunStore and SQLiteRunStore.
+Save complete snapshots atomically with revision and ownership checks. Add bounded
+claim lease renewal/recovery. Keep transactions short; no HTTP/human waits while writing.
+Validate schema/definition/options/source/worker identity before continuing.
+
+Crash-injection tests cover transaction boundaries; subprocess/concurrency tests cover
+competing resumers and expired/live owners. Reject stale revision, incompatible source,
+options or schema. Check cache hits never establish progress. Declare repeated reads
+inside interrupted waves and live-provider mutability honestly.
+Commit the storage/revision contract before human interface activation.
+
+## P07 — Shared interfaces and operational docs
+
+Expose cache/run options and continuation through the AP02 service. Implement CLI run
+status/resume, Python load/continue and browser status/list/resume against that service.
+Use explicit local paths and preserve in-memory defaults. Resume review requires an
+explicit decision; never change ambiguity behavior to make a demo continue.
+
+Tests: interface contract matrix, cancellation with valid last checkpoint, duplicates,
+lineage, settings and changed-definition rejection. Rehearse Firefox and real generated
+commands. Document paths, leases, retention, schema migration and limits. Archives stay
+independent observation exports. Update versions/floors/artifacts and strict gates.
+Done: PF07 and W14 integrated acceptance; publication stays deferred.
+
+## Evidence and commit discipline
+
+Each task starts Planned, becomes In progress while edited, and becomes Verified only
+with acceptance evidence and local commit hash. Record resolved engineering choices
+alongside tests; do not silently change spec defaults. Run relevant package tests, then
+workspace checks at coherent checkpoints. Data/tools stay isolated and uncommitted.
+Keep source/API behavior unchanged where possible; changed API paths require live E2E.
+
+## P01 implementation evidence — 2026-10-05
+
+Implemented `braidworks.core.sqlite` connection_scope, readonly_uri and transaction.
+Owned handles always close; explicit transaction ownership rejects nesting. NCBI
+internal read/write scopes now use explicit paths/handles, close owned connections,
+and preserve active borrowed transactions. A fresh borrowed write commits only the
+transaction it starts; commit=False requires a borrowed handle. Legacy connect() still
+sets the documented no-path default for compatibility, but internal scopes do not.
+Read paths do not initialize/create files. Builds now explicitly close their handle.
+Schema version 1 is stored in source-local taxonomy_schema; future versions reject.
+Actual databases are checked instead of initialized-path memoization, including replacement.
+Review-history separation remains P03, not part of this change.
+
+Evidence: core 403 passed; NCBI 121 passed/11 skipped; full workspace Make test passed;
+make lint and NCBI strict verification passed. Ten new regression tests cover ownership,
+rollback, borrowed transactions, special/missing paths, replacement and future schema.
+No API backend changed; no live network tests or data downloads were required.
+Core 0.13.1; NCBI 0.2.3 with core floor 0.13.1. Isolated uv environment retained.
+The broad unscoped ruff check also reported five existing findings in docs/diagrams and
+tools/release_tags.py outside the Make lint targets; those files were not changed.
+Local commit: see git log entry `refactor(sqlite): make connection and schema ownership explicit`.
+
+## P02a implementation evidence — 2026-10-05
+
+BuildLock uses POSIX flock or Windows byte-range locking on a stable file. Kernel
+ownership ends on process death; age never evicts a live owner. Acquisition accepts a
+finite nonnegative timeout and optional wait progress callback. Unsupported OSes fail
+clearly. Release closes this owner's handle and never unlinks a contender's inode.
+The old lock-file-removal assertion was deliberately replaced with persistent-inode
+and successful-reacquisition assertions: unlinking would violate mutual exclusion.
+18 targeted tests and 408 core tests passed, including real spawned-process timeout,
+old live owner, process termination recovery, repeat release and invalid timeouts.
+Linux POSIX behavior tested; Windows implementation requires Windows CI validation.
+Atomic build-failure tests retained. No fallback based on stale timestamps or Redis.
+Local commit: see `fix(localdb): use process-owned locks with bounded acquisition`.
+
+## P02b / P03b local-source session evidence — 2026-10-05
+
+SourceIdentity is an immutable JSON value; SourceBinding owns read-only batch sessions
+with a SQLite read transaction, source-local metadata and local artifact stamps.
+Bindings reject replacement/in-place changes and require a new backend. SQLite WAL and
+GTDB tree components participate; no per-query hashing of large files. Metadata/results
+come from one connection snapshot. New builds record schema/build identifiers alongside
+existing release/content metadata. Wikipedia and GTDB reproductions now reject stale
+fingerprints, including unchanged release tags and changed trees. Legacy stamps guard
+local generations but are not portable content digests. No remote immutability claimed.
+
+Wikipedia, Disbiome, GMrepo and MONDO readers close per batch. GTDB and AGORA schedule
+one whole synchronous batch through asyncio.to_thread, retaining ordering/cardinality.
+Tests include JSON roundtrip, same-generation reuse, replacement before/during sessions,
+component identity and async heartbeat. Workspace suite and lint passed before commit.
+NCBI integration depends on P03a and is recorded separately below.
+Local commit: see `refactor(sources): bind local readers to artifact generations`.
+
+## P03a / NCBI P02b–P03b evidence — 2026-10-05
+
+Source-local ReviewedDecisionRepository owns history; reference sessions open read-only.
+Default history is a separate sibling `.reviews.sqlite`; explicit cache paths and legacy
+same-path configuration remain supported. Idempotent migration copies complete legacy
+rows/markers in one transaction and never deletes originals; duplicate original rows
+are retained. Failed imports roll back both markers and copies. Refresh retains history,
+while conservative build-version matching refuses stale reuse. Operational/rollback
+instructions are in docs/how-to/set-up-ncbi-database.md. A former mock-only service test was deliberately
+replaced with real read-only behavior assertions; conformance/contract checks unchanged.
+
+NCBI now owns one service per batch with a borrowed SourceBinding reference session;
+service closure preserves borrowed handles and closes its review repository. Metadata
+and rows share a pinned generation, replacement rejects even across worker threads.
+Fixture benchmark: 100 rows 0.006s direct/0.009s batch-thread; 1000 rows 0.077s/0.052s.
+No persistent thread-local lifecycle is justified by that evidence. Already-running
+thread work may complete after cancellation. Core/local source suites, strict gates
+and workspace lint pass; final full workspace verification is recorded in the log.
+Local commits: P02a ed87656; six-source session change 3615baf; NCBI review change see
+`refactor(ncbi): separate reviewed history from read-only reference sessions`.
+
+## P04a–P04b implementation evidence — 2026-10-05
+
+Versioned cache_codec rejects unsupported/nonfinite values rather than stringifying
+persistent identities. Historical finite JSON input fingerprints remain compatible.
+CachePolicy implements the specified configurable 3600s positive/ambiguous and 300s
+negative TTLs, no ERROR admission, zero-category disabling and 256 MiB payload budget.
+SQLiteStrandCache implements the existing port with short owned connections/transactions,
+versioned schema/codec checks, indexed base-key lookup, expiry and deterministic smallest
+valid group-superset selection. Loaded identity/coverage/JSON is validated; corruption is
+logged and treated as a miss. Retention evicts oldest observations deterministically;
+large payloads are not retained. Physical SQLite page/WAL size is not the payload budget.
+Memory remains the default; reviewed decisions stay outside lookup cache. API backend
+identity does not freeze live providers. Cache commits do not establish run progress.
+
+Core 448 tests pass, including adapter coverage contracts, reopen/fake-clock expiry,
+negative/ambiguous review retention, disabled TTL/budget, codec/policy validation,
+corruption/future-schema rejection, deterministic retention and transaction rollback.
+Existing executor coverage admission remains authoritative. Core 0.15.0 exposes
+SQLiteStrandCache and CachePolicy. Human interface configuration is reserved for P07.
+Executed P04 after its AP01–02 dependency while keeping unrelated application tasks
+planned, per the user's request to implement one plan at a time.
+Local commit: see `feat(cache): add opt-in SQLite cache with versioned policy and codec`.
+
+## P05 implementation evidence — 2026-10-05
+
+ExecutionState captures chunk/wave/reroute cursors, active/terminal internal row keys,
+results, review/errors, expansion counter and options. QueryExecutionState adds the
+heterogeneous-group/traversal/prelude/target cursor and active executor state. Values
+roundtrip through versioned JSON with shared entity aliases and expansion budget restored.
+Internal node keys distinguish duplicate labels; public entity/source_row/parent labels
+remain intact. Legacy execute/run_traversed/execute_query are facades over this engine.
+Fetched waves use the existing deterministic application algorithm, now isolated in
+_apply_wave; source/cache I/O stays outside it. Checkpoint observers run after application
+and phase/cursor advancement. Interrupted unapplied waves cannot be serialized/reused;
+load the last complete checkpoint. Runtime handles are excluded. No run-store I/O yet.
+
+Thirteen boundary tests reconstruct at every wave/chunk/reroute/query phase, with fresh
+executors/caches, and compare complete outcomes/alias counts with uninterrupted runs.
+Coverage includes duplicates, heterogeneous groups, two self-loop traversals, bounded
+set/candidate fan-out, errors/reroutes, unresolved/review and cancellation. Completed
+waves and completed queries do not call sources again. Existing core/toolkit contracts
+and full workspace suite pass. Core 0.16.0 exposes start_query/continue_query and states.
+Local commit: see `refactor(execution): serialize applied waves and query phase cursors`.
+
+## P06 implementation evidence — 2026-10-05
+
+RunDefinition and RunCheckpoint roundtrip through canonical versioned JSON. Definitions
+retain the prepared query, declared registry/source identity (including optional unavailable
+backends), and caller-supplied worker identity. Whole-registry identity is conservative
+because rerouting can use sources outside the original plan. validate() rejects changes
+before continuation; API fingerprints remain declarations rather than frozen datasets.
+SQLiteRunStore implements create/load/claim/renew/save/finish/release and ordered listing.
+Short BEGIN IMMEDIATE transactions atomically replace complete snapshots. Revisions and
+random owner tokens reject stale/concurrent saves; finite positive leases recover after
+expiry. Clock checks run after acquiring the writer lock. Malformed snapshots are rejected
+before commit. Completion releases ownership; saved review stays review, never accepted
+implicitly. Persistence remains opt-in and has no cache-progress coupling.
+
+Twenty real SQLite regression tests pass, including four competing connections, a spawned
+owner exiting, process death after an uncommitted write, injected transaction failure,
+renewal/recovery/release, duplicate identities, stale tokens/revisions, changed source/worker/
+options, corruption/future schema and completed-wave continuation without new source calls.
+Core 481 tests pass; full workspace 1335 passed/48 skipped; make lint passes. Core 0.17.0
+exports the narrow storage contracts. Human interface activation and lease renewal around
+long async execution belong to P07. No API backend changed; no network/data downloads.
+Local commit: see `feat(resume): add atomic SQLite run snapshots and ownership leases`.
+
+## P07a shared lifecycle evidence — 2026-10-07
+
+Public start_run/continue_run compose the existing query state engine and RunStore.
+They validate saved source/manifest/worker identity and optional expected settings,
+claim with a revision, renew leases while awaiting sources, save post-application
+checkpoints and finish with ownership released. Cancellation/observer failure releases
+the last complete saved state; unapplied mutable state is never serialized. Lost
+renewal cancels and joins execution. Complete/review observations load without source
+replay or implicit candidate selection. This is the shared lifecycle, not completed
+review-decision or CLI/browser activation. P07 remains in progress.
+
+Seven lifecycle tests pass: memory/durable equivalence, duplicate rows, completed resume,
+real cancellation and reconstruction, long query renewal, failed renewal cleanup,
+changed worker/source/options and pending review. Core 488 tests pass; full workspace
+1355 passed/48 skipped; make lint passes. Core 0.18.0.
+Local commit: see `feat(resume): manage durable query leases and checkpoint lifecycle`.
+
+## P07b explicit review continuation evidence — 2026-10-07
+
+ReviewDecision identifies a saved stable entity key and select/accept/reject action.
+Selecting requires a saved candidate index; accept requires an OK observation; invalid
+or duplicate decisions leave the run unclaimed. Decisions retain original observation
+and phase context in history. Only that observation is approved below its confidence
+floor; subsequent results retain saved review/confidence settings. Rejection records an
+unresolved terminal row. Duplicate labels remain independent.
+
+Review queues now retain unapplied siblings in their wave and query phase/group/traversal
+context. Serializable continuation frames share the original expansion budget and resume
+only that branch, including remaining traversals/targets. Prior branch failures persist.
+Query snapshot version 2 reads legacy version 1; older readers reject new snapshots rather
+than dropping frames. Legacy review already missing phase context fails with a retain/new
+run instruction. Runtime registry/cache handles remain excluded.
+
+Eleven review tests pass: explicit low-confidence selection, next-step review preserved,
+accept/reject, duplicate partial decisions, repeated traversals under a shared fan cap,
+JSON reconstruction/resumption at every saved continuation boundary, unapplied parallel
+sibling, prior errors, atomic invalid decisions and legacy limits. Full workspace 1366
+passed/48 skipped and lint pass. Core 0.19.0 exports ReviewDecision. P07 CLI/browser/docs
+and final integrated gates remain in progress.
+Local commit: see `feat(review): resume explicit decisions at saved query phases`.
+
+## P07c CLI activation evidence — 2026-10-07
+
+weave exposes explicit cache/run paths, cache TTL/payload knobs, owner lease and optional
+new run identity. runs lists/statuses stores without discovering weavers or creating a
+missing file; human output shows stable review keys, original candidates and zero-based
+selection indices. resume loads original settings and accepts repeatable explicit
+select/accept/reject decisions. Results keep existing formats/strict/reference behavior;
+archives remain independent observation exports. run_status shares JSON presentation
+data without exposing owner tokens. SQLiteRunStore(create=False) validates existing
+stores read-only before continuation. Memory remains the default.
+
+Five command journeys pass: cross-command cache reuse and completed resume without source
+calls, duplicate review select/accept/reject, missing-path status without file creation,
+invalid knobs/no overwrite and resumed archive export. Existing CLI/review client tests
+pass (88 before new journeys). Full workspace 1371 passed/48 skipped; make lint passes.
+Core 0.19.1. P07 browser/shared path-option adapters and integrated gates remain.
+Local commit: see `feat(cli): expose local cache run status and explicit resume decisions`.
+
+
+## P07d shared interfaces and integrated acceptance — 2026-10-07
+
+Core 0.20.0 introduces versioned QueryPersistence and execute_managed_query: CLI,
+Python examples and browser POST adapters share cache policy, explicit paths and
+managed durable execution. Weaverkit 0.6.0 requires core >=0.20.0. Browser saved-run
+list/status/continuation retains original requests/plans and requires explicit review
+choices. Recipes and generated commands retain operational options. Status opens
+existing files only and never exposes owner tokens. Resume rejects query overrides.
+Storage docs describe defaults, lease renewal/recovery, retention, migration limits,
+interrupted-wave replay and independent observation archives.
+
+Acceptance: workspace 1,383 passed/48 skipped; lint and changed-file formatting pass;
+all 17 strict weaver gates pass. Firefox verified recipe persistence round trips,
+save/cancel after the first applied wave, server task cleanup, paused status, continuation
+with changed form inputs ignored, no repeated completed resolve, and explicit candidate
+approval followed by the saved downstream route. Earlier P07 endpoint/CLI contracts
+also cover duplicate decisions, later review, changed definitions and completed replay.
+Existing Firefox batch upload, duplicate/source-row, encoders and cancel/retry journeys
+passed against the new browser implementation.
+
+All 20 current wheel/sdist pairs built, passed Twine metadata checks and clean
+installation/CLI/archive/server smoke tests. Current weavers' golden examples pass in
+isolated clean installs at declared core floors 0.1.8, 0.13.0 and 0.13.3, using actual
+historical core source rather than relabeling the current code. A generated persistent
+Python script executes with only the core 0.20.0 wheel, no FastAPI/toolkit, preserving
+duplicate rows in a completed run. Toolkit's core 0.20.0 floor is exercised by its clean
+wheel install. All environments/data/artifacts remain isolated and excluded from git.
+
+P01–P07 are verified locally. W14 gates relevant to persistence are satisfied; final
+programme-wide W14 remains pending A06–A08. No API backend changed in this step;
+network/live-source downloads were unnecessary. Windows lock behavior remains a CI
+platform check, not a local Linux result. No push, merge, release tag or publication.

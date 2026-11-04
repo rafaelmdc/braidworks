@@ -70,7 +70,7 @@ Configuration (all env, all optional):
 Workers install a request-budget callback for every job. Without a matching explicit
 rate rule, that callback charges no pacing budget; source-local defaults do not
 supply a Redis limit. Configure `BRAIDWORKS_RATE_LIMITS` entries for cluster-wide
-pacing. Local source defaults described in [request pacing](../docs/request-pacing.md)
+pacing. Local source defaults described in [request pacing](../docs/how-to/set-request-rates.md)
 apply when no executor budget overrides them.
 
 ### Entity-level fan-out
@@ -94,7 +94,7 @@ burst, and workers must agree on rates and capacity for a shared bucket. Conflic
 configurations fail explicitly. A cancelled wait sends no request; already sent
 requests retain their charges. Third-party backends must declare request pacing support
 and use core's `PacedHTTPClient` for every HTTP call; configured unsupported backends
-fail before execution. See [request pacing](../docs/request-pacing.md).
+fail before execution. See [request pacing](../docs/how-to/set-request-rates.md).
 
 ### Worker discovery
 

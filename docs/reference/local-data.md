@@ -1,7 +1,7 @@
 # Local-data generations and build ownership
 
 Contracts for operating local SQLite source artifacts. For NCBI acquisition steps,
-see [database setup](../database.md).
+see [database setup](../how-to/set-up-ncbi-database.md).
 
 ## Reader generations and build ownership
 

@@ -495,7 +495,7 @@ before request access. Keep request and biological policies in the source adapte
 Expose existing source options explicitly through the public builder; reject
 unknown names with reject_unknown_options. New scaffolds do this for their empty
 configuration contract. Raise the core floor to 0.21.5 when using this API.
-See [configuration and lifetime](../../docs/weaver-configuration.md) for closing
+See [configuration and lifetime](../../docs/reference/weaver-configuration.md) for closing
 weavers, injected clients and effective endpoint identity.
 
 ### Keep support metadata when disabling backends

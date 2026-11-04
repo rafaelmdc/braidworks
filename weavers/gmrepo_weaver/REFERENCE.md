@@ -106,7 +106,7 @@ databases with `refresh=True`; rank completes all relevant lookup ordering.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Synthetic fixture example

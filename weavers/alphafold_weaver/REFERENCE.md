@@ -70,7 +70,7 @@ Expected HTTP, JSON-decoding and explicitly validated source-data failures are r
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Confidence data references

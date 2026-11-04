@@ -116,7 +116,7 @@ then taxon ID/name/rank; ambiguous suggestions retain their review requirement.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Backend responsibilities and JSON intermediates

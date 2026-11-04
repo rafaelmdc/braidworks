@@ -74,7 +74,7 @@ methods and sequence ranges without adding a new capability or output group.
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 ## Configured Python query

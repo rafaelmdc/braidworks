@@ -1,7 +1,7 @@
 # Cache and run-store contracts
 
 Storage policies, ownership and compatibility for applications and operators.
-For creating or continuing a query, see [the saved-run guide](../persistence.md).
+For creating or continuing a query, see [the saved-run guide](../how-to/cache-and-resume.md).
 
 ## Lookup cache
 
@@ -63,7 +63,7 @@ run progress. Use local disk, not cross-host/network SQLite. Run schema version 
 no automatic destructive migration: retain the file for migration and use a new path
 when incompatible. Runs have no automatic retention/deletion policy; keep backups and
 remove an old store only when no owners use it. CLI, Python and browser tasks are
-described in the [saved-run guide](../persistence.md).
+described in the [saved-run guide](../how-to/cache-and-resume.md).
 
 ## Managed continuation and compatibility
 

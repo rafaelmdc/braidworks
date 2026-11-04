@@ -1,7 +1,7 @@
 # Browser execution interfaces
 
 HTTP contracts for applications integrating with the optional local server.
-For interactive use, see [the browser guide](../browser.md).
+For interactive use, see [the browser guide](../how-to/use-the-browser.md).
 
 ## Execution and persistence
 

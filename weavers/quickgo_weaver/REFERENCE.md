@@ -85,7 +85,7 @@ The existing annotation coverage output still reports whether acquisition comple
 
 ## Construction and resource lifetime
 For validated builders and client ownership, see
-[shared configuration](../../docs/weaver-configuration.md).
+[shared configuration](../../docs/reference/weaver-configuration.md).
 
 
 Optional annotation parameters are `evidence_code` (one ECO:nnnnnnn ID),

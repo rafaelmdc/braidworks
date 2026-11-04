@@ -12,7 +12,7 @@ From your Braidworks checkout, install every source, including NCBI and FAPROTAX
 uv sync --all-extras
 ```
 
-Use Python 3.12+ and uv, as in [installation](../installation.md).
+Use Python 3.12+ and uv, as in [installation](../how-to/install.md).
 The lesson uses live NCBI taxonomy and bundled FAPROTAX rules; it does not acquire a
 local taxonomy database. Network access to NCBI is required.
 
@@ -80,7 +80,7 @@ only a function label. Keep the JSON with your analysis. A rule's literature sup
 the clade affiliation; it does not demonstrate the function in every queried isolate.
 An empty annotation would likewise not prove functional absence.
 
-For your own organism table, continue with [batch usage](../usage.md#process-a-batch).
+For your own organism table, continue with [batch usage](../how-to/run-queries.md#process-a-batch).
 The [FAPROTAX reference](../../weavers/faprotax_weaver/README.md) describes membership
-rules and evidence scope; [result interpretation](../results.md) covers partial and
+rules and evidence scope; [result interpretation](../how-to/check-results.md) covers partial and
 uncertain observations.

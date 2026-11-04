@@ -1,0 +1,211 @@
+# Roadmap: cardinality fan-out (one → many expansion)
+
+> **Design history.** Status and priority statements below reflect earlier planning.
+> For current behavior, see [expansion usage](../how-to/run-queries.md#follow-related-entities) and [core contracts](../reference/core-contracts.md).
+> This record is retained for its rationale; it is not an operating guide.
+
+**Status:** Phase 1 **shipped** (`braidworks-core` 0.2.0); Phases 2–4 designed, not
+built. This is a **core** feature, not a weaver capability. Build it deliberately, in
+phases — **the full fan-out mechanism (Phases 1–3) before the run visualizer (Phase 4).**
+
+## Phase 1 — shipped (resolver/entry fan-out)
+
+`ExpandPolicy` (`braidworks.core.ExpandPolicy`, modes `TOP` / `TOP_K(k)` / `ALL`) is
+plumbed through LocalExecutor.execute(..., expand_policy=, max_expansion=).
+Since core 0.12.0, ambiguous resolver results pause under the default ReviewPolicy.HALT,
+even when TOP_K or ALL is selected. Expansion alone does not authorize a match.
+
+With explicit ReviewPolicy.ALLOW_CONTINUE and candidates above the confidence floor:
+
+- TOP selects the highest-confidence candidate, with a deterministic tie-break.
+- TOP_K(k) / ALL fork selected candidates into independent children.
+- Selected entities retain requires_review and the source warnings.
+
+
+`AMBIGUOUS` with **no** candidates is unchanged: there is nothing to pick or fork, so it
+still routes to the review queue / RAISE per `ReviewPolicy`. Children carry
+`StrandSet.parent_id` (the originating-input id, preserved across forks) for regrouping.
+`max_expansion` (default 10 000) bounds leaf growth across all input chunks,
+traversal phases and reroutes. Every original input reserves one leaf slot. Forks
+replace that slot and reserve extras before cloning; cross-products are enumerated
+only up to the available budget. If the input count itself exceeds the limit, inputs
+are preserved and no additional leaves are admitted. No source row is silently dropped.
+`ExecutionResult.truncations` records each limited fork's entity/source row,
+capability, requested/kept/omitted counts and limit, and survives JSON serialization.
+Counts describe successors omitted at that fork, not hypothetical final descendants.
+Retained children carry a warning; CLI exports include structured truncations and
+stderr reports them. `weave --max-expansion N` sets the shared limit.
+Cache keys already include each child's distinct fan value, so children never collide.
+
+ReviewPolicy.RAISE rejects ambiguity before selection or child allocation.
+A positive confidence_threshold checks candidate confidence and each selected strand's
+confidence. Results below the threshold pause even with ALLOW_CONTINUE. Candidate
+context and review flags survive JSON round trips. See
+[migrating-to-0.12.md](../how-to/migrate-to-core-0.12.md) for CLI, Python and browser controls.
+
+## Why (the principle)
+
+Braidworks exists to **mirror real API capabilities and let them interconnect**. A
+huge fraction of those capabilities are intrinsically **one → many**:
+
+- one protein query → **all** UniProt hits that match (not just the top one);
+- one accession → **all** pathways it participates in / **all** PDB structures / **all**
+  interaction partners;
+- one taxon → all its children; one disease → all associated microbes.
+
+Today the model collapses every one→many to a **single representative** at the join
+boundary (`uniprot._pick` picks one protein; a join key like `pathway.reactome.id` is
+**scalar**, so it can only carry one value to chain onward). The descriptive *data* is
+returned as a capped list (`pathway.reactome.names` etc.), but you **cannot chain on
+each of the many** — e.g. "for my protein, take every pathway and pull each pathway's
+detail" is impossible. **Collapsing to one genuinely blocks real questions**; it is the
+single biggest gap against the vision. Fan-out fixes it.
+
+## What it is
+
+A first-class runtime operation: **one entity becomes N, then the braid continues per
+child**, governed by a policy knob:
+
+- **`ExpandPolicy`** (sits beside the existing `BackendPolicy` / `ReviewPolicy`):
+  - `TOP` — pick the representative, 1 result. **Exactly today's behaviour** (so the
+    default is backwards-compatible and nothing existing breaks).
+  - `TOP_K(n)` — fork the best *n* (e.g. "top 5 hits").
+  - `ALL` — fork every value.
+- Settable per-run, and overridable per-step / per-type (e.g. expand proteins `TOP_1`
+  but pathways `ALL`).
+
+`ExecutionResult.resolved` then holds the **cross-product of leaf entities** — one query
+in → every (protein × pathway × …) row out — each a normal `StrandSet` you can keep
+enriching/drilling. Expand *and* contract: `ALL` expands; `TOP`/`TOP_K` contracts.
+
+## Two expansion sites, one mechanism
+
+| Question | Fan dimension | Source today |
+|---|---|---|
+| query → all matching proteins | the candidate set | resolver `candidates` (already emitted!) |
+| protein → all pathways / structures / partners | a produced **id set** | a capability output marked multi-valued |
+
+The first reuses machinery that already exists; the second needs a cardinality flag.
+
+## What already exists to build on
+
+- `braidworks-core/.../records.py`: `ResolverRecord.candidates: list[Candidate]` +
+  `MatchStatus.AMBIGUOUS` already model "several possible successors."
+- The executor already routes `AMBIGUOUS` somewhere deliberate (review queue / HALT,
+  `ReviewPolicy`). Fan-out **generalizes** "AMBIGUOUS → review" into "AMBIGUOUS → expand
+  per `ExpandPolicy`."
+- "Representative pick" is the implicit `TOP`: `uniprot_weaver._pick`, and every
+  satellite's "top-N list + true count" cap. These become the `TOP`/`TOP_K` path.
+- `braidworks-arq/.../fanout.py` is **unrelated** (it splits a *batch of inputs* across
+  workers for throughput; it does NOT expand one input into many). Don't conflate. They
+  compose: batch-parallelism × cardinality-expansion.
+
+## What has to change in core
+
+- **`Capability` / output cardinality.** A produced type is `scalar` (today) or `set`
+  (fan-out-able). e.g. `pathway.reactome.id` → `set`. Declared in the manifest/spec.
+- **Executor entity-forking** (the hard part). The executor (`executor.py`,
+  `_run_chunk`/`_run_step_over`) carries a fixed entity list through dependency waves,
+  enriching each in place. Fan-out means: when a step yields a `set` (or resolver
+  candidates) under `ALL`/`TOP_K`, **replace that entity with N children** (parent
+  strands + one fan value each) and feed all N into the remaining waves. Keep one entity
+  under `TOP`.
+- **Cache & planner: unaffected.** Each child carries a distinct fan value → distinct
+  `compute_cache_key`; the braid *plan* (shape) is identical — expansion is purely
+  runtime. (Sanity-check the cache key includes the fan value so children don't collide.)
+- **`ExecutionResult`** already a flat `resolved` list — it just gets more rows. Consider
+  recording provenance of which input each leaf descended from (a parent/lineage id) so
+  callers can group results back by the original query.
+
+## Phases (build in order; each its own PR(s))
+
+**Build the whole fan-out *mechanism* first; the run visualizer comes last** (decided
+with the user 2026-06-14). The visualizer reads the *result* of a run, so it should be
+built against the **finished** fan/lineage model — not a half-built one. Phases 1→3
+complete and surface the mechanism; Phase 4 visualizes it once, with no rework.
+
+1. **`ExpandPolicy` + entry/resolver fan-out.** ✅ **Done** (core 0.2.0). Policy enum
+   plumbed through `LocalExecutor.execute`; a resolver returning candidates forks per
+   candidate under `TOP_K`/`ALL` (or collapses under `TOP`) instead of only
+   HALT-to-review. Reuses `CandidateResult`. Covers "query → all hits." See the
+   "Phase 1 — shipped" section above.
+2. **Mid-braid `set`-output expansion** (completes the mechanism).
+   - **Core mechanism — ✅ Done** (core 0.2.1). `Capability.set_outputs: frozenset[str]`
+     declares which produced join keys are one→many (subset of `produces`, default empty
+     → backwards-compatible). The executor forks on a set-valued produced strand (a list)
+     after merge: `TOP`/`TOP_K(1)` collapse to a representative in place (+warning);
+     `TOP_K(k>1)`/`ALL` fork the **cross-product** across every fan dimension into
+     children, reusing the Phase-1 lineage scheme (`entity_id` `parent#i`, `parent_id` =
+     root) and the `max_expansion` cap. Per-type policy via `execute(..., expand_by_type=
+     {type: ExpandPolicy})`. See `executor._expand_set_outputs`; tests in
+     `tests/test_fanout_setoutput.py`. **Lineage shape decided:** no change needed — the
+     hierarchical `entity_id` already encodes nested fans (`e0#1#3`), and `parent_id`
+     gives the root; the visualizer (Phase 4) reconstructs the tree by splitting on `#`.
+   - **weaverkit `set_outputs` support — ✅ Done** (weaverkit 0.1.10, PR-B). A
+     `[[capability]]` may declare `set_outputs = [...]` (validated ⊆ produces); the
+     scaffold emits it into the generated `Capability`, and conformance checks the
+     manifest's `set_outputs` matches the spec. So a weaver can now declare a fan
+     dimension without hand-editing generated `vocab.py`.
+   - **First satellite conversion — ✅ Done** (reactome 0.1.3, PR-C). `reactome_weaver`
+     emits `pathway.reactome.id` as the full distinct stId set and declares it in
+     `set_outputs`. Covers "protein → all pathways, each drillable" (producer side; no
+     consumer weaver yet — island producer). Remaining satellites (`pdb.id`, etc.) are
+     the cross-cutting "update all relevant weavers" pass after Phases 3–4.
+3. **Surface the mechanism (non-visual).** ✅ **Done** (weaverkit 0.1.11, arq 0.1.2).
+   - Static network view annotates fan dimensions: a producer→key edge whose key is a
+     `set_output` is badged `⤜ fan`, and the weaver card lists "fans out (one→many)".
+   - `braidworks-arq`: cardinality fan-out composes with the distributed executor
+     unchanged (it lives in `LocalExecutor` orchestration, which `build_distributed_executor`
+     reuses) — locked by a regression test and a doc note distinguishing it from arq's
+     unrelated batch-across-workers `fanout.py`.
+   - *CLI knobs: N/A — there is no braid-execution CLI (the CLIs plan/verify/visualize,
+     they don't run braids); `ExpandPolicy`/`expand_by_type` are passed in code to
+     `execute()`.*
+4. **Run-fanout visualizer** — ✅ **Done** (weaverkit 0.1.12). `weaverkit view --run
+   result.json` (a serialized `ExecutionResult.to_json()`) adds one selectable
+   **run-lineage view per originating input**: `input → [shared ops] → fork ⤜ one value
+   node per fanned leaf → [per-leaf enrichment ops]`, reusing the generic `{nodes, edges}`
+   template (`VIEWS` gained a `DATA.runs` hook). `build_run_views` groups leaves by
+   `parent_id` (the originating-input root), finds the fork (first step whose produced
+   value differs across leaves), and renders shared-prefix + per-leaf chains; the realized
+   fan factor shows in the view title (`×N`). Caps at `max_roots` with a logged note.
+   *Limitation:* a single fork is detected per group, so a deeply **nested** multi-fork
+   run renders as a flattened fan from the first fork (no current weaver chains two set
+   fans, so no real run hits this yet — enhance when a two-level producer chain exists).
+
+## Dependent / folds in
+
+- **UniProt `resolve_mapping` capability** (cross-ref IDs → `pdb.id`, `pathway.reactome.id`,
+  `gene.ensembl.id`, `protein.interpro.id`, `protein.pfam.id`, `go.term`, …). Discussed
+  2026-06-14. It only becomes *connective* once Phase 2 exists (the cross-ref **sets** fan
+  out into future id→data weavers). Until then it would just be descriptive leaf lists.
+  Build it **after** Phase 2, as a producer of `set` join keys — that is the
+  "two paths to the same place" topology the user wants.
+
+## Open questions — settled for Phase 1 (2026-06-14)
+
+- Default `ExpandPolicy` = `TOP`. ✅ **Settled.** But per the user, `TOP` now
+  **auto-picks** the best candidate and continues (it no longer routes `AMBIGUOUS` to
+  review). The review path survives only for `AMBIGUOUS` with no candidates.
+- Per-type policy map. **Deferred to Phase 2.** Phase 1 takes a single run-level
+  `ExpandPolicy`; the per-type map lands with `set`-output expansion.
+- Result grouping. ✅ **Yes** — `StrandSet.parent_id` carries the originating-input id.
+- Blow-up guardrail. ✅ **Done** — `max_expansion` (default 10 000) bounds allocation
+  across chunks/phases, with serialized truncation reports and preserved root coverage.
+
+## Open questions for Phase 2
+
+- How a caller asks for a fan dimension: explicit per-type policy map, or inferred from
+  requesting a `set` output? Lean explicit (`ExpandPolicy` map keyed by type).
+- Cross-product of two `ALL` dimensions reuses the same `max_expansion` cap.
+
+## Explicit source filtering
+
+AGORA exposes `agora_weaver.crosswalk_taxids()` for callers that already have a
+collection of related taxids and want to construct only AGORA-relevant inputs.
+Intersect before passing that collection to downstream queries; see
+[AGORA's filtering instructions](../../weavers/agora_weaver/README.md#filter-an-existing-taxid-collection).
+This is an explicit caller decision. The executor does not automatically prune
+children based on a downstream source's coverage, and ordinary expansion semantics
+remain unchanged. Exact crosswalk membership does not establish reaction/model
+availability or coverage of ancestor/descendant taxa.
