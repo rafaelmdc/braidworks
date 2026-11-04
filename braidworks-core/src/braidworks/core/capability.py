@@ -282,6 +282,12 @@ class WeaverManifest:
     # descriptive — surfaced by tooling (e.g. the network view's info card). Defaults
     # to "" so a manifest without it is still valid.
     title: str = ""
+    # One-line meaning of each type this weaver consumes or produces, keyed by type id
+    # (generated from the spec, defaulting to weaverkit's key registry). Lets users find
+    # fields by meaning (``braidworks.find``) without the toolkit installed. Optional:
+    # empty for weavers generated before descriptions existed. Excluded from the hash
+    # (a dict is unhashable) but part of equality.
+    type_descriptions: dict[str, str] = field(default_factory=dict, hash=False)
 
     def capability(self, capability_id: str) -> Capability | None:
         for c in self.capabilities:
@@ -299,6 +305,8 @@ class WeaverManifest:
             data["provenance"] = self.provenance.to_json()
         if self.title:
             data["title"] = self.title
+        if self.type_descriptions:
+            data["type_descriptions"] = dict(sorted(self.type_descriptions.items()))
         return data
 
     @classmethod
@@ -310,4 +318,5 @@ class WeaverManifest:
             capabilities=tuple(Capability.from_json(c) for c in data["capabilities"]),
             provenance=Provenance.from_json(prov) if prov is not None else None,
             title=data.get("title", ""),
+            type_descriptions=dict(data.get("type_descriptions", {})),
         )

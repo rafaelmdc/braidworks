@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from weaverkit.keys import is_shared_key
+from weaverkit.keys import OUTPUT_KEYS, SHARED_KEYS, is_shared_key
 
 _DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -213,6 +213,9 @@ class WeaverSpec:
     attribution: str = ""
     bulk: BulkSpec | None = None
     golden: tuple[GoldenSpec, ...] = field(default_factory=tuple)
+    # Optional ``[types]`` table: per-weaver descriptions that override the key
+    # registry for types this weaver consumes or produces.
+    type_overrides: dict[str, str] = field(default_factory=dict)
 
     @property
     def package(self) -> str:
@@ -254,11 +257,38 @@ class WeaverSpec:
                 bulk=bulk,
                 capabilities=tuple(CapabilitySpec.from_dict(c) for c in data.get("capability", ())),
                 golden=tuple(GoldenSpec.from_dict(g) for g in data.get("golden", ())),
+                type_overrides={str(k): str(v) for k, v in data.get("types", {}).items()},
             )
         except KeyError as exc:
             raise SpecError(f"spec missing required key: {exc}") from None
         except TypeError as exc:
             raise SpecError(f"spec has a wrong-typed field: {exc}") from None
+
+
+def _spec_types(spec: WeaverSpec) -> set[str]:
+    """Every type the spec's capabilities consume or produce."""
+    return {t for cap in spec.capabilities for t in (*cap.consumes, *cap.produces)}
+
+
+def type_descriptions(spec: WeaverSpec) -> dict[str, str]:
+    """One-line meaning of each consumed/produced type, sorted by type id.
+
+    The spec's ``[types]`` table wins; otherwise the key registry (``SHARED_KEYS`` for
+    join keys, ``OUTPUT_KEYS`` for outputs) supplies the text. Types with no
+    description anywhere are omitted (see :func:`undescribed_types`).
+    """
+    described = {}
+    for type_id in sorted(_spec_types(spec)):
+        override = spec.type_overrides.get(type_id, "").strip()
+        text = override or SHARED_KEYS.get(type_id) or OUTPUT_KEYS.get(type_id) or ""
+        if text.strip():
+            described[type_id] = text.strip()
+    return described
+
+
+def undescribed_types(spec: WeaverSpec) -> list[str]:
+    """Types the spec uses that have no description in ``[types]`` or the registry."""
+    return sorted(_spec_types(spec) - set(type_descriptions(spec)))
 
 
 def load_spec(path: str | Path) -> WeaverSpec:
@@ -457,4 +487,13 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                     f"{sorted(produces)}"
                 )
 
+    # --- [types] descriptions -------------------------------------------------
+    used = _spec_types(spec)
+    for type_id, text in sorted(spec.type_overrides.items()):
+        if type_id not in used:
+            problems.append(
+                f"[types] describes {type_id!r}, which no capability consumes or produces"
+            )
+        elif not text.strip():
+            problems.append(f"[types] description for {type_id!r} is empty")
     return problems

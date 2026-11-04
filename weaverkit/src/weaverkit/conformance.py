@@ -27,7 +27,14 @@ from braidworks.core.strand import Strand, StrandSet
 from braidworks.core.weaver import BaseWeaver
 
 from weaverkit.keys import is_shared_key
-from weaverkit.spec import GoldenSpec, WeaverSpec, load_spec, validate_spec
+from weaverkit.spec import (
+    GoldenSpec,
+    WeaverSpec,
+    load_spec,
+    type_descriptions,
+    undescribed_types,
+    validate_spec,
+)
 
 _BAD_FINGERPRINTS = {"", "unknown"}
 
@@ -134,7 +141,37 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                     "[weaver].backends in weaver.spec.toml, or drop it from the capability"
                 )
 
+    # Descriptions are optional while older vocab.py files are regenerated (an empty
+    # manifest only warns, see description_warnings); once present they must match.
+    expected_descriptions = type_descriptions(spec)
+    if manifest.type_descriptions and dict(manifest.type_descriptions) != expected_descriptions:
+        changed = sorted(
+            t
+            for t in set(manifest.type_descriptions) | set(expected_descriptions)
+            if manifest.type_descriptions.get(t) != expected_descriptions.get(t)
+        )
+        problems.append(
+            f"manifest type descriptions differ from the spec/key registry for {changed} — {regen}"
+        )
+
     return problems
+
+
+def description_warnings(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
+    """Advisory gaps in type descriptions (non-fatal, like provenance warnings)."""
+    warnings = []
+    if not manifest.type_descriptions and type_descriptions(spec):
+        warnings.append(
+            "the manifest has no type descriptions (vocab.py predates them) — "
+            "regenerate vocab.py so users can find this weaver's fields by meaning"
+        )
+    missing = undescribed_types(spec)
+    if missing:
+        warnings.append(
+            f"no description for {missing} — add it to weaverkit.keys (OUTPUT_KEYS / "
+            "SHARED_KEYS) or to the spec's [types] table"
+        )
+    return warnings
 
 
 def check_fingerprints(weaver: BaseWeaver, backends: list[str]) -> list[str]:

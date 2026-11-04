@@ -28,7 +28,7 @@ import tomllib
 from pathlib import Path
 
 from weaverkit.capability_docs import END, START, render_capabilities
-from weaverkit.spec import WeaverSpec, validate_spec
+from weaverkit.spec import WeaverSpec, type_descriptions, validate_spec
 
 
 class ScaffoldError(Exception):
@@ -123,6 +123,12 @@ def _vocab_source(spec: WeaverSpec) -> str:
         f"    attribution={spec.attribution!r},",
         ")",
         "",
+        "# What each consumed/produced type means — from the spec's [types] table, else",
+        "# weaverkit's key registry. Lets users find fields by meaning.",
+        "TYPE_DESCRIPTIONS = {",
+        *(f"    {type_id!r}: {text!r}," for type_id, text in type_descriptions(spec).items()),
+        "}",
+        "",
         "",
         "def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:",
         '    """Declare every capability for the wired-in backends."""',
@@ -131,6 +137,7 @@ def _vocab_source(spec: WeaverSpec) -> str:
         "        version=WEAVER_VERSION,",
         "        title=WEAVER_TITLE,",
         "        provenance=PROVENANCE,",
+        "        type_descriptions=dict(TYPE_DESCRIPTIONS),",
         "        capabilities=(",
     ]
     for cap in spec.capabilities:
@@ -1347,7 +1354,7 @@ def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
     # making every api-weaver author add it by hand.
     has_api = "api" in spec.backends
     # New scaffolds target the runtime verified with this toolkit release.
-    deps = ['"braidworks-core>=0.22.0"']
+    deps = ['"braidworks-core>=0.25.0"']
     if has_api:
         deps.append('"httpx>=0.27"')
     tokens["DEPS"] = ", ".join(deps)

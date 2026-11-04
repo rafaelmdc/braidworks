@@ -227,3 +227,35 @@ def test_unconfigured_fingerprint_is_not_treated_as_configured():
     assert not _is_configured_fingerprint("")
     assert not _is_configured_fingerprint("unknown")
     assert _is_configured_fingerprint("disbiome@2024-01-01")
+
+
+# --- type descriptions --------------------------------------------------------
+
+
+def test_generated_vocab_carries_type_descriptions():
+    from weaverkit.scaffold import _vocab_source
+    from weaverkit.spec import type_descriptions
+
+    namespace: dict = {}
+    exec(_vocab_source(_spec()), namespace)  # noqa: S102 - generated code under test
+    manifest = namespace["build_manifest"](backends=("local",))
+    assert manifest.type_descriptions == type_descriptions(_spec())
+    assert check_manifest(manifest, _spec()) == []
+
+
+def test_type_description_drift_is_a_conformance_problem():
+    from weaverkit.spec import type_descriptions
+
+    expected = type_descriptions(_spec())
+    stale = dict(expected)
+    stale[next(iter(stale))] = "an outdated description"
+    problems = check_manifest(dataclasses.replace(_manifest(), type_descriptions=stale), _spec())
+    assert any("type descriptions" in p for p in problems)
+
+
+def test_manifest_without_descriptions_only_warns():
+    from weaverkit.conformance import description_warnings
+
+    manifest = dataclasses.replace(_manifest(), type_descriptions={})
+    assert check_manifest(manifest, _spec()) == []
+    assert any("regenerate vocab.py" in w for w in description_warnings(manifest, _spec()))
