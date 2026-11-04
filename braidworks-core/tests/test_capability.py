@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
 from braidworks.core import Provenance, WeaverManifest
+from braidworks.core.capability import Capability, OutputGroup
 from helpers import CORE_OUTPUTS, LINEAGE_OUTPUTS, resolve_name_capability
 
 
@@ -97,3 +99,33 @@ def test_manifest_type_descriptions_round_trip_and_stay_optional():
     plain = WeaverManifest(weaver_id="w", version="1.0.0")
     assert "type_descriptions" not in plain.to_json()
     assert WeaverManifest.from_json(plain.to_json()).type_descriptions == {}
+
+
+# --- declared list totals ------------------------------------------------------
+
+
+def _listing(**kwargs):
+    return Capability(
+        id="list_things",
+        consumes=frozenset({"thing.query"}),
+        produces=frozenset({"thing.ids", "thing.count"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"thing.ids", "thing.count"})),),
+        backends=("api",),
+        **kwargs,
+    )
+
+
+def test_capability_totals_round_trip_and_stay_optional():
+    cap = _listing(totals={"thing.ids": "thing.count"})
+    assert Capability.from_json(cap.to_json()) == cap
+    hash(cap)
+    plain = _listing()
+    assert "totals" not in plain.to_json()
+    assert Capability.from_json(plain.to_json()).totals == {}
+
+
+def test_capability_totals_must_name_produced_types():
+    with pytest.raises(ValueError, match="totals"):
+        _listing(totals={"thing.ids": "thing.missing"})
+    with pytest.raises(ValueError, match="totals"):
+        _listing(totals={"thing.ids": "thing.ids"})

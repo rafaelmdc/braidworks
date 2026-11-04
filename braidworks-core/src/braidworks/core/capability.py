@@ -144,8 +144,19 @@ class Capability:
     # Declarative, validated, and defaulted; the planner never routes on them. Empty
     # (the default) means the capability takes no parameters.
     parameters: tuple[Parameter, ...] = ()
+    # Capped lists and where their true size lives: ``{list_type: count_type}``, e.g.
+    # ``{"structure.pdb.ids": "structure.pdb.count"}`` when the source returns a
+    # display-sized list but reports the full count. Clients show "25 of 321". Both
+    # types must be produced here. Excluded from the hash (a dict) but part of equality.
+    totals: dict[str, str] = field(default_factory=dict, hash=False)
 
     def __post_init__(self) -> None:
+        for list_type, count_type in self.totals.items():
+            if list_type == count_type or not {list_type, count_type} <= self.produces:
+                raise ValueError(
+                    f"capability {self.id!r}: totals entry {list_type!r} -> {count_type!r} "
+                    "must map one produced list type to a different produced count type"
+                )
         extra = self.set_outputs - self.produces
         if extra:
             raise ValueError(
@@ -213,6 +224,7 @@ class Capability:
             "set_outputs": sorted(self.set_outputs),
             "consumes_any": self.consumes_any,
             "parameters": [p.to_json() for p in self.parameters],
+            **({"totals": dict(sorted(self.totals.items()))} if self.totals else {}),
         }
 
     @classmethod
@@ -229,6 +241,7 @@ class Capability:
             set_outputs=frozenset(data.get("set_outputs", ())),
             consumes_any=data.get("consumes_any", False),
             parameters=tuple(Parameter.from_json(p) for p in data.get("parameters", ())),
+            totals=dict(data.get("totals", {})),
         )
 
 

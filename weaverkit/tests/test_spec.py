@@ -451,3 +451,32 @@ def test_types_without_any_description_are_reported():
     data = _valid_dict()
     data["capability"][0]["group"][0]["outputs"].append("microbe.trait.made_up")
     assert undescribed_types(WeaverSpec.from_dict(data)) == ["microbe.trait.made_up"]
+
+
+# --- capability totals --------------------------------------------------------
+
+
+def _with_totals(totals, extra_group=None):
+    data = _valid_dict()
+    groups = data["capability"][0]["group"]
+    groups[0]["outputs"] += ["microbe.trait.ids", "microbe.trait.count"]
+    if extra_group:
+        groups.append(extra_group)
+    data["capability"][0]["totals"] = totals
+    return WeaverSpec.from_dict(data)
+
+
+def test_totals_parse_and_validate():
+    spec = _with_totals({"microbe.trait.ids": "microbe.trait.count"})
+    assert spec.capabilities[0].totals == {"microbe.trait.ids": "microbe.trait.count"}
+    assert [p for p in validate_spec(spec) if "totals" in p] == []
+
+
+def test_totals_must_name_outputs_in_one_group():
+    unknown = _with_totals({"microbe.trait.ids": "microbe.trait.nope"})
+    assert any("both must be outputs" in p for p in validate_spec(unknown))
+    split = _with_totals(
+        {"microbe.trait.ids": "microbe.trait.total"},
+        extra_group={"id": "counts", "outputs": ["microbe.trait.total"]},
+    )
+    assert any("put them in one group" in p for p in validate_spec(split))

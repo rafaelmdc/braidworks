@@ -34,6 +34,14 @@ blocks (per-query knobs — filters/sort/thresholds — `name`, `type` ∈
 `string|int|float|bool`, optional `enum`/`default`/`description`; surfaced as
 `--param` in the CLI and threaded to the backend's `fetch` as `params`).
 
+**`totals`** (optional, per capability) — `{ "<list type>" = "<count type>" }`
+for a list the backend caps for display while a produced count reports its true
+size, e.g. `totals = { "structure.pdb.ids" = "structure.pdb.count" }`. Both must be
+outputs of the capability, and the count must be in the list's output group (or in
+`always_computed_groups`) so it is present whenever the list is. Declare a pair only
+when the count is the full size *of that list*. It maps to `Capability.totals`;
+results then show "25 of 321" and add a `<list>.total` column.
+
 **`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
 `filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB
 local DB.

@@ -36,6 +36,18 @@ def _cell(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _shown(row: dict[str, Any], type_id: str, width: int | None = None) -> str:
+    """A cell for people: the value, plus "(n of total)" when a list was capped."""
+    value = row.get(type_id)
+    text = _cell(value)
+    if width is not None:
+        text = text[:width]
+    total = row.get(f"{type_id}.total")
+    if isinstance(value, (list, tuple)) and isinstance(total, int) and total > len(value):
+        text += f" ({len(value)} of {total})"
+    return text
+
+
 class ReviewItem:
     """One row paused for a human decision; record it, then call ``result.resume()``.
 
@@ -124,14 +136,17 @@ class Result:
         *,
         session: Any = None,
         state: Any = None,
+        totals: dict[str, str] | None = None,
     ) -> None:
         self.raw = raw
         self.want = list(want)
         self._prepared = prepared
+        # Wanted capped lists -> the produced type holding their true size.
+        self._totals = {lt: ct for lt, ct in (totals or {}).items() if lt in self.want}
         self._session = session  # the Session that ran this, for resume()
         self._state = state  # the engine state that resume() continues from
         self._decisions: dict[str, ReviewDecision] = {}
-        self._records = execution_records(raw, self.want)
+        self._records = execution_records(raw, self.want, self._totals)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
         self.rows: list[dict[str, Any]] = [self._row(record) for record in self._records]
@@ -143,6 +158,8 @@ class Result:
         row["status"] = record["status"]
         for type_id in self.want:
             row[type_id] = record["values"].get(type_id)
+            if type_id in self._totals:
+                row[f"{type_id}.total"] = record["totals"].get(type_id)
         row["missing"] = list(record["missing"])
         return row
 
@@ -155,7 +172,13 @@ class Result:
             "row",
             *(["parent"] if has_parent else []),
             "status",
-            *self.want,
+            *[
+                column
+                for type_id in self.want
+                for column in (
+                    (type_id, f"{type_id}.total") if type_id in self._totals else (type_id,)
+                )
+            ],
             "missing",
         ]
 
@@ -283,7 +306,7 @@ class Result:
     def __repr__(self) -> str:
         lines = [f"<braidworks.Result {self.summary()}>"]
         for row in self.rows[:10]:
-            values = ", ".join(f"{t}={_cell(row[t])[:40]!r}" for t in self.want)
+            values = ", ".join(f"{t}={_shown(row, t, 40)!r}" for t in self.want)
             lines.append(f"  {row['input']} [{row['status']}] {values}")
         if len(self.rows) > 10:
             lines.append(f"  … {len(self.rows) - 10} more rows")
@@ -294,7 +317,12 @@ class Result:
         head = "".join(f"<th>{html.escape(c)}</th>" for c in columns)
         body = "".join(
             "<tr>"
-            + "".join(f"<td>{html.escape(_cell(row.get(c)))[:200]}</td>" for c in columns)
+            + "".join(
+                "<td>"
+                + html.escape(_shown(row, c, 200) if c in self.want else _cell(row.get(c))[:200])
+                + "</td>"
+                for c in columns
+            )
             + "</tr>"
             for row in self.rows[:50]
         )
