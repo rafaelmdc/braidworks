@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "faprotax"
-WEAVER_VERSION = "0.1.5"
+WEAVER_VERSION = "0.1.6"
 WEAVER_TITLE = "FAPROTAX ecological function (organism lineage -> functional groups)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,14 @@ PROVENANCE = Provenance(
     attribution="FAPROTAX (Louca, Parfrey & Doebeli 2016); DB (c) Stilianos Louca",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "microbe.ecology.evidence": "Ordered FAPROTAX rule operations, references and attributes; putative affiliation evidence.",
+    "microbe.ecology.functional_groups": "FAPROTAX ecological/metabolic functional groups this microbe's clade is affiliated with (e.g. methanotrophy, nitrification, sulfate_respiration).",
+    "ncbi.taxon.lineage": "An organism's ranked lineage, from species up to root.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +42,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_ecology",

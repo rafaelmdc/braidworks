@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "bacdive"
-WEAVER_VERSION = "0.1.14"
+WEAVER_VERSION = "0.1.15"
 WEAVER_TITLE = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -26,6 +26,26 @@ PROVENANCE = Provenance(
     attribution="BacDive (DSMZ)",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "culture.collection.id": "Collection-prefix and strain number (e.g. DSM 2801); BacDive produces and consumes observed references with multiplicity.",
+    "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
+    "microbe.bacdive.identifier_evidence": "Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions.",
+    "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
+    "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
+    "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
+    "microbe.trait.cell_shape": "This microbe's cell shape — rod, coccus, …",
+    "microbe.trait.gram_stain": "This microbe's Gram stain — positive or negative.",
+    "microbe.trait.motility": "Whether this microbe can move.",
+    "microbe.trait.optimum_ph": "The pH this microbe grows best at.",
+    "microbe.trait.optimum_temp": "The temperature this microbe grows best at.",
+    "microbe.trait.oxygen_tolerance": "How this microbe relates to oxygen — aerobe, anaerobe, facultative, …",
+    "microbe.trait.records": "Selected strain identity, scope and raw phenotype evidence with conflicts.",
+    "microbe.trait.spore_formation": "Whether this microbe forms spores.",
+    "organism.scientific_name": "An organism's canonical scientific name — joins clade-keyed datasets.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -34,6 +54,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="describe_traits",

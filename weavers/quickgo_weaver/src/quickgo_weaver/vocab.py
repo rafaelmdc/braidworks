@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.14"
+WEAVER_VERSION = "0.1.15"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -27,6 +27,28 @@ PROVENANCE = Provenance(
     attribution="Gene Ontology / EMBL-EBI QuickGO",
 )
 
+# What each consumed/produced type means — from the spec's [types] table, else
+# weaverkit's key registry. Lets users find fields by meaning.
+TYPE_DESCRIPTIONS = {
+    "go.annotation.coverage": "Pagination coverage, source counts and page-cap completeness.",
+    "go.annotation.records": "Source annotation rows, retaining evidence, qualifiers and references.",
+    "go.biological_process": "The biological processes this protein takes part in.",
+    "go.cellular_component": "Where in the cell this protein acts.",
+    "go.count": "Distinct GO terms in retrieved annotation pages; inspect coverage for completeness.",
+    "go.molecular_function": "The molecular functions this protein is annotated with.",
+    "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
+    "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
+    "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
+    "go.term": "A Gene Ontology term id.",
+    "go.term.aspect": "This GO term's aspect — molecular_function, biological_process, or cellular_component.",
+    "go.term.definition": "What this GO term means.",
+    "go.term.detail": "Full detail of this GO term — name, aspect, definition, synonyms.",
+    "go.term.hierarchy": "Source paths, ancestors, directional replacements and term history.",
+    "go.term.name": "The name of this GO term.",
+    "go.term.relations": "Observed typed term children and obsoletion; parents/replacements not inferred.",
+    "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
+}
+
 
 def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
     """Declare every capability for the wired-in backends."""
@@ -35,6 +57,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
         version=WEAVER_VERSION,
         title=WEAVER_TITLE,
         provenance=PROVENANCE,
+        type_descriptions=dict(TYPE_DESCRIPTIONS),
         capabilities=(
             Capability(
                 id="list_go_terms",
