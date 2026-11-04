@@ -43,8 +43,8 @@ index; see issue #306.)
 | `docs/internal/` | Project records | plans, audits, roadmaps; not user instructions |
 
 A page that mixes types moves to its main type and gets split when it is next
-rewritten. Moved pages leave a one-line stub at the old path until the documentation
-site handles redirects. Generated files (`reference/keys-index.md`,
+rewritten. When you move a page, update every link to it in the same change (no stubs
+at old paths); `make links-check` finds any you missed. Generated files (`reference/keys-index.md`,
 `reference/weavers-index.tsv`) are rebuilt with `make index`, never edited by hand.
 
 ## Page templates
