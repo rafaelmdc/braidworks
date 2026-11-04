@@ -8,7 +8,7 @@
 # Braidworks you say what you HAVE (a gene name) and what you WANT, and it finds the
 # route across every database for you — in one command.
 #
-# Run it line by line in front of an audience, or `bash docs/demo.sh` start to finish.
+# Run it line by line in front of an audience, or `bash examples/demo.sh` start to finish.
 # Data prints to stdout; the resolved/unresolved count prints to stderr.
 #
 # Prereqs: activate the project environment after installing UniProt, PDBe, AlphaFold,
@@ -69,5 +69,5 @@ $BW weave --have gene.ncbi.id=7157 --for-each orthologs --param taxon_filter=944
 #   $BW weave --have protein.query=TP53 --param organism=9606 \
 #       --want pathway.reactome.names --format json | jq '.[].strands'
 #
-# And the network is an offline, shareable HTML map: `make view && open docs/braidworks-network.html`
+# And the network is an offline, shareable HTML map: `make view && open docs/network/braidworks-network.html`
 echo "done — say what you have, say what you want, get the route."

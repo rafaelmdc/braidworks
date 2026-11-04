@@ -11,9 +11,9 @@
 # live, mostly keyless public APIs (ncbi key is optional). Expect some braids to
 # be slow or to surface upstream hiccups — that's the point.
 #
-# Run start-to-finish:  bash docs/testing-examples.sh
-# Run one braid:        bash docs/testing-examples.sh 3
-# Network recap:        bash docs/testing-examples.sh weavers
+# Run start-to-finish:  bash examples/testing-examples.sh
+# Run one braid:        bash examples/testing-examples.sh 3
+# Network recap:        bash examples/testing-examples.sh weavers
 #
 # Two hubs, three bridges:
 #   taxonomy/microbiome hub  keyed on ncbi.taxon.id / organism.scientific_name

@@ -44,7 +44,7 @@ index:  ## Build the cross-weaver index -> docs/reference/weavers-index.tsv + do
 	uv run weaverkit index --root . --out docs/reference/weavers-index.tsv --keys-out docs/reference/keys-index.md
 
 # Where `make view` writes the interactive network view; override with VIEW_OUT=path.html.
-VIEW_OUT ?= docs/braidworks-network.html
+VIEW_OUT ?= docs/network/braidworks-network.html
 # The hero braid embedded in the view by default: a gene name -> what it does
 # (Reactome pathways + GO biological processes). Two wants, both human-readable
 # descriptors — not a raw id dump. Override with FROM=.. TO=...

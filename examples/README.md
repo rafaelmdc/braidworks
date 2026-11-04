@@ -5,10 +5,12 @@ Ready-to-run input files so you can try Braidworks without making your own.
 | File | Format | Use with |
 |---|---|---|
 | [`genes.txt`](genes.txt) | one gene symbol per line (`#` comments + blank lines ignored) | `--in-file genes.txt --in-type protein.query` |
+| [`demo.sh`](demo.sh) | live demo script: one gene name to structures, interactions, pathways and functions | `bash examples/demo.sh` |
+| [`testing-examples.sh`](testing-examples.sh) | ten hard real-world braids that exercise fan-out, traversal and cross-source routing (live APIs) | `bash examples/testing-examples.sh [N]` |
 
 ## Quick start
 
-Install UniProt, QuickGO, and STRING using the [selected-source instructions](../docs/how-to/install.md).
+Install Braidworks with every source as in the [installation guide](../docs/how-to/install.md) (`uv sync --all-extras`).
 From the repo root:
 
 ```bash
