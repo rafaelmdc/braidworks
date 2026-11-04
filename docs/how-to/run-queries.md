@@ -106,7 +106,18 @@ consumer; data go to stdout and progress goes to stderr. See
 
 ## Query from Python
 
-Give `get` your IDs, say what they are, and name the fields you want:
+Give `get` your IDs, say what they are, and name the fields you want. If you don't
+know a field's exact name, search for it by meaning first:
+
+```python
+import braidworks as bw
+
+bw.find("pdb structures", limit=1)
+# structure.pdb.ids  Experimental PDB structures of this protein.
+#                    (pdbe; from protein.uniprot.accession)
+```
+
+Then use the names in `get`:
 
 ```python
 import braidworks as bw
@@ -136,6 +147,7 @@ notebook as written.
 | Citations for the sources used | `result.cite()`, `result.references` |
 | The route that ran | `print(result.route[0])`, or `print(bw.path("protein.query", "structure.pdb.ids"))` |
 | Installed sources and their readiness | `bw.sources()` |
+| A field's exact name, from plain words | `bw.find("pdb structures")` |
 
 Inputs can be one value, a list of values with `have=`, a list of `{field: value}` rows,
 a `{field: [values]}` mapping, a pandas DataFrame with field-named columns, or a

@@ -22,6 +22,7 @@ from typing import Any, Self, TypeVar
 
 from braidworks._result import Result
 from braidworks.core.braid import BackendPolicy, Braid
+from braidworks.core.catalog import FieldMatches, field_catalog, rank_fields
 from braidworks.core.diagnose import explain_no_route, installed_types, source_status
 from braidworks.core.discovery import build_registry_from_entry_points
 from braidworks.core.exceptions import NoPathError
@@ -364,6 +365,15 @@ class Session:
         """Each installed source with its version and readiness (as `braidworks doctor`)."""
         return source_status(self.registry)
 
+    def find(self, text: str, *, limit: int = 10) -> FieldMatches:
+        """Fields whose name or description matches ``text``, best first.
+
+        ``s.find("pdb structures")`` lists ``structure.pdb.ids`` with its meaning, the
+        source that provides it and what it starts from. Use the type id as ``want=``
+        (or ``have=`` when the field is an input).
+        """
+        return FieldMatches(rank_fields(text, field_catalog(self.registry), limit=limit))
+
 
 # --------------------------------------------------------------------------- #
 # module-level functions over a shared default session
@@ -483,3 +493,13 @@ def path(have: str | Iterable[str], want: str | Iterable[str]) -> Braid:
 def sources() -> list[dict[str, Any]]:
     """Each installed source with its version and readiness."""
     return _default_session().sources()
+
+
+def find(text: str, *, limit: int = 10) -> FieldMatches:
+    """Fields whose name or description matches ``text``, best first.
+
+    Example::
+
+        bw.find("pdb structures")   # -> structure.pdb.ids, with its meaning and source
+    """
+    return _default_session().find(text, limit=limit)
