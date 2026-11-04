@@ -16,10 +16,13 @@ from os import PathLike
 from typing import Any
 
 from braidworks.core.braid import Braid
-from braidworks.core.executor import ExecutionError, ExecutionResult
+from braidworks.core.executor import ExecutionError, ExecutionResult, ReviewQueueItem
 from braidworks.core.outcomes import execution_records
 from braidworks.core.query import PreparedQuery
 from braidworks.core.references import Reference, format_references
+from braidworks.core.result import WeaveStatus
+from braidworks.core.review import ReviewDecision
+from braidworks.core.strand import entity_key
 
 STATUSES = ("resolved", "unresolved", "review", "error")
 
@@ -33,6 +36,77 @@ def _cell(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+class ReviewItem:
+    """One row paused for a human decision; record it, then call ``result.resume()``.
+
+    ``ambiguous`` rows need :meth:`choose` (pick a numbered candidate) or
+    :meth:`reject`; rows a source flagged for confirmation take :meth:`accept` or
+    :meth:`reject`. Recording a decision does not run anything until ``resume()``.
+    """
+
+    def __init__(self, result: Result, item: ReviewQueueItem) -> None:
+        self._result = result
+        triggering = item.triggering_result
+        self.input: str = item.strand_set.entity_id
+        self.row: int | None = item.strand_set.source_row
+        self.step: str = triggering.capability_id
+        self.ambiguous: bool = triggering.status is WeaveStatus.AMBIGUOUS
+        self.candidates: list[dict[str, Any]] = [
+            {
+                "index": index,
+                "confidence": candidate.confidence,
+                "values": {strand.type_id: strand.value for strand in candidate.strands},
+            }
+            for index, candidate in enumerate(triggering.candidates)
+        ]
+        self.warnings: list[str] = list(triggering.warnings)
+        self._key = str(entity_key(item.strand_set))
+
+    @property
+    def decision(self) -> str | None:
+        """The recorded decision (``"select 1"``, ``"accept"``, ``"reject"``), if any."""
+        recorded = self._result._decisions.get(self._key)
+        if recorded is None:
+            return None
+        if recorded.action == "select":
+            return f"select {recorded.candidate_index}"
+        return recorded.action
+
+    def choose(self, index: int) -> None:
+        """Pick candidate ``index`` for an ambiguous match."""
+        if not self.candidates:
+            raise ValueError(f"{self.input!r} has no candidates to choose from; use accept()")
+        if type(index) is not int or not 0 <= index < len(self.candidates):
+            raise ValueError(
+                f"{self.input!r}: candidate index must be 0..{len(self.candidates) - 1}"
+            )
+        self._record(ReviewDecision(self._key, "select", index))
+
+    def accept(self) -> None:
+        """Confirm a result the source flagged for review."""
+        if self.ambiguous:
+            raise ValueError(f"{self.input!r} is ambiguous: choose(index) a candidate instead")
+        self._record(ReviewDecision(self._key, "accept"))
+
+    def reject(self) -> None:
+        """Record no match for this input."""
+        self._record(ReviewDecision(self._key, "reject"))
+
+    def _record(self, decision: ReviewDecision) -> None:
+        self._result._decisions[self._key] = decision
+
+    def __repr__(self) -> str:
+        where = f"row {self.row}" if self.row is not None else "row ?"
+        kind = "ambiguous, choose one" if self.ambiguous else "flagged, accept or reject"
+        lines = [f"{self.input} ({where}) at {self.step}: {kind}"]
+        for candidate in self.candidates:
+            values = ", ".join(f"{t}={_cell(v)[:40]!r}" for t, v in candidate["values"].items())
+            lines.append(f"  [{candidate['index']}] {candidate['confidence']:.2f}  {values}")
+        if self.decision:
+            lines.append(f"  decision: {self.decision}")
+        return "\n".join(lines)
+
+
 class Result:
     """Rows, coverage and provenance for one query.
 
@@ -42,10 +116,21 @@ class Result:
     type (``None`` when absent) and ``missing`` (requested types this row lacks).
     """
 
-    def __init__(self, raw: ExecutionResult, prepared: PreparedQuery, want: list[str]) -> None:
+    def __init__(
+        self,
+        raw: ExecutionResult,
+        prepared: PreparedQuery,
+        want: list[str],
+        *,
+        session: Any = None,
+        state: Any = None,
+    ) -> None:
         self.raw = raw
         self.want = list(want)
         self._prepared = prepared
+        self._session = session  # the Session that ran this, for resume()
+        self._state = state  # the engine state that resume() continues from
+        self._decisions: dict[str, ReviewDecision] = {}
         self._records = execution_records(raw, self.want)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
@@ -94,13 +179,36 @@ class Result:
         return [row for row in self.rows if row["missing"] or row["status"] != "resolved"]
 
     @property
-    def review(self) -> list[dict[str, Any]]:
-        """Rows paused for review, each with its ``candidates``."""
-        return [
-            {**row, "candidates": record["candidates"]}
-            for row, record in zip(self.rows, self._records, strict=True)
-            if record["requires_review"]
-        ]
+    def review(self) -> list[ReviewItem]:
+        """Rows paused for a human decision, in input order (see :class:`ReviewItem`)."""
+        if not hasattr(self, "_review_items"):
+            items = sorted(self.raw.review_queue, key=lambda i: i.strand_set.source_row or 0)
+            self._review_items = [ReviewItem(self, item) for item in items]
+        return self._review_items
+
+    def resume(self) -> Result:
+        """Continue the run with the decisions recorded on :attr:`review` items.
+
+        Returns a new :class:`Result`; rows that were already finished are kept as
+        they were, and this result is left unchanged. Undecided rows stay paused.
+        """
+        session = self._resume_session()
+        return session._runner().run(session._continue(self))
+
+    async def async_resume(self) -> Result:
+        """Awaitable :meth:`resume`."""
+        session = self._resume_session()
+        return await session._runner().arun(session._continue(self))
+
+    def _resume_session(self):
+        if not self._decisions:
+            raise ValueError(
+                "no review decisions recorded: call choose(), accept() or reject() on the "
+                "items in result.review first"
+            )
+        if self._session is None or self._state is None:
+            raise ValueError("this result was not produced by braidworks.get; cannot resume")
+        return self._session
 
     @property
     def errors(self) -> list[ExecutionError]:

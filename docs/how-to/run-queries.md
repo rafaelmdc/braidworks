@@ -143,7 +143,7 @@ notebook as written.
 | One field per input | `result.column("protein.name")` |
 | Rows for one input | `result["P04637"]` |
 | Inputs lacking a requested field | `result.missing` |
-| Ambiguous matches and their candidates | `result.review` |
+| Ambiguous matches and their candidates | `result.review`; see below to resolve them |
 | Citations for the sources used | `result.cite()`, `result.references` |
 | The route that ran | `print(result.route[0])`, or `print(bw.path("protein.query", "structure.pdb.ids"))` |
 | Installed sources and their readiness | `bw.sources()` |
@@ -156,6 +156,26 @@ a `{field: [values]}` mapping, a pandas DataFrame with field-named columns, or a
 and parameters fail before any source is called, with suggestions. Other options:
 `sources="uniprot,pdbe"`, `expand="all"` or `"top:5"`, `for_each="orthologs"`,
 `review="allow_continue"`, `min_confidence=0.8`.
+
+### Resolve ambiguous matches
+
+By default, a match the source is unsure about pauses instead of guessing: its row has
+status `review` and appears in `result.review` with numbered candidates. Record a
+decision for each paused row, then resume. Only the decided rows continue; finished
+rows are kept and undecided rows stay paused.
+
+```python
+result = bw.get(["bacilus subtilis"], have="organism.name", want="ncbi.taxon.id")
+result.review[0]
+# bacilus subtilis (row 1) at ncbi.resolve_name: ambiguous, choose one
+#   [0] 0.81  ncbi.taxon.id='1630683', organism.scientific_name='Actinocyclus subtilis', …
+#   [1] 0.80  ncbi.taxon.id='135461', organism.scientific_name='Bacillus subtilis subsp. subtilis', …
+result.review[0].choose(1)    # or .reject(); a flagged (not ambiguous) row takes .accept()
+result = result.resume()      # a new Result; the original is unchanged
+```
+
+Candidate order and scores come from the source; check the names before choosing.
+`min_confidence=0.9` pauses any match scored below that threshold.
 
 To reuse sources and settings across many queries, open a session; it closes the
 sources' network connections when the block ends:

@@ -28,10 +28,12 @@ from braidworks.core.discovery import build_registry_from_entry_points
 from braidworks.core.exceptions import NoPathError
 from braidworks.core.executor import ReviewPolicy
 from braidworks.core.inputs import read_input_rows
-from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
+from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.planner import Braider
 from braidworks.core.query import QueryOptions, QueryRequest, normalize_expansion, prepare_query
+from braidworks.core.query_state import continue_query, start_query
 from braidworks.core.registry import BraidRegistry
+from braidworks.core.review import apply_review_decisions
 from braidworks.core.strand import Strand, StrandSet
 
 T = TypeVar("T")
@@ -287,8 +289,17 @@ class Session:
         return prepared, want_types
 
     async def _execute(self, prepared, want_types: list[str]) -> Result:
-        raw = await execute_managed_query(self.registry, prepared, self._persistence)
-        return Result(raw, prepared, want_types)
+        # Keep the engine state on the Result so paused rows can be resumed later.
+        state = start_query(prepared)
+        raw = await continue_query(self.registry, state, cache=self._persistence.cache())
+        return Result(raw, prepared, want_types, session=self, state=state)
+
+    async def _continue(self, result: Result) -> Result:
+        state = apply_review_decisions(
+            self.registry, result._state, tuple(result._decisions.values())
+        )
+        raw = await continue_query(self.registry, state, cache=self._persistence.cache())
+        return Result(raw, result._prepared, result.want, session=self, state=state)
 
     def get(
         self,
