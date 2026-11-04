@@ -245,7 +245,7 @@ one identifier per line or upload CSV/TSV with field names as headers.
 Empty cells, shared values, duplicate rows, parameters, and expansion limits follow
 the same batch rules as the CLI. Results show progress, review and errors; export
 JSON/CSV/TSV for analysis. Saved recipes and generated commands retain batch settings.
-For cache/run paths, use [persistence](cache-and-resume.md); paths refer to the server's disk.
+For cache/run paths, use [persistence](cache-and-resume.md); paths refer to the server's disk, inside its data directory (`--data-dir`).
 
 ## Configure a run
 

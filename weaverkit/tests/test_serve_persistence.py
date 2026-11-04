@@ -16,7 +16,7 @@ recording_registry = _recording_fixture
 
 def test_browser_cache_run_status_and_resume(monkeypatch, recording_registry, tmp_path):
     registry, weaver = recording_registry
-    client = client_for(monkeypatch, registry)
+    client = client_for(monkeypatch, registry, data_dir=tmp_path)
     options = QueryPersistence(str(tmp_path / "cache.sqlite"), str(tmp_path / "runs.sqlite"), "one")
     body = {"have": {QUERY: "TP53"}, "want": [SYMBOL], "persistence": options.to_json()}
     first = client.post("/api/run", json=body).json()
@@ -87,7 +87,7 @@ def test_status_missing_path_and_bad_options_fail_without_lookup(
     monkeypatch, recording_registry, tmp_path
 ):
     registry, weaver = recording_registry
-    client = client_for(monkeypatch, registry)
+    client = client_for(monkeypatch, registry, data_dir=tmp_path)
     path = tmp_path / "missing.sqlite"
     assert not client.get("/api/runs", params={"run_db": str(path)}).json()["ok"]
     assert not path.exists()
@@ -124,7 +124,7 @@ def test_browser_explicit_review_decisions(monkeypatch, recording_registry, tmp_
         return replace(result, requires_review=True) if cid == "describe" else result
 
     weaver.execute = reviewed
-    client = client_for(monkeypatch, registry)
+    client = client_for(monkeypatch, registry, data_dir=tmp_path)
     options = QueryPersistence(run_db=str(tmp_path / "runs.sqlite"), run_id="review")
     body = {
         "batch": {"format": "lines", "input_type": QUERY, "text": "TP53\nTP53"},
@@ -150,3 +150,52 @@ def test_browser_explicit_review_decisions(monkeypatch, recording_registry, tmp_
     finished = client.post("/api/resume", json=resume).json()
     assert finished["ok"] and finished["run"]["status"] == "complete"
     assert {row["status"] for row in finished["rows"]} == {"resolved", "unresolved"}
+
+
+def test_browser_paths_stay_inside_the_data_directory(monkeypatch, recording_registry, tmp_path):
+    registry, weaver = recording_registry
+    data, outside = tmp_path / "data", tmp_path / "elsewhere"
+    data.mkdir()
+    outside.mkdir()
+    client = client_for(monkeypatch, registry, data_dir=data)
+
+    escaping = [str(outside / "runs.sqlite"), "../elsewhere/runs.sqlite"]
+    for path in escaping:
+        body = {
+            "have": {QUERY: "TP53"},
+            "want": [SYMBOL],
+            "persistence": QueryPersistence(run_db=path, run_id="x").to_json(),
+        }
+        refused = client.post("/api/run", json=body).json()
+        assert not refused["ok"] and "outside the server's data directory" in refused["error"]
+        assert not client.get("/api/runs", params={"run_db": path}).json()["ok"]
+    assert list(outside.iterdir()) == [] and weaver.calls == []
+
+    inside = QueryPersistence(run_db="runs.sqlite", run_id="ok")  # relative to the data dir
+    body = {"have": {QUERY: "TP53"}, "want": [SYMBOL], "persistence": inside.to_json()}
+    assert client.post("/api/run", json=body).json()["ok"]
+    assert (data / "runs.sqlite").exists()
+    listed = client.get("/api/runs", params={"run_db": "runs.sqlite"}).json()
+    assert [run["run_id"] for run in listed["runs"]] == ["ok"]
+
+
+def test_exposure_warning_only_for_non_loopback_hosts():
+    assert serve.exposure_warning("127.0.0.1", "/data") is None
+    assert serve.exposure_warning("localhost", "/data") is None
+    warning = serve.exposure_warning("0.0.0.0", "/data")
+    assert "reachable from other machines" in warning and "/data" in warning
+
+
+def test_confine_path_rules(tmp_path):
+    import os
+
+    root = os.path.realpath(tmp_path)
+    assert serve.confine_path("runs.sqlite", root) == os.path.join(root, "runs.sqlite")
+    assert serve.confine_path(os.path.join(root, "a", "b.sqlite"), root).startswith(root)
+    (tmp_path / "link").symlink_to("/")
+    for escaping in ("../x.sqlite", "/etc/x.sqlite", "link/etc/x.sqlite"):
+        try:
+            serve.confine_path(escaping, root)
+        except ValueError:
+            continue
+        raise AssertionError(f"{escaping} was not refused")

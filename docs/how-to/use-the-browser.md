@@ -30,8 +30,10 @@ it does not require the browser server at execution time. See [artifact referenc
 
 Expand **Cache and saved runs** to set a lookup-cache and/or run-store file. Blank paths
 retain in-memory execution. Advanced controls set TTLs, payload budget and the run lease.
-Paths refer to the server's disk; recipes and generated commands retain them, so inspect
-paths before sharing a recipe.
+Paths are on the server's disk and must stay inside its data directory: the folder
+`weaverkit serve` was started in, or the one given with `--data-dir`. Relative paths
+such as `data/runs.sqlite` resolve inside it; paths outside it are refused. Recipes and
+generated commands retain the paths, so inspect them before sharing a recipe.
 
 Open **Saved runs** for the selected store, inspect a run and continue using its saved
 settings. Review selectors start at **Leave pending**. Choose a candidate, accept an
