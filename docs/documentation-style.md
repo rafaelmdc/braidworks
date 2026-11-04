@@ -50,7 +50,8 @@ facts to the appropriate page and link them; remove filler and obsolete claims a
 checking their replacements. Preserve prerequisites, defaults, limitations and side
 effects. Reducing length is useful only when the reader can still complete the task.
 
-Use `uv run --no-sync` after selected workspace installs. Check current command help,
+Install with `uv sync --all-extras` and run with `uv run`; never document per-package
+`uv sync --package` selections, because each one removes the packages it does not name. Check current command help,
 public signatures, and generated catalogues before documenting behavior. Link to the
 canonical reference instead of copying signatures or whole field lists into a guide.
 If a detail must be duplicated, verify both locations in the same change.

@@ -6,14 +6,13 @@ that retains the annotation, its evidence and the lookup outcome.
 
 ## Prepare the two sources
 
-From your Braidworks checkout, install NCBI and FAPROTAX:
+From your Braidworks checkout, install every source, including NCBI and FAPROTAX:
 
 ```bash
-uv sync --package ncbi-weaver --package faprotax-weaver
+uv sync --all-extras
 ```
 
-Use Python 3.12+ and uv, as in [installation](../installation.md). This selection
-creates or updates the checkout's `.venv` and can remove previously selected packages.
+Use Python 3.12+ and uv, as in [installation](../installation.md).
 The lesson uses live NCBI taxonomy and bundled FAPROTAX rules; it does not acquire a
 local taxonomy database. Network access to NCBI is required.
 
@@ -22,7 +21,7 @@ local taxonomy database. Network access to NCBI is required.
 Run this from the checkout:
 
 ```bash
-uv run --no-sync braidworks weave --have organism.name=Methylococcus \
+uv run braidworks weave --have organism.name=Methylococcus \
     --want microbe.ecology.functional_groups --only ncbi,faprotax --policy api_first
 ```
 
@@ -40,7 +39,7 @@ not measurements of a particular strain's metabolism.
 Repeat the lookup, adding the evidence field and JSON output:
 
 ```bash
-uv run --no-sync braidworks weave --have organism.name=Methylococcus \
+uv run braidworks weave --have organism.name=Methylococcus \
     --want microbe.ecology.functional_groups,microbe.ecology.evidence \
     --only ncbi,faprotax --policy api_first --format json > methylococcus.json
 ```
@@ -68,7 +67,7 @@ if evidence is not None:
 Run it:
 
 ```bash
-uv run --no-sync python inspect_ecology.py
+uv run python inspect_ecology.py
 ```
 
 Check that `Missing` is empty, `Review` is false and `Errors` is empty before using

@@ -51,6 +51,10 @@ class BackendDispatchWeaver(BaseWeaver):
             )
         return strat
 
+    def backend_ready(self, backend: str) -> bool:
+        strat = self._backends.get(backend)
+        return strat is not None and strat.is_configured()
+
     def supports_request_pacing(self, backend: str) -> bool:
         return bool(getattr(self._backends.get(backend), "supports_request_pacing", False))
 

@@ -21,12 +21,12 @@ see [sources](sources.md) for acquisition and [NCBI setup](database.md) for taxo
 From the checkout, with UniProt and PDBe installed:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv run braidworks weave --have protein.query=P04637 \
     --want protein.name,structure.pdb.ids \
     --cache-db data/lookups.sqlite --run-db data/runs.sqlite --run-id p53-structures
-uv run --no-sync braidworks runs --run-db data/runs.sqlite
-uv run --no-sync braidworks runs p53-structures --run-db data/runs.sqlite --format json
-uv run --no-sync braidworks resume p53-structures --run-db data/runs.sqlite --format json
+uv run braidworks runs --run-db data/runs.sqlite
+uv run braidworks runs p53-structures --run-db data/runs.sqlite --format json
+uv run braidworks resume p53-structures --run-db data/runs.sqlite --format json
 ```
 
 Choose a new run ID: existing IDs are never overwritten. If omitted, the generated
@@ -41,7 +41,7 @@ Inspect `runs RUN_ID` to get the pending review key and candidate list. Then sub
 the decision using that key. For example, **if the reported key is `node:0`**:
 
 ```bash
-uv run --no-sync braidworks resume RUN_ID --run-db data/runs.sqlite \
+uv run braidworks resume RUN_ID --run-db data/runs.sqlite \
     --decision node:0=select:0
 ```
 

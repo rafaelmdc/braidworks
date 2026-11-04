@@ -26,6 +26,8 @@ jobs:
           python-version: "3.12"
       - name: Sync workspace
         run: uv sync --all-extras
+      - name: README quickstart (real network calls)
+        run: make quickstart-check LIVE=1
       - name: Live E2E (real network calls)
         env:
           BRAIDWORKS_RUN_LIVE: "1"

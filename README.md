@@ -24,20 +24,21 @@ access; some sources require a separately prepared local database. See the
 ## Try one query
 
 You need Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-From a terminal, install the two sources for this example:
+From a terminal, install Braidworks with every source and the browser interface:
 
 ```bash
 git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
-uv sync --package uniprot-weaver --package pdbe-weaver
-uv run --no-sync braidworks weave --have protein.query=P04637 \
+uv sync --all-extras
+uv run braidworks doctor
+uv run braidworks weave --have protein.query=P04637 \
     --want protein.name,structure.pdb.ids
 ```
 
 This asks for the name and experimental structure IDs associated with human p53's
 UniProt accession, `P04637`. It uses live APIs, so the returned structure inventory
 can change. The install creates a local `.venv`; it does not download biological
-databases. Keep `--no-sync` when running commands to preserve your selected packages.
+databases. `braidworks doctor` checks the installation and tells you what to fix.
 
 For gene symbols, constrain the species, for example `--have protein.query=TP53
 --param organism=9606` for human. UniProt search returns one representative, which
@@ -85,5 +86,5 @@ for other setups and [release rehearsal](docs/releasing.md) for maintainers.
 ## License and attribution
 
 The software is [MIT licensed](LICENSE). Biological data retain their providers'
-licenses and attribution requirements. Run `uv run --no-sync braidworks references`
+licenses and attribution requirements. Run `uv run braidworks references`
 to inspect references from your installed sources.

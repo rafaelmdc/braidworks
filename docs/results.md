@@ -49,7 +49,7 @@ counts and serialization, see [Python result reference](reference/results.md#pyt
 With PDBe installed, save a CSV and a separate observation archive:
 
 ```bash
-uv run --no-sync braidworks weave --have protein.uniprot.accession=P04637 --want structure.pdb.ids \
+uv run braidworks weave --have protein.uniprot.accession=P04637 --want structure.pdb.ids \
   --only pdbe --format csv --archive run.json > structures.csv
 ```
 

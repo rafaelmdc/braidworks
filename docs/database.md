@@ -13,9 +13,9 @@ the current dump and your machine. Start with `ncbi-weaver ensure` below, or use
 Run these commands from the checkout with `ncbi_weaver` installed.
 
 ```bash
-uv run --no-sync ncbi-weaver ensure              # prompt, then download + build into the user cache
-uv run --no-sync ncbi-weaver ensure --yes        # non-interactive (CI/servers)
-uv run --no-sync ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
+uv run ncbi-weaver ensure              # prompt, then download + build into the user cache
+uv run ncbi-weaver ensure --yes        # non-interactive (CI/servers)
+uv run ncbi-weaver ensure --refresh    # rebuild from the latest NCBI taxdump
 ```
 
 `ensure` is idempotent (a valid DB is reused instantly), lands the DB in the
@@ -30,7 +30,7 @@ A console script (`ncbi-weaver`) ships with the `ncbi_weaver` package:
 
 ```bash
 # from the repo root
-uv run --no-sync ncbi-weaver build-db \
+uv run ncbi-weaver build-db \
     --download \
     --dump  data/taxdump.tar.gz \
     --db    data/ncbi_taxonomy.sqlite
