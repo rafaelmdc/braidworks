@@ -43,6 +43,42 @@ def installed_types(registry: BraidRegistry) -> tuple[set[str], set[str]]:
     return consumed, produced
 
 
+def backend_readiness(registry: BraidRegistry, weaver_id: str) -> tuple[list[str], list[str]]:
+    """``(ready, needs_setup)`` backends for one installed weaver, across its capabilities."""
+    weaver = registry.get_weaver(weaver_id)
+    active = registry.get_manifest(weaver_id)
+    ready: list[str] = []
+    needs_setup: list[str] = []
+    declared = registry.get_declared_manifest(weaver_id).capabilities
+    for backend in sorted({b for cap in declared for b in cap.backends}):
+        enabled = active is not None and any(backend in c.backends for c in active.capabilities)
+        try:
+            ok = enabled and weaver.backend_ready(backend)
+        except Exception:  # noqa: BLE001 - a broken backend reads as "needs setup", never a crash
+            ok = False
+        (ready if ok else needs_setup).append(backend)
+    return ready, needs_setup
+
+
+def source_status(registry: BraidRegistry) -> list[dict]:
+    """One plain record per installed source: id, version, title and backend readiness."""
+    records = []
+    for manifest in sorted(registry.declared_manifests(), key=lambda m: m.weaver_id):
+        ready, needs_setup = backend_readiness(registry, manifest.weaver_id)
+        state = "ready" if not needs_setup else ("partial" if ready else "needs_setup")
+        records.append(
+            {
+                "source": manifest.weaver_id,
+                "version": manifest.version,
+                "title": manifest.title,
+                "status": state,
+                "ready": ready,
+                "needs_setup": needs_setup,
+            }
+        )
+    return records
+
+
 def suggest_types(name: str, known: Iterable[str], limit: int = 5) -> list[str]:
     """Closest known type names: spelling matches first, then dotted-segment matches."""
     known = sorted(set(known) - {name})

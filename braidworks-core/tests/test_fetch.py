@@ -162,3 +162,34 @@ def test_fetch_result_json_archive_preserves_partial_values_references_and_error
     assert restored.column(WANT) == {"853": ["ACGAMK"]}
     assert restored.references[0].render() == result.references[0].render()
     assert restored.errors[0].strand_set.get("ncbi.taxon.id").value == 999
+
+
+async def test_sync_fetch_works_inside_a_running_loop():
+    # A Jupyter cell already runs an event loop; fetch must not call asyncio.run on it.
+    res = fetch(WANT, ids=["853"], registry=_registry())
+    assert res.get("853")[WANT] == ["ACGAMK", "PGK"]
+
+
+async def test_fetch_closes_sources_it_discovers_but_not_a_callers_registry(monkeypatch):
+    import importlib
+
+    fetch_module = importlib.import_module("braidworks.core.fetch")
+
+    closed = []
+
+    class Closing(ScriptedWeaver):
+        async def aclose(self):
+            closed.append(self.MANIFEST.weaver_id)
+
+    def discovered(only=None):
+        reg = BraidRegistry()
+        reg.register(Closing(_resolver, capability=CAP, weaver_id="agora"))
+        return reg
+
+    monkeypatch.setattr(fetch_module, "build_registry_from_entry_points", discovered)
+    await async_fetch(WANT, ids=["853"])
+    assert closed == ["agora"]
+
+    own = discovered()
+    await async_fetch(WANT, ids=["853"], registry=own)
+    assert closed == ["agora"]  # the caller's registry stays open for reuse

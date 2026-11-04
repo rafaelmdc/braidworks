@@ -33,7 +33,12 @@ from typing import Any
 from braidworks.core.archive import begin_archive, write_archive
 from braidworks.core.braid import BackendPolicy
 from braidworks.core.cache_policy import CachePolicy
-from braidworks.core.diagnose import INSTALL_ALL, explain_no_route, workspace_weavers
+from braidworks.core.diagnose import (
+    INSTALL_ALL,
+    backend_readiness,
+    explain_no_route,
+    workspace_weavers,
+)
 from braidworks.core.discovery import (
     DiscoveryPolicy,
     build_registry_from_entry_points,
@@ -906,23 +911,6 @@ def _cmd_path(args: argparse.Namespace) -> int:
     return 0
 
 
-def _backend_gaps(registry: BraidRegistry, weaver_id: str) -> tuple[list[str], list[str]]:
-    """``(ready, not_set_up)`` backends for one weaver, across its capabilities."""
-    weaver = registry.get_weaver(weaver_id)
-    active = registry.get_manifest(weaver_id)
-    ready: list[str] = []
-    not_set_up: list[str] = []
-    declared = registry.get_declared_manifest(weaver_id).capabilities
-    for backend in sorted({b for cap in declared for b in cap.backends}):
-        enabled = active is not None and any(backend in c.backends for c in active.capabilities)
-        try:
-            ok = enabled and weaver.backend_ready(backend)
-        except Exception:  # noqa: BLE001 - a broken backend reads as "not set up", never a crash
-            ok = False
-        (ready if ok else not_set_up).append(backend)
-    return ready, not_set_up
-
-
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Check the installation and say, in plain words, what to do next."""
     import platform
@@ -944,7 +932,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         [len(m.weaver_id) for m in manifests] + [len(f.name) for f in report.failures] + [1]
     )
     for manifest in manifests:
-        enabled, not_set_up = _backend_gaps(registry, manifest.weaver_id)
+        enabled, not_set_up = backend_readiness(registry, manifest.weaver_id)
         label = f"  {{mark}} {manifest.weaver_id:<{width}}  v{manifest.version:<8} "
         if not not_set_up:
             print(label.format(mark="✓") + f"ready ({', '.join(enabled)})")
