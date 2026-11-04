@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.2.10"
+WEAVER_VERSION = "0.3.0"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -32,8 +32,9 @@ PROVENANCE = Provenance(
 TYPE_DESCRIPTIONS = {
     "disease.mesh.id": "A MeSH descriptor id for a disease (e.g. D003093) — an entry point for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets.",
     "metagenome.run_id": "Observed sequencing run accession; produced and consumed by GMrepo run workflows.",
+    "microbe.abundance.association_count": "How many GMrepo phenotype-association rows mention this microbe (a phenotype can have several).",
     "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
-    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for (the length of microbe.abundance.phenotype_names).",
     "microbe.abundance.coverage": "GMrepo taxon association acquisition outcome and completeness.",
     "microbe.abundance.overview": "This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo).",
     "microbe.abundance.phenotype_listing": "Observed source MeSH phenotype identities for a taxon.",
@@ -61,6 +62,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 consumes=frozenset({"ncbi.taxon.id"}),
                 produces=frozenset(
                     {
+                        "microbe.abundance.association_count",
                         "microbe.abundance.associations",
                         "microbe.abundance.count",
                         "microbe.abundance.coverage",
@@ -74,6 +76,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         id="summary",
                         outputs=frozenset(
                             {
+                                "microbe.abundance.association_count",
                                 "microbe.abundance.count",
                                 "microbe.abundance.coverage",
                                 "microbe.abundance.overview",
@@ -87,6 +90,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                     OutputGroup(id="full", outputs=frozenset({"microbe.abundance.records"})),
                 ),
                 backends=backends,
+                totals={"microbe.abundance.phenotype_names": "microbe.abundance.count"},
             ),
             Capability(
                 id="gmrepo.sample_profiles",

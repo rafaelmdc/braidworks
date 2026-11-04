@@ -4,15 +4,20 @@ Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 ``GET /json/interaction_partners`` (STRING resolves the accession to its protein +
 species itself, so no species input is needed). The returned edges are normalized
 into interaction leaves:
-  * ``protein.interaction.partners`` — partner display names,
-  * ``protein.interaction.count`` — how many,
-  * ``protein.interaction.records`` — full edges (partner, combined score, per-channel
-    subscores).
+  * ``protein.interaction.partners`` — the most confident partners (display cap),
+  * ``protein.interaction.count`` — how many partners STRING has in total,
+  * ``protein.interaction.records`` — full edges for the displayed partners (partner,
+    combined score, per-channel subscores).
+
+**Completeness:** we ask STRING for every partner (``limit`` = ``FETCH_ALL``), so a
+response shorter than the request is the whole network at the chosen score threshold
+and ``count`` is its true size. ``string.id`` (the fan dimension) lists every partner;
+partners/records show the top ``limit``. A caller-set ``max_partners`` that cuts the
+download makes the total unknown: ``count`` is then omitted and coverage says so.
 
 **Determinism:** STRING returns partners ranked by confidence, but ties are not
 ordered stably, so we impose a fixed total order — combined score descending, then
-partner name ascending — within the upstream retrieval limit. This is a bounded observation, not
-a complete interaction network.
+partner name ascending.
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -35,8 +40,10 @@ from braidworks.core.source_identity import remote_fingerprint
 logger = logging.getLogger("string_weaver.api")
 
 DEFAULT_BASE_URL = "https://version-12-5.string-db.org/api"
-DEFAULT_LIMIT = 25  # max partners per protein (most confident first)
-_ID_CHUNK = 100  # identifiers per STRING request (newline-separated; keeps the URL bounded)
+DEFAULT_LIMIT = 25  # partners shown per protein (most confident first)
+FETCH_ALL = 100_000  # requested per protein: above any real network (UBC: ~1.6k partners)
+_ID_CHUNK = 100  # identifiers per get_string_ids request (keeps the URL bounded)
+_PARTNER_CHUNK = 10  # proteins per interaction_partners request (full networks ~0.5 MB each)
 # STRING evidence channels: JSON subscore key -> readable name.
 _CHANNELS = {
     "nscore": "neighborhood",
@@ -109,7 +116,7 @@ def _edge(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
+def _extract(payload: list[dict[str, Any]], display: int) -> dict[str, Any]:
     # Collapse logical source/target edges; keep all distinct observed evidence.
     by_edge: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for raw in payload:
@@ -129,11 +136,13 @@ def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
         record["evidence"] = observed
         records.append(record)
     records.sort(key=lambda row: (-(row["score"] or 0.0), row["string_id"], row["source_id"]))
+    shown = records[:display]
     return {
+        # The fan dimension: every partner, uncapped (max_expansion bounds fan-out).
         "string.id": list(dict.fromkeys(row["string_id"] for row in records)),
-        "protein.interaction.partners": [row["partner"] for row in records],
+        "protein.interaction.partners": [row["partner"] for row in shown],
         "protein.interaction.count": len(records),
-        "protein.interaction.records": records,
+        "protein.interaction.records": shown,
     }
 
 
@@ -169,6 +178,7 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
             "string-api",
             endpoint,
             limit=self._limit,
+            acquisition="full-network",
             release="12.5" if endpoint.rstrip("/") == DEFAULT_BASE_URL else "custom-or-unversioned",
         )
 
@@ -198,6 +208,15 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         score = options.get("required_score")
         species = options.get("species")
         network_type = options.get("network_type", "functional")
+        max_partners = options.get("max_partners")
+        if max_partners is not None and (
+            isinstance(max_partners, bool) or not isinstance(max_partners, int) or max_partners < 1
+        ):
+            return [
+                LookupRecord(query=q, error="max_partners must be a positive integer")
+                for q in queries
+            ]
+        fetch_limit = max_partners if max_partners is not None else FETCH_ALL
         if (
             score is not None
             and (isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 1000)
@@ -219,7 +238,7 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
             return [LookupRecord(query=q, found=False) for q in queries]
         idmap, mapping_errors = await self._string_ids(distinct, **mapping_options)
         partners, partner_errors = await self._partners(
-            sorted(set(idmap.values())), **partner_options
+            sorted(set(idmap.values())), fetch_limit, **partner_options
         )
 
         records: list[LookupRecord] = []
@@ -236,8 +255,8 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                         found=False,
                         warnings=(
                             (
-                                f"No edges observed within STRING retrieval limit={self._limit}; "
-                                "network completeness is not established."
+                                "STRING reports no interaction partners for this protein "
+                                "at the requested score threshold."
                             ),
                         )
                         if string_id
@@ -245,34 +264,38 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                     )
                 )
             else:
-                values = _extract(edges)
+                values = _extract(edges, self._limit)
+                # STRING applies the request limit per protein: fewer edges than asked
+                # for means we hold the whole network at this threshold.
+                complete = len(edges) < fetch_limit
+                total = values["protein.interaction.count"]
                 values["protein.interaction.coverage"] = {
-                    "scope": "retrieved_interaction_partners",
+                    "scope": "interaction_partners",
                     "network_type": network_type,
                     "required_score": score,
                     "species": species,
                     "score_scale": [0, 1],
                     "required_score_scale": [0, 1000],
-                    "request_limit": self._limit,
-                    "observed_edges": values["protein.interaction.count"],
+                    "request_limit": fetch_limit,
+                    "display_limit": self._limit,
+                    "total_partners": total if complete else None,
                     "observed_partners": len(values["string.id"]),
-                    "complete": None,
-                    "count_scope": "observed_edges",
-                    "fan_scope": "retrieved_partners",
+                    "complete": complete,
+                    "count_scope": "all_partners",
+                    "fan_scope": "all_partners" if complete else "retrieved_partners",
                 }
-                records.append(
-                    LookupRecord(
-                        query=query,
-                        found=True,
-                        values=values,
-                        warnings=(
-                            (
-                                f"STRING retrieval is bounded by limit={self._limit}; "
-                                "counts and fan-out describe retrieved partners, "
-                                "not a proven complete network."
-                            ),
+                warnings: tuple[str, ...] = ()
+                if not complete:
+                    # A count we do not know is never published as if it were the total.
+                    del values["protein.interaction.count"]
+                    warnings = (
+                        (
+                            f"STRING download stopped at max_partners={fetch_limit}; the true "
+                            "number of partners is unknown, so no count is reported."
                         ),
                     )
+                records.append(
+                    LookupRecord(query=query, found=True, values=values, warnings=warnings)
                 )
         return records
 
@@ -314,20 +337,20 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         return out, errors
 
     async def _partners(
-        self, string_ids: list[str], **options: str
+        self, string_ids: list[str], fetch_limit: int, **options: str
     ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
-        """Bulk-fetch interaction partners, grouped by the query protein (``stringId_A``)."""
+        """Bulk-fetch every interaction partner, grouped by query protein (``stringId_A``)."""
         out: dict[str, list[dict[str, Any]]] = {}
         errors: dict[str, str] = {}
-        for start in range(0, len(string_ids), _ID_CHUNK):
-            chunk = string_ids[start : start + _ID_CHUNK]
+        for start in range(0, len(string_ids), _PARTNER_CHUNK):
+            chunk = string_ids[start : start + _PARTNER_CHUNK]
             if not chunk:
                 continue
             try:
                 rows = await self._get(
                     "/json/interaction_partners",
                     "\r".join(chunk),
-                    limit=str(self._limit),
+                    limit=str(fetch_limit),
                     **options,
                 )
             except (

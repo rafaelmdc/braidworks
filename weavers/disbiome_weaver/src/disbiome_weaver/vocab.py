@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "disbiome"
-WEAVER_VERSION = "0.3.10"
+WEAVER_VERSION = "0.4.0"
 WEAVER_TITLE = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -34,8 +34,9 @@ TYPE_DESCRIPTIONS = {
     "disease.disbiome.record": "One provider disease identity with retained source records.",
     "disease.meddra.id": "A MedDRA id for a disease (e.g. 10009888) — an entry point for disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome).",
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, method, sample, host.",
-    "microbe.disease.count": "How many disease-association experiments mention this microbe.",
+    "microbe.disease.count": "How many distinct diseases this microbe is linked to (the length of microbe.disease.names).",
     "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
+    "microbe.disease.experiment_count": "How many disease-association experiments mention this microbe (one disease can have several).",
     "microbe.disease.identities": "Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence.",
     "microbe.disease.names": "The diseases this microbe is linked to.",
     "microbe.disease.records": "Full Disbiome experiment rows linking this microbe to diseases.",
@@ -64,6 +65,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "microbe.disease.associations",
                         "microbe.disease.count",
                         "microbe.disease.coverage",
+                        "microbe.disease.experiment_count",
                         "microbe.disease.identities",
                         "microbe.disease.names",
                         "microbe.disease.records",
@@ -72,7 +74,13 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 output_groups=(
                     OutputGroup(
                         id="summary",
-                        outputs=frozenset({"microbe.disease.count", "microbe.disease.names"}),
+                        outputs=frozenset(
+                            {
+                                "microbe.disease.count",
+                                "microbe.disease.experiment_count",
+                                "microbe.disease.names",
+                            }
+                        ),
                     ),
                     OutputGroup(
                         id="associations", outputs=frozenset({"microbe.disease.associations"})
@@ -93,6 +101,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 set_outputs=frozenset({"disease.disbiome.id", "disease.meddra.id"}),
                 consumes_any=True,
+                totals={"microbe.disease.names": "microbe.disease.count"},
                 parameters=(
                     Parameter(
                         name="sample",

@@ -40,7 +40,10 @@ size, e.g. `totals = { "structure.pdb.ids" = "structure.pdb.count" }`. Both must
 outputs of the capability, and the count must be in the list's output group (or in
 `always_computed_groups`) so it is present whenever the list is. Declare a pair only
 when the count is the full size *of that list*. It maps to `Capability.totals`;
-results then show "25 of 321" and add a `<list>.total` column.
+results then show "25 of 321" and add a `<list>.total` column. Every produced
+`*.count` must be declared here (`verify` rejects one that is not): `.count` always
+means a list's total. Name other counts for what they count, e.g.
+`microbe.disease.experiment_count`.
 
 **`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
 `filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB

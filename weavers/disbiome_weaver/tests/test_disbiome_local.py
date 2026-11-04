@@ -8,6 +8,7 @@ from disbiome_weaver.factory import build_disbiome_weaver_fixture
 CAP = "disbiome.list_diseases"
 NAMES = "microbe.disease.names"
 COUNT = "microbe.disease.count"
+EXPERIMENTS = "microbe.disease.experiment_count"
 ASSOCIATIONS = "microbe.disease.associations"
 RECORDS = "microbe.disease.records"
 
@@ -65,12 +66,15 @@ async def test_full_blob_has_every_joined_field():
     assert rec["publication"]["doi"] is None
 
 
-async def test_multiple_experiments_dedup_names_but_count_all():
+async def test_multiple_experiments_count_diseases_and_experiments_separately():
     # taxid 1350 has two experiments, both for Crohn's disease.
-    r = await _resolve(build_disbiome_weaver_fixture(), 1350, {NAMES, COUNT, ASSOCIATIONS})
+    r = await _resolve(
+        build_disbiome_weaver_fixture(), 1350, {NAMES, COUNT, EXPERIMENTS, ASSOCIATIONS}
+    )
     sm = _strands(r)
     assert sm[NAMES] == ["Crohn's disease"]  # de-duplicated
-    assert sm[COUNT] == 2  # both experiments counted
+    assert sm[COUNT] == 1 == len(sm[NAMES])  # .count is always the size of its list
+    assert sm[EXPERIMENTS] == 2  # both experiments, under their own name
     directions = sorted(a["direction"] for a in sm[ASSOCIATIONS])
     assert directions == ["Elevated", "Reduced"]
 
@@ -101,7 +105,8 @@ async def test_generic_genus_taxid_is_reachable_without_species_label():
     )[0]
     assert result.status is WeaveStatus.OK
     values = _strands(result)
-    assert values[COUNT] == 2
+    assert values[COUNT] == 1  # one disease (Crohn's)
+    assert len(values[RECORDS]) == 2  # both experiments reachable at genus level
     assert all(record["organism"]["ncbi_id"] == "1350" for record in values[RECORDS])
     assert all(
         record["organism"]["scientific_name"] == "Enterococcus" for record in values[RECORDS]

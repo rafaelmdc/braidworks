@@ -17,7 +17,7 @@ db_name = "disbiome"
 weaver_id = "disbiome"
 kind = "lookup"
 title = "Disbiome microbe–disease associations (taxid -> diseases + direction)"
-version = "0.3.10"
+version = "0.4.0"
 license = "Open"
 citation = "https://doi.org/10.1186/s12866-018-1197-5"
 attribution = "Disbiome (Janssens et al., 2018)"
@@ -45,6 +45,8 @@ source_sample = """
 
 [[capability]]
 id = "disbiome.list_diseases"
+# microbe.disease.count = distinct diseases (the names list); experiments are counted separately.
+totals = { "microbe.disease.names" = "microbe.disease.count" }
 # Exact source identity: generic taxids include genus records; species IDs remain
 # an alternative for existing callers. No inferred ancestor roll-up.
 consumes = ["ncbi.taxon.id", "ncbi.taxon.species_id"]
@@ -54,7 +56,7 @@ set_outputs = ["disease.disbiome.id", "disease.meddra.id"]
   # Lightest slice — "what diseases is this microbe linked to, and how many records?"
   [[capability.group]]
   id = "summary"
-  outputs = ["microbe.disease.names", "microbe.disease.count"]
+  outputs = ["microbe.disease.names", "microbe.disease.count", "microbe.disease.experiment_count"]
 
   # Medium slice — one compact row per experiment (the association signal + context).
   [[capability.group]]

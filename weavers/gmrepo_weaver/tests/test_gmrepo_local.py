@@ -9,6 +9,7 @@ CAP = "gmrepo.list_abundances"
 OVERVIEW = "microbe.abundance.overview"
 NAMES = "microbe.abundance.phenotype_names"
 COUNT = "microbe.abundance.count"
+ASSOCIATION_COUNT = "microbe.abundance.association_count"
 ASSOCIATIONS = "microbe.abundance.associations"
 RECORDS = "microbe.abundance.records"
 
@@ -29,11 +30,14 @@ def _strands(result):
 
 
 async def test_summary_slice_is_light():
-    r = await _resolve(build_gmrepo_weaver_fixture(), 816, {OVERVIEW, NAMES, COUNT})
+    r = await _resolve(
+        build_gmrepo_weaver_fixture(), 816, {OVERVIEW, NAMES, COUNT, ASSOCIATION_COUNT}
+    )
     assert r.status is WeaveStatus.OK
     sm = _strands(r)
     assert sm[NAMES] == ["Colitis, Ulcerative"]
-    assert sm[COUNT] == 1
+    assert sm[COUNT] == 1 == len(sm[NAMES])  # .count is always the size of its list
+    assert sm[ASSOCIATION_COUNT] >= sm[COUNT]  # association rows are counted separately
     assert sm[OVERVIEW]["name"] == "Bacteroides"
     assert sm[OVERVIEW]["pct_of_all_samples"] == 81.07
     # the light slice must NOT carry the heavy outputs

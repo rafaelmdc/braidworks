@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.1.14"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -30,9 +30,9 @@ PROVENANCE = Provenance(
 # What each consumed/produced type means — from the spec's [types] table, else
 # weaverkit's key registry. Lets users find fields by meaning.
 TYPE_DESCRIPTIONS = {
-    "protein.interaction.count": "Number of edges observed within the configured STRING retrieval limit.",
-    "protein.interaction.coverage": "STRING retrieval limit, observed edge/partner counts and unknown network completeness.",
-    "protein.interaction.partners": "The proteins this protein interacts with.",
+    "protein.interaction.count": "How many interaction partners this protein has in total (all of them, not only those listed).",
+    "protein.interaction.coverage": "STRING request scope, display limit, total partners and whether the network was retrieved completely.",
+    "protein.interaction.partners": "The proteins this protein interacts with, most confident first (a display-sized top list).",
     "protein.interaction.records": "This protein's interactions — partner, combined score, per-channel subscores.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
     "string.id": "Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping.",
@@ -77,6 +77,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=25,
                 set_outputs=frozenset({"string.id"}),
+                totals={"protein.interaction.partners": "protein.interaction.count"},
                 parameters=(
                     Parameter(
                         name="required_score",
@@ -94,6 +95,13 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         ),
                         default="functional",
                         description="Functional association or physical interaction network",
+                    ),
+                    Parameter(
+                        name="max_partners",
+                        type="int",
+                        enum=(),
+                        default=None,
+                        description="Stop downloading after this many partners per protein; omitted fetches all (then the total is known)",
                     ),
                     Parameter(
                         name="species",

@@ -15,7 +15,7 @@ db_name = "uniprot"
 weaver_id = "uniprot"
 kind = "lookup"
 title = "UniProt protein identity, exact sequence/annotation description and ID mapping"
-version = "0.2.11"
+version = "0.2.12"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1052"
 attribution = "UniProt Consortium"
@@ -131,6 +131,8 @@ always_computed_groups = ["identity"]
 # accession ordered reviewed-first; accession is a set output (the fan dimension).
 [[capability]]
 id = "map_to_accession"
+# Mapping records are complete; the count is their number.
+totals = { "protein.uniprot.mapping.records" = "protein.uniprot.mapping.count" }
 consumes = [
   "gene.ncbi.id", "gene.ensembl.id", "protein.ensembl.id", "gene.symbol",
   "refseq.protein.id", "gene.hgnc.id", "nucleotide.insdc.accession", "pdb.id", "string.id",
@@ -149,6 +151,8 @@ set_outputs = ["protein.uniprot.accession"]
 # targets; target-only calls fetch only that target. Groups match upstream work.
 [[capability]]
 id = "map_from_accession"
+# Mapping records are complete; the count is their number.
+totals = { "protein.uniprot.mapping.records" = "protein.uniprot.mapping.count" }
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 1000
 set_outputs = [

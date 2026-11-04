@@ -135,7 +135,10 @@ asyncio.run(main())
 ```
 
 Summary queries project overview, names, count and acquisition scope; they do not
-project association measurements. Full records and profiles require their groups.
+project association measurements. `microbe.abundance.count` is the number of distinct
+phenotypes (the length of `microbe.abundance.phenotype_names`);
+`microbe.abundance.association_count` is the number of association rows behind them.
+(Before 0.3.0, `microbe.abundance.count` held the association-row count.) Full records and profiles require their groups.
 Direct backend callers passing an empty group set retain the legacy full view.
 The live build uses the taxon-centric summary endpoint with trailing slashes;
 source_sample records current observed envelopes. Source setup still exposes

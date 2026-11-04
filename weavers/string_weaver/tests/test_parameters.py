@@ -34,7 +34,7 @@ async def test_scope_applies_to_both_bulk_stages_and_retains_units():
         scope = records[0].values["protein.interaction.coverage"]
         assert scope["required_score_scale"] == [0, 1000]
         assert scope["score_scale"] == [0, 1]
-        assert scope["complete"] is None
+        assert scope["complete"] is True  # full fetch: fewer edges than requested
         mismatch = await backend.fetch(
             "list_interactions",
             queries[:1],

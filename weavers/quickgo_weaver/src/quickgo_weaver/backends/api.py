@@ -10,7 +10,8 @@ evidence*, so a single protein yields hundreds of rows across many pages. The ba
 
 **Determinism:** distinct terms are sorted by GO id, so the same accession always yields
 the same lists. Completeness is bounded by ``max_pages`` (a protein with more annotation
-pages than the cap is truncated — reported in coverage metadata and warnings).
+pages than the cap is truncated — reported in coverage metadata and warnings, and
+``go.count`` is then omitted because the total is unknown).
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -644,10 +645,13 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
         warnings = ()
         if coverage["complete"] is not True:
             state = "incomplete" if coverage["complete"] is False else "unknown"
+            # go.count is the total number of distinct terms; from a partial download it
+            # would understate it, so it is withheld rather than published as the total.
+            values.pop("go.count", None)
             warnings = (
                 (
-                    f"QuickGO annotation coverage {state}: {coverage['reason']}; "
-                    "go.count describes only the retrieved term inventory"
+                    f"QuickGO annotation coverage {state}: {coverage['reason']}; the term "
+                    "lists show what was retrieved and go.count is omitted"
                 ),
             )
         return LookupRecord(query=query, found=True, values=values, warnings=warnings)

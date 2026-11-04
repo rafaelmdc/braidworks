@@ -21,7 +21,7 @@ db_name = "gmrepo"
 weaver_id = "gmrepo"
 kind = "lookup"
 title = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
-version = "0.2.10"
+version = "0.3.0"
 license = "Open"
 citation = "https://doi.org/10.1093/nar/gkz764"
 attribution = "GMrepo (Wu et al., NAR 2020)"
@@ -107,6 +107,8 @@ source_sample = """
 
 [[capability]]
 id = "gmrepo.list_abundances"
+# microbe.abundance.count = distinct phenotypes (the names list); association rows are counted separately.
+totals = { "microbe.abundance.phenotype_names" = "microbe.abundance.count" }
 # GMrepo keys on NCBI taxon ids directly (genus and species rank both present); consume the
 # generic organism join key so a genus or species taxid both resolve.
 consumes = ["ncbi.taxon.id"]
@@ -114,7 +116,7 @@ consumes = ["ncbi.taxon.id"]
   # Lightest slice — "how common/abundant is this microbe in guts, and in which phenotypes?"
   [[capability.group]]
   id = "summary"
-  outputs = ["microbe.abundance.overview", "microbe.abundance.phenotype_names", "microbe.abundance.count", "microbe.abundance.coverage"]
+  outputs = ["microbe.abundance.overview", "microbe.abundance.phenotype_names", "microbe.abundance.count", "microbe.abundance.association_count", "microbe.abundance.coverage"]
 
   # Medium slice — one compact row per phenotype (the prevalence + abundance signal).
   [[capability.group]]

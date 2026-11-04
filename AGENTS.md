@@ -80,7 +80,10 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    > `braidworks.core.is_not_found_status` (5xx/network → error), make ambiguous picks
    > deterministic (sort + id tiebreak), and dedup→sort→cap "list" outputs while
    > reporting the true total — and declare the pairing in the spec
-   > (`totals = { "<list>" = "<count>" }`) so clients show "25 of 321". Fill in `tests/test_e2e_live.py` (not the placeholder).
+   > (`totals = { "<list>" = "<count>" }`) so clients show "25 of 321".
+   > **A `<thing>.count` always means the total size of a list**, in that list's unit;
+   > `verify` rejects a `.count` no list declares. Name any other count for what it
+   > counts (`<thing>.experiment_count`), and omit a count you do not actually know. Fill in `tests/test_e2e_live.py` (not the placeholder).
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>_weaver` (spec valid +
    manifest matches + reachable + real fingerprints) and `cd weavers/<db>_weaver &&
    make test`. The **definition of done** is the `--strict` gate (what the generated

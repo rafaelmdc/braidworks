@@ -8,7 +8,7 @@ Exact source outputs, coverage and implementation constraints. Start with
 <!-- weaverkit:capabilities:start -->
 | Capability | Input types | Output groups / expandable keys | Backends | Parameters |
 |---|---|---|---|---|
-| `list_interactions` | `protein.uniprot.accession` | `summary`, `full`; expands `string.id` | `api` | `required_score`, `network_type`, `species` |
+| `list_interactions` | `protein.uniprot.accession` | `summary`, `full`; expands `string.id` | `api` | `required_score`, `network_type`, `max_partners`, `species` |
 <!-- weaverkit:capabilities:end -->
 
 These are the current declared capabilities. Output groups select fields computed
@@ -26,12 +26,16 @@ back through UniProt: `protein → partners → fan → each partner's UniProt e
 
 STRING returns partners ranked by confidence, but ties are not ordered stably. The backend
 imposes a fixed total order — **combined score descending, then stable STRING partner/source IDs** —
-within the upstream retrieval `limit` (default 25). This limit bounds fetched
-partners, not only the display. `protein.interaction.count` counts observed edges;
-`string.id` fans out only over retrieved partner IDs. Neither claims to cover
-the complete interaction network. Request `protein.interaction.coverage` for the
-limit, observed edge/partner counts, count/fan scope and unknown completeness. Every
-successful result also carries a scope warning, including scalar-only requests. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
+and returns the top `limit` (default 25) as `protein.interaction.partners` and
+`protein.interaction.records`. Every partner is fetched (request limit 100,000 per
+protein, above any real network), so `protein.interaction.count` is the **true total**
+and `string.id` fans out over every partner; the capability declares
+`totals = { partners = count }`, so results show "25 of 2396". A response shorter than
+the request is the complete network at the chosen threshold. The `max_partners`
+parameter stops the download early; when it does, the total is unknown, so
+`protein.interaction.count` is omitted and a warning says why.
+`protein.interaction.coverage` records the request scope, display limit, total
+partners and `complete`. An identifier STRING can't map (HTTP 400/404) is a clean `NO_MATCH`.
 
 ## Develop
 Run the commands from this package directory.
@@ -57,8 +61,8 @@ version endpoint was probed and reported 12.5. STRING recommends a
 [version-specific address for production](https://version5.string-db.org/help/api/).
 This replaces the mutable `string-db.org/api` default previously labelled v12.
 
-`build_string_weaver(base_url=..., client=..., limit=25)` exposes the existing
-positive retrieval limit. Fingerprints hash the effective endpoint, limit and an
+`build_string_weaver(base_url=..., client=..., limit=25)` sets how many top partners
+are listed (the display limit); the full network is still fetched and counted. Fingerprints hash the effective endpoint, limit and an
 honest release descriptor. An injected client's base URL is the effective source;
 a custom/unversioned endpoint is not automatically labelled 12.5. Endpoint
 credentials are not emitted. Retrieval coverage remains explicitly bounded, as
@@ -87,7 +91,7 @@ For validated builders and client ownership, see
 ## Bulk requests and source pacing
 
 The backend resolves distinct accessions in chunks of 100, then retrieves distinct
-STRING proteins' partners in chunks of 100. Mapping requests explicitly set
+STRING proteins' full partner sets in chunks of 10 (a full network is up to ~0.5 MB). Mapping requests explicitly set
 `echo_query=1`; responses are correlated by echoed identifier or a validated query index,
 never by response order. Every request identifies this client as `braidworks`.
 
@@ -122,5 +126,5 @@ Per-query parameters: `required_score` is an upstream integer threshold 0..1000
 (omitted retains the provider default); `network_type` is `functional` (default)
 or `physical`; `species` is an optional positive NCBI taxon constraint applied
 to both bulk mapping and partner acquisition. Coverage records effective scope
-and distinguishes threshold units from returned 0..1 scores. Retrieval limits
-still bound the observed network; regulatory/directed networks are not added.
+and distinguishes threshold units from returned 0..1 scores. Regulatory/directed
+networks are not added.

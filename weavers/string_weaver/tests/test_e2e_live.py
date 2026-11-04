@@ -42,8 +42,9 @@ async def _interactions(weaver, accession):
 async def test_live_tp53_has_interaction_partners():
     """Drift detector: P04637 (human TP53) returns scored interaction partners.
 
-    Structural truth (not a fixed partner list): some partners come back, the count
-    matches, scores are in [0,1], and MDM2 — TP53's canonical regulator — is among
+    Structural truth (not a fixed partner list): the top 25 partners are listed, the
+    count is the full network (TP53 has thousands of partners, far more than are
+    listed), scores are in [0,1], and MDM2 — TP53's canonical regulator — is among
     them. Confirms the live STRING JSON still maps to our leaves.
     """
     weaver = build_string_weaver()
@@ -53,7 +54,9 @@ async def test_live_tp53_has_interaction_partners():
     produced = {s.type_id: s.value for s in result.strands}
     partners = produced["protein.interaction.partners"]
     records = produced["protein.interaction.records"]
-    assert produced["protein.interaction.count"] == len(partners) == len(records)
+    assert len(partners) == len(records) == 25
+    assert produced["protein.interaction.count"] > 1000  # the true total, not the display
+    assert len(produced["string.id"]) == produced["protein.interaction.count"]
     assert all(0.0 <= r["score"] <= 1.0 for r in records)
     assert "MDM2" in partners
     # the fan dimension: distinct partner names as protein.query (chains into uniprot)

@@ -95,7 +95,10 @@ Optional per-query `sample`, `method` and `outcome` parameters match provider
 strings exactly, before summary counts or output projections. Omitted filters
 retain all observations; missing context does not match an explicit filter.
 Sample names are provider sample categories, not inferred anatomical sites.
-Counts remain experiment counts and cannot establish causal disease effects.
+`microbe.disease.count` is the number of distinct diseases (the length of
+`microbe.disease.names`); `microbe.disease.experiment_count` is the number of
+association experiments behind them. Neither establishes causal disease effects.
+(Before 0.4.0, `microbe.disease.count` held the experiment count.)
 
 
 ### Exact disease and reverse taxon workflows

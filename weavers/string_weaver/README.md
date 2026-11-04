@@ -1,9 +1,10 @@
 # string_weaver
 
-Retrieve bounded protein functional-association networks from STRING with combined scores and
+Retrieve protein functional-association networks from STRING with combined scores and
 evidence channels. Associations can include indirect functional relationships and need not
-represent physical binding. The keyless API supports species, score and retrieval controls; its
-observed count is not an exhaustive interaction network.
+represent physical binding. Every partner at the chosen score threshold is fetched:
+`protein.interaction.count` is the true total (e.g. 2,396 for p53) while the partner list
+shows the most confident 25. The keyless API supports species, score and download controls.
 
 - **Source:** https://string-db.org · **License:** CC-BY-4.0 · **Cite:** https://doi.org/10.1093/nar/gkac1000 — STRING (Szklarczyk et al.)
 - **Backend:** `api` (keyless) · **Discoverable as** `string`
