@@ -1,0 +1,197 @@
+"""``Result``: what :func:`braidworks.get` returns — a table with honest outcomes.
+
+One row per input (or per expanded child), labelled by the value the caller supplied.
+The same row schema backs ``rows``, ``to_csv`` and ``to_pandas``, so every export of
+one result agrees. The engine's full :class:`ExecutionResult` stays on ``raw``.
+"""
+
+from __future__ import annotations
+
+import csv
+import html
+import io
+import json
+from collections.abc import Iterator
+from os import PathLike
+from typing import Any
+
+from braidworks.core.braid import Braid
+from braidworks.core.executor import ExecutionError, ExecutionResult
+from braidworks.core.outcomes import execution_records
+from braidworks.core.query import PreparedQuery
+from braidworks.core.references import Reference, format_references
+
+STATUSES = ("resolved", "unresolved", "review", "error")
+
+
+def _cell(value: Any) -> str:
+    """Flatten one value for a text table: lists join with ``; ``, mappings as JSON."""
+    if isinstance(value, (list, tuple)):
+        return "; ".join(_cell(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return "" if value is None else str(value)
+
+
+class Result:
+    """Rows, coverage and provenance for one query.
+
+    Row keys: ``input`` (the supplied value), ``row`` (1-based input position, so
+    duplicates stay distinct), ``parent`` (only for expanded children), ``status``
+    (``resolved`` / ``unresolved`` / ``review`` / ``error``), one key per requested
+    type (``None`` when absent) and ``missing`` (requested types this row lacks).
+    """
+
+    def __init__(self, raw: ExecutionResult, prepared: PreparedQuery, want: list[str]) -> None:
+        self.raw = raw
+        self.want = list(want)
+        self._prepared = prepared
+        self._records = execution_records(raw, self.want)
+        # Input order; stable, so expanded children keep the engine's order within a row.
+        self._records.sort(key=lambda record: record["source_row"] or 0)
+        self.rows: list[dict[str, Any]] = [self._row(record) for record in self._records]
+
+    def _row(self, record: dict[str, Any]) -> dict[str, Any]:
+        row: dict[str, Any] = {"input": record["entity"], "row": record["source_row"]}
+        if "parent" in record:
+            row["parent"] = record["parent"]
+        row["status"] = record["status"]
+        for type_id in self.want:
+            row[type_id] = record["values"].get(type_id)
+        row["missing"] = list(record["missing"])
+        return row
+
+    # --- reading -------------------------------------------------------------------
+    @property
+    def columns(self) -> list[str]:
+        has_parent = any("parent" in row for row in self.rows)
+        return [
+            "input",
+            "row",
+            *(["parent"] if has_parent else []),
+            "status",
+            *self.want,
+            "missing",
+        ]
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self.rows)
+
+    def __getitem__(self, input_value: str) -> list[dict[str, Any]]:
+        """Every row for one input value (several when duplicated or expanded)."""
+        return [row for row in self.rows if row["input"] == input_value]
+
+    def column(self, type_id: str) -> dict[str, Any]:
+        """``{input: value}`` for one requested type, skipping rows without it."""
+        return {row["input"]: row[type_id] for row in self.rows if row.get(type_id) is not None}
+
+    @property
+    def missing(self) -> list[dict[str, Any]]:
+        """Rows lacking at least one requested type, whatever their status."""
+        return [row for row in self.rows if row["missing"] or row["status"] != "resolved"]
+
+    @property
+    def review(self) -> list[dict[str, Any]]:
+        """Rows paused for review, each with its ``candidates``."""
+        return [
+            {**row, "candidates": record["candidates"]}
+            for row, record in zip(self.rows, self._records, strict=True)
+            if record["requires_review"]
+        ]
+
+    @property
+    def errors(self) -> list[ExecutionError]:
+        return list(self.raw.errors)
+
+    @property
+    def references(self) -> list[Reference]:
+        return list(self.raw.references)
+
+    @property
+    def route(self) -> list[Braid]:
+        """The plan(s) that ran: one per group of inputs sharing the same input types."""
+        return [braid for braid, _ in self._prepared.plans]
+
+    @property
+    def parameters(self) -> dict[str, dict[str, Any]]:
+        """Effective parameters per capability (defaults plus what the caller set)."""
+        return {cid: dict(values) for cid, values in self._prepared.effective_params.items()}
+
+    def cite(self) -> str:
+        """The sources this result drew on, as a plain-text reference list."""
+        return format_references(self.raw.references)
+
+    def summary(self) -> str:
+        counts = {status: 0 for status in STATUSES}
+        for row in self.rows:
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        inputs = len(self._prepared.request.inputs)
+        return (
+            f"{inputs} input{'s' if inputs != 1 else ''} · {counts['resolved']} resolved · "
+            f"{counts['unresolved']} unresolved · {counts['review']} need review · "
+            f"{counts['error']} error{'s' if counts['error'] != 1 else ''}"
+        )
+
+    # --- exporting -----------------------------------------------------------------
+    def to_csv(self, path: str | PathLike | None = None, *, sep: str = ",") -> str:
+        """Write the rows as CSV (or TSV with ``sep="\\t"``); returns the text."""
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, delimiter=sep, lineterminator="\n")
+        columns = self.columns
+        writer.writerow(columns)
+        for row in self.rows:
+            writer.writerow([_cell(row.get(column)) for column in columns])
+        text = buffer.getvalue()
+        if path is not None:
+            with open(path, "w", encoding="utf-8", newline="") as handle:
+                handle.write(text)
+        return text
+
+    def to_pandas(self, *, explode: str | None = None):
+        """A pandas DataFrame of the rows; ``explode`` gives one row per list member."""
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "to_pandas() needs pandas: pip install 'braidworks-core[pandas]' "
+                "(or use result.rows / result.to_csv())"
+            ) from exc
+        frame = pd.DataFrame(self.rows, columns=self.columns)
+        return frame.explode(explode, ignore_index=True) if explode else frame
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary(),
+            "want": list(self.want),
+            "rows": self.rows,
+            "references": [reference.to_json() for reference in self.raw.references],
+            "result": self.raw.to_json(),
+        }
+
+    # --- display -------------------------------------------------------------------
+    def __repr__(self) -> str:
+        lines = [f"<braidworks.Result {self.summary()}>"]
+        for row in self.rows[:10]:
+            values = ", ".join(f"{t}={_cell(row[t])[:40]!r}" for t in self.want)
+            lines.append(f"  {row['input']} [{row['status']}] {values}")
+        if len(self.rows) > 10:
+            lines.append(f"  … {len(self.rows) - 10} more rows")
+        return "\n".join(lines)
+
+    def _repr_html_(self) -> str:
+        columns = self.columns
+        head = "".join(f"<th>{html.escape(c)}</th>" for c in columns)
+        body = "".join(
+            "<tr>"
+            + "".join(f"<td>{html.escape(_cell(row.get(c)))[:200]}</td>" for c in columns)
+            + "</tr>"
+            for row in self.rows[:50]
+        )
+        more = f"<p>… {len(self.rows) - 50} more rows</p>" if len(self.rows) > 50 else ""
+        return (
+            f"<p><strong>{html.escape(self.summary())}</strong></p>"
+            f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>{more}"
+        )

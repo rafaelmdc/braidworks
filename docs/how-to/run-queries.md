@@ -106,46 +106,57 @@ consumer; data go to stdout and progress goes to stderr. See
 
 ## Query from Python
 
-For an ordinary batch lookup, use `fetch` with explicit input and output types:
+Give `get` your IDs, say what they are, and name the fields you want:
 
 ```python
-from braidworks import fetch
+import braidworks as bw
 
-result = fetch(
-    "structure.pdb.ids",
-    ids=["P04637", "P38398"],
-    have="protein.uniprot.accession",
-    only=frozenset({"pdbe"}),
+result = bw.get(
+    ["P04637", "TP53"],
+    have="protein.query",
+    want=["protein.name", "structure.pdb.ids"],
+    organism="9606",
 )
-print(result.column("structure.pdb.ids"))
-print("No requested value:", result.unresolved)
-print("Pending reviews:", len(result.review_queue))
-print("Diagnostics:", len(result.errors))
+print(result.summary())   # 2 inputs · 2 resolved · 0 unresolved · 0 need review · 0 errors
+result.to_pandas()        # one row per input; needs: pip install 'braidworks-core[pandas]'
 ```
 
-`fetch` discovers installed weavers, plans, and executes. `only` restricts discovery;
-`registry` lets an application reuse configured weavers. `want` can also be a list
-of fields. Set `have` explicitly: its default is `ncbi.taxon.id`.
+Rows are labelled by the value you supplied and keep their order; duplicate inputs stay
+separate rows. Each row has a `status` (`resolved`, `unresolved`, `review` or `error`),
+one column per requested field, and a `missing` list. `get` also works in a Jupyter
+notebook as written.
 
-For gene symbols, use `have="protein.query"` and `params={"organism": "9606"}`.
-Parameters may be bare names or scoped by capability, such as
-`{"resolve_protein": {"organism": "9606"}}`; use one form per call.
-Unknown parameters and unused scopes fail before source calls.
+| Need | Use |
+|---|---|
+| Rows as dictionaries or a file | `result.rows`, `result.to_csv("out.csv")`, `result.to_csv("out.tsv", sep="\t")` |
+| One field per input | `result.column("protein.name")` |
+| Rows for one input | `result["P04637"]` |
+| Inputs lacking a requested field | `result.missing` |
+| Ambiguous matches and their candidates | `result.review` |
+| Citations for the sources used | `result.cite()`, `result.references` |
+| The route that ran | `print(result.route[0])`, or `print(bw.path("protein.query", "structure.pdb.ids"))` |
+| Installed sources and their readiness | `bw.sources()` |
 
-In a notebook or application with an active event loop, use `async_fetch`:
+Inputs can be one value, a list of values with `have=`, a list of `{field: value}` rows,
+a `{field: [values]}` mapping, a pandas DataFrame with field-named columns, or a
+`pathlib.Path` to a CSV/TSV file. Parameters are keywords (`organism="9606"`); use
+`params={"resolve_protein": {"organism": "9606"}}` to target one step. Unknown fields
+and parameters fail before any source is called, with suggestions. Other options:
+`sources="uniprot,pdbe"`, `expand="all"` or `"top:5"`, `for_each="orthologs"`,
+`review="allow_continue"`, `min_confidence=0.8`.
+
+To reuse sources and settings across many queries, open a session; it closes the
+sources' network connections when the block ends:
 
 ```python
-from braidworks import async_fetch
-
-result = await async_fetch(
-    "structure.pdb.ids", ids=["P04637"],
-    have="protein.uniprot.accession", only=frozenset({"pdbe"}),
-)
+with bw.Session(sources="uniprot,pdbe", cache="~/.cache/braidworks/lookups.sqlite") as s:
+    names = s.get(["P04637"], have="protein.query", want="protein.name")
+    structures = s.get(["P04637"], have="protein.uniprot.accession", want="structure.pdb.ids")
 ```
 
-`fetch` collapses repeated IDs. Use CLI table input or the explicit API below when
-duplicate rows need separate identities. See [reading Python results](check-results.md#read-python-results)
-for partial success, review, and serialization.
+Inside your own async code, use `await bw.async_get(...)` or `await s.async_get(...)`.
+`fetch` and `async_fetch` remain available for existing scripts; see
+[reading Python results](check-results.md#read-python-results) for their result shape.
 
 ### Control the registry and executor
 

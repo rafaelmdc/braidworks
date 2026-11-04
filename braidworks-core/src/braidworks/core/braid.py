@@ -41,9 +41,7 @@ class BackendPolicy(Enum):
     @property
     def default_fallback_on(self) -> frozenset[FallbackCondition]:
         if self in (BackendPolicy.LOCAL_FIRST, BackendPolicy.API_FIRST):
-            return frozenset(
-                {FallbackCondition.NO_MATCH, FallbackCondition.BACKEND_UNAVAILABLE}
-            )
+            return frozenset({FallbackCondition.NO_MATCH, FallbackCondition.BACKEND_UNAVAILABLE})
         return frozenset()
 
 
@@ -79,9 +77,7 @@ class CapabilityInvocation:
             output_types=frozenset(data["output_types"]),
             primary_backend=data["primary_backend"],
             fallback_backends=tuple(data.get("fallback_backends", [])),
-            fallback_on=frozenset(
-                FallbackCondition(c) for c in data.get("fallback_on", [])
-            ),
+            fallback_on=frozenset(FallbackCondition(c) for c in data.get("fallback_on", [])),
         )
 
 
@@ -92,6 +88,20 @@ class Braid:
     steps: tuple[CapabilityInvocation, ...]
     from_types: frozenset[str]
     to_types: frozenset[str]
+
+    def __str__(self) -> str:
+        """The route as people read it (the same layout as ``braidworks path``)."""
+        plural = "s" if len(self.steps) != 1 else ""
+        header = f"{', '.join(sorted(self.from_types))}  →  {', '.join(sorted(self.to_types))}"
+        lines = [f"{header}   ({len(self.steps)} step{plural})"]
+        for i, step in enumerate(self.steps, start=1):
+            ins = ", ".join(sorted(step.input_types))
+            outs = ", ".join(sorted(step.output_types))
+            lines.append(
+                f"  {i}. {step.weaver_id}.{step.capability_id} [{step.primary_backend}]: "
+                f"{ins} → {outs}"
+            )
+        return "\n".join(lines)
 
     def to_json(self) -> dict[str, Any]:
         return {
