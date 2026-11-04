@@ -65,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.15"
+WEAVER_VERSION = "0.2.16"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -170,6 +170,8 @@ def list_genomes_capability(*, backends: tuple[str, ...]) -> Capability:
         produces=LIST_GENOMES_OUTPUTS,
         output_groups=(OutputGroup(id="genomes", outputs=LIST_GENOMES_OUTPUTS),),
         set_outputs=frozenset({GENOME_ACCESSION}),
+        # Records are capped at _CHILDREN_LIMIT; the count is the true total (all pages).
+        totals={ASSEMBLY_RECORDS: ASSEMBLY_COUNT},
         parameters=(
             Parameter(
                 name="reference_only",
@@ -278,6 +280,8 @@ def list_orthologs_capability(*, backends: tuple[str, ...]) -> Capability:
         produces=ORTHOLOG_OUTPUTS,
         output_groups=(OutputGroup(id="orthologs", outputs=ORTHOLOG_OUTPUTS),),
         set_outputs=frozenset({GENE_ID}),
+        # Records are capped at _CHILDREN_LIMIT; the count is the true total (all pages).
+        totals={ORTHOLOG_RECORDS: ORTHOLOG_COUNT},
         parameters=(
             Parameter(
                 name="taxon_filter",

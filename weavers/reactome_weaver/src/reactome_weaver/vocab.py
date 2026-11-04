@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.15"
+WEAVER_VERSION = "0.1.16"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -83,6 +83,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=25,
                 set_outputs=frozenset({"pathway.reactome.id"}),
+                totals={"pathway.reactome.names": "pathway.reactome.count"},
             ),
             Capability(
                 id="describe_pathway",

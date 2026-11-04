@@ -7,7 +7,7 @@ db_name = "ncbi"
 weaver_id = "ncbi"
 kind = "resolver"
 title = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
-version = "0.2.15"
+version = "0.2.16"
 license = "Public Domain"
 citation = ""
 attribution = "NCBI Taxonomy"
@@ -144,6 +144,8 @@ set_outputs = ["ncbi.taxon.id"]
 # the live search.
 [[capability]]
 id = "ncbi.list_genomes"
+# Capped list -> produced count of its true size (results show "25 of 321").
+totals = { "genome.assembly.records" = "genome.assembly.count" }
 consumes = ["ncbi.taxon.id"]
 backends = ["api"]
 max_batch_size = 1000
@@ -225,6 +227,8 @@ max_batch_size = 1000
 # is a set output (the fan dimension): "this gene -> its ortholog in every species". API-only.
 [[capability]]
 id = "ncbi.list_orthologs"
+# Capped list -> produced count of its true size (results show "25 of 321").
+totals = { "gene.ortholog.records" = "gene.ortholog.count" }
 consumes = ["gene.ncbi.id"]
 backends = ["api"]
 max_batch_size = 1000
