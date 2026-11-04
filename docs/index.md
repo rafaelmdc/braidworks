@@ -41,7 +41,7 @@ including [result shapes](reference/results.md) and [storage contracts](referenc
 | Task | Guide |
 |---|---|
 | Choose sources and prepare local data | [Source catalogue](how-to/choose-sources.md) |
-| Find input and output field names | [Key index](reference/keys-index.md), generated from the weavers |
+| Find input and output field names | `bw.find("pdb structures")` in Python, or the [key index](reference/keys-index.md) |
 | Follow every related structure, pathway, or other entity | [Expansion and relationships](how-to/run-queries.md#follow-related-entities) |
 | Reuse lookups and continue saved work | [Cache and saved runs](how-to/cache-and-resume.md) |
 | Prepare the optional local NCBI taxonomy database | [NCBI database setup](how-to/set-up-ncbi-database.md) |

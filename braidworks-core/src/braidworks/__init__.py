@@ -13,7 +13,7 @@ for existing code.
 """
 
 from braidworks._result import Result
-from braidworks._session import Session, async_get, get, path, sources
+from braidworks._session import Session, async_get, find, get, path, sources
 from braidworks.core.fetch import FetchResult, async_fetch, fetch
 
 __all__ = [
@@ -23,6 +23,7 @@ __all__ = [
     "async_fetch",
     "async_get",
     "fetch",
+    "find",
     "get",
     "path",
     "sources",
