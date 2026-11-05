@@ -46,6 +46,8 @@ async def test_code_multiplicity_exact_identity_and_generic_taxon_fan(tmp_path):
     evidence = reverse.values["microbe.disease.taxa"]
     assert evidence["matched_disease_ids"] == [2, 3]
     assert evidence["experiment_count"] == 3
+    assert len(evidence["records"]) == 3  # every experiment row, no display cap
+    assert "observed_taxon_count" not in evidence  # ncbi.taxon.id carries the taxa
     assert evidence["records"][0]["publication"]["title"]
     exact = await fetch("disbiome.list_taxa", {"disease.disbiome.id": 2})
     assert exact.values["ncbi.taxon.id"] == [1350]

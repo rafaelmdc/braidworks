@@ -158,9 +158,8 @@ class DisbiomeLocalBackend(BackendBase):
                                     "organism": row.get("organism"),
                                     "publication": row.get("publication"),
                                 }
-                                for row in rows[:10]
+                                for row in rows
                             ],
-                            "observed_taxon_count": len(ids),
                             "experiment_count": len(rows),
                             "matched_disease_ids": sorted(
                                 {
