@@ -28,7 +28,6 @@ def build_string_weaver(
     *,
     base_url: str = DEFAULT_BASE_URL,
     client: httpx.AsyncClient | None = None,
-    limit: int = 25,
     **_config: Any,
 ) -> BaseWeaver:
     """Zero-config introspection builder (``weaverkit verify``'s entry point).
@@ -38,7 +37,7 @@ def build_string_weaver(
     """
     reject_unknown_options(_config)
     backends = {
-        "api": StringApiBackend(base_url=base_url, client=client, limit=limit),
+        "api": StringApiBackend(base_url=base_url, client=client),
     }
     return StringWeaver(backends)
 

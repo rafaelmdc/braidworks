@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 
 import httpx
+from braidworks import Listing
 from string_weaver.backends.api import StringApiBackend
 
 CAP = "list_interactions"
@@ -148,18 +149,19 @@ def test_fingerprint_is_stable_and_real():
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
 
 
-async def test_full_fetch_reports_the_true_total_and_caps_the_display():
+async def test_full_fetch_returns_every_partner():
     edges = [_edge(f"P{i:02d}", 0.9 - i / 100) for i in range(30)]
     calls: list[str] = []
     record = await _one(_backend(edges, calls=calls), "P04637")
     values = record.values
-    assert len(values["protein.interaction.partners"]) == 25  # display cap
-    assert len(values["protein.interaction.records"]) == 25
-    assert values["protein.interaction.count"] == 30  # every partner STRING has
-    assert len(values["string.id"]) == 30  # the fan dimension stays complete
+    # The whole network, as plain (complete) lists: no display cap in the weaver.
+    assert type(values["protein.interaction.partners"]) is list
+    assert len(values["protein.interaction.partners"]) == 30
+    assert len(values["protein.interaction.records"]) == 30
+    assert values["protein.interaction.count"] == 30
+    assert len(values["string.id"]) == 30
     coverage = values["protein.interaction.coverage"]
-    assert coverage["complete"] is True and coverage["total_partners"] == 30
-    assert coverage["display_limit"] == 25
+    assert not {"complete", "total_partners", "observed_partners", "display_limit"} & set(coverage)
     assert not record.warnings
     partner_call = next(c for c in calls if "interaction_partners" in c)
     assert "limit=100000" in partner_call  # asks for everything
@@ -176,7 +178,10 @@ async def test_max_partners_that_cuts_the_download_withholds_the_count():
     )
     values = records[0].values
     assert "protein.interaction.count" not in values  # unknown, so not published
-    assert values["protein.interaction.coverage"]["complete"] is False
+    for list_type in ("protein.interaction.partners", "protein.interaction.records", "string.id"):
+        listed = values[list_type]
+        assert isinstance(listed, Listing), list_type
+        assert (len(listed), listed.total, listed.complete) == (3, None, False)
     assert any("max_partners=3" in w for w in records[0].warnings)
 
 
@@ -189,10 +194,6 @@ async def test_invalid_max_partners_is_an_error():
         params={"max_partners": 0},
     )
     assert records[0].error
-
-
-def test_retrieval_limit_changes_fingerprint():
-    assert StringApiBackend(limit=1).fingerprint() != StringApiBackend(limit=25).fingerprint()
 
 
 async def test_same_name_distinct_partners_and_duplicate_edges_preserve_ids():

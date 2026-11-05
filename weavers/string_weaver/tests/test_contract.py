@@ -56,6 +56,8 @@ class TestApiOrder(WeaverOrderContractTests):
 class TestResolveInteractionsCacheFingerprint(CacheFingerprintTests):
     capability = _MANIFEST.capability("list_interactions")
     consumed_values_a: ClassVar[dict[str, object]] = {"protein.uniprot.accession": "P04637"}
-    consumed_values_b: ClassVar[dict[str, object]] = {"protein.uniprot.accession": "sample-b-protein.uniprot.accession"}
+    consumed_values_b: ClassVar[dict[str, object]] = {
+        "protein.uniprot.accession": "sample-b-protein.uniprot.accession"
+    }
     group_subset = "summary"
     group_superset = "full"

@@ -231,9 +231,9 @@ OUTPUT_KEYS: dict[str, str] = {
     "chembl.id": "This protein's ChEMBL target id.",
     "drugbank.id": "This protein's DrugBank id.",
     # protein-protein interaction outputs (string_weaver)
-    "protein.interaction.partners": "The proteins this protein interacts with, most confident first (a display-sized top list).",
+    "protein.interaction.partners": "Every protein this protein interacts with, most confident first.",
     "protein.interaction.count": "How many interaction partners this protein has in total (all of them, not only those listed).",
-    "protein.interaction.coverage": "STRING request scope, display limit, total partners and whether the network was retrieved completely.",
+    "protein.interaction.coverage": "STRING request scope: network type, score threshold, species and request limit.",
     "protein.interaction.records": "This protein's interactions — partner, combined score, "
     "per-channel subscores.",
     # Gene Ontology annotation outputs (quickgo_weaver), grouped by GO aspect
