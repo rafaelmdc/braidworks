@@ -148,14 +148,47 @@ def test_fingerprint_is_stable_and_real():
     assert fp and fp.lower() not in ("", "unknown") and "TODO" not in fp
 
 
-async def test_short_response_does_not_claim_complete_network():
-    record = await _one(_backend([_edge("MDM2", 0.9)]), "P04637")
-    coverage = record.values["protein.interaction.coverage"]
-    assert coverage["request_limit"] == 25
-    assert coverage["observed_edges"] == coverage["observed_partners"] == 1
-    assert coverage["complete"] is None
-    assert coverage["fan_scope"] == "retrieved_partners"
-    assert record.warnings
+async def test_full_fetch_reports_the_true_total_and_caps_the_display():
+    edges = [_edge(f"P{i:02d}", 0.9 - i / 100) for i in range(30)]
+    calls: list[str] = []
+    record = await _one(_backend(edges, calls=calls), "P04637")
+    values = record.values
+    assert len(values["protein.interaction.partners"]) == 25  # display cap
+    assert len(values["protein.interaction.records"]) == 25
+    assert values["protein.interaction.count"] == 30  # every partner STRING has
+    assert len(values["string.id"]) == 30  # the fan dimension stays complete
+    coverage = values["protein.interaction.coverage"]
+    assert coverage["complete"] is True and coverage["total_partners"] == 30
+    assert coverage["display_limit"] == 25
+    assert not record.warnings
+    partner_call = next(c for c in calls if "interaction_partners" in c)
+    assert "limit=100000" in partner_call  # asks for everything
+
+
+async def test_max_partners_that_cuts_the_download_withholds_the_count():
+    edges = [_edge(f"P{i:02d}", 0.9 - i / 100) for i in range(3)]
+    records = await _backend(edges).fetch(
+        CAP,
+        [{"protein.uniprot.accession": "P04637"}],
+        requested_outputs=ALL,
+        groups_to_compute=frozenset(),
+        params={"max_partners": 3},
+    )
+    values = records[0].values
+    assert "protein.interaction.count" not in values  # unknown, so not published
+    assert values["protein.interaction.coverage"]["complete"] is False
+    assert any("max_partners=3" in w for w in records[0].warnings)
+
+
+async def test_invalid_max_partners_is_an_error():
+    records = await _backend([]).fetch(
+        CAP,
+        [{"protein.uniprot.accession": "P04637"}],
+        requested_outputs=ALL,
+        groups_to_compute=frozenset(),
+        params={"max_partners": 0},
+    )
+    assert records[0].error
 
 
 def test_retrieval_limit_changes_fingerprint():

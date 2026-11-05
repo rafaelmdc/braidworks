@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.11"
+WEAVER_VERSION = "0.2.12"
 WEAVER_TITLE = "UniProt protein identity, exact sequence/annotation description and ID mapping"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -197,6 +197,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 always_computed_groups=frozenset({"mapping"}),
                 set_outputs=frozenset({"protein.uniprot.accession"}),
                 consumes_any=True,
+                totals={"protein.uniprot.mapping.records": "protein.uniprot.mapping.count"},
             ),
             Capability(
                 id="map_from_accession",
@@ -259,6 +260,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                         "string.id",
                     }
                 ),
+                totals={"protein.uniprot.mapping.records": "protein.uniprot.mapping.count"},
             ),
         ),
     )

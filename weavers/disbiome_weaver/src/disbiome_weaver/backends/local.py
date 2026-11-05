@@ -30,7 +30,8 @@ from braidworks.core.source_identity import SourceBinding
 from disbiome_weaver.setup import _coerce_taxid, db_is_valid, default_disbiome_db_path
 
 NAMES = "microbe.disease.names"
-COUNT = "microbe.disease.count"
+COUNT = "microbe.disease.count"  # distinct diseases (= len of NAMES)
+EXPERIMENT_COUNT = "microbe.disease.experiment_count"  # association experiments
 ASSOCIATIONS = "microbe.disease.associations"
 RECORDS = "microbe.disease.records"
 
@@ -234,14 +235,8 @@ class DisbiomeLocalBackend(BackendBase):
                 return LookupRecord(query=query, found=False)
             values[RECORDS] = records
             if "summary" in groups:
-                values.update(
-                    {
-                        NAMES: sorted(
-                            {r["disease_name"] for r in records if r.get("disease_name")}
-                        ),
-                        COUNT: len(records),
-                    }
-                )
+                names = sorted({r["disease_name"] for r in records if r.get("disease_name")})
+                values.update({NAMES: names, COUNT: len(names), EXPERIMENT_COUNT: len(records)})
             if "associations" in groups:
                 values[ASSOCIATIONS] = [_association_row(record) for record in records]
         elif "associations" in groups:
@@ -268,14 +263,8 @@ class DisbiomeLocalBackend(BackendBase):
             records = [dict(zip(keys, row)) for row in rows]
             values[ASSOCIATIONS] = [_association_row(record) for record in records]
             if "summary" in groups:
-                values.update(
-                    {
-                        NAMES: sorted(
-                            {r["disease_name"] for r in records if r.get("disease_name")}
-                        ),
-                        COUNT: len(records),
-                    }
-                )
+                names = sorted({r["disease_name"] for r in records if r.get("disease_name")})
+                values.update({NAMES: names, COUNT: len(names), EXPERIMENT_COUNT: len(records)})
         elif "summary" in groups:
             rows = con.execute(
                 f"SELECT disease_name, COUNT(*) FROM association WHERE {where} GROUP BY disease_name",
@@ -283,11 +272,9 @@ class DisbiomeLocalBackend(BackendBase):
             ).fetchall()
             if not rows:
                 return LookupRecord(query=query, found=False)
+            names = sorted(row[0] for row in rows if row[0])
             values.update(
-                {
-                    NAMES: sorted(row[0] for row in rows if row[0]),
-                    COUNT: sum(row[1] for row in rows),
-                }
+                {NAMES: names, COUNT: len(names), EXPERIMENT_COUNT: sum(row[1] for row in rows)}
             )
         elif not con.execute(
             f"SELECT 1 FROM association WHERE {where} LIMIT 1", bindings

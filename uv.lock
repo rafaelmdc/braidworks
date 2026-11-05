@@ -250,7 +250,7 @@ wheels = [
 
 [[package]]
 name = "disbiome-weaver"
-version = "0.3.10"
+version = "0.4.0"
 source = { editable = "weavers/disbiome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -356,7 +356,7 @@ wheels = [
 
 [[package]]
 name = "gmrepo-weaver"
-version = "0.2.10"
+version = "0.3.0"
 source = { editable = "weavers/gmrepo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -975,7 +975,7 @@ wheels = [
 
 [[package]]
 name = "quickgo-weaver"
-version = "0.1.15"
+version = "0.2.0"
 source = { editable = "weavers/quickgo_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1129,7 +1129,7 @@ wheels = [
 
 [[package]]
 name = "string-weaver"
-version = "0.1.14"
+version = "0.2.0"
 source = { editable = "weavers/string_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1185,7 +1185,7 @@ wheels = [
 
 [[package]]
 name = "uniprot-weaver"
-version = "0.2.11"
+version = "0.2.12"
 source = { editable = "weavers/uniprot_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1224,7 +1224,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.9.0"
+version = "0.10.0"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },

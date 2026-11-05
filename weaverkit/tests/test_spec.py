@@ -480,3 +480,12 @@ def test_totals_must_name_outputs_in_one_group():
         extra_group={"id": "counts", "outputs": ["microbe.trait.total"]},
     )
     assert any("put them in one group" in p for p in validate_spec(split))
+
+
+def test_every_count_must_be_a_declared_list_total():
+    data = _valid_dict()
+    data["capability"][0]["group"][0]["outputs"] += ["microbe.trait.ids", "microbe.trait.count"]
+    problems = validate_spec(WeaverSpec.from_dict(data))
+    assert any("'microbe.trait.count' is a .count" in p for p in problems)
+    data["capability"][0]["totals"] = {"microbe.trait.ids": "microbe.trait.count"}
+    assert not any(".count" in p for p in validate_spec(WeaverSpec.from_dict(data)))

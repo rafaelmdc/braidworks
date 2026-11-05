@@ -30,7 +30,8 @@ async def test_compact_identity_matches_full_and_filters_all_groups(tmp_path):
         )[0]
 
     all_groups = await lookup({"summary", "associations", "full"})
-    assert all_groups.values["microbe.disease.count"] == 2
+    assert all_groups.values["microbe.disease.count"] == 1  # one disease
+    assert all_groups.values["microbe.disease.experiment_count"] == 2  # two experiments
     compact = await lookup({"associations"})
     assert (
         compact.values["microbe.disease.associations"]

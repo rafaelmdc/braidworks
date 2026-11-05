@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "quickgo"
-WEAVER_VERSION = "0.1.15"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "Gene Ontology annotations (accession -> GO terms by aspect)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -34,7 +34,7 @@ TYPE_DESCRIPTIONS = {
     "go.annotation.records": "Source annotation rows, retaining evidence, qualifiers and references.",
     "go.biological_process": "The biological processes this protein takes part in.",
     "go.cellular_component": "Where in the cell this protein acts.",
-    "go.count": "Distinct GO terms in retrieved annotation pages; inspect coverage for completeness.",
+    "go.count": "How many distinct GO terms are annotated to this protein (all of them; omitted when retrieval was incomplete).",
     "go.molecular_function": "The molecular functions this protein is annotated with.",
     "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
     "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
@@ -93,6 +93,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=10,
                 set_outputs=frozenset({"go.term"}),
+                totals={"go.term": "go.count"},
                 parameters=(
                     Parameter(
                         name="evidence_code",

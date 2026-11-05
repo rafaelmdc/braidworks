@@ -31,7 +31,8 @@ from gmrepo_weaver.setup import _coerce_taxid, db_is_valid, default_gmrepo_db_pa
 
 OVERVIEW = "microbe.abundance.overview"
 NAMES = "microbe.abundance.phenotype_names"
-COUNT = "microbe.abundance.count"
+COUNT = "microbe.abundance.count"  # distinct phenotypes (= len of NAMES)
+ASSOCIATION_COUNT = "microbe.abundance.association_count"  # association rows
 ASSOCIATIONS = "microbe.abundance.associations"
 RECORDS = "microbe.abundance.records"
 SAMPLE_PROFILES = "microbe.abundance.sample_profiles"
@@ -386,13 +387,17 @@ class GmrepoLocalBackend(BackendBase):
             return LookupRecord(query=query, found=False)
         values = {}
         if "summary" in groups:
+            names = (
+                sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
+                if want_rows
+                else sorted(row[0] for row in summary_rows if row[0])
+            )
             values.update(
                 {
                     OVERVIEW: overview,
-                    NAMES: sorted({r["phenotype_name"] for r in rows if r.get("phenotype_name")})
-                    if want_rows
-                    else sorted(row[0] for row in summary_rows if row[0]),
-                    COUNT: count,
+                    NAMES: names,
+                    COUNT: len(names),  # .count is always the size of its list
+                    ASSOCIATION_COUNT: count,
                 }
             )
         if "associations" in groups:

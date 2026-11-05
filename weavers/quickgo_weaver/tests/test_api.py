@@ -258,6 +258,8 @@ async def test_page_cap_is_visible_in_values_and_exported_warnings():
     assert coverage["total_pages"] == 3
     assert coverage["reason"] == "page_cap"
     assert record.warnings
+    assert "go.count" not in record.values  # never a partial count posing as the total
+    assert record.values["go.term"] == ["GO:0006915"]  # what was retrieved is still listed
     registry = BraidRegistry()
     registry.register(QuickgoWeaver({"api": backend}))
     braid = Braider(registry).plan(
@@ -276,7 +278,9 @@ async def test_page_cap_is_visible_in_values_and_exported_warnings():
             ],
         )
         exported = execution_records(result, ["go.count"])[0]
-        assert exported["values"]["go.count"] == 1
+        # A partial download's term count is not the total, so it is not published.
+        assert "go.count" not in exported["values"]
+        assert exported["missing"] == ["go.count"]
         assert any("incomplete" in warning for warning in exported["warnings"])
 
 

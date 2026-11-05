@@ -176,7 +176,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "disease.disbiome.record": "One provider disease identity with retained source records.",
     "microbe.disease.coverage": "Exact source taxid and reported rank; no ancestor or descendant inference.",
     "microbe.disease.names": "The diseases this microbe is linked to.",
-    "microbe.disease.count": "How many disease-association experiments mention this microbe.",
+    "microbe.disease.count": "How many distinct diseases this microbe is linked to (the length of microbe.disease.names).",
+    "microbe.disease.experiment_count": "How many disease-association experiments mention this microbe (one disease can have several).",
     "microbe.disease.associations": "This microbe's disease links — disease, elevated/reduced, "
     "method, sample, host.",
     "microbe.disease.records": "Full Disbiome experiment rows linking this microbe to diseases.",
@@ -186,7 +187,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "phenotypes it appears in (GMrepo).",
     "microbe.abundance.phenotype_names": "The gut-metagenome phenotypes (diseases/health) "
     "this microbe is reported prevalent in (GMrepo).",
-    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for.",
+    "microbe.abundance.count": "How many phenotypes this microbe has a GMrepo abundance record for (the length of microbe.abundance.phenotype_names).",
+    "microbe.abundance.association_count": "How many GMrepo phenotype-association rows mention this microbe (a phenotype can have several).",
     "microbe.abundance.coverage": "GMrepo taxon association acquisition outcome and completeness.",
     "microbe.abundance.associations": "This microbe's per-phenotype abundance signal — mesh_id, "
     "phenotype, sample count, prevalence %, and median relative abundance (GMrepo).",
@@ -229,16 +231,16 @@ OUTPUT_KEYS: dict[str, str] = {
     "chembl.id": "This protein's ChEMBL target id.",
     "drugbank.id": "This protein's DrugBank id.",
     # protein-protein interaction outputs (string_weaver)
-    "protein.interaction.partners": "The proteins this protein interacts with.",
-    "protein.interaction.count": "Number of edges observed within the configured STRING retrieval limit.",
-    "protein.interaction.coverage": "STRING retrieval limit, observed edge/partner counts and unknown network completeness.",
+    "protein.interaction.partners": "The proteins this protein interacts with, most confident first (a display-sized top list).",
+    "protein.interaction.count": "How many interaction partners this protein has in total (all of them, not only those listed).",
+    "protein.interaction.coverage": "STRING request scope, display limit, total partners and whether the network was retrieved completely.",
     "protein.interaction.records": "This protein's interactions — partner, combined score, "
     "per-channel subscores.",
     # Gene Ontology annotation outputs (quickgo_weaver), grouped by GO aspect
     "go.molecular_function": "The molecular functions this protein is annotated with.",
     "go.biological_process": "The biological processes this protein takes part in.",
     "go.cellular_component": "Where in the cell this protein acts.",
-    "go.count": "Distinct GO terms in retrieved annotation pages; inspect coverage for completeness.",
+    "go.count": "How many distinct GO terms are annotated to this protein (all of them; omitted when retrieval was incomplete).",
     "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
     "go.annotation.records": "Source annotation rows, retaining evidence, qualifiers and references.",
     "go.annotation.coverage": "Pagination coverage, source counts and page-cap completeness.",

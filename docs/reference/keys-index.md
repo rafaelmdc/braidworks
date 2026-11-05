@@ -97,7 +97,7 @@ Descriptive payload fields; nothing joins on them.
 | `go.annotation.records` | Source annotation rows, retaining evidence, qualifiers and references. | `quickgo:list_go_terms` | — |
 | `go.biological_process` | The biological processes this protein takes part in. | `quickgo:list_go_terms` | — |
 | `go.cellular_component` | Where in the cell this protein acts. | `quickgo:list_go_terms` | — |
-| `go.count` | Distinct GO terms in retrieved annotation pages; inspect coverage for completeness. | `quickgo:list_go_terms` | — |
+| `go.count` | How many distinct GO terms are annotated to this protein (all of them; omitted when retrieval was incomplete). | `quickgo:list_go_terms` | — |
 | `go.molecular_function` | The molecular functions this protein is annotated with. | `quickgo:list_go_terms` | — |
 | `go.records` | Deduplicated GO term inventory — GO id, name, aspect. | `quickgo:list_go_terms` | — |
 | `go.reverse.annotations` | Observed exact-term reverse annotations, including negative evidence. | `quickgo:list_gene_products` | — |
@@ -115,8 +115,9 @@ Descriptive payload fields; nothing joins on them.
 | `gtdb.genome.synonyms` | Observed GTDB genome-specific synonyms, distinct from species/tree assertions. | `gtdb:describe_genome` | — |
 | `gtdb.lineage` | This organism's GTDB genome-based, rank-normalized lineage — an ordered list of {rank, name} from domain to species. | `gtdb:describe_gtdb_taxonomy` | — |
 | `gtdb.tree.rootpath` | This organism's path from the root of the GTDB reference tree to its species-representative leaf — an ordered list of [node_id, cumulative_depth]. Two paths give a patristic distance via their deepest shared node (gtdb_weaver.cophenetic). | `gtdb:describe_gtdb_tree_placement` | — |
+| `microbe.abundance.association_count` | How many GMrepo phenotype-association rows mention this microbe (a phenotype can have several). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.associations` | This microbe's per-phenotype abundance signal — mesh_id, phenotype, sample count, prevalence %, and median relative abundance (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
-| `microbe.abundance.count` | How many phenotypes this microbe has a GMrepo abundance record for. | `gmrepo:gmrepo.list_abundances` | — |
+| `microbe.abundance.count` | How many phenotypes this microbe has a GMrepo abundance record for (the length of microbe.abundance.phenotype_names). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.coverage` | GMrepo taxon association acquisition outcome and completeness. | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.overview` | This microbe's global gut-metagenome abundance summary — percent of all samples it occurs in, its median relative abundance, and how many phenotypes it appears in (GMrepo). | `gmrepo:gmrepo.list_abundances` | — |
 | `microbe.abundance.phenotype_listing` | Observed source MeSH phenotype identities for a taxon. | `gmrepo:gmrepo.list_phenotypes` | — |
@@ -136,8 +137,9 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.bacdive.strain` | One exact BacDive strain's taxonomy, source traits and observed collection/genome references. | `bacdive:describe_strain` | — |
 | `microbe.bacdive.strain_coverage` | Observed full binomial strain listing scope and count. | `bacdive:list_strains`, `bacdive:map_to_strain` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
-| `microbe.disease.count` | How many disease-association experiments mention this microbe. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.count` | How many distinct diseases this microbe is linked to (the length of microbe.disease.names). | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.coverage` | Exact source taxid and reported rank; no ancestor or descendant inference. | `disbiome:disbiome.list_diseases` | — |
+| `microbe.disease.experiment_count` | How many disease-association experiments mention this microbe (one disease can have several). | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.identities` | Distinct Disbiome disease identities and observed MedDRA code/level; no name equivalence. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.names` | The diseases this microbe is linked to. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.records` | Full Disbiome experiment rows linking this microbe to diseases. | `disbiome:disbiome.list_diseases` | — |
@@ -178,9 +180,9 @@ Descriptive payload fields; nothing joins on them.
 | `protein.annotation.records` | Structured UniProtKB comments/features/references and observed evidence/release metadata. | `uniprot:describe_protein` | — |
 | `protein.function` | What this protein does — UniProt's curated summary. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.gene` | The gene that codes for this protein. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
-| `protein.interaction.count` | Number of edges observed within the configured STRING retrieval limit. | `string:list_interactions` | — |
-| `protein.interaction.coverage` | STRING retrieval limit, observed edge/partner counts and unknown network completeness. | `string:list_interactions` | — |
-| `protein.interaction.partners` | The proteins this protein interacts with. | `string:list_interactions` | — |
+| `protein.interaction.count` | How many interaction partners this protein has in total (all of them, not only those listed). | `string:list_interactions` | — |
+| `protein.interaction.coverage` | STRING request scope, display limit, total partners and whether the network was retrieved completely. | `string:list_interactions` | — |
+| `protein.interaction.partners` | The proteins this protein interacts with, most confident first (a display-sized top list). | `string:list_interactions` | — |
 | `protein.interaction.records` | This protein's interactions — partner, combined score, per-channel subscores. | `string:list_interactions` | — |
 | `protein.length` | This protein's length in amino acids. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.name` | This protein's recommended name. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |

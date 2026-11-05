@@ -458,6 +458,18 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                     "or always compute the count's group"
                 )
 
+        # One meaning for every count: a produced ``<thing>.count`` is the total size of
+        # a list, so it must be declared as that list's total (counts of anything else
+        # get a name that says what they count, e.g. ``<thing>.experiment_count``).
+        declared_counts = set(cap.totals.values())
+        for type_id in sorted(produced):
+            if type_id.endswith(".count") and type_id not in declared_counts:
+                problems.append(
+                    f"{where}: {type_id!r} is a .count but no list declares it as its total "
+                    "— add `totals = { \"<list>\" = \"" + type_id + "\" }`, or rename it to say "
+                    "what it counts (e.g. '<thing>.experiment_count')"
+                )
+
         seen_params: set[str] = set()
         for p in cap.parameters:
             if not p.name:

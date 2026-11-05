@@ -35,6 +35,7 @@ async def test_bad_source_is_error(phase, body):
 @pytest.mark.parametrize("phase", ["mapping", "partners"])
 async def test_failed_chunk_keeps_other_chunks(monkeypatch, phase):
     monkeypatch.setattr(api, "_ID_CHUNK", 1)
+    monkeypatch.setattr(api, "_PARTNER_CHUNK", 1)
     calls = []
 
     def handler(request):
