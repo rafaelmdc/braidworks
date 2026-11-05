@@ -78,6 +78,7 @@ from braidworks.core.licenses import (
     citation_requirement,
     is_known_license,
 )
+from braidworks.core.listing import Listing, describe_size
 from braidworks.core.localdb import (
     BuildLock,
     auto_consented,
@@ -177,6 +178,7 @@ __all__ = [
     "InMemoryStrandCache",
     "InProcessStepRunner",
     "InvalidManifestError",
+    "Listing",
     "LocalExecutor",
     "LookupRecord",
     "MatchStatus",
@@ -229,6 +231,7 @@ __all__ = [
     "continue_query",
     "continue_run",
     "default_db_path",
+    "describe_size",
     "discover_registry",
     "download",
     "ensure_local_db",
