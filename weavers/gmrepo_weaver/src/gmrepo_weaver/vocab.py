@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "gmrepo"
-WEAVER_VERSION = "0.3.0"
+WEAVER_VERSION = "0.3.1"
 WEAVER_TITLE = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

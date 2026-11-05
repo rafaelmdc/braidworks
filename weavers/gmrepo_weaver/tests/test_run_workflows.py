@@ -1,5 +1,6 @@
 """Run identity, source evidence and selection precede display/profile limits."""
 
+from braidworks import Listing
 from gmrepo_weaver.backends.local import GmrepoLocalBackend
 from gmrepo_weaver.fixture import _ASSOCIATIONS, _OVERVIEW, _PHENOTYPES, _SAMPLE_PROFILES
 from gmrepo_weaver.setup import _fetch_run_ids, write_db
@@ -65,6 +66,10 @@ async def test_run_pair_phenotype_bridge_and_failed_empty_profiles(tmp_path):
     listed = await fetch("gmrepo.list_runs", {"disease.mesh.id": "D003093"}, {"country": "China"})
     assert listed.values["metagenome.run_id"] == ["EMPTY", "ERRFIX01", "FAILED"]
     assert listed.values["microbe.abundance.run_listing"]["coverage"]["capped"]
+    # a capped acquisition saw only part of the runs: the list says so
+    runs = listed.values["metagenome.run_id"]
+    assert isinstance(runs, Listing) and not runs.complete and runs.total is None
+    assert "observed_count" not in listed.values["microbe.abundance.run_listing"]
     run = await fetch("gmrepo.describe_run", {"metagenome.run_id": "ERRFIX01"})
     assert run.found and len(run.values["microbe.abundance.run"]["profiles"]) == 2
     for rid, status in [("EMPTY", "empty"), ("FAILED", "failed")]:

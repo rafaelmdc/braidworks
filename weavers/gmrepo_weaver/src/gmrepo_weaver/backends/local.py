@@ -24,7 +24,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from braidworks.core import BackendBase, LookupRecord
+from braidworks.core import BackendBase, Listing, LookupRecord
 from braidworks.core.source_identity import SourceBinding
 
 from gmrepo_weaver.setup import _coerce_taxid, db_is_valid, default_gmrepo_db_path
@@ -124,8 +124,7 @@ class GmrepoLocalBackend(BackendBase):
                     values = {
                         "disease.mesh.id": ids,
                         "microbe.abundance.phenotype_listing": {
-                            "records": rows[:10],
-                            "observed_count": len(ids),
+                            "records": rows,
                             "coverage": acquisition.get("taxa", {}).get(str(taxid)),
                             "scope": "retained source associations, not all possible phenotypes",
                         },
@@ -177,16 +176,20 @@ class GmrepoLocalBackend(BackendBase):
                             query=query,
                             found=True,
                             values={
-                                "metagenome.run_id": ids,
+                                # A capped acquisition saw only part of the runs.
+                                "metagenome.run_id": (
+                                    Listing(ids, total=None, complete=False)
+                                    if scope and scope.get("capped")
+                                    else ids
+                                ),
                                 "microbe.abundance.run_listing": {
                                     "mesh_id": mesh,
                                     "records": [
                                         deepcopy(metadata[rid])
                                         if metadata is not None
                                         else {"run_id": rid}
-                                        for rid in ids[:10]
+                                        for rid in ids
                                     ],
-                                    "observed_count": len(ids),
                                     "metadata_available": metadata is not None,
                                     "effective_filters": dict(params),
                                     "filter_scope": "retained acquired runs; selection-before-cap requires builder profile_filters",

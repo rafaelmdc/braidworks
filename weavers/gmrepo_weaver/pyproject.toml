@@ -1,12 +1,12 @@
 [project]
 name = "gmrepo_weaver"
-version = "0.3.0"
+version = "0.3.1"
 description = "GMrepo gut-metagenome abundances (taxid -> prevalence + median relative abundance, global and per-phenotype) — a Braidworks weaver."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["braidworks-core>=0.28.0"]
+dependencies = ["braidworks-core>=0.29.0"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"
