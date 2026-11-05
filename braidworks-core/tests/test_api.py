@@ -440,3 +440,59 @@ def test_partial_list_survives_the_sqlite_cache(tmp_path):
         if attempt == 0:
             calls_after_first = down.batch_calls
     assert down.batch_calls == calls_after_first  # second run read the cache
+
+
+# --- a requested list comes back whole (#353) -------------------------------------
+
+DESCRIBE_CAP = Capability(
+    id="describe_structure",
+    consumes=frozenset({"pdb.id"}),
+    produces=frozenset({"structure.pdb.title"}),
+    output_groups=(OutputGroup(id="g", outputs=frozenset({"structure.pdb.title"})),),
+    backends=("api",),
+)
+
+
+def _describe(ss, backend, requested):
+    pid = ss.get("pdb.id").value
+    return WeaveResult(
+        "describe_structure",
+        "1.0.0",
+        backend,
+        frozenset({"g"}),
+        status=WeaveStatus.OK,
+        strands=(Strand("structure.pdb.title", f"Title of {pid}"),),
+    )
+
+
+def _set_registry():
+    reg = BraidRegistry()
+    reg.register(ScriptedWeaver(_up, capability=UP_CAP, weaver_id="uniprot"))
+    reg.register(ScriptedWeaver(_down_set, capability=SET_CAP, weaver_id="pdbe"))
+    reg.register(ScriptedWeaver(_describe, capability=DESCRIBE_CAP, weaver_id="pdbdesc"))
+    return reg
+
+
+def test_requested_set_output_comes_back_whole():
+    with bw.Session(registry=_set_registry()) as s:
+        result = s.get(["P1"], have="protein.query", want="pdb.id")
+    assert len(result.rows) == 1
+    ids = result.rows[0]["pdb.id"]
+    assert isinstance(ids, bw.Listing) and ids == ["1ABC", "2DEF"]
+    assert (ids.total, ids.complete) == (9, False)
+    assert not any("auto-selected" in w for ss in result.raw.resolved for w in ss.warnings)
+
+
+def test_set_output_a_later_step_consumes_still_collapses_to_one():
+    with bw.Session(registry=_set_registry()) as s:
+        result = s.get(["P1"], have="protein.query", want="structure.pdb.title")
+    assert [row["structure.pdb.title"] for row in result.rows] == ["Title of 1ABC"]
+
+
+def test_requested_set_output_comes_back_whole_after_resume():
+    with bw.Session(registry=_set_registry()) as s:
+        result = s.get(["AMB"], have="protein.query", want="pdb.id")
+        result.review[0].choose(0)
+        resumed = result.resume()
+    ids = resumed["AMB"][0]["pdb.id"]
+    assert isinstance(ids, bw.Listing) and ids == ["1ABC", "2DEF"]

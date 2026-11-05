@@ -73,14 +73,28 @@ def _one_step(output_types):
 
 # --- TOP (default): collapse a set output to a representative -------------------
 
-async def test_top_collapses_set_output_in_place():
-    cap = _set_cap({PATHWAY}, {PATHWAY})
-    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-3", "R-1", "R-2"])), cap)
-    res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"))  # default ExpandPolicy.TOP
+async def test_top_collapses_unrequested_set_output_in_place():
+    # The caller asks for "n", not the set key: TOP picks one representative for it.
+    cap = _set_cap({PATHWAY, "n"}, {PATHWAY})
+    _reg, ex = _setup(
+        lambda ss, b, r: _ok(Strand(PATHWAY, ["R-3", "R-1", "R-2"]), Strand("n", 3)), cap
+    )
+    res = await ex.execute(_one_step({"n"}), _inputs("P1"))  # default ExpandPolicy.TOP
     assert len(res.resolved) == 1
     leaf = res.resolved[0]
     assert leaf.get(PATHWAY).value == "R-3"  # first (best-first) representative, scalar
     assert any("auto-selected 1 of 3" in w for w in leaf.warnings)
+
+
+async def test_top_keeps_a_requested_set_output_whole():
+    # The caller asks for the set key itself and nothing later consumes it (#353).
+    cap = _set_cap({PATHWAY}, {PATHWAY})
+    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-3", "R-1", "R-2"])), cap)
+    res = await ex.execute(_one_step({PATHWAY}), _inputs("P1"))
+    assert len(res.resolved) == 1
+    leaf = res.resolved[0]
+    assert leaf.get(PATHWAY).value == ["R-3", "R-1", "R-2"]
+    assert not any("auto-selected" in w for w in leaf.warnings)
 
 
 async def test_set_output_same_as_consumed_key_forks_on_produced_list():

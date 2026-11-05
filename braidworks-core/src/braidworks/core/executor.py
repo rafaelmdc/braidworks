@@ -465,9 +465,14 @@ class LocalExecutor:
         max_expansion=10_000,
         backend_policy=BackendPolicy.LOCAL_FIRST,
         reroute=True,
+        keep_requested_lists=True,
         _expansion_budget=None,
     ):
-        """Create a serializable state without source I/O; execute remains the legacy facade."""
+        """Create a serializable state without source I/O; execute remains the legacy facade.
+
+        ``keep_requested_lists`` (default on) leaves a requested set output whole under the
+        default TOP policy; a traversal's fan stage turns it off, since its set key feeds
+        the next stage."""
         from braidworks.core.execution_state import ExecutionState
 
         if not 0 <= confidence_threshold <= 1:
@@ -492,6 +497,7 @@ class LocalExecutor:
             "chunk_size": chunk_size,
             "backend_policy": backend_policy.value,
             "reroute": reroute,
+            "keep_requested_lists": keep_requested_lists,
         }
         return ExecutionState(braid, strand_sets, settings, budget)
 
@@ -725,6 +731,12 @@ class LocalExecutor:
         representative = state.representative
         errored = state.errored
         spawned = []
+        # Requested set outputs stay whole under default TOP (see _expand_set_outputs).
+        wanted = (
+            state.braid.to_types
+            if state.settings.get("keep_requested_lists", True)
+            else frozenset()
+        )
         ordered = sorted(wave_results, key=lambda t: t[0])
         for step_index, invocation, outs in ordered:
             cap = self._registry.get_capability(invocation.weaver_id, invocation.capability_id)
@@ -759,11 +771,13 @@ class LocalExecutor:
                     expand_by_type=expand_by_type,
                     confidence_threshold=confidence_threshold,
                     expansion_budget=expansion_budget,
+                    wanted=wanted,
                 )
                 for item in result.review_queue[review_count:]:
                     item.continuation.update(
                         invocation=invocation.to_json(),
                         to_types=sorted(state.braid.to_types),
+                        wanted=sorted(wanted),
                         prior_errors=[
                             list(pair) for pair in sorted(errored.get(entity_key(ss), set()))
                         ],
@@ -970,6 +984,7 @@ class LocalExecutor:
         expand_by_type: dict[str, ExpandPolicy],
         confidence_threshold: float,
         expansion_budget: _ExpansionBudget,
+        wanted: frozenset[str] = frozenset(),
     ) -> None:
         """Fold one step's result into an entity and record its completion outcome.
 
@@ -1095,6 +1110,11 @@ class LocalExecutor:
                 merge_policy,
                 expansion_budget,
                 result,
+                keep_whole=frozenset(
+                    t
+                    for t in set_outputs & wanted
+                    if not any(t in step.input_types for step in remaining_steps)
+                ),
             )
 
     def _expand_candidates(
@@ -1168,6 +1188,7 @@ class LocalExecutor:
         merge_policy: MergePolicy,
         expansion_budget: _ExpansionBudget,
         result: ExecutionResult,
+        keep_whole: frozenset[str] = frozenset(),
     ) -> None:
         """Fork ``ss`` on each set-valued produced join key, per its ``ExpandPolicy``.
 
@@ -1176,6 +1197,9 @@ class LocalExecutor:
         / ``ALL`` replace the entity with children — the **cross-product** across every
         forking dimension — each holding one scalar value so the braid drills it. Reuses
         the Phase-1 lineage scheme (``entity_id`` ``parent#i``, ``parent_id`` = root).
+        ``keep_whole`` names set outputs the caller asked for that no later step consumes:
+        the default ``TOP`` (no per-key policy) leaves those as the whole list instead of
+        picking one representative.
         """
         # Gather the fan dimensions actually present on this entity, with their policy.
         dims: list[tuple[str, list, ExpandPolicy, Strand]] = []
@@ -1200,6 +1224,15 @@ class LocalExecutor:
         forks: list[tuple[str, list, Strand]] = []
         for type_id, values, policy, strand in dims:
             take = policy.fork_count(len(values))
+            if (
+                type_id in keep_whole
+                and policy.mode is ExpandMode.TOP
+                and type_id not in expand_by_type
+            ):
+                # Default TOP, the caller asked for this list and no later step needs one
+                # value of it: leave the whole list (with its size). An explicit policy
+                # (ALL/TOP_K, or a per-key setting) still picks or forks.
+                continue
             if take == 1:
                 ss.add_strand(
                     Strand(

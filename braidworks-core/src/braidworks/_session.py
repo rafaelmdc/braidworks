@@ -447,6 +447,8 @@ def get(
         want: The type(s) to retrieve, as a list or ``"a,b"``.
         sources: Restrict to these source ids. Uses a one-off session when set.
         expand: ``"none"`` (default), ``"all"`` or ``"top:5"`` to follow set outputs.
+            With ``"none"`` a requested list (e.g. ``want="go.term"``) comes back whole
+            in one row; ``"all"`` gives one row per member.
         for_each: Follow a relationship (e.g. ``"orthologs"``) before resolving ``want``.
         review: ``"halt"`` (default) pauses ambiguous matches for review;
             ``"allow_continue"`` keeps the source's pick and flags it; ``"raise"``.
