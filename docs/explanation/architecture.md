@@ -73,9 +73,10 @@ the run. A resolved entity may still have missing fields or branch errors; see
 
 A capability declares `set_outputs` for related identifiers that can feed another
 lookup. Expansion creates child contexts per selected member, carrying their original
-source row and parent label. One run-wide budget bounds additional leaves. Source
-display lists may be capped while the join-key set retains the distinct IDs the
-source actually returned. This is not a guarantee of upstream completeness.
+source row and parent label. One run-wide budget bounds additional leaves. Lists are
+returned whole and carry their own size (a `Listing`); when a source stopped early the
+list says it is partial. Completeness refers to what the source returned, not a
+guarantee about the upstream database.
 
 Ambiguous resolver candidates pause by default. Automatic selection requires an
 explicit review policy and retains review flags. Expansion and minimum-confidence

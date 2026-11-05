@@ -35,7 +35,7 @@ async def test_exact_genome_bridge_and_model_genomes_do_not_acquire(tmp_path):
     assert dataset.reconstructions_for_genome("GCA_000160075.2") == []
 
 
-async def test_reaction_pair_is_drillable_and_full_fan_independent_of_display(tmp_path):
+async def test_reaction_pair_is_drillable_and_lists_every_reaction(tmp_path):
     import shutil
 
     path = tmp_path / "reactions.sqlite"
@@ -55,8 +55,10 @@ async def test_reaction_pair_is_drillable_and_full_fan_independent_of_display(tm
         )
     )[0]
     assert len(listed.values["reaction.vmh.id"]) == 22
-    assert listed.values["microbe.agora.reaction_listing"]["observed_count"] == 22
-    assert len(listed.values["microbe.agora.reaction_listing"]["records"]) == 10
+    listing = listed.values["microbe.agora.reaction_listing"]
+    assert "observed_count" not in listing
+    # every reaction row is listed, not a display-sized ten
+    assert {row["abbreviation"] for row in listing["records"]} == set(listed.values["reaction.vmh.id"])
     described = await backend.fetch(
         "describe_reaction",
         [

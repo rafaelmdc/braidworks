@@ -10,8 +10,8 @@ evidence*, so a single protein yields hundreds of rows across many pages. The ba
 
 **Determinism:** distinct terms are sorted by GO id, so the same accession always yields
 the same lists. Completeness is bounded by ``max_pages`` (a protein with more annotation
-pages than the cap is truncated — reported in coverage metadata and warnings, and
-``go.count`` is then omitted because the total is unknown).
+pages than the cap is truncated — reported in coverage metadata and warnings; every
+term list is then a ``Listing`` of unknown size and ``go.count`` is omitted).
 
 The HTTP client is injectable (``client=``) so tests drive it with an
 ``httpx.MockTransport`` offline (see ``fixture.py``). The JSON shape was validated
@@ -28,7 +28,13 @@ from dataclasses import replace
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import (
+    BackendBase,
+    Listing,
+    LookupRecord,
+    format_exc,
+    is_not_found_status,
+)
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
@@ -138,6 +144,10 @@ def _relations(term: dict[str, Any]) -> dict[str, Any]:
         "scope": "observed term children and obsoletion; parents and replacements not acquired",
         "source": deepcopy(term),
     }
+
+
+# Lists built from the annotation download; partial when the download is.
+_TERM_LISTS = frozenset({"go.term", "go.records", "go.annotation.records", *_ASPECTS.values()})
 
 
 def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -418,15 +428,14 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                             error="QuickGO reverse coverage incomplete before any annotations for this term were retrieved",
                         )
                     else:
+                        annotations = deepcopy(selected)
+                        if coverage["complete"] is not True:  # what the capped pages held
+                            products = Listing(products, total=None, complete=False)
+                            annotations = Listing(annotations, total=None, complete=False)
                         values = {
                             "protein.uniprot.accession": products,
-                            "go.reverse.annotations": deepcopy(selected),
-                            "go.reverse.coverage": {
-                                **coverage,
-                                "query_scope": chunk,
-                                "observed_products": len(products),
-                                "count_scope": "retrieved positive UniProtKB products; source totals count annotations",
-                            },
+                            "go.reverse.annotations": annotations,
+                            "go.reverse.coverage": {**coverage, "query_scope": chunk},
                         }
                         warnings = (
                             ()
@@ -645,9 +654,12 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
         warnings = ()
         if coverage["complete"] is not True:
             state = "incomplete" if coverage["complete"] is False else "unknown"
-            # go.count is the total number of distinct terms; from a partial download it
-            # would understate it, so it is withheld rather than published as the total.
+            # A partial download: every term list holds what was retrieved, and its true
+            # size is unknown. go.count would understate the total, so it is withheld.
             values.pop("go.count", None)
+            for list_type, items in list(values.items()):
+                if list_type in _TERM_LISTS:
+                    values[list_type] = Listing(items, total=None, complete=False)
             warnings = (
                 (
                     f"QuickGO annotation coverage {state}: {coverage['reason']}; the term "

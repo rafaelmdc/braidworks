@@ -110,8 +110,8 @@ A provider disease ID is not a MedDRA code, and sharing a name does not merge ID
 `disbiome.list_taxa` takes either provider ID or MedDRA code (provider ID wins if
 both are present). A code lookup preserves all distinct provider disease records
 linked to that exact code. It emits the full sorted generic `ncbi.taxon.id` set,
-not species IDs, with up to ten experiment/source organism/publication evidence
-records and the true counts. Publication evidence preserves provider quality
+not species IDs, with every experiment/source organism/publication evidence record
+and the experiment count. Publication evidence preserves provider quality
 reporting without deriving a study-quality score. Missing taxids stay out of the
 fan set but remain evidence rows. Sample/method/outcome filters apply before counts.
 

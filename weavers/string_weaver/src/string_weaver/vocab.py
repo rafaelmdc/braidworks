@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "string"
-WEAVER_VERSION = "0.2.0"
+WEAVER_VERSION = "0.3.0"
 WEAVER_TITLE = "STRING protein-protein interactions (accession -> partners + scores)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -31,8 +31,8 @@ PROVENANCE = Provenance(
 # weaverkit's key registry. Lets users find fields by meaning.
 TYPE_DESCRIPTIONS = {
     "protein.interaction.count": "How many interaction partners this protein has in total (all of them, not only those listed).",
-    "protein.interaction.coverage": "STRING request scope, display limit, total partners and whether the network was retrieved completely.",
-    "protein.interaction.partners": "The proteins this protein interacts with, most confident first (a display-sized top list).",
+    "protein.interaction.coverage": "STRING request scope: network type, score threshold, species and request limit.",
+    "protein.interaction.partners": "Every protein this protein interacts with, most confident first.",
     "protein.interaction.records": "This protein's interactions — partner, combined score, per-channel subscores.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
     "string.id": "Taxon-scoped STRING protein ID; produced by STRING interactions and UniProt mapping.",
@@ -78,6 +78,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=25,
                 set_outputs=frozenset({"string.id"}),
                 totals={"protein.interaction.partners": "protein.interaction.count"},
+                lists=frozenset({"protein.interaction.records"}),
                 parameters=(
                     Parameter(
                         name="required_score",

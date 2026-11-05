@@ -4,16 +4,15 @@ Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 ``GET /json/interaction_partners`` (STRING resolves the accession to its protein +
 species itself, so no species input is needed). The returned edges are normalized
 into interaction leaves:
-  * ``protein.interaction.partners`` — the most confident partners (display cap),
+  * ``protein.interaction.partners`` — every partner, most confident first,
   * ``protein.interaction.count`` — how many partners STRING has in total,
-  * ``protein.interaction.records`` — full edges for the displayed partners (partner,
+  * ``protein.interaction.records`` — full edges for those partners (partner,
     combined score, per-channel subscores).
 
 **Completeness:** we ask STRING for every partner (``limit`` = ``FETCH_ALL``), so a
-response shorter than the request is the whole network at the chosen score threshold
-and ``count`` is its true size. ``string.id`` (the fan dimension) lists every partner;
-partners/records show the top ``limit``. A caller-set ``max_partners`` that cuts the
-download makes the total unknown: ``count`` is then omitted and coverage says so.
+response shorter than the request is the whole network at the chosen score threshold.
+A caller-set ``max_partners`` that cuts the download makes the total unknown: every
+list is then a ``Listing`` of unknown size and ``count`` is omitted.
 
 **Determinism:** STRING returns partners ranked by confidence, but ties are not
 ordered stably, so we impose a fixed total order — combined score descending, then
@@ -32,7 +31,13 @@ import math
 from typing import Any
 
 import httpx
-from braidworks.core import BackendBase, LookupRecord, format_exc, is_not_found_status
+from braidworks.core import (
+    BackendBase,
+    Listing,
+    LookupRecord,
+    format_exc,
+    is_not_found_status,
+)
 from braidworks.core.http_pacing import PacedHTTPClient
 from braidworks.core.lifecycle import HTTPClientLifecycle
 from braidworks.core.source_identity import remote_fingerprint
@@ -40,7 +45,6 @@ from braidworks.core.source_identity import remote_fingerprint
 logger = logging.getLogger("string_weaver.api")
 
 DEFAULT_BASE_URL = "https://version-12-5.string-db.org/api"
-DEFAULT_LIMIT = 25  # partners shown per protein (most confident first)
 FETCH_ALL = 100_000  # requested per protein: above any real network (UBC: ~1.6k partners)
 _ID_CHUNK = 100  # identifiers per get_string_ids request (keeps the URL bounded)
 _PARTNER_CHUNK = 10  # proteins per interaction_partners request (full networks ~0.5 MB each)
@@ -116,7 +120,11 @@ def _edge(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _extract(payload: list[dict[str, Any]], display: int) -> dict[str, Any]:
+# Lists built from one partner download; partial when max_partners cuts it.
+_PARTNER_LISTS = ("string.id", "protein.interaction.partners", "protein.interaction.records")
+
+
+def _extract(payload: list[dict[str, Any]]) -> dict[str, Any]:
     # Collapse logical source/target edges; keep all distinct observed evidence.
     by_edge: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for raw in payload:
@@ -136,13 +144,12 @@ def _extract(payload: list[dict[str, Any]], display: int) -> dict[str, Any]:
         record["evidence"] = observed
         records.append(record)
     records.sort(key=lambda row: (-(row["score"] or 0.0), row["string_id"], row["source_id"]))
-    shown = records[:display]
     return {
-        # The fan dimension: every partner, uncapped (max_expansion bounds fan-out).
+        # The fan dimension: every partner (max_expansion bounds fan-out).
         "string.id": list(dict.fromkeys(row["string_id"] for row in records)),
-        "protein.interaction.partners": [row["partner"] for row in shown],
+        "protein.interaction.partners": [row["partner"] for row in records],
         "protein.interaction.count": len(records),
-        "protein.interaction.records": shown,
+        "protein.interaction.records": records,
     }
 
 
@@ -156,12 +163,8 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         *,
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
-        limit: int = DEFAULT_LIMIT,
     ) -> None:
         self._configure_client(client, base_url)
-        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-            raise ValueError("limit must be a positive integer")
-        self._limit = limit
 
     def is_configured(self) -> bool:
         """STRING REST needs no key or local data, so it's always usable."""
@@ -177,7 +180,6 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
         return remote_fingerprint(
             "string-api",
             endpoint,
-            limit=self._limit,
             acquisition="full-network",
             release="12.5" if endpoint.rstrip("/") == DEFAULT_BASE_URL else "custom-or-unversioned",
         )
@@ -264,11 +266,10 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                     )
                 )
             else:
-                values = _extract(edges, self._limit)
+                values = _extract(edges)
                 # STRING applies the request limit per protein: fewer edges than asked
                 # for means we hold the whole network at this threshold.
                 complete = len(edges) < fetch_limit
-                total = values["protein.interaction.count"]
                 values["protein.interaction.coverage"] = {
                     "scope": "interaction_partners",
                     "network_type": network_type,
@@ -277,17 +278,14 @@ class StringApiBackend(HTTPClientLifecycle, BackendBase):
                     "score_scale": [0, 1],
                     "required_score_scale": [0, 1000],
                     "request_limit": fetch_limit,
-                    "display_limit": self._limit,
-                    "total_partners": total if complete else None,
-                    "observed_partners": len(values["string.id"]),
-                    "complete": complete,
-                    "count_scope": "all_partners",
-                    "fan_scope": "all_partners" if complete else "retrieved_partners",
                 }
                 warnings: tuple[str, ...] = ()
                 if not complete:
-                    # A count we do not know is never published as if it were the total.
+                    # The lists hold what was retrieved; the true size is unknown, so
+                    # no count is published as if it were the total.
                     del values["protein.interaction.count"]
+                    for list_type in _PARTNER_LISTS:
+                        values[list_type] = Listing(values[list_type], total=None, complete=False)
                     warnings = (
                         (
                             f"STRING download stopped at max_partners={fetch_limit}; the true "

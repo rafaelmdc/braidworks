@@ -125,6 +125,12 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                 f"!= spec totals {dict(sorted(spec_cap.totals.items()))} — {regen}"
             )
 
+        if frozenset(man_cap.lists) != frozenset(spec_cap.lists):
+            problems.append(
+                f"capability {cap_id!r}: manifest lists {sorted(man_cap.lists)} "
+                f"!= spec lists {sorted(spec_cap.lists)} — {regen}"
+            )
+
         if man_cap.consumes_any != spec_cap.consumes_any:
             problems.append(
                 f"capability {cap_id!r}: manifest consumes_any {man_cap.consumes_any} "
@@ -213,7 +219,10 @@ async def run_golden(
         "golden",
         [Strand(type_id=k, value=v) for k, v in golden.input.items()],
     )
-    requested = frozenset(golden.expect)
+    # ``<list>.total`` expects a list's true size: request the list itself.
+    requested = frozenset(
+        k.removesuffix(".total") if k not in cap.produces else k for k in golden.expect
+    )
     result = await weaver.execute(
         golden.capability,
         strand_set,
@@ -232,7 +241,35 @@ async def run_golden(
 
     got = {s.type_id: s.value for s in result.strands}
     problems: list[str] = []
+    where = f"golden ({golden.capability}, input={golden.input})"
+    for strand in result.strands:
+        problems.extend(_size_problems(where, strand))
+    sizes = {s.type_id: _known_size(s) for s in result.strands}
+    # A declared .count must equal its list's size (an explicit count is not checked
+    # by the mapper's alias derivation, which only fills a missing one).
+    for list_type, count_type in sorted(cap.totals.items()):
+        if (
+            list_type in got
+            and count_type in got
+            and sizes.get(list_type) is not None
+            and got[count_type] != sizes[list_type]
+        ):
+            problems.append(
+                f"{where}: {count_type!r} = {got[count_type]!r} but {list_type!r} holds "
+                f"{sizes[list_type]} items — the count must be the list's size"
+            )
     for key, want in golden.expect.items():
+        base = key.removesuffix(".total")
+        if base != key and key not in cap.produces:
+            if base not in got:
+                problems.append(f"{where}: expected list {base!r} was not produced")
+            elif sizes[base] != want:
+                problems.append(
+                    f"{where}: {base!r} has total {sizes[base]!r}, expected {want!r}, got "
+                    f"{sizes[base]!r} — if the backend stopped early, return "
+                    "Listing(items, total=n) or Listing(items, total=None, complete=False)"
+                )
+            continue
         if key not in got:
             problems.append(
                 f"golden ({golden.capability}, input={golden.input}): "
@@ -246,6 +283,31 @@ async def run_golden(
                 "or the expected value in weaver.spec.toml"
             )
     return problems
+
+
+def _known_size(strand: Strand) -> int | None:
+    """A list strand's true size: its ``total``, or its length when it said nothing."""
+    if strand.total is not None:
+        return strand.total
+    if strand.complete and isinstance(strand.value, list):
+        return len(strand.value)
+    return None
+
+
+def _size_problems(where: str, strand: Strand) -> list[str]:
+    """A list's size must agree with its items: complete ⇒ total == len; total ≥ len."""
+    if strand.total is None or not isinstance(strand.value, list):
+        return []
+    n = len(strand.value)
+    if strand.total < n or (strand.complete and strand.total != n):
+        state = "complete" if strand.complete else "partial"
+        return [
+            (
+                f"{where}: {strand.type_id!r} is {state} with total {strand.total} but has "
+                f"{n} items — return a Listing so core keeps the size consistent"
+            )
+        ]
+    return []
 
 
 async def check_golden(weaver: BaseWeaver, spec: WeaverSpec, *, backend: str) -> list[str]:

@@ -26,9 +26,8 @@ that optional local data are already configured.
 ## Dedup + deterministic ordering
 
 Reactome maps the accession to its pathways; the backend dedups to **distinct pathways**
-(by Reactome stable id) and orders them by stable id. `count` is the true total;
-`names`/`records` are the top `limit` (default 30); `pathway.reactome.id` is the full
-distinct set (uncapped — the fan dimension). Same accession → same list. An accession with
+(by Reactome stable id) and orders them by stable id. `names`, `records` and
+`pathway.reactome.id` (the fan dimension) list every pathway; `count` is how many. Same accession → same list. An accession with
 no pathways (Reactome 400/404, or an empty list) is a clean `NO_MATCH`.
 
 ## Develop
@@ -56,12 +55,11 @@ Pathway-list and detail responses must be lists of objects with stable identifie
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
 
-## Source identity and display policy
+## Source identity
 
-`build_reactome_weaver(base_url=..., client=..., limit=30)` exposes the backend's
-positive integer display cap. Full fan-out identifiers and true totals retain their
-existing semantics. Fingerprints hash the effective endpoint (including an injected
-client's base URL) and cap. Changing either separates cached results, without
+`build_reactome_weaver(base_url=..., client=...)` configures the endpoint. Lists are
+never cut for display. Fingerprints hash the effective endpoint (including an injected
+client's base URL). Changing it separates cached results, without
 printing endpoint credentials. Configuration identity does not freeze the contents
 of an unversioned live service.
 
@@ -102,8 +100,8 @@ Source: [Reactome Content Service](https://reactome.org/dev/content-service/).
 `list_reactions` consumes a pathway stable ID and uses the provider's recursive
 `containedEvents` endpoint. It resolves numeric object references against observed
 nested identities; unresolved or conflicting identities are errors. All distinct
-reaction-like stable IDs form `reaction.reactome.id`; descriptive records use the
-configured display `limit` with the true total retained. Pathways are excluded and
+reaction-like stable IDs form `reaction.reactome.id`; descriptive records list them
+all, with their `count`. Pathways are excluded and
 Reaction, BlackBoxEvent and the other explicit reaction-like classes stay typed.
 Repeated pathway inputs share acquisition; single-pathway requests run concurrently.
 

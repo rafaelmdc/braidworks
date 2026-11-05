@@ -10,7 +10,7 @@ db_name = "reactome"
 weaver_id = "reactome"
 kind = "lookup"
 title = "Reactome pathways (accession -> pathways)"
-version = "0.1.16"
+version = "0.2.0"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkab1028"
 attribution = "Reactome"
@@ -48,13 +48,14 @@ source_sample = """
 # preserves per-query grouping, so batches fan out per accession.
 [[capability]]
 id = "list_pathways"
-# Capped list -> produced count of its true size (results show "25 of 321").
+# Deprecated alias: pathway.reactome.count is derived from the names list's size.
 totals = { "pathway.reactome.names" = "pathway.reactome.count" }
+lists = ["pathway.reactome.records"]
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 # pathway.reactome.id is one→many: the weaver emits every distinct pathway stId, so a
 # caller can fan out (ExpandPolicy) one child per pathway — "protein -> all pathways,
-# each drillable". names/count/records stay the top-N display + true total.
+# each drillable". names/records list every pathway; count is how many.
 set_outputs = ["pathway.reactome.id"]
 
   [[capability.group]]
@@ -118,7 +119,7 @@ max_batch_size = 25
 [[golden]]
 capability = "list_pathways"
 input = { "protein.uniprot.accession" = "P04637" }
-expect = { "pathway.reactome.count" = 2 }
+expect = { "pathway.reactome.count" = 2, "pathway.reactome.names.total" = 2 }
 
 [[golden]]
 capability = "describe_pathway"

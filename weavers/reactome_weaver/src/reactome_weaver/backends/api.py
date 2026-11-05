@@ -5,8 +5,8 @@ Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 its protein + species itself and returns the pathways it participates in. The backend
 dedups to **distinct pathways** (by Reactome stable id), orders them by stable id, and
 emits ``pathway.reactome.id`` (every distinct stId — the one→many fan dimension),
-``pathway.reactome.names`` (top ``limit``), ``pathway.reactome.count`` (true total),
-and ``pathway.reactome.records`` (``{st_id, name, in_disease}``).
+``pathway.reactome.names``, ``pathway.reactome.count`` (how many pathways) and
+``pathway.reactome.records`` (``{st_id, name, in_disease}``) — every pathway, no cap.
 
 **Determinism:** fixed ordering applies to the same observed response; live source
 updates can change pathways. Conflicting duplicate stable IDs are source errors.
@@ -34,7 +34,6 @@ from braidworks.core.source_identity import remote_fingerprint
 logger = logging.getLogger("reactome_weaver.api")
 
 DEFAULT_BASE_URL = "https://reactome.org/ContentService"
-DEFAULT_LIMIT = 30  # top pathways to surface in names/records (count stays the true total)
 _ID_CHUNK = 100  # pathway ids per POST /data/query/ids request (keeps the body bounded)
 
 
@@ -64,7 +63,7 @@ def _validated_rows(body: Any, requested: list[str] | None = None) -> list[dict[
     return body
 
 
-def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+def _extract(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Dedup pathway rows to distinct pathways (by stId) and order by stId."""
     by_id: dict[str, dict[str, Any]] = {}
     for raw in rows:
@@ -80,15 +79,14 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
             "source": deepcopy(raw),
         }
     records = sorted(by_id.values(), key=lambda p: p["st_id"])
-    top = records[:limit]
     return {
         # The fan dimension (set_outputs): every distinct pathway stId, so a caller can
-        # fan out one child per pathway. Uncapped — names/records below are the top-N
-        # display; the executor's max_expansion bounds any runaway.
+        # fan out one child per pathway; the executor's max_expansion bounds any runaway.
         "pathway.reactome.id": [r["st_id"] for r in records],
-        "pathway.reactome.names": [r["name"] for r in top if r["name"]],
-        "pathway.reactome.count": len(by_id),  # true total distinct; names/records are top N
-        "pathway.reactome.records": top,
+        # One name per pathway (its stable id when unnamed), so count == len(names).
+        "pathway.reactome.names": [r["name"] or r["st_id"] for r in records],
+        "pathway.reactome.count": len(by_id),
+        "pathway.reactome.records": records,
     }
 
 
@@ -237,16 +235,12 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
         *,
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
-        limit: int = DEFAULT_LIMIT,
         max_concurrency: int = 4,
     ) -> None:
         self._configure_client(client, base_url)
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")
         self._max_concurrency = max_concurrency
-        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-            raise ValueError("limit must be a positive integer")
-        self._limit = limit
 
     def is_configured(self) -> bool:
         """Reactome ContentService needs no key or local data, so it's always usable."""
@@ -259,7 +253,7 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
             if self._client is not None and str(self._client.base_url)
             else self._base_url
         )
-        return remote_fingerprint("reactome-api", endpoint, limit=self._limit)
+        return remote_fingerprint("reactome-api", endpoint, acquisition="all-pathways")
 
     supports_request_pacing = True
 
@@ -433,8 +427,7 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
                         "pathway.reactome.reactions": {
                             "pathway_id": pid,
                             "count": len(records),
-                            "records": records[: self._limit],
-                            "display_limit": self._limit,
+                            "records": records,
                             "scope": "all recursive contained reaction-like events; full distinct fan IDs",
                             "source": f"/data/pathway/{pid}/containedEvents",
                         },
@@ -482,4 +475,4 @@ class ReactomeApiBackend(HTTPClientLifecycle, BackendBase):
 
         if not rows:
             return LookupRecord(query=query, found=False)
-        return LookupRecord(query=query, found=True, values=_extract(rows, self._limit))
+        return LookupRecord(query=query, found=True, values=_extract(rows))

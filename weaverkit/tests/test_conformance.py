@@ -278,3 +278,106 @@ def test_totals_flow_into_vocab_and_drift_is_caught():
     assert manifest.capability(cap.id).totals == totals
     assert check_manifest(manifest, spec) == []
     assert any("totals" in p for p in check_manifest(manifest, _spec()))
+
+
+# --- list sizes in golden ------------------------------------------------------
+
+
+class _ListFake(ConformingFakeWeaver):
+    """Answers golden with a configured strand for microbe.trait.gram_stain."""
+
+    def __init__(self, strand):
+        self._strand = strand
+
+    async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+        from braidworks.core.result import WeaveResult, WeaveStatus
+
+        return WeaveResult(
+            capability_id=capability_id,
+            weaver_version=self.MANIFEST.version,
+            backend_used=backend,
+            computed_groups=frozenset({"traits.core"}),
+            status=WeaveStatus.OK,
+            strands=(self._strand,),
+        )
+
+
+def _golden_spec(expect):
+    spec = _spec()
+    return dataclasses.replace(spec, golden=(dataclasses.replace(spec.golden[0], expect=expect),))
+
+
+async def test_golden_total_matches_strand_total():
+    from braidworks.core.strand import Strand
+
+    fake = _ListFake(Strand("microbe.trait.gram_stain", ["a"], total=3, complete=False))
+    key = "microbe.trait.gram_stain.total"
+    assert await check_golden(fake, _golden_spec({key: 3}), backend="local") == []
+    problems = await check_golden(fake, _golden_spec({key: 4}), backend="local")
+    assert any("expected 4" in p and "3" in p for p in problems)
+
+
+async def test_golden_silent_cap_caught():
+    from braidworks.core.strand import Strand
+
+    fake = _ListFake(Strand("microbe.trait.gram_stain", ["a"]))  # capped, said nothing
+    spec = _golden_spec({"microbe.trait.gram_stain.total": 3})
+    problems = await check_golden(fake, spec, backend="local")
+    assert any("expected 3" in p and "got 1" in p for p in problems)
+
+
+async def test_golden_flags_inconsistent_size():
+    from braidworks.core.strand import Strand
+
+    fake = _ListFake(Strand("microbe.trait.gram_stain", ["a", "b"], total=1))
+    spec = _golden_spec({"microbe.trait.gram_stain": ["a", "b"]})
+    problems = await check_golden(fake, spec, backend="local")
+    assert any("total 1" in p and "2 items" in p for p in problems)
+
+
+def test_lists_flow_into_vocab_and_drift_is_caught():
+    import dataclasses as dc
+
+    from weaverkit.scaffold import _vocab_source
+
+    spec = _spec()
+    cap = spec.capabilities[0]
+    first = next(o for g in cap.groups for o in g.outputs)
+    spec = dc.replace(spec, capabilities=(dc.replace(cap, lists=(first,)), *spec.capabilities[1:]))
+    namespace: dict = {}
+    exec(_vocab_source(spec), namespace)  # noqa: S102 - generated code under test
+    manifest = namespace["build_manifest"](backends=tuple(spec.backends))
+    assert manifest.capability(cap.id).lists == frozenset({first})
+    assert check_manifest(manifest, spec) == []
+    assert any("lists" in p for p in check_manifest(manifest, _spec()))
+
+
+async def test_golden_flags_count_that_disagrees_with_its_list():
+    import dataclasses as dc
+
+    from braidworks.core.result import WeaveResult, WeaveStatus
+    from braidworks.core.strand import Strand
+
+    spec = _spec()
+    cap = spec.capabilities[0]
+    outs = [o for g in cap.groups for o in g.outputs]
+    list_type, count_type = outs[0], outs[1]
+    spec = dc.replace(
+        spec,
+        capabilities=(dc.replace(cap, totals={list_type: count_type}), *spec.capabilities[1:]),
+        golden=(dc.replace(spec.golden[0], capability=cap.id, expect={list_type: ["a", "b"]}),),
+    )
+
+    class _Fake(ConformingFakeWeaver):
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+            return WeaveResult(
+                capability_id=capability_id,
+                weaver_version=self.MANIFEST.version,
+                backend_used=backend,
+                computed_groups=frozenset({"traits.core"}),
+                status=WeaveStatus.OK,
+                strands=(Strand(list_type, ["a", "b"], total=2), Strand(count_type, 5)),
+            )
+
+    problems = await check_golden(_Fake(), spec, backend="local")
+    assert any(count_type in p and "5" in p and "2" in p for p in problems)

@@ -95,8 +95,9 @@ def _down(ss, backend, requested):
         frozenset({"g"}),
         status=WeaveStatus.OK,
         strands=(
-            Strand("structure.pdb.ids", [f"{acc}-1", f"{acc}-2"]),
-            Strand("structure.pdb.count", 5),  # the source capped its list at 2 of 5
+            # the source returned 2 of its 5 structures
+            Strand("structure.pdb.ids", [f"{acc}-1", f"{acc}-2"], total=5, complete=False),
+            Strand("structure.pdb.count", 5),
         ),
     )
 
@@ -356,23 +357,86 @@ def test_session_cache_file_is_used(tmp_path):
 # --- declared list totals ------------------------------------------------------
 
 
-def test_capped_lists_carry_their_true_total(session):
+def test_rows_carry_listing(session):
     result = session.get(["P1", "MISS"], have="protein.query", want="structure.pdb.ids")
-    assert result.columns == [
-        "input",
-        "row",
-        "status",
-        "structure.pdb.ids",
-        "structure.pdb.ids.total",
-        "missing",
-    ]
-    assert result.rows[0]["structure.pdb.ids.total"] == 5
-    assert result.rows[1]["structure.pdb.ids.total"] is None
+    assert result.columns == ["input", "row", "status", "structure.pdb.ids", "missing"]
+    pdb = result.rows[0]["structure.pdb.ids"]
+    assert isinstance(pdb, bw.Listing)
+    assert pdb == ["ACC_P1-1", "ACC_P1-2"]
+    assert (len(pdb), pdb.total, pdb.complete) == (2, 5, False)
+    assert result.rows[1]["structure.pdb.ids"] is None
     assert "(2 of 5)" in repr(result)
     assert "(2 of 5)" in result._repr_html_()
-    assert "structure.pdb.ids.total" in result.to_csv().splitlines()[0]
+
+
+def test_exports_add_total_column(session):
+    result = session.get(["P1", "MISS"], have="protein.query", want="structure.pdb.ids")
+    lines = result.to_csv().splitlines()
+    assert lines[0] == "input,row,status,structure.pdb.ids,structure.pdb.ids.total,missing"
+    assert lines[1].endswith(",ACC_P1-1; ACC_P1-2,5,")
+    assert ",structure.pdb.ids," not in lines[2] and lines[2].split(",")[4] == ""
+
+
+def test_record_totals_come_from_the_strands(session):
+    result = session.get(["P1"], have="protein.query", want="structure.pdb.ids")
+    assert result._records[0]["totals"] == {"structure.pdb.ids": {"total": 5, "complete": False}}
 
 
 def test_no_total_column_without_a_declared_total(session):
     result = session.get(["P1"], have="protein.query", want="protein.name")
     assert "protein.name.total" not in result.columns
+
+
+SET_CAP = Capability(
+    id="list_structures",
+    consumes=frozenset({"protein.uniprot.accession"}),
+    produces=frozenset({"pdb.id"}),
+    output_groups=(OutputGroup(id="g", outputs=frozenset({"pdb.id"})),),
+    backends=("api",),
+    set_outputs=frozenset({"pdb.id"}),
+)
+
+
+def _down_set(ss, backend, requested):
+    return WeaveResult(
+        "list_structures",
+        "1.0.0",
+        backend,
+        frozenset({"g"}),
+        status=WeaveStatus.OK,
+        strands=(Strand("pdb.id", ["1ABC", "2DEF"], total=9, complete=False),),
+    )
+
+
+def test_fan_child_is_scalar():
+    reg = BraidRegistry()
+    reg.register(ScriptedWeaver(_up, capability=UP_CAP, weaver_id="uniprot"))
+    reg.register(ScriptedWeaver(_down_set, capability=SET_CAP, weaver_id="pdbe"))
+    with bw.Session(registry=reg) as s:
+        result = s.get(["P1"], have="protein.query", want="pdb.id", expand="all")
+    assert [row["pdb.id"] for row in result.rows] == ["1ABC", "2DEF"]
+    assert all(type(row["pdb.id"]) is str for row in result.rows)
+    assert all(row["parent"] for row in result.rows)
+
+
+def test_partial_list_survives_resume(session):
+    result = session.get(["AMB"], have="protein.query", want="structure.pdb.ids")
+    result.review[0].choose(0)
+    resumed = result.resume()
+    pdb = resumed["AMB"][0]["structure.pdb.ids"]
+    assert isinstance(pdb, bw.Listing) and (pdb.total, pdb.complete) == (5, False)
+    assert "(2 of 5)" in repr(resumed)
+
+
+def test_partial_list_survives_the_sqlite_cache(tmp_path):
+    cache = tmp_path / "lookups.sqlite"
+    reg = _registry()
+    down = reg.get_weaver("pdbe")
+    for attempt in range(2):
+        with bw.Session(registry=reg, cache=cache) as s:
+            result = s.get(["P1"], have="protein.query", want="structure.pdb.ids")
+        pdb = result.rows[0]["structure.pdb.ids"]
+        assert isinstance(pdb, bw.Listing) and (pdb.total, pdb.complete) == (5, False)
+        if attempt == 0:
+            calls_after_first = down.batch_calls
+    assert down.batch_calls == calls_after_first  # second run read the cache

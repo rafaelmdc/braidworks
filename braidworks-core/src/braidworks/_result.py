@@ -17,6 +17,7 @@ from typing import Any
 
 from braidworks.core.braid import Braid
 from braidworks.core.executor import ExecutionError, ExecutionResult, ReviewQueueItem
+from braidworks.core.listing import Listing, describe_size
 from braidworks.core.outcomes import execution_records
 from braidworks.core.query import PreparedQuery
 from braidworks.core.references import Reference, format_references
@@ -37,14 +38,13 @@ def _cell(value: Any) -> str:
 
 
 def _shown(row: dict[str, Any], type_id: str, width: int | None = None) -> str:
-    """A cell for people: the value, plus "(n of total)" when a list was capped."""
+    """A cell for people: the value, plus "(25 of 321)" / "(25+)" for a partial list."""
     value = row.get(type_id)
     text = _cell(value)
     if width is not None:
         text = text[:width]
-    total = row.get(f"{type_id}.total")
-    if isinstance(value, (list, tuple)) and isinstance(total, int) and total > len(value):
-        text += f" ({len(value)} of {total})"
+    if isinstance(value, Listing) and not value.complete:
+        text += f" ({describe_size(value)})"
     return text
 
 
@@ -136,17 +136,14 @@ class Result:
         *,
         session: Any = None,
         state: Any = None,
-        totals: dict[str, str] | None = None,
     ) -> None:
         self.raw = raw
         self.want = list(want)
         self._prepared = prepared
-        # Wanted capped lists -> the produced type holding their true size.
-        self._totals = {lt: ct for lt, ct in (totals or {}).items() if lt in self.want}
         self._session = session  # the Session that ran this, for resume()
         self._state = state  # the engine state that resume() continues from
         self._decisions: dict[str, ReviewDecision] = {}
-        self._records = execution_records(raw, self.want, self._totals)
+        self._records = execution_records(raw, self.want)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
         self.rows: list[dict[str, Any]] = [self._row(record) for record in self._records]
@@ -158,8 +155,6 @@ class Result:
         row["status"] = record["status"]
         for type_id in self.want:
             row[type_id] = record["values"].get(type_id)
-            if type_id in self._totals:
-                row[f"{type_id}.total"] = record["totals"].get(type_id)
         row["missing"] = list(record["missing"])
         return row
 
@@ -172,15 +167,27 @@ class Result:
             "row",
             *(["parent"] if has_parent else []),
             "status",
-            *[
-                column
-                for type_id in self.want
-                for column in (
-                    (type_id, f"{type_id}.total") if type_id in self._totals else (type_id,)
-                )
-            ],
+            *self.want,
             "missing",
         ]
+
+    def _export_columns(self) -> list[str]:
+        """``columns`` plus ``<type>.total`` after each sized list, for flat exports."""
+        sized = {t for t in self.want for row in self.rows if isinstance(row.get(t), Listing)}
+        out: list[str] = []
+        for column in self.columns:
+            out.append(column)
+            if column in sized:
+                out.append(f"{column}.total")
+        return out
+
+    def _export_row(self, row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
+        flat = dict(row)
+        for column in columns:
+            if column.endswith(".total") and column not in row:
+                value = row.get(column[: -len(".total")])
+                flat[column] = value.total if isinstance(value, Listing) else None
+        return flat
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -271,10 +278,11 @@ class Result:
         """Write the rows as CSV (or TSV with ``sep="\\t"``); returns the text."""
         buffer = io.StringIO()
         writer = csv.writer(buffer, delimiter=sep, lineterminator="\n")
-        columns = self.columns
+        columns = self._export_columns()
         writer.writerow(columns)
         for row in self.rows:
-            writer.writerow([_cell(row.get(column)) for column in columns])
+            flat = self._export_row(row, columns)
+            writer.writerow([_cell(flat.get(column)) for column in columns])
         text = buffer.getvalue()
         if path is not None:
             with open(path, "w", encoding="utf-8", newline="") as handle:
@@ -290,7 +298,8 @@ class Result:
                 "to_pandas() needs pandas: pip install 'braidworks-core[pandas]' "
                 "(or use result.rows / result.to_csv())"
             ) from exc
-        frame = pd.DataFrame(self.rows, columns=self.columns)
+        columns = self._export_columns()
+        frame = pd.DataFrame([self._export_row(row, columns) for row in self.rows], columns=columns)
         return frame.explode(explode, ignore_index=True) if explode else frame
 
     def to_json(self) -> dict[str, Any]:

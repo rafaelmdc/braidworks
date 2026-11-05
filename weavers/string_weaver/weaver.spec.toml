@@ -10,7 +10,7 @@ db_name = "string"
 weaver_id = "string"
 kind = "lookup"
 title = "STRING protein-protein interactions (accession -> partners + scores)"
-version = "0.2.0"
+version = "0.3.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkac1000"
 attribution = "STRING (Szklarczyk et al.)"
@@ -35,12 +35,13 @@ source_sample = """
 """
 
 # Bulk ID resolution and chunked partner retrieval, correlated by STRING id.
-# Every partner is fetched; partners/records show the most confident top N and
-# protein.interaction.count is the true total (omitted if max_partners cuts it).
+# Every partner is fetched and listed, most confident first. If max_partners cuts the
+# download, the lists are partial (unknown size) and protein.interaction.count is omitted.
 [[capability]]
 id = "list_interactions"
-# Capped list -> produced count of its true size (results show "25 of 2396").
+# Deprecated alias: protein.interaction.count is derived from the partner list's size.
 totals = { "protein.interaction.partners" = "protein.interaction.count" }
+lists = ["protein.interaction.records"]
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 # Fan out stable taxon-scoped STRING IDs; UniProt ID-mapping consumes this bridge.
@@ -82,4 +83,4 @@ set_outputs = ["string.id"]
 [[golden]]
 capability = "list_interactions"
 input = { "protein.uniprot.accession" = "P04637" }
-expect = { "protein.interaction.count" = 2 }
+expect = { "protein.interaction.count" = 2, "protein.interaction.partners.total" = 2 }

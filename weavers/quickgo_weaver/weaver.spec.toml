@@ -10,7 +10,7 @@ db_name = "quickgo"
 weaver_id = "quickgo"
 kind = "lookup"
 title = "Gene Ontology annotations (accession -> GO terms by aspect)"
-version = "0.2.0"
+version = "0.3.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/bioinformatics/btp536"
 attribution = "Gene Ontology / EMBL-EBI QuickGO"
@@ -146,6 +146,15 @@ max_batch_size = 10
 # (ExpandPolicy) one child per term — "protein -> all GO terms, each drillable". The
 # per-aspect lists are term names; go.count counts all distinct terms (omitted if incomplete).
 set_outputs = ["go.term"]
+# Every term list is the whole download; partial (a Listing of unknown size) if the
+# annotation pages hit the cap.
+lists = [
+  "go.molecular_function",
+  "go.biological_process",
+  "go.cellular_component",
+  "go.records",
+  "go.annotation.records",
+]
 
   [[capability.group]]
   id = "aspects"
@@ -218,6 +227,7 @@ max_batch_size = 10
 id = "list_gene_products"
 consumes = ["go.term"]
 set_outputs = ["protein.uniprot.accession"]
+lists = ["go.reverse.annotations"]
 max_batch_size = 10
 
   [[capability.group]]
@@ -248,7 +258,7 @@ max_batch_size = 10
 [[golden]]
 capability = "list_go_terms"
 input = { "protein.uniprot.accession" = "P04637" }
-expect = { "go.count" = 3 }
+expect = { "go.count" = 3, "go.term.total" = 3 }
 
 [[golden]]
 capability = "describe_go_term"

@@ -8,6 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from braidworks.core.keytypes import canonicalize
+from braidworks.core.listing import Listing
 
 if TYPE_CHECKING:
     from braidworks.core.result import WeaveResult
@@ -37,6 +38,11 @@ class Strand:
     confidence: float = 1.0
     provenance: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Size of a list value (see ``braidworks.core.listing``): ``total`` is the true
+    # size (``None`` = unknown or not a sized list) and ``complete`` says whether
+    # ``value`` holds all of it. Defaults mean "nothing said": a plain value.
+    total: int | None = None
+    complete: bool = True
 
     def __post_init__(self) -> None:
         # Normalize the value to the canonical type for this (shared) key, so the
@@ -44,14 +50,25 @@ class Strand:
         # Unregistered (weaver-private) keys pass through unchanged.
         self.value = canonicalize(self.type_id, self.value)
 
+    def as_value(self) -> Any:
+        """The value for readers: a ``Listing`` when this strand carries a list size."""
+        if self.total is None and self.complete:
+            return self.value
+        return Listing(self.value, total=self.total, complete=self.complete)
+
     def to_json(self) -> dict[str, Any]:
-        return {
+        data = {
             "type_id": self.type_id,
             "value": self.value,
             "confidence": self.confidence,
             "provenance": list(self.provenance),
             "metadata": self.metadata,
         }
+        if self.total is not None:
+            data["total"] = self.total
+        if not self.complete:
+            data["complete"] = False
+        return data
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> Strand:
@@ -61,6 +78,8 @@ class Strand:
             confidence=data.get("confidence", 1.0),
             provenance=tuple(data.get("provenance", ())),
             metadata=dict(data.get("metadata", {})),
+            total=data.get("total"),
+            complete=data.get("complete", True),
         )
 
 

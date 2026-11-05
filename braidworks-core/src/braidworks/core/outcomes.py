@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from braidworks.core.executor import ExecutionResult
+from braidworks.core.listing import Listing
 from braidworks.core.strand import StrandSet
 
 
@@ -17,11 +18,10 @@ def strand_record(
     status: str,
     ss: StrandSet,
     want: list[str],
-    totals: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     # If --want is empty (e.g. `run` with no filter), show everything produced.
     types = want or sorted(ss.available_types())
-    values = {t: ss.get(t).value for t in types if ss.get(t) is not None}
+    values = {t: ss.get(t).as_value() for t in types if ss.get(t) is not None}
     rec: dict[str, Any] = {
         "entity": entity_id,
         "status": status,
@@ -37,11 +37,12 @@ def strand_record(
         "truncations": [],
         "candidates": [],
         "references": [],
-        # True size of capped lists (declared Capability.totals), for wanted lists only.
+        # Size of every sized list shown here (a Listing): its true total and whether
+        # this record holds all of it.
         "totals": {
-            list_type: ss.get(count_type).value
-            for list_type, count_type in (totals or {}).items()
-            if list_type in types and ss.get(count_type) is not None
+            t: {"total": v.total, "complete": v.complete}
+            for t, v in values.items()
+            if isinstance(v, Listing)
         },
     }
     if ss.parent_id is not None:
@@ -49,9 +50,7 @@ def strand_record(
     return rec
 
 
-def execution_records(
-    result: ExecutionResult, want: list[str], totals: dict[str, str] | None = None
-) -> list[dict[str, Any]]:
+def execution_records(result: ExecutionResult, want: list[str]) -> list[dict[str, Any]]:
     """One record per terminal object; attach branch diagnostics without duplicating rows."""
     terminal: dict[int, tuple[StrandSet, str, Any]] = {}
     for ss in result.resolved:
@@ -66,7 +65,7 @@ def execution_records(
         terminal[id(error.strand_set)] = (error.strand_set, "error", None)
     records = []
     for ss, status, wr in terminal.values():
-        record = strand_record(ss.entity_id, status, ss, want, totals)
+        record = strand_record(ss.entity_id, status, ss, want)
         record["diagnostics"] = [
             {key: value for key, value in error.to_json().items() if key != "strand_set"}
             for error in result.errors

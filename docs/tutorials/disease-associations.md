@@ -54,8 +54,8 @@ async def main():
         observations = associations.get("1").get("microbe.disease.taxa")
         if observations is not None:
             print("Experiments:", observations["experiment_count"])
-            print("Distinct taxa:", observations["observed_taxon_count"])
-            for record in observations["records"][:3]:
+            print("Distinct taxa:", len({r["taxid"] for r in observations["records"]}))
+            for record in observations["records"][:3]:  # every row is returned; show three
                 publication = record.get("publication") or {}
                 print(record["taxid"], record["direction"], record["method"])
                 print(publication.get("title"), publication.get("pubmed_url"))

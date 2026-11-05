@@ -60,6 +60,6 @@ async def test_listing_fan_ids_are_uncapped_and_never_acquire_artifacts(tmp_path
         )
     )[0]
     assert len(record.values["microbe.agora.reconstruction_id"]) == 12
-    assert len(record.values["microbe.agora.reconstructions"]) == 10
-    assert record.values["microbe.agora.coverage"]["observed_count"] == 12
+    assert len(record.values["microbe.agora.reconstructions"]) == 12  # no display cap
+    assert "observed_count" not in record.values["microbe.agora.coverage"]
     assert list(tmp_path.iterdir()) == []

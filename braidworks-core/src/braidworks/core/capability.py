@@ -56,8 +56,7 @@ class Parameter:
             )
         if self.enum and self.default is not None and self.default not in self.enum:
             raise ValueError(
-                f"parameter {self.name!r}: default {self.default!r} not in enum "
-                f"{list(self.enum)}"
+                f"parameter {self.name!r}: default {self.default!r} not in enum {list(self.enum)}"
             )
 
     def coerce(self, value: Any) -> Any:
@@ -84,8 +83,7 @@ class Parameter:
         coerced = self.coerce(value)
         if self.enum and coerced not in self.enum:
             raise ValueError(
-                f"parameter {self.name!r}: {coerced!r} not in allowed values "
-                f"{list(self.enum)}"
+                f"parameter {self.name!r}: {coerced!r} not in allowed values {list(self.enum)}"
             )
         return coerced
 
@@ -144,11 +142,16 @@ class Capability:
     # Declarative, validated, and defaulted; the planner never routes on them. Empty
     # (the default) means the capability takes no parameters.
     parameters: tuple[Parameter, ...] = ()
-    # Capped lists and where their true size lives: ``{list_type: count_type}``, e.g.
-    # ``{"structure.pdb.ids": "structure.pdb.count"}`` when the source returns a
-    # display-sized list but reports the full count. Clients show "25 of 321". Both
-    # types must be produced here. Excluded from the hash (a dict) but part of equality.
+    # Deprecated ``.count`` aliases: ``{list_type: count_type}``, e.g.
+    # ``{"structure.pdb.ids": "structure.pdb.count"}``. A list's size now travels on
+    # the list itself (a backend returns a ``Listing``); the mapper derives the count
+    # strand from it, so existing ``want=[…count]`` calls keep working. Both types
+    # must be produced here. Excluded from the hash (a dict) but part of equality.
     totals: dict[str, str] = field(default_factory=dict, hash=False)
+    # Produced outputs that are lists (e.g. ``structure.pdb.ids``). They always read
+    # back as a ``Listing`` that knows its size: complete unless the backend returned a
+    # partial ``Listing``. ``totals`` keys and ``set_outputs`` count as lists too.
+    lists: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         for list_type, count_type in self.totals.items():
@@ -157,17 +160,18 @@ class Capability:
                     f"capability {self.id!r}: totals entry {list_type!r} -> {count_type!r} "
                     "must map one produced list type to a different produced count type"
                 )
+        unknown_lists = self.lists - self.produces
+        if unknown_lists:
+            raise ValueError(
+                f"capability {self.id!r}: lists must be produced; unknown: {sorted(unknown_lists)}"
+            )
         extra = self.set_outputs - self.produces
         if extra:
-            raise ValueError(
-                f"set_outputs must be a subset of produces; unknown: {sorted(extra)}"
-            )
+            raise ValueError(f"set_outputs must be a subset of produces; unknown: {sorted(extra)}")
         names = [p.name for p in self.parameters]
         dupes = {n for n in names if names.count(n) > 1}
         if dupes:
-            raise ValueError(
-                f"capability {self.id!r}: duplicate parameter names: {sorted(dupes)}"
-            )
+            raise ValueError(f"capability {self.id!r}: duplicate parameter names: {sorted(dupes)}")
 
     def resolve_params(self, given: dict[str, Any] | None) -> dict[str, Any]:
         """Validate caller params against the declaration and overlay defaults.
@@ -194,9 +198,12 @@ class Capability:
 
     def triggered_groups(self, requested: frozenset[str]) -> frozenset[str]:
         """Group ids containing at least one of the requested outputs."""
-        return frozenset(
-            g.id for g in self.output_groups if g.outputs & requested
-        )
+        return frozenset(g.id for g in self.output_groups if g.outputs & requested)
+
+    @property
+    def list_outputs(self) -> frozenset[str]:
+        """Every produced sized list: ``lists``, ``totals`` keys and ``set_outputs``."""
+        return self.lists | frozenset(self.totals) | self.set_outputs
 
     def outputs_to_compute(self, requested: frozenset[str]) -> frozenset[str]:
         """Union of every triggered group's outputs, intersected with ``produces``.
@@ -225,6 +232,7 @@ class Capability:
             "consumes_any": self.consumes_any,
             "parameters": [p.to_json() for p in self.parameters],
             **({"totals": dict(sorted(self.totals.items()))} if self.totals else {}),
+            **({"lists": sorted(self.lists)} if self.lists else {}),
         }
 
     @classmethod
@@ -242,6 +250,7 @@ class Capability:
             consumes_any=data.get("consumes_any", False),
             parameters=tuple(Parameter.from_json(p) for p in data.get("parameters", ())),
             totals=dict(data.get("totals", {})),
+            lists=frozenset(data.get("lists", ())),
         )
 
 

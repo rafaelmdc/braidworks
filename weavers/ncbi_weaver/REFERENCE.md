@@ -89,8 +89,8 @@ traversal returns `ERROR` with its observed page count and incomplete scope,
 claims no completed groups and is not cached. Products now follow pagination;
 product and sequence records no longer silently stop at 200. Their `.coverage`
 outputs report the returned/observed record counts and successful report completion.
-List capabilities retain their 200-row display cap with uncapped identifier sets
-and true distinct counts, after every source page has been acquired.
+List capabilities return every record, identifier and distinct count, after every
+source page has been acquired; nothing is cut for display.
 
 ## Bounded API batches
 
@@ -151,7 +151,7 @@ fixtures exercise merge chains, deletion, missing history and atomic failures.
 Local `ncbi.list_children` traverses **all strict descendants**, not only direct
 children. `rank=species` is the default; an empty rank returns every descendant
 rank. The queried node is excluded, the fan key contains the full distinct sorted
-ID set, and display records are capped at 200, matching the API. It reads only the current dump;
+ID set, and every child record is returned, matching the API. It reads only the current dump;
 historical IDs are not silently followed. Empty/unknown subtrees are NO_MATCH.
 Traversal uses the parent index off the event loop and terminates on cyclic input.
 

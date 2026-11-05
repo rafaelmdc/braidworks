@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "agora"
-WEAVER_VERSION = "0.2.12"
+WEAVER_VERSION = "0.3.0"
 WEAVER_TITLE = (
     "AGORA2 metabolic reconstructions (NCBI taxid -> reconstruction + reaction repertoire)"
 )
@@ -33,12 +33,12 @@ PROVENANCE = Provenance(
 TYPE_DESCRIPTIONS = {
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
     "microbe.agora.artifact": "Observed local SBML structural status; release verification and remote availability remain explicit.",
-    "microbe.agora.coverage": "AGORA crosswalk release and full observed versus display counts.",
+    "microbe.agora.coverage": "AGORA crosswalk release and lookup scope.",
     "microbe.agora.genome_listing": "Exact model-to-assembly source associations from the pinned crosswalk.",
     "microbe.agora.reaction_listing": "Processed-model reaction repertoire with full fan and database source identity.",
     "microbe.agora.reconstruction": "One release-qualified model's source taxid/genome associations.",
     "microbe.agora.reconstruction_id": "Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it.",
-    "microbe.agora.reconstructions": "Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set.",
+    "microbe.agora.reconstructions": "Every reconstruction record for this organism from the bundled crosswalk.",
     "microbe.metabolism.reactions": "The reaction repertoire of this organism's AGORA2 reconstruction(s) — a list of {reconstruction_id, abbreviation, subsystem, ec, kegg, rhea}.",
     "microbe.metabolism.reconstruction": "This organism's AGORA2 genome-scale metabolic reconstruction(s) — a list of {reconstruction_id, gcf_id} (the source RefSeq genome).",
     "microbe.metabolism.sbml": "The genome-scale metabolic model (AGORA2 SBML) for this microbe — a local path per reconstruction (lazily downloaded per model), the substrate for community-flux / seed-set metabolic-complementarity analysis.",
@@ -105,6 +105,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=50,
                 set_outputs=frozenset({"microbe.agora.reconstruction_id"}),
                 consumes_any=True,
+                lists=frozenset({"microbe.agora.reconstructions"}),
             ),
             Capability(
                 id="describe_reconstruction",

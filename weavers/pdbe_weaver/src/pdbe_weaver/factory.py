@@ -28,12 +28,11 @@ def build_pdbe_weaver(
     *,
     base_url: str = "https://www.ebi.ac.uk/pdbe/api",
     client: httpx.AsyncClient | None = None,
-    limit: int = 25,
     **_config: Any,
 ) -> BaseWeaver:
     """Build with explicit source settings; injected clients remain caller-owned."""
     reject_unknown_options(_config)
-    return PdbeWeaver({"api": PdbeApiBackend(base_url=base_url, client=client, limit=limit)})
+    return PdbeWeaver({"api": PdbeApiBackend(base_url=base_url, client=client)})
 
 
 def build_pdbe_weaver_fixture() -> BaseWeaver:

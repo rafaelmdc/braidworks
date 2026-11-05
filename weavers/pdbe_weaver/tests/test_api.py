@@ -27,7 +27,7 @@ def _row(pid, cov, res=None, chain="A", method="X-ray diffraction"):
     }
 
 
-def _backend(mapping=None, *, status=200, limit=25, calls=None):
+def _backend(mapping=None, *, status=200, calls=None):
     def handler(request: httpx.Request) -> httpx.Response:
         if calls is not None:
             calls.append(str(request.url))
@@ -38,7 +38,7 @@ def _backend(mapping=None, *, status=200, limit=25, calls=None):
         return httpx.Response(404, content=b"{}")
 
     client = httpx.AsyncClient(base_url="https://p/api", transport=httpx.MockTransport(handler))
-    return PdbeApiBackend(client=client, limit=limit)
+    return PdbeApiBackend(client=client)
 
 
 async def _one(backend, accession):
@@ -70,13 +70,13 @@ async def test_resolution_breaks_coverage_ties():
     assert v["structure.pdb.ids"] == ["bbbb", "aaaa"]  # same coverage -> lower resolution first
 
 
-async def test_ids_capped_but_count_is_true_total():
-    mapping = {"P04637": [_row(f"p{i:03d}", 0.5 + i / 100, 2.0) for i in range(5)]}
-    v = (await _one(_backend(mapping, limit=2), "P04637")).values
-    assert len(v["structure.pdb.ids"]) == 2
-    assert v["structure.pdb.count"] == 5
-    # the fan dimension is the full distinct set, not the display cap
-    assert len(v["pdb.id"]) == 5
+async def test_every_structure_is_listed():
+    mapping = {"P04637": [_row(f"p{i:03d}", 0.5 + i / 1000, 2.0) for i in range(40)]}
+    v = (await _one(_backend(mapping), "P04637")).values
+    # No display cap in the weaver: ids, records and the fan set are all 40 structures.
+    assert len(v["structure.pdb.ids"]) == len(v["structure.pdb.records"]) == 40
+    assert v["structure.pdb.count"] == 40
+    assert len(v["pdb.id"]) == 40
 
 
 async def test_accession_key_casing_fallback():

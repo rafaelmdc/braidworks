@@ -65,7 +65,7 @@ LINEAGE_OUTPUTS = frozenset({LINEAGE, SPECIES_ID})
 TAXID_CORE_OUTPUTS = frozenset({SCIENTIFIC_NAME, TAXON_RANK, PARENT_ID})
 
 WEAVER_ID = "ncbi"
-WEAVER_VERSION = "0.2.16"
+WEAVER_VERSION = "0.3.0"
 WEAVER_TITLE = "NCBI Taxonomy resolver (name/taxid -> taxonomy + lineage)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -138,6 +138,7 @@ def list_children_capability(*, backends: tuple[str, ...]) -> Capability:
         produces=CHILDREN_OUTPUTS,
         output_groups=(OutputGroup(id="children", outputs=CHILDREN_OUTPUTS),),
         set_outputs=frozenset({TAXON_ID}),
+        lists=frozenset({CHILDREN_RECORDS}),
         parameters=(
             Parameter(
                 name="rank",

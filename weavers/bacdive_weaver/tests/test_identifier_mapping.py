@@ -33,7 +33,9 @@ async def test_reference_mapping_retains_multiplicity_deduplicates_and_no_fallba
         assert len(calls) == 2
         assert records[0].values["microbe.bacdive.strain_id"] == [2, 3]
         assert any("GCA_000243275.1" in path for path in calls)
-        assert records[2].values["microbe.bacdive.strain_coverage"]["input"] == "GCA_000243275.1"
+        coverage = records[2].values["microbe.bacdive.strain_coverage"]
+        assert coverage["input"] == "GCA_000243275.1"
+        assert not {"observed_strains", "complete"} & set(coverage)  # the list carries its size
         records[0].values["microbe.bacdive.strain_id"].append(4)
         assert records[1].values["microbe.bacdive.strain_id"] == [2, 3]
         assert not records[3].found

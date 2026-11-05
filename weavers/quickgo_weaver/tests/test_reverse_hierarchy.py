@@ -125,3 +125,38 @@ async def test_hierarchy_batches_many_into_one_request_per_endpoint():
         "GO:0006915",
         "GO:0012501",
     ]
+
+
+async def test_reverse_page_cap_returns_partial_lists():
+    from braidworks import Listing
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"goId": "GO:0000001", "geneProductId": "UniProtKB:P1", "qualifier": "x"}
+                ],
+                "numberOfHits": 400,
+                "pageInfo": {"current": 1, "total": 2},
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://test"
+    ) as client:
+        backend = QuickgoApiBackend(client=client, max_pages=1)
+        record = (
+            await backend.fetch(
+                "list_gene_products",
+                [{"go.term": "GO:0000001"}],
+                requested_outputs=frozenset(),
+                groups_to_compute=frozenset(),
+            )
+        )[0]
+    products = record.values["protein.uniprot.accession"]
+    assert isinstance(products, Listing) and products == ["P1"]
+    assert (products.total, products.complete) == (None, False)
+    coverage = record.values["go.reverse.coverage"]
+    assert not {"observed_products", "count_scope"} & set(coverage)
+    assert record.warnings

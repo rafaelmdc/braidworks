@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 
 import httpx
+from braidworks import Listing
 from quickgo_weaver.backends.api import QuickgoApiBackend
 
 CAP = "list_go_terms"
@@ -260,11 +261,16 @@ async def test_page_cap_is_visible_in_values_and_exported_warnings():
     assert record.warnings
     assert "go.count" not in record.values  # never a partial count posing as the total
     assert record.values["go.term"] == ["GO:0006915"]  # what was retrieved is still listed
+    # ...and every retrieved list says it is partial, with an unknown true size.
+    for list_type in ("go.term", "go.records", "go.biological_process"):
+        assert isinstance(record.values[list_type], Listing), list_type
+        assert record.values[list_type].complete is False
+        assert record.values[list_type].total is None
     registry = BraidRegistry()
     registry.register(QuickgoWeaver({"api": backend}))
     braid = Braider(registry).plan(
         available_types=frozenset({"protein.uniprot.accession"}),
-        target_types=frozenset({"go.count"}),
+        target_types=frozenset({"go.count", "go.biological_process"}),
     )
     executor = LocalExecutor(registry)
     for _ in range(2):  # uncached and cached calls preserve the warning
@@ -282,6 +288,8 @@ async def test_page_cap_is_visible_in_values_and_exported_warnings():
         assert "go.count" not in exported["values"]
         assert exported["missing"] == ["go.count"]
         assert any("incomplete" in warning for warning in exported["warnings"])
+        names = execution_records(result, ["go.biological_process"])[0]
+        assert names["totals"] == {"go.biological_process": {"total": None, "complete": False}}
 
 
 async def test_missing_page_metadata_does_not_claim_complete():

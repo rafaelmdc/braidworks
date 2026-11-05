@@ -9,6 +9,7 @@ from alphafold_weaver.backends.archive import (
     ArchiveFormatError,
     index_archive,
 )
+from braidworks import Listing
 from braidworks.core import BackendConfigurationError
 
 
@@ -39,15 +40,16 @@ async def fetch(backend, capability, query):
     )[0]
 
 
-async def test_full_fragments_isoforms_versions_and_capped_display(tmp_path):
+async def test_full_fragments_isoforms_versions_and_every_model(tmp_path):
     path = archive(tmp_path / "proteome.tar", names())
     backend = AlphafoldArchiveBackend([path])
     record = await fetch(backend, "list_models", {"protein.uniprot.accession": "Q8WZ42"})
     values = record.values
     assert len(values["structure.alphafold.model_id"]) == 14
-    assert len(values["structure.alphafold.models"]) == 10
+    assert len(values["structure.alphafold.models"]) == 14  # no display cap
+    assert type(values["structure.alphafold.model_id"]) is list  # complete scan
     coverage = values["structure.alphafold.model_coverage"]
-    assert coverage["source_complete"] is True
+    assert not {"source_complete", "observed_models", "display_limit"} & set(coverage)
     assert coverage["sources"][0]["header_bytes_read"] < 20_000
     assert path.stat().st_size > 1_000_000
     described = await fetch(
@@ -64,10 +66,10 @@ async def test_incomplete_scan_warns_and_unobserved_is_error(tmp_path):
     path = archive(tmp_path / "proteome.tar", names())
     backend = AlphafoldArchiveBackend([path], max_members=1)
     record = await fetch(backend, "list_models", {"protein.uniprot.accession": "Q8WZ42"})
-    assert (
-        record.warnings
-        and record.values["structure.alphafold.model_coverage"]["source_complete"] is False
-    )
+    assert record.warnings
+    for list_type in ("structure.alphafold.model_id", "structure.alphafold.models"):
+        listed = record.values[list_type]
+        assert isinstance(listed, Listing) and not listed.complete and listed.total is None
     miss = await fetch(
         backend, "describe_prediction", {"structure.alphafold.model_id": "AF-Q8WZ42-F12@v6"}
     )

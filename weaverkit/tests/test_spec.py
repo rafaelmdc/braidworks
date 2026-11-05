@@ -489,3 +489,29 @@ def test_every_count_must_be_a_declared_list_total():
     assert any("'microbe.trait.count' is a .count" in p for p in problems)
     data["capability"][0]["totals"] = {"microbe.trait.ids": "microbe.trait.count"}
     assert not any(".count" in p for p in validate_spec(WeaverSpec.from_dict(data)))
+
+
+# --- capability lists and golden totals ----------------------------------------
+
+
+def test_lists_parse_and_must_be_outputs():
+    data = _valid_dict()
+    data["capability"][0]["group"][0]["outputs"].append("microbe.trait.ids")
+    data["capability"][0]["lists"] = ["microbe.trait.ids"]
+    spec = WeaverSpec.from_dict(data)
+    assert spec.capabilities[0].lists == ("microbe.trait.ids",)
+    assert [p for p in validate_spec(spec) if "lists" in p] == []
+    data["capability"][0]["lists"] = ["microbe.trait.nope"]
+    assert any("lists" in p for p in validate_spec(WeaverSpec.from_dict(data)))
+
+
+def test_golden_total_key_validates():
+    data = _valid_dict()
+    data["capability"][0]["group"][0]["outputs"].append("microbe.trait.ids")
+    cap_id = data["capability"][0]["id"]
+    consumes = data["capability"][0]["consumes"]
+    base = {"capability": cap_id, "input": {consumes[0]: "1"}}
+    data["golden"] = [{**base, "expect": {"microbe.trait.ids.total": 3}}]
+    assert not any("expect key" in p for p in validate_spec(WeaverSpec.from_dict(data)))
+    data["golden"] = [{**base, "expect": {"microbe.trait.nope.total": 3}}]
+    assert any("expect key" in p for p in validate_spec(WeaverSpec.from_dict(data)))

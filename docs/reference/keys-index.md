@@ -101,7 +101,7 @@ Descriptive payload fields; nothing joins on them.
 | `go.molecular_function` | The molecular functions this protein is annotated with. | `quickgo:list_go_terms` | — |
 | `go.records` | Deduplicated GO term inventory — GO id, name, aspect. | `quickgo:list_go_terms` | — |
 | `go.reverse.annotations` | Observed exact-term reverse annotations, including negative evidence. | `quickgo:list_gene_products` | — |
-| `go.reverse.coverage` | Bounded reverse annotation query pagination and observed product accounting. | `quickgo:list_gene_products` | — |
+| `go.reverse.coverage` | Bounded reverse annotation query pagination: pages retrieved, cap and why it stopped. | `quickgo:list_gene_products` | — |
 | `go.term.aspect` | This GO term's aspect — molecular_function, biological_process, or cellular_component. | `quickgo:describe_go_term` | — |
 | `go.term.definition` | What this GO term means. | `quickgo:describe_go_term` | — |
 | `go.term.detail` | Full detail of this GO term — name, aspect, definition, synonyms. | `quickgo:describe_go_term` | — |
@@ -128,14 +128,14 @@ Descriptive payload fields; nothing joins on them.
 | `microbe.abundance.run_metadata` | Observed bounded GMrepo run listing metadata with selection and profile acquisition coverage. | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.abundance.sample_profiles` | Per-run taxonomic profiles for a phenotype (GMrepo) — the sample × taxon relative-abundance matrix (run_id, ncbi_taxon_id, rank, relative_abundance) that feeds compositional co-occurrence inference (SparCC/SPIEC-EASI). | `gmrepo:gmrepo.sample_profiles` | — |
 | `microbe.agora.artifact` | Observed local SBML structural status; release verification and remote availability remain explicit. | `agora:describe_reconstruction` | — |
-| `microbe.agora.coverage` | AGORA crosswalk release and full observed versus display counts. | `agora:list_reconstructions` | — |
+| `microbe.agora.coverage` | AGORA crosswalk release and lookup scope. | `agora:list_reconstructions` | — |
 | `microbe.agora.genome_listing` | Exact model-to-assembly source associations from the pinned crosswalk. | `agora:list_genomes` | — |
 | `microbe.agora.reaction_listing` | Processed-model reaction repertoire with full fan and database source identity. | `agora:list_reactions` | — |
 | `microbe.agora.reconstruction` | One release-qualified model's source taxid/genome associations. | `agora:describe_reconstruction` | — |
-| `microbe.agora.reconstructions` | Capped reconstruction display from the bundled crosswalk; full identities are a separate fan set. | `agora:list_reconstructions` | — |
+| `microbe.agora.reconstructions` | Every reconstruction record for this organism from the bundled crosswalk. | `agora:list_reconstructions` | — |
 | `microbe.bacdive.identifier_evidence` | Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions. | `bacdive:map_from_strain` | — |
 | `microbe.bacdive.strain` | One exact BacDive strain's taxonomy, source traits and observed collection/genome references. | `bacdive:describe_strain` | — |
-| `microbe.bacdive.strain_coverage` | Observed full binomial strain listing scope and count. | `bacdive:list_strains`, `bacdive:map_to_strain` | — |
+| `microbe.bacdive.strain_coverage` | Strain listing scope: input, source endpoint and what the listing covers. | `bacdive:list_strains`, `bacdive:map_to_strain` | — |
 | `microbe.disease.associations` | This microbe's disease links — disease, elevated/reduced, method, sample, host. | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.count` | How many distinct diseases this microbe is linked to (the length of microbe.disease.names). | `disbiome:disbiome.list_diseases` | — |
 | `microbe.disease.coverage` | Exact source taxid and reported rank; no ancestor or descendant inference. | `disbiome:disbiome.list_diseases` | — |
@@ -174,15 +174,15 @@ Descriptive payload fields; nothing joins on them.
 | `pathway.reactome.in_disease` | Whether one Reactome pathway is disease-associated. | `reactome:describe_pathway` | — |
 | `pathway.reactome.names` | The Reactome pathways this protein takes part in. | `reactome:list_pathways` | — |
 | `pathway.reactome.participants` | Typed provider participant references with numeric IDs scoped to observed release. | `reactome:describe_pathway` | — |
-| `pathway.reactome.reactions` | Recursive reaction-like event listing and display accounting. | `reactome:list_reactions` | — |
+| `pathway.reactome.reactions` | Recursive reaction-like event listing: every reaction, its count and source. | `reactome:list_reactions` | — |
 | `pathway.reactome.records` | This protein's Reactome pathways — stable id, name, in-disease flag. | `reactome:list_pathways` | — |
 | `pathway.reactome.species` | The species of one Reactome pathway. | `reactome:describe_pathway` | — |
 | `protein.annotation.records` | Structured UniProtKB comments/features/references and observed evidence/release metadata. | `uniprot:describe_protein` | — |
 | `protein.function` | What this protein does — UniProt's curated summary. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.gene` | The gene that codes for this protein. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.interaction.count` | How many interaction partners this protein has in total (all of them, not only those listed). | `string:list_interactions` | — |
-| `protein.interaction.coverage` | STRING request scope, display limit, total partners and whether the network was retrieved completely. | `string:list_interactions` | — |
-| `protein.interaction.partners` | The proteins this protein interacts with, most confident first (a display-sized top list). | `string:list_interactions` | — |
+| `protein.interaction.coverage` | STRING request scope: network type, score threshold, species and request limit. | `string:list_interactions` | — |
+| `protein.interaction.partners` | Every protein this protein interacts with, most confident first. | `string:list_interactions` | — |
 | `protein.interaction.records` | This protein's interactions — partner, combined score, per-channel subscores. | `string:list_interactions` | — |
 | `protein.length` | This protein's length in amino acids. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
 | `protein.name` | This protein's recommended name. | `uniprot:resolve_protein`, `uniprot:describe_protein` | — |
@@ -196,9 +196,9 @@ Descriptive payload fields; nothing joins on them.
 | `structure.alphafold.confidence` | Observed PAE/pLDDT references with model version, coverage and metric semantics. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.entry_id` | This protein's AlphaFold model id. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.mean_plddt` | The AlphaFold model's mean pLDDT confidence, 0–100. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
-| `structure.alphafold.model_coverage` | Observed model/display counts and API-only enumeration scope. | `alphafold:list_models` | — |
+| `structure.alphafold.model_coverage` | Model enumeration scope (API-only, or the archive sources scanned). | `alphafold:list_models` | — |
 | `structure.alphafold.model_url` | Where to download this protein's AlphaFold model. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
-| `structure.alphafold.models` | Capped display of API-observed AlphaFold models; full identities are a separate fan set. | `alphafold:list_models` | — |
+| `structure.alphafold.models` | Every observed AlphaFold model of this protein, with its record. | `alphafold:list_models` | — |
 | `structure.alphafold.pae_image_url` | The AlphaFold model's predicted-aligned-error plot. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.records` | Full AlphaFold model metadata — id, confidence, URLs. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |
 | `structure.alphafold.version` | Which AlphaFold model version this is. | `alphafold:describe_model`, `alphafold:describe_prediction` | — |

@@ -2,8 +2,8 @@
 
 List the pathways observed for a protein, inspect pathway details and contained reactions, and
 retain provider evidence. UniProt can supply the accession. The keyless API returns source
-observations, not a synthesized biological confidence assessment; display limits and complete
-fan sets serve different purposes.
+observations, not a synthesized biological confidence assessment. Every list is
+returned whole.
 
 - **Source:** https://reactome.org · **License:** CC0-1.0 · **Cite:** https://doi.org/10.1093/nar/gkab1028 — Reactome
 - **Backend:** `api` (keyless) · **Discoverable as** `reactome`

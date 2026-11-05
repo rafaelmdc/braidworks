@@ -5,8 +5,8 @@ Strategy: a UniProt ``protein.uniprot.accession`` is sent to
 (structure, chain) mapping, so a protein yields many rows. The backend:
   * **dedups to distinct PDB structures** (``pdb_id``), keeping the best-covering chain;
   * orders them best-first — coverage descending, then resolution ascending, then pdb_id;
-  * emits ``structure.pdb.ids`` (top ``limit``), ``structure.pdb.count`` (total distinct),
-    and ``structure.pdb.records`` (top ``limit`` with method/resolution/coverage).
+  * emits ``structure.pdb.ids``, ``structure.pdb.count`` (how many distinct structures)
+    and ``structure.pdb.records`` (method/resolution/coverage) — every structure, no cap.
 
 **Determinism:** the fixed sort means the same accession always yields the same list.
 An accession with no structures (PDBe 404, or an empty mapping) is a clean ``NO_MATCH``.
@@ -44,7 +44,6 @@ from pdbe_weaver.structure_detail import (
 logger = logging.getLogger("pdbe_weaver.api")
 
 DEFAULT_BASE_URL = "https://www.ebi.ac.uk/pdbe/api"
-DEFAULT_LIMIT = 25  # top structures to surface in ids/records (count stays the true total)
 _BEST_CHUNK = 100  # accessions per bulk best-structure request
 _SUMMARY_CHUNK = 200  # pdb ids per POST /pdb/entry/summary request (keeps the body bounded)
 _WORST_RESOLUTION = 1e9  # sort sentinel for entries with no resolution (NMR/EM sometimes)
@@ -122,7 +121,7 @@ def _sort_key(rec: dict[str, Any]) -> tuple[float, float, str]:
     )
 
 
-def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+def _extract(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Dedup PDBe (structure, chain) rows to distinct best structures, ordered."""
     chains: dict[str, dict[str, dict[str, Any]]] = {}
     for raw in rows:
@@ -146,15 +145,13 @@ def _extract(rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
         representative["chains"] = ordered_chains
         by_id[pid] = representative
     ordered = sorted(by_id.values(), key=_sort_key)
-    top = ordered[:limit]
     return {
         # The fan dimension (set_outputs): every distinct PDB id, so a caller can fan out
-        # one child per structure. Uncapped — structure.pdb.ids/records are the top-N
-        # display; the executor's max_expansion bounds any runaway.
+        # one child per structure; the executor's max_expansion bounds any runaway.
         "pdb.id": [r["pdb_id"] for r in ordered],
-        "structure.pdb.ids": [r["pdb_id"] for r in top],
-        "structure.pdb.count": len(by_id),  # true total distinct; ids/records are the top N
-        "structure.pdb.records": top,
+        "structure.pdb.ids": [r["pdb_id"] for r in ordered],
+        "structure.pdb.count": len(by_id),
+        "structure.pdb.records": ordered,
     }
 
 
@@ -186,12 +183,8 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
         *,
         base_url: str = DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
-        limit: int = DEFAULT_LIMIT,
     ) -> None:
         self._configure_client(client, base_url)
-        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-            raise ValueError("limit must be a positive integer")
-        self._limit = limit
 
     def is_configured(self) -> bool:
         """PDBe REST needs no key or local data, so it's always usable."""
@@ -204,7 +197,7 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
             if self._client is not None and str(self._client.base_url)
             else self._base_url
         )
-        return remote_fingerprint("pdbe-api", endpoint, limit=self._limit)
+        return remote_fingerprint("pdbe-api", endpoint, acquisition="all-structures")
 
     supports_request_pacing = True
 
@@ -383,9 +376,7 @@ class PdbeApiBackend(HTTPClientLifecycle, BackendBase):
             if accession in errors:
                 records.append(LookupRecord(query=query, error=errors[accession]))
             elif rows:
-                records.append(
-                    LookupRecord(query=query, found=True, values=_extract(rows, self._limit))
-                )
+                records.append(LookupRecord(query=query, found=True, values=_extract(rows)))
             else:
                 records.append(LookupRecord(query=query, found=False))
         return records

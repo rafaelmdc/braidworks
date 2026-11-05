@@ -10,7 +10,7 @@ db_name = "pdbe"
 weaver_id = "pdbe"
 kind = "lookup"
 title = "PDB experimental structures via PDBe (accession -> structures)"
-version = "0.1.16"
+version = "0.2.0"
 license = "CC0-1.0"
 citation = "https://doi.org/10.1093/nar/gkz990"
 attribution = "wwPDB / EMBL-EBI PDBe"
@@ -62,13 +62,14 @@ source_sample = """
 # by accession in the response; a singleton uses GET. Query duplicates retain positions.
 [[capability]]
 id = "list_structures"
-# Capped list -> produced count of its true size (results show "25 of 321").
+# Deprecated alias: structure.pdb.count is derived from the ids list's size.
 totals = { "structure.pdb.ids" = "structure.pdb.count" }
+lists = ["structure.pdb.records"]
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 # pdb.id is one→many: the weaver emits every distinct PDB id, so a caller can fan out
 # (ExpandPolicy) one child per structure — "protein -> all structures, each drillable".
-# structure.pdb.ids/count/records stay the top-N display + true total.
+# structure.pdb.ids/records list every structure; count is how many.
 set_outputs = ["pdb.id"]
 
   [[capability.group]]
@@ -131,7 +132,7 @@ max_batch_size = 25
 [[golden]]
 capability = "list_structures"
 input = { "protein.uniprot.accession" = "P04637" }
-expect = { "structure.pdb.count" = 2 }
+expect = { "structure.pdb.count" = 2, "structure.pdb.ids.total" = 2 }
 
 [[golden]]
 capability = "describe_structure"

@@ -162,7 +162,7 @@ complete cohort, and QC labels are not reinterpreted.
 ### Run and phenotype routing
 
 `gmrepo.list_runs` takes `disease.mesh.id` and emits the full ordered
-`metagenome.run_id` set plus `microbe.abundance.run_listing` (display capped at ten).
+`metagenome.run_id` set (a `Listing` of unknown size when the acquisition was capped) plus `microbe.abundance.run_listing` with every run.
 `gmrepo.describe_run` consumes one run ID and returns `microbe.abundance.run`:
 retained metadata by phenotype, empty/failed acquisition outcomes, and profile rows.
 Run, sample and project identities remain distinct; failed profiles are not empty

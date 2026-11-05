@@ -78,12 +78,14 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    > For HTTP backends, follow the **Fetch patterns** in
    > `weaverkit/docs/implementing-backends.md`: classify 400/404 as `NO_MATCH` with
    > `braidworks.core.is_not_found_status` (5xx/network → error), make ambiguous picks
-   > deterministic (sort + id tiebreak), and dedup→sort→cap "list" outputs while
-   > reporting the true total — and declare the pairing in the spec
-   > (`totals = { "<list>" = "<count>" }`) so clients show "25 of 321".
-   > **A `<thing>.count` always means the total size of a list**, in that list's unit;
-   > `verify` rejects a `.count` no list declares. Name any other count for what it
-   > counts (`<thing>.experiment_count`), and omit a count you do not actually know. Fill in `tests/test_e2e_live.py` (not the placeholder).
+   > deterministic (sort + id tiebreak), and dedup→sort "list" outputs. **Return
+   > the whole list you retrieved — never slice for display**; declare it in the
+   > spec's `lists = [...]` so it reads back as a `braidworks.Listing` that knows its
+   > size. If retrieval itself stopped early (a page cap, `max_partners`), return
+   > `Listing(items, total=n)` or `Listing(items, total=None, complete=False)` —
+   > clients then show "25 of 321" / "25+". Don't add new `<thing>.count` outputs for a
+   > list's size (existing ones are deprecated aliases, derived from the list via
+   > `totals`). Name any other count for what it counts (`<thing>.experiment_count`). Fill in `tests/test_e2e_live.py` (not the placeholder).
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>_weaver` (spec valid +
    manifest matches + reachable + real fingerprints) and `cd weavers/<db>_weaver &&
    make test`. The **definition of done** is the `--strict` gate (what the generated
@@ -128,8 +130,8 @@ one; `TOP_K`/`ALL` expand). Children carry `parent_id` back to the originating i
 When you add a `set_outputs` key:
 - It must be a registered **shared key** (something can consume it), not a leaf —
   fan-out only matters if a `describe_*`/downstream weaver consumes it.
-- Backends still **dedup → sort → cap** the display list and report the true total;
-  the set key is the *full* distinct ordered set (the fan dimension), uncapped.
+- Backends **dedup → sort** and return the *full* distinct ordered set (the fan
+  dimension); a set key is a sized list automatically (no `lists` entry needed).
 - Bump the weaver and raise its floor to `braidworks-core>=0.2.1` (where
   `Capability.set_outputs` landed). See `docs/internal/fanout-roadmap.md`.
 

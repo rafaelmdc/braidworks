@@ -4,7 +4,7 @@ import httpx
 from pdbe_weaver.backends.api import PdbeApiBackend, _extract
 
 
-def test_mapping_spans_retain_distinct_chains_and_display_fan_limits():
+def test_mapping_spans_retain_distinct_chains():
     rows = [
         {
             "pdb_id": "1tup",
@@ -17,7 +17,7 @@ def test_mapping_spans_retain_distinct_chains_and_display_fan_limits():
         }
         for chain, start, end in [("A", 1, 50), ("B", 100, 149)]
     ]
-    result = _extract(rows, 1)
+    result = _extract(rows)
     chains = result["structure.pdb.records"][0]["chains"]
     assert [c["ranges"]["uniprot"]["start"] for c in chains] == [1, 100]
     assert all(c["source"]["chain_id"] == c["chain_id"] for c in chains)

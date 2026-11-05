@@ -22,17 +22,13 @@ async def test_limit_and_effective_injected_endpoint_separate_cache(tmp_path, pe
     async def track(request):
         calls.append(str(request.url))
 
-    for endpoint, budget in [
-        ("https://first/api", 1),
-        ("https://first/api", 2),
-        ("https://second/api", 2),
-    ]:
+    for endpoint in ["https://first/api", "https://second/api"]:
         async with httpx.AsyncClient(
             base_url=endpoint,
             transport=httpx.MockTransport(_handler),
             event_hooks={"request": [track]},
         ) as client:
-            backend = StringApiBackend(client=client, limit=budget)
+            backend = StringApiBackend(client=client)
             registry = BraidRegistry()
             registry.register(StringWeaver({"api": backend}))
             executor = LocalExecutor(registry, cache=cache)
@@ -50,17 +46,9 @@ async def test_limit_and_effective_injected_endpoint_separate_cache(tmp_path, pe
             assert len(calls) == after
 
 
-@pytest.mark.parametrize("value", [True, 0, -1, 1.5])
-def test_semantic_budget_rejects_invalid_values(value):
-    with pytest.raises(ValueError):
-        StringApiBackend(limit=value)
-
-
 def test_endpoint_secrets_are_not_emitted_and_builder_honors_policy():
-    first = StringApiBackend(
-        base_url="https://user:secret@first/api?token=private", limit=1
-    ).fingerprint()
-    second = StringApiBackend(base_url="https://second/api", limit=1).fingerprint()
+    first = StringApiBackend(base_url="https://user:secret@first/api?token=private").fingerprint()
+    second = StringApiBackend(base_url="https://second/api").fingerprint()
     assert first != second and "secret" not in first and "private" not in first
-    weaver = build_string_weaver(base_url="https://second/api", limit=1)
+    weaver = build_string_weaver(base_url="https://second/api")
     assert weaver._backends["api"].fingerprint() == second

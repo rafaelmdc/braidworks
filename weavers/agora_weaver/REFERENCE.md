@@ -138,7 +138,7 @@ Caller-configured XML directories can be supplied through `model_download_base_u
 that configuration affects backend fingerprints and exported source URLs.
 
 `list_reconstructions` emits the full distinct `microbe.agora.reconstruction_id`
-set (`AGORA2-v2.01:<model>`), a capped display of ten crosswalk records and coverage.
+set (`AGORA2-v2.01:<model>`), every crosswalk record and coverage.
 `describe_reconstruction` consumes that release-qualified key. Its identity group
 retains exact source taxid/genome associations; reactions/model groups reuse the
 existing resource and consent behavior. IDs for other releases are explicit errors.
@@ -159,8 +159,7 @@ retains assembly versions and does not guess GCA/GCF equivalence or latest versi
 observed assembly set, preserving exact model/strain associations.
 
 `list_reactions` consumes that same model identity and uses the acquired reaction
-DB to emit the full sorted `reaction.vmh.id` set plus ten display records and true
-counts. `describe_reaction` consumes one VMH abbreviation and reports source
+DB to emit the full sorted `reaction.vmh.id` set plus every reaction record. `describe_reaction` consumes one VMH abbreviation and reports source
 annotations and observed model memberships with database release/content identity.
 Missing annotations remain null, not guessed KEGG/Rhea equivalence. Unprocessed
 model coverage is an error, not an empty repertoire. These routes require no new

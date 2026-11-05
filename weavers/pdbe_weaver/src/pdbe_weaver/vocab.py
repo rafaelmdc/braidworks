@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "pdbe"
-WEAVER_VERSION = "0.1.16"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "PDB experimental structures via PDBe (accession -> structures)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -74,6 +74,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=25,
                 set_outputs=frozenset({"pdb.id"}),
                 totals={"structure.pdb.ids": "structure.pdb.count"},
+                lists=frozenset({"structure.pdb.records"}),
             ),
             Capability(
                 id="describe_structure",

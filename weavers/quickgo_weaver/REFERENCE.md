@@ -29,7 +29,7 @@ references. The default budget is ten pages of 200 rows per accession.
 The term inventory (go.term, go.records and aspect lists) deduplicates by GO ID
 and sorts by that ID. go.count is the total number of distinct terms annotated to the protein (go.term
 lists them all). When retrieval is incomplete (page cap or count mismatch) go.count is
-**omitted** rather than understated; the lists then show what was retrieved. It is
+**omitted** rather than understated; the lists then show what was retrieved. Each list is then a `braidworks.Listing` with `complete=False` and `total=None`, shown as "25+". It is
 not a claim of positive experimental support.
 
 Request go.annotation.records for the retrieved source rows, preserving evidence,
