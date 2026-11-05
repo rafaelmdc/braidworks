@@ -40,8 +40,6 @@ from rapidfuzz import fuzz
 from .. import vocab
 from ..intermediate import CandidateMatch, LineageEntry, TaxonMatch, TaxonMatchStatus
 
-_CHILDREN_LIMIT = 200  # top-N children surfaced in records (ids/count stay the true total)
-
 logger = logging.getLogger("ncbi_weaver.api")
 
 DEFAULT_BASE_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2"
@@ -444,7 +442,7 @@ class DatasetsV2Backend(HTTPClientLifecycle):
                 values={
                     vocab.TAXON_ID: ids,
                     vocab.CHILDREN_COUNT: len(ids),
-                    vocab.CHILDREN_RECORDS: children[:_CHILDREN_LIMIT],
+                    vocab.CHILDREN_RECORDS: children,
                 },
             )
 
@@ -526,7 +524,7 @@ class DatasetsV2Backend(HTTPClientLifecycle):
                 values={
                     vocab.GENOME_ACCESSION: [a["accession"] for a in assemblies],
                     vocab.ASSEMBLY_COUNT: len(assemblies),
-                    vocab.ASSEMBLY_RECORDS: assemblies[:_CHILDREN_LIMIT],
+                    vocab.ASSEMBLY_RECORDS: assemblies,
                 },
             )
 
@@ -996,7 +994,7 @@ class DatasetsV2Backend(HTTPClientLifecycle):
                 values={
                     vocab.GENE_ID: [o["gene_id"] for o in orthologs],
                     vocab.ORTHOLOG_COUNT: len(orthologs),
-                    vocab.ORTHOLOG_RECORDS: orthologs[:_CHILDREN_LIMIT],
+                    vocab.ORTHOLOG_RECORDS: orthologs,
                 },
             )
 

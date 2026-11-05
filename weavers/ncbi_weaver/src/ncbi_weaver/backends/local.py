@@ -118,7 +118,7 @@ class LocalTaxonomyBackend:
                         values={
                             vocab.TAXON_ID: [r["taxid"] for r in children],
                             vocab.CHILDREN_COUNT: len(children),
-                            vocab.CHILDREN_RECORDS: children[:200],
+                            vocab.CHILDREN_RECORDS: children,
                         }
                         if children
                         else {},

@@ -20,6 +20,11 @@ SUBTREE = {
         {"tax_id": 2646395, "rank": "NO_RANK", "current_scientific_name": {"name": "unclassified Faecalibacterium"}},
     ],
     "999999": [],  # a taxid with no subtree
+    # a genus with more species than any old display cap (was 200)
+    "777": [
+        {"tax_id": n, "rank": "SPECIES", "current_scientific_name": {"name": f"s{n}"}}
+        for n in range(1000, 1205)
+    ],
 }
 
 
@@ -103,3 +108,11 @@ async def test_set_output_fans_out():
     assert len(result.resolved) == 2
     assert {ss.get(vocab.TAXON_ID).value for ss in result.resolved} == {853, 4203190}
     assert all(ss.parent_id == "g" for ss in result.resolved)
+
+
+async def test_every_child_record_is_returned_as_a_complete_list():
+    r = await _children("777")
+    strands = {s.type_id: s for s in r.strands}
+    records = strands[vocab.CHILDREN_RECORDS]
+    assert len(records.value) == 205 == strands[vocab.CHILDREN_COUNT].value
+    assert (records.total, records.complete) == (205, True)

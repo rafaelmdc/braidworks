@@ -50,7 +50,7 @@ async def test_root_self_edges_and_cycles_terminate_with_uncapped_fan(tmp_path):
     records = await backend.list_children([{vocab.TAXON_ID: 1}], rank="species")
     assert records[0].values[vocab.CHILDREN_COUNT] == 210
     assert len(records[0].values[vocab.TAXON_ID]) == 210
-    assert len(records[0].values[vocab.CHILDREN_RECORDS]) == 200
+    assert len(records[0].values[vocab.CHILDREN_RECORDS]) == 210  # no display cap
     with sqlite3.connect(path) as con:
         con.execute("UPDATE taxa SET parent_taxid=853 WHERE taxid=239934")
     cyclic = await LocalTaxonomyBackend(path).list_children([{vocab.TAXON_ID: 239934}], rank="")
