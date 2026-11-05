@@ -51,9 +51,7 @@ def test_two_hop_path_ordered_by_dependency():
         weaver_id="chain",
     )
     reg = _registry(chain)
-    braid = Braider(reg).plan(
-        frozenset({"organism.name"}), frozenset({"uniprot.proteome.id"})
-    )
+    braid = Braider(reg).plan(frozenset({"organism.name"}), frozenset({"uniprot.proteome.id"}))
     assert [s.capability_id for s in braid.steps] == ["c.name2id", "c.id2proteome"]
     assert braid.from_types == frozenset({"organism.name"})
     assert braid.to_types == frozenset({"uniprot.proteome.id"})

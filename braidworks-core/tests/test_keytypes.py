@@ -50,7 +50,10 @@ def test_int_vs_str_taxid_share_one_cache_fingerprint():
         backends=("local",),
     )
     key_args = {
-        "weaver_id": "x", "weaver_version": "1.0.0", "backend": "local", "backend_fingerprint": "fp"
+        "weaver_id": "x",
+        "weaver_version": "1.0.0",
+        "backend": "local",
+        "backend_fingerprint": "fp",
     }
     as_int = compute_cache_key(
         cap, StrandSet.from_strands("a", [Strand("ncbi.taxon.id", 1578)]), **key_args

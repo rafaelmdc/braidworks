@@ -33,9 +33,13 @@ DESCRIBE = "ncbi.describe_gene"
 async def test_successive_traversals_share_leaf_budget_and_keep_truncation():
     inputs = _inputs("7157")
     inputs[0].source_row = 1
-    result = await run_traversed(_registry(), inputs,
-                                 [("ncbi", ORTHOLOGS), ("ncbi", ORTHOLOGS)],
-                                 frozenset(), max_expansion=3)
+    result = await run_traversed(
+        _registry(),
+        inputs,
+        [("ncbi", ORTHOLOGS), ("ncbi", ORTHOLOGS)],
+        frozenset(),
+        max_expansion=3,
+    )
     assert len(result.resolved) <= 3
     assert result.truncations
     assert all(item.source_row == 1 for item in result.truncations)
@@ -102,6 +106,7 @@ def _inputs(gene: str = "7157") -> list[StrandSet]:
 
 # --- relationship resolution ---------------------------------------------------
 
+
 def test_relationship_name_strips_list_prefix():
     assert relationship_name("ncbi.list_orthologs") == "orthologs"
     assert relationship_name("ncbi.list_children") == "children"
@@ -141,7 +146,8 @@ def test_resolve_qualified_id_for_bare_capability():
         )
     )
     assert resolve_traversal(reg, "string.list_interactions") == (
-        "string", "list_interactions",
+        "string",
+        "list_interactions",
     )
 
 
@@ -177,6 +183,7 @@ def test_resolve_ambiguous_relationship_points_to_capability_ids():
 
 # --- the orchestration ---------------------------------------------------------
 
+
 async def test_describe_each_ortholog():
     res = await run_traversed(
         _registry(),
@@ -187,7 +194,9 @@ async def test_describe_each_ortholog():
     assert len(res.resolved) == 3
     # each child describes its OWN ortholog id, not the seed gene 7157
     assert sorted(s.get(SYMBOL).value for s in res.resolved) == [
-        "SYM-100", "SYM-200", "SYM-300",
+        "SYM-100",
+        "SYM-200",
+        "SYM-300",
     ]
     # lineage regroups every child to the original query
     assert {s.parent_id for s in res.resolved} == {"e0"}
@@ -195,20 +204,18 @@ async def test_describe_each_ortholog():
 
 
 async def test_no_want_returns_the_fanned_children():
-    res = await run_traversed(
-        _registry(), _inputs("7157"), [("ncbi", ORTHOLOGS)], frozenset()
-    )
+    res = await run_traversed(_registry(), _inputs("7157"), [("ncbi", ORTHOLOGS)], frozenset())
     # gene.ncbi.id canonicalizes to int
     assert sorted(s.get(GENE).value for s in res.resolved) == [100, 200, 300]
 
 
 async def test_traversal_discards_annotations_when_join_key_is_already_present():
     inputs = [StrandSet.from_strands("e0", [Strand(GENE, "7157"), Strand(SYMBOL, "TP53")])]
-    res = await run_traversed(
-        _registry(), inputs, [("ncbi", ORTHOLOGS)], frozenset({SYMBOL})
-    )
+    res = await run_traversed(_registry(), inputs, [("ncbi", ORTHOLOGS)], frozenset({SYMBOL}))
     assert sorted(s.get(SYMBOL).value for s in res.resolved) == [
-        "SYM-100", "SYM-200", "SYM-300",
+        "SYM-100",
+        "SYM-200",
+        "SYM-300",
     ]
     assert {s.parent_id for s in res.resolved} == {"e0"}
     assert inputs[0].get(SYMBOL).value == "TP53"
@@ -220,9 +227,7 @@ async def test_each_traversal_discards_previous_relationship_attributes():
         return _ortholog_result(["100", "200", "300"])
 
     registry = BraidRegistry()
-    registry.register(
-        ScriptedWeaver(orthologs, capability=_orthologs_cap(), weaver_id="ncbi")
-    )
+    registry.register(ScriptedWeaver(orthologs, capability=_orthologs_cap(), weaver_id="ncbi"))
     res = await run_traversed(
         registry, _inputs(), [("ncbi", ORTHOLOGS), ("ncbi", ORTHOLOGS)], frozenset()
     )
@@ -262,9 +267,7 @@ def _registry_with_resolver() -> BraidRegistry:
                 status=WeaveStatus.OK,
                 strands=(Strand(GENE, "7157"), Strand(SYMBOL, "SEED-SYM")),
             ),
-            capability=simple_capability(
-                RESOLVE, {NAME}, {GENE, SYMBOL}, backends=("api",)
-            ),
+            capability=simple_capability(RESOLVE, {NAME}, {GENE, SYMBOL}, backends=("api",)),
             weaver_id="resolver",
         )
     )
@@ -283,7 +286,9 @@ async def test_traversal_resolves_have_down_to_fan_input():
     assert len(res.resolved) == 3
     # each child describes its OWN ortholog, NOT the seed's byproduct "SEED-SYM"
     assert sorted(s.get(SYMBOL).value for s in res.resolved) == [
-        "SYM-100", "SYM-200", "SYM-300",
+        "SYM-100",
+        "SYM-200",
+        "SYM-300",
     ]
     assert "SEED-SYM" not in {s.get(SYMBOL).value for s in res.resolved}
 
@@ -301,7 +306,8 @@ async def test_python_traversal_handles_mixed_direct_and_unresolved_inputs():
     result = await run_traversed(
         _registry_with_resolver(),
         _inputs() + [StrandSet.from_strands("e1", [Strand(NAME, "TP53")])],
-        [("ncbi", ORTHOLOGS)], frozenset({SYMBOL}),
+        [("ncbi", ORTHOLOGS)],
+        frozenset({SYMBOL}),
     )
     assert len(result.resolved) == 6
     assert result.errors == []
@@ -311,6 +317,11 @@ async def test_python_traversal_handles_mixed_direct_and_unresolved_inputs():
 async def test_python_traversal_rejects_unused_parameter_scope_before_io():
     registry = _registry()
     with pytest.raises(ValueError, match="wrong"):
-        await run_traversed(registry, _inputs(), [("ncbi", ORTHOLOGS)], frozenset({SYMBOL}),
-                            params={"wrong": {"organism": 9606}})
+        await run_traversed(
+            registry,
+            _inputs(),
+            [("ncbi", ORTHOLOGS)],
+            frozenset({SYMBOL}),
+            params={"wrong": {"organism": 9606}},
+        )
     assert registry.get_weaver("ncbi").batch_calls == 0

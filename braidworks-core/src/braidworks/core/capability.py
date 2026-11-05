@@ -148,6 +148,10 @@ class Capability:
     # strand from it, so existing ``want=[…count]`` calls keep working. Both types
     # must be produced here. Excluded from the hash (a dict) but part of equality.
     totals: dict[str, str] = field(default_factory=dict, hash=False)
+    # Produced outputs that are lists (e.g. ``structure.pdb.ids``). They always read
+    # back as a ``Listing`` that knows its size: complete unless the backend returned a
+    # partial ``Listing``. ``totals`` keys and ``set_outputs`` count as lists too.
+    lists: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         for list_type, count_type in self.totals.items():
@@ -156,6 +160,11 @@ class Capability:
                     f"capability {self.id!r}: totals entry {list_type!r} -> {count_type!r} "
                     "must map one produced list type to a different produced count type"
                 )
+        unknown_lists = self.lists - self.produces
+        if unknown_lists:
+            raise ValueError(
+                f"capability {self.id!r}: lists must be produced; unknown: {sorted(unknown_lists)}"
+            )
         extra = self.set_outputs - self.produces
         if extra:
             raise ValueError(f"set_outputs must be a subset of produces; unknown: {sorted(extra)}")
@@ -191,6 +200,11 @@ class Capability:
         """Group ids containing at least one of the requested outputs."""
         return frozenset(g.id for g in self.output_groups if g.outputs & requested)
 
+    @property
+    def list_outputs(self) -> frozenset[str]:
+        """Every produced sized list: ``lists``, ``totals`` keys and ``set_outputs``."""
+        return self.lists | frozenset(self.totals) | self.set_outputs
+
     def outputs_to_compute(self, requested: frozenset[str]) -> frozenset[str]:
         """Union of every triggered group's outputs, intersected with ``produces``.
 
@@ -218,6 +232,7 @@ class Capability:
             "consumes_any": self.consumes_any,
             "parameters": [p.to_json() for p in self.parameters],
             **({"totals": dict(sorted(self.totals.items()))} if self.totals else {}),
+            **({"lists": sorted(self.lists)} if self.lists else {}),
         }
 
     @classmethod
@@ -235,6 +250,7 @@ class Capability:
             consumes_any=data.get("consumes_any", False),
             parameters=tuple(Parameter.from_json(p) for p in data.get("parameters", ())),
             totals=dict(data.get("totals", {})),
+            lists=frozenset(data.get("lists", ())),
         )
 
 

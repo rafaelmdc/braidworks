@@ -24,13 +24,15 @@ from helpers import ScriptedWeaver, simple_capability
 
 
 def _ok(cap_id: str, *strands: Strand) -> WeaveResult:
-    return WeaveResult(cap_id, "1.0.0", "local", frozenset({"g"}),
-                       status=WeaveStatus.OK, strands=tuple(strands))
+    return WeaveResult(
+        cap_id, "1.0.0", "local", frozenset({"g"}), status=WeaveStatus.OK, strands=tuple(strands)
+    )
 
 
 def _err(cap_id: str, message: str) -> WeaveResult:
-    return WeaveResult(cap_id, "1.0.0", "local", frozenset({"g"}),
-                       status=WeaveStatus.ERROR, errors=(message,))
+    return WeaveResult(
+        cap_id, "1.0.0", "local", frozenset({"g"}), status=WeaveStatus.ERROR, errors=(message,)
+    )
 
 
 def _input(a: str = "A") -> list[StrandSet]:
@@ -39,17 +41,21 @@ def _input(a: str = "A") -> list[StrandSet]:
 
 # --- classification ------------------------------------------------------------
 
-@pytest.mark.parametrize("message,expected", [
-    ("Server error '500 INTERNAL_SERVER_ERROR'", ErrorCategory.UPSTREAM_UNAVAILABLE),
-    ("503 Service Unavailable", ErrorCategory.UPSTREAM_UNAVAILABLE),
-    ("429 Too Many Requests", ErrorCategory.RATE_LIMITED),
-    ("Read timeout after 30s", ErrorCategory.TIMEOUT),
-    ("Connection refused", ErrorCategory.NETWORK),
-    ("401 Unauthorized", ErrorCategory.AUTH),
-    ("KeyError: 'reports'", ErrorCategory.BAD_RESPONSE),
-    ("something weird", ErrorCategory.UNKNOWN),
-    (None, ErrorCategory.UNKNOWN),
-])
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("Server error '500 INTERNAL_SERVER_ERROR'", ErrorCategory.UPSTREAM_UNAVAILABLE),
+        ("503 Service Unavailable", ErrorCategory.UPSTREAM_UNAVAILABLE),
+        ("429 Too Many Requests", ErrorCategory.RATE_LIMITED),
+        ("Read timeout after 30s", ErrorCategory.TIMEOUT),
+        ("Connection refused", ErrorCategory.NETWORK),
+        ("401 Unauthorized", ErrorCategory.AUTH),
+        ("KeyError: 'reports'", ErrorCategory.BAD_RESPONSE),
+        ("something weird", ErrorCategory.UNKNOWN),
+        (None, ErrorCategory.UNKNOWN),
+    ],
+)
 def test_classify_error(message, expected):
     assert classify_error(message) == expected
 
@@ -61,14 +67,23 @@ def test_explain_error_names_the_source():
 
 # --- branch-local: a failed branch does not discard the good branches ----------
 
+
 async def test_one_branch_errors_others_survive():
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("bad", "Server error '500'"),
-        capability=simple_capability("bad", {"a"}, {"b"}), weaver_id="w_bad"))
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok("good", Strand("c", "C")),
-        capability=simple_capability("good", {"a"}, {"c"}), weaver_id="w_good"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("bad", "Server error '500'"),
+            capability=simple_capability("bad", {"a"}, {"b"}),
+            weaver_id="w_bad",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok("good", Strand("c", "C")),
+            capability=simple_capability("good", {"a"}, {"c"}),
+            weaver_id="w_good",
+        )
+    )
 
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"b", "c"}))
     res = await LocalExecutor(reg).execute(braid, _input())
@@ -84,18 +99,31 @@ async def test_one_branch_errors_others_survive():
 
 # --- reroute: re-plan around a failed node via an alternate path ----------------
 
+
 def _reroute_registry() -> BraidRegistry:
     """direct a->c (cost 1, errors) vs the alternate a->x->c (cost 2)."""
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("direct", "Server error '500'"),
-        capability=simple_capability("direct", {"a"}, {"c"}, cost=1.0), weaver_id="w_direct"))
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok("s1", Strand("x", "X")),
-        capability=simple_capability("s1", {"a"}, {"x"}, cost=1.0), weaver_id="w_s1"))
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok("s2", Strand("c", "C-via-x")),
-        capability=simple_capability("s2", {"x"}, {"c"}, cost=1.0), weaver_id="w_s2"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("direct", "Server error '500'"),
+            capability=simple_capability("direct", {"a"}, {"c"}, cost=1.0),
+            weaver_id="w_direct",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok("s1", Strand("x", "X")),
+            capability=simple_capability("s1", {"a"}, {"x"}, cost=1.0),
+            weaver_id="w_s1",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok("s2", Strand("c", "C-via-x")),
+            capability=simple_capability("s2", {"x"}, {"c"}, cost=1.0),
+            weaver_id="w_s2",
+        )
+    )
     return reg
 
 
@@ -104,8 +132,10 @@ async def test_reroutes_around_failed_node():
     with_provenance = BraidRegistry()
     for wid in ("w_direct", "w_s1", "w_s2"):
         weaver = reg.get_weaver(wid)
-        weaver._manifest = replace(weaver.MANIFEST,
-            provenance=Provenance(source_url=f"https://{wid}.test", license="CC0-1.0"))
+        weaver._manifest = replace(
+            weaver.MANIFEST,
+            provenance=Provenance(source_url=f"https://{wid}.test", license="CC0-1.0"),
+        )
         with_provenance.register(weaver)
     reg = with_provenance
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
@@ -127,12 +157,20 @@ async def test_reroutes_onto_interchangeable_source():
     """Two weavers offer the SAME a->c edge (e.g. NCBI vs Ensembl taxonomy). The cheaper
     one is chosen; when it fails, reroute falls back onto the other producer."""
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("primary", "Server error '503'"),
-        capability=simple_capability("primary", {"a"}, {"c"}, cost=1.0), weaver_id="ncbi"))
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _ok("backup", Strand("c", "C-from-ensembl")),
-        capability=simple_capability("backup", {"a"}, {"c"}, cost=2.0), weaver_id="ensembl"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("primary", "Server error '503'"),
+            capability=simple_capability("primary", {"a"}, {"c"}, cost=1.0),
+            weaver_id="ncbi",
+        )
+    )
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _ok("backup", Strand("c", "C-from-ensembl")),
+            capability=simple_capability("backup", {"a"}, {"c"}, cost=2.0),
+            weaver_id="ensembl",
+        )
+    )
 
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     assert braid.steps[0].weaver_id == "ncbi"  # cheaper primary chosen
@@ -154,9 +192,13 @@ async def test_reroute_disabled_leaves_entity_blocked():
 
 async def test_no_alternate_path_reports_fatally():
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("only", "Server error '500'"),
-        capability=simple_capability("only", {"a"}, {"c"}), weaver_id="w_only"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("only", "Server error '500'"),
+            capability=simple_capability("only", {"a"}, {"c"}),
+            weaver_id="w_only",
+        )
+    )
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     res = await LocalExecutor(reg).execute(braid, _input())
 
@@ -168,11 +210,16 @@ async def test_no_alternate_path_reports_fatally():
 
 # --- RAISE still aborts; serialization round-trips the new fields ---------------
 
+
 async def test_error_policy_raise_still_aborts():
     reg = BraidRegistry()
-    reg.register(ScriptedWeaver(
-        lambda ss, b, r: _err("only", "boom"),
-        capability=simple_capability("only", {"a"}, {"c"}), weaver_id="w_only"))
+    reg.register(
+        ScriptedWeaver(
+            lambda ss, b, r: _err("only", "boom"),
+            capability=simple_capability("only", {"a"}, {"c"}),
+            weaver_id="w_only",
+        )
+    )
     braid = Braider(reg).plan(frozenset({"a"}), frozenset({"c"}))
     with pytest.raises(BraidworksError):
         await LocalExecutor(reg).execute(braid, _input(), error_policy=ErrorPolicy.RAISE)
@@ -274,10 +321,12 @@ def test_classify_exception_by_type_even_with_empty_message():
     from braidworks.core import ErrorCategory, classify_exception
 
     class ReadTimeout(Exception):
-        def __str__(self): return ""  # httpx timeouts stringify empty
+        def __str__(self):
+            return ""  # httpx timeouts stringify empty
 
     class ConnectError(Exception):
-        def __str__(self): return ""
+        def __str__(self):
+            return ""
 
     assert classify_exception(ReadTimeout()) is ErrorCategory.TIMEOUT
     assert classify_exception(ConnectError()) is ErrorCategory.NETWORK
@@ -290,7 +339,8 @@ def test_format_exc_is_never_empty_and_classifies():
     from braidworks.core import ErrorCategory, classify_error, format_exc
 
     class ReadTimeout(Exception):
-        def __str__(self): return ""
+        def __str__(self):
+            return ""
 
     msg = format_exc(ReadTimeout())
     assert msg == "ReadTimeout"  # not empty
@@ -305,7 +355,7 @@ def test_greenlightable_set_excludes_server_and_schema_errors():
     assert is_greenlightable(E.NETWORK)
     assert is_greenlightable(E.RATE_LIMITED)
     assert not is_greenlightable(E.UPSTREAM_UNAVAILABLE)  # 5xx → hard fail
-    assert not is_greenlightable(E.BAD_RESPONSE)          # schema drift → hard fail
+    assert not is_greenlightable(E.BAD_RESPONSE)  # schema drift → hard fail
     assert not is_greenlightable(E.AUTH)
 
 
@@ -314,13 +364,20 @@ def test_skip_if_transient_skips_timeout_but_not_5xx():
     from braidworks.core import skip_if_transient
     from braidworks.core.result import WeaveResult, WeaveStatus
 
-    timeout = WeaveResult("c", "1", "api", frozenset(),
-                          status=WeaveStatus.ERROR, errors=("BacDive API error: ReadTimeout",))
+    timeout = WeaveResult(
+        "c",
+        "1",
+        "api",
+        frozenset(),
+        status=WeaveStatus.ERROR,
+        errors=("BacDive API error: ReadTimeout",),
+    )
     with pytest.raises(pytest.skip.Exception):
         skip_if_transient(timeout)
 
-    server = WeaveResult("c", "1", "api", frozenset(),
-                         status=WeaveStatus.ERROR, errors=("Server error '500'",))
+    server = WeaveResult(
+        "c", "1", "api", frozenset(), status=WeaveStatus.ERROR, errors=("Server error '500'",)
+    )
     skip_if_transient(server)  # does NOT skip — a 5xx must fail loudly
 
     ok = WeaveResult("c", "1", "api", frozenset(), status=WeaveStatus.OK)

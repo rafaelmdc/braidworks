@@ -128,3 +128,46 @@ def test_resolver_and_candidates_unpack():
     )
     strand = {s.type_id: s for s in amb.candidates[0].strands}["a.ids"]
     assert type(strand.value) is list and strand.total == 4
+
+
+def test_declared_lists_default_complete():
+    cap = Capability(
+        id="list_a",
+        consumes=frozenset({"a.query"}),
+        produces=frozenset({"a.names", "a.other"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"a.names", "a.other"})),),
+        backends=("api",),
+        lists=frozenset({"a.names"}),
+    )
+    got = _by_type(_map({"a.names": ["x"], "a.other": ["y"]}, cap, frozenset({"a.names"})))
+    assert (got["a.names"].total, got["a.names"].complete) == (1, True)
+    assert got["a.other"].total is None
+
+
+def test_totals_keys_count_as_lists():
+    got = _by_type(_map({"a.ids": ["p", "q"]}, _cap(totals={"a.ids": "a.count"})))
+    assert got["a.ids"].total == 2 and got["a.count"].value == 2
+
+
+def test_capability_lists_round_trip_and_validate():
+    import pytest
+
+    cap = Capability(
+        id="c",
+        consumes=frozenset({"a.query"}),
+        produces=frozenset({"a.names"}),
+        output_groups=(OutputGroup(id="g", outputs=frozenset({"a.names"})),),
+        backends=("api",),
+        lists=frozenset({"a.names"}),
+    )
+    assert Capability.from_json(cap.to_json()).lists == frozenset({"a.names"})
+    assert "lists" not in Capability.from_json({**cap.to_json(), "lists": []}).to_json()
+    with pytest.raises(ValueError, match="lists"):
+        Capability(
+            id="c",
+            consumes=frozenset({"a.query"}),
+            produces=frozenset({"a.names"}),
+            output_groups=(OutputGroup(id="g", outputs=frozenset({"a.names"})),),
+            backends=("api",),
+            lists=frozenset({"a.nope"}),
+        )

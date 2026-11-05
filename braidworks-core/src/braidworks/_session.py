@@ -298,15 +298,7 @@ class Session:
             want_types,
             session=self,
             state=state,
-            totals=self._route_totals(prepared),
         )
-
-    def _route_totals(self, prepared) -> dict[str, str]:
-        """Declared ``{list_type: count_type}`` across every capability on the route."""
-        totals: dict[str, str] = {}
-        for weaver_id, capability_id in prepared.capability_ids:
-            totals.update(self.registry.get_capability(weaver_id, capability_id).totals)
-        return totals
 
     async def _continue(self, result: Result) -> Result:
         state = apply_review_decisions(
@@ -319,7 +311,6 @@ class Session:
             result.want,
             session=self,
             state=state,
-            totals=self._route_totals(result._prepared),
         )
 
     def get(

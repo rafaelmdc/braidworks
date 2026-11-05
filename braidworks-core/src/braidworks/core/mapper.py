@@ -44,10 +44,10 @@ def _strand(type_id: str, value: Any, capability: Capability, **kwargs: Any) -> 
     """A strand for one produced value, carrying a list's size when known.
 
     A backend states a partial list by returning a ``Listing``; a plain list under one
-    of the capability's ``set_outputs`` is the whole set. Strands hold plain lists."""
+    of the capability's declared lists is the whole list. Strands hold plain lists."""
     if isinstance(value, Listing):
         return Strand(type_id, list(value), total=value.total, complete=value.complete, **kwargs)
-    if type_id in capability.set_outputs and isinstance(value, list):
+    if type_id in capability.list_outputs and isinstance(value, list):
         return Strand(type_id, value, total=len(value), **kwargs)
     return Strand(type_id, value, **kwargs)
 
