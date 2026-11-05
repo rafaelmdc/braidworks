@@ -10,7 +10,7 @@ import pytest
 from braidworks.core.capability import Capability, OutputGroup, Parameter
 from braidworks.core.exceptions import NoPathError
 from braidworks.core.registry import BraidRegistry
-from braidworks.core.result import WeaveResult, WeaveStatus
+from braidworks.core.result import CandidateResult, WeaveResult, WeaveStatus
 from braidworks.core.strand import Strand
 from tests.helpers import ScriptedWeaver
 
@@ -38,6 +38,37 @@ def _up(ss, backend, requested):
     if q == "MISS":
         return WeaveResult(
             "resolve_protein", "1.0.0", backend, frozenset({"g"}), status=WeaveStatus.NO_MATCH
+        )
+    if q == "AMB":  # two plausible proteins: needs a human choice
+        return WeaveResult(
+            "resolve_protein",
+            "1.0.0",
+            backend,
+            frozenset({"g"}),
+            status=WeaveStatus.AMBIGUOUS,
+            candidates=tuple(
+                CandidateResult(
+                    (
+                        Strand("protein.uniprot.accession", f"ACC_{suffix}"),
+                        Strand("protein.name", f"Candidate {suffix}"),
+                    ),
+                    confidence,
+                )
+                for suffix, confidence in (("A", 0.6), ("B", 0.4))
+            ),
+        )
+    if q == "FLAG":  # resolved, but the source asks for confirmation
+        return WeaveResult(
+            "resolve_protein",
+            "1.0.0",
+            backend,
+            frozenset({"g"}),
+            status=WeaveStatus.OK,
+            strands=(
+                Strand("protein.uniprot.accession", "ACC_FLAG"),
+                Strand("protein.name", "Flagged name"),
+            ),
+            requires_review=True,
         )
     return WeaveResult(
         "resolve_protein",
@@ -243,3 +274,65 @@ def test_route_prints_like_the_cli(session):
     text = str(session.path("protein.query", "structure.pdb.ids"))
     assert text.splitlines()[0] == "protein.query  →  structure.pdb.ids   (2 steps)"
     assert "1. uniprot.resolve_protein [api]" in text
+
+
+# --- resolving ambiguous matches from Python ---------------------------------
+
+
+def test_review_lists_paused_rows_with_numbered_candidates(session):
+    result = session.get(["P1", "AMB"], have="protein.query", want="structure.pdb.ids")
+    assert [row["status"] for row in result.rows] == ["resolved", "review"]
+    (item,) = result.review
+    assert item.input == "AMB" and item.ambiguous
+    assert [c["index"] for c in item.candidates] == [0, 1]
+    assert item.candidates[1]["values"]["protein.name"] == "Candidate B"
+    assert "AMB" in repr(item) and "Candidate B" in repr(item)
+
+
+def test_choose_then_resume_continues_downstream(session):
+    result = session.get(["P1", "AMB"], have="protein.query", want="structure.pdb.ids")
+    result.review[0].choose(1)
+    resumed = result.resume()
+    assert [row["status"] for row in resumed.rows] == ["resolved", "resolved"]
+    assert resumed["AMB"][0]["structure.pdb.ids"] == ["ACC_B-1", "ACC_B-2"]
+    assert resumed["P1"][0]["structure.pdb.ids"] == ["ACC_P1-1", "ACC_P1-2"]  # kept
+    assert resumed.review == []
+    assert result.rows[1]["status"] == "review"  # the original result is unchanged
+
+
+def test_reject_and_accept(session):
+    result = session.get(["AMB", "FLAG"], have="protein.query", want="protein.name")
+    by_input = {item.input: item for item in result.review}
+    assert not by_input["FLAG"].ambiguous
+    by_input["AMB"].reject()
+    by_input["FLAG"].accept()
+    resumed = result.resume()
+    assert resumed["AMB"][0]["status"] == "unresolved"
+    assert resumed["FLAG"][0]["protein.name"] == "Flagged name"
+
+
+def test_review_choices_are_validated(session):
+    result = session.get(["AMB", "FLAG"], have="protein.query", want="protein.name")
+    amb, flag = sorted(result.review, key=lambda item: item.input)
+    with pytest.raises(ValueError, match="candidate"):
+        amb.choose(5)
+    with pytest.raises(ValueError, match="choose"):
+        amb.accept()
+    with pytest.raises(ValueError, match="no candidates"):
+        flag.choose(0)
+    with pytest.raises(ValueError, match="no review decisions"):
+        result.resume()
+
+
+def test_async_resume(session):
+    result = session.get(["AMB"], have="protein.query", want="protein.name")
+    result.review[0].choose(0)
+    resumed = asyncio.run(result.async_resume())
+    assert resumed["AMB"][0]["protein.name"] == "Candidate A"
+
+
+def test_session_cache_file_is_used(tmp_path):
+    cache = tmp_path / "lookups.sqlite"
+    with bw.Session(registry=_registry(), cache=cache) as s:
+        s.get(["P1"], have="protein.query", want="protein.name")
+    assert cache.exists()
