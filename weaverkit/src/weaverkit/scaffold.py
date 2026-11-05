@@ -180,6 +180,9 @@ def _vocab_source(spec: WeaverSpec) -> str:
         # Alternative inputs: consumes is a set of alternatives (any one suffices).
         if cap.consumes_any:
             lines.append("                consumes_any=True,")
+        # Capped lists and the produced count that holds their true size.
+        if cap.totals:
+            lines.append(f"                totals={dict(sorted(cap.totals.items()))!r},")
         # Per-query knobs (filters/sort/thresholds) the caller may pass at run time.
         if cap.parameters:
             lines.append("                parameters=(")
@@ -1354,7 +1357,7 @@ def generate_files(spec: WeaverSpec, *, spec_toml: str) -> dict[Path, str]:
     # making every api-weaver author add it by hand.
     has_api = "api" in spec.backends
     # New scaffolds target the runtime verified with this toolkit release.
-    deps = ['"braidworks-core>=0.25.0"']
+    deps = ['"braidworks-core>=0.28.0"']
     if has_api:
         deps.append('"httpx>=0.27"')
     tokens["DEPS"] = ", ".join(deps)

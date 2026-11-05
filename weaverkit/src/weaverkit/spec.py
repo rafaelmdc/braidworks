@@ -110,6 +110,8 @@ class CapabilitySpec:
     consumes_any: bool = False
     # Per-query knobs the capability accepts (maps to Capability.parameters).
     parameters: tuple[ParameterSpec, ...] = ()
+    # Capped lists -> the produced count holding their true size (Capability.totals).
+    totals: dict[str, str] = field(default_factory=dict)
 
     @property
     def produces(self) -> tuple[str, ...]:
@@ -135,6 +137,7 @@ class CapabilitySpec:
                 set_outputs=tuple(data.get("set_outputs", ())),
                 consumes_any=bool(data.get("consumes_any", False)),
                 parameters=tuple(ParameterSpec.from_dict(p) for p in data.get("parameter", ())),
+                totals={str(k): str(v) for k, v in data.get("totals", {}).items()},
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -431,6 +434,28 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                 problems.append(
                     f"{where}: set_outputs lists {key!r}, which this capability does not "
                     f"produce ({sorted(produced)}) — set_outputs must be a subset of produces"
+                )
+
+        # totals: a capped list and the count of its true size must both be produced,
+        # and the count must be computed whenever the list is (same group, or a group
+        # the backend always computes), so the total is never silently missing.
+        group_of = {o: g.id for g in cap.groups for o in g.outputs}
+        for list_type, count_type in sorted(cap.totals.items()):
+            if list_type not in produced or count_type not in produced:
+                problems.append(
+                    f"{where}: totals maps {list_type!r} -> {count_type!r}, but both must be "
+                    "outputs of this capability"
+                )
+            elif list_type == count_type:
+                problems.append(f"{where}: totals maps {list_type!r} to itself")
+            elif (
+                group_of[count_type] != group_of[list_type]
+                and group_of[count_type] not in cap.always_computed_groups
+            ):
+                problems.append(
+                    f"{where}: totals count {count_type!r} is in group {group_of[count_type]!r}, "
+                    f"not {list_type!r}'s group {group_of[list_type]!r} — put them in one group "
+                    "or always compute the count's group"
                 )
 
         seen_params: set[str] = set()

@@ -259,3 +259,22 @@ def test_manifest_without_descriptions_only_warns():
     manifest = dataclasses.replace(_manifest(), type_descriptions={})
     assert check_manifest(manifest, _spec()) == []
     assert any("regenerate vocab.py" in w for w in description_warnings(manifest, _spec()))
+
+
+def test_totals_flow_into_vocab_and_drift_is_caught():
+    import dataclasses as dc
+
+    from weaverkit.scaffold import _vocab_source
+
+    spec = _spec()
+    cap = spec.capabilities[0]
+    outs = [o for g in cap.groups for o in g.outputs]
+    assert len(outs) > 1, "fixture capability needs two outputs for this test"
+    totals = {outs[0]: outs[1]}
+    spec = dc.replace(spec, capabilities=(dc.replace(cap, totals=totals), *spec.capabilities[1:]))
+    namespace: dict = {}
+    exec(_vocab_source(spec), namespace)  # noqa: S102 - generated code under test
+    manifest = namespace["build_manifest"](backends=tuple(spec.backends))
+    assert manifest.capability(cap.id).totals == totals
+    assert check_manifest(manifest, spec) == []
+    assert any("totals" in p for p in check_manifest(manifest, _spec()))

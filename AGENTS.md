@@ -79,7 +79,8 @@ Do **not** hand-write a weaver from scratch. Follow the loop:
    > `weaverkit/docs/implementing-backends.md`: classify 400/404 as `NO_MATCH` with
    > `braidworks.core.is_not_found_status` (5xx/network → error), make ambiguous picks
    > deterministic (sort + id tiebreak), and dedup→sort→cap "list" outputs while
-   > reporting the true total. Fill in `tests/test_e2e_live.py` (not the placeholder).
+   > reporting the true total — and declare the pairing in the spec
+   > (`totals = { "<list>" = "<count>" }`) so clients show "25 of 321". Fill in `tests/test_e2e_live.py` (not the placeholder).
 4. **Verify.** `make verify-weaver SPEC=... PACKAGE=<db>_weaver` (spec valid +
    manifest matches + reachable + real fingerprints) and `cd weavers/<db>_weaver &&
    make test`. The **definition of done** is the `--strict` gate (what the generated

@@ -27,9 +27,12 @@ UP_CAP = Capability(
 DOWN_CAP = Capability(
     id="list_structures",
     consumes=frozenset({"protein.uniprot.accession"}),
-    produces=frozenset({"structure.pdb.ids"}),
-    output_groups=(OutputGroup(id="g", outputs=frozenset({"structure.pdb.ids"})),),
+    produces=frozenset({"structure.pdb.ids", "structure.pdb.count"}),
+    output_groups=(
+        OutputGroup(id="g", outputs=frozenset({"structure.pdb.ids", "structure.pdb.count"})),
+    ),
     backends=("api",),
+    totals={"structure.pdb.ids": "structure.pdb.count"},
 )
 
 
@@ -91,7 +94,10 @@ def _down(ss, backend, requested):
         backend,
         frozenset({"g"}),
         status=WeaveStatus.OK,
-        strands=(Strand("structure.pdb.ids", [f"{acc}-1", f"{acc}-2"]),),
+        strands=(
+            Strand("structure.pdb.ids", [f"{acc}-1", f"{acc}-2"]),
+            Strand("structure.pdb.count", 5),  # the source capped its list at 2 of 5
+        ),
     )
 
 
@@ -194,7 +200,9 @@ def test_summary_and_missing(session):
 def test_to_csv_flattens_lists(session, tmp_path):
     result = session.get(["P1"], have="protein.query", want="structure.pdb.ids")
     text = result.to_csv()
-    assert text.splitlines()[0] == "input,row,status,structure.pdb.ids,missing"
+    assert text.splitlines()[0] == (
+        "input,row,status,structure.pdb.ids,structure.pdb.ids.total,missing"
+    )
     assert "ACC_P1-1; ACC_P1-2" in text
     out = tmp_path / "rows.tsv"
     result.to_csv(out, sep="\t")
@@ -206,7 +214,14 @@ def test_to_pandas(session):
     result = session.get(["P1"], have="protein.query", want="structure.pdb.ids")
     frame = result.to_pandas()
     assert isinstance(frame, pd.DataFrame)
-    assert list(frame.columns) == ["input", "row", "status", "structure.pdb.ids", "missing"]
+    assert list(frame.columns) == [
+        "input",
+        "row",
+        "status",
+        "structure.pdb.ids",
+        "structure.pdb.ids.total",
+        "missing",
+    ]
     assert len(result.to_pandas(explode="structure.pdb.ids")) == 2
 
 
@@ -336,3 +351,28 @@ def test_session_cache_file_is_used(tmp_path):
     with bw.Session(registry=_registry(), cache=cache) as s:
         s.get(["P1"], have="protein.query", want="protein.name")
     assert cache.exists()
+
+
+# --- declared list totals ------------------------------------------------------
+
+
+def test_capped_lists_carry_their_true_total(session):
+    result = session.get(["P1", "MISS"], have="protein.query", want="structure.pdb.ids")
+    assert result.columns == [
+        "input",
+        "row",
+        "status",
+        "structure.pdb.ids",
+        "structure.pdb.ids.total",
+        "missing",
+    ]
+    assert result.rows[0]["structure.pdb.ids.total"] == 5
+    assert result.rows[1]["structure.pdb.ids.total"] is None
+    assert "(2 of 5)" in repr(result)
+    assert "(2 of 5)" in result._repr_html_()
+    assert "structure.pdb.ids.total" in result.to_csv().splitlines()[0]
+
+
+def test_no_total_column_without_a_declared_total(session):
+    result = session.get(["P1"], have="protein.query", want="protein.name")
+    assert "protein.name.total" not in result.columns

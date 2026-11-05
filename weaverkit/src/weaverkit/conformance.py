@@ -119,6 +119,12 @@ def check_manifest(manifest: WeaverManifest, spec: WeaverSpec) -> list[str]:
                 f"!= spec set_outputs {sorted(spec_cap.set_outputs)} — {regen}"
             )
 
+        if dict(man_cap.totals) != dict(spec_cap.totals):
+            problems.append(
+                f"capability {cap_id!r}: manifest totals {dict(sorted(man_cap.totals.items()))} "
+                f"!= spec totals {dict(sorted(spec_cap.totals.items()))} — {regen}"
+            )
+
         if man_cap.consumes_any != spec_cap.consumes_any:
             problems.append(
                 f"capability {cap_id!r}: manifest consumes_any {man_cap.consumes_any} "

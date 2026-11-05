@@ -292,14 +292,35 @@ class Session:
         # Keep the engine state on the Result so paused rows can be resumed later.
         state = start_query(prepared)
         raw = await continue_query(self.registry, state, cache=self._persistence.cache())
-        return Result(raw, prepared, want_types, session=self, state=state)
+        return Result(
+            raw,
+            prepared,
+            want_types,
+            session=self,
+            state=state,
+            totals=self._route_totals(prepared),
+        )
+
+    def _route_totals(self, prepared) -> dict[str, str]:
+        """Declared ``{list_type: count_type}`` across every capability on the route."""
+        totals: dict[str, str] = {}
+        for weaver_id, capability_id in prepared.capability_ids:
+            totals.update(self.registry.get_capability(weaver_id, capability_id).totals)
+        return totals
 
     async def _continue(self, result: Result) -> Result:
         state = apply_review_decisions(
             self.registry, result._state, tuple(result._decisions.values())
         )
         raw = await continue_query(self.registry, state, cache=self._persistence.cache())
-        return Result(raw, result._prepared, result.want, session=self, state=state)
+        return Result(
+            raw,
+            result._prepared,
+            result.want,
+            session=self,
+            state=state,
+            totals=self._route_totals(result._prepared),
+        )
 
     def get(
         self,
