@@ -227,6 +227,7 @@ max_batch_size = 10
 id = "list_gene_products"
 consumes = ["go.term"]
 set_outputs = ["protein.uniprot.accession"]
+lists = ["go.reverse.annotations"]
 max_batch_size = 10
 
   [[capability.group]]

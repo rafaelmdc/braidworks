@@ -38,7 +38,7 @@ TYPE_DESCRIPTIONS = {
     "go.molecular_function": "The molecular functions this protein is annotated with.",
     "go.records": "Deduplicated GO term inventory — GO id, name, aspect.",
     "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
-    "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
+    "go.reverse.coverage": "Bounded reverse annotation query pagination: pages retrieved, cap and why it stopped.",
     "go.term": "A Gene Ontology term id.",
     "go.term.aspect": "This GO term's aspect — molecular_function, biological_process, or cellular_component.",
     "go.term.definition": "What this GO term means.",
@@ -193,6 +193,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 backends=backends,
                 max_batch_size=10,
                 set_outputs=frozenset({"protein.uniprot.accession"}),
+                lists=frozenset({"go.reverse.annotations"}),
                 parameters=(
                     Parameter(
                         name="taxon_id",

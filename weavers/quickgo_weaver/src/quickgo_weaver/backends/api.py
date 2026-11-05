@@ -428,15 +428,14 @@ class QuickgoApiBackend(HTTPClientLifecycle, BackendBase):
                             error="QuickGO reverse coverage incomplete before any annotations for this term were retrieved",
                         )
                     else:
+                        annotations = deepcopy(selected)
+                        if coverage["complete"] is not True:  # what the capped pages held
+                            products = Listing(products, total=None, complete=False)
+                            annotations = Listing(annotations, total=None, complete=False)
                         values = {
                             "protein.uniprot.accession": products,
-                            "go.reverse.annotations": deepcopy(selected),
-                            "go.reverse.coverage": {
-                                **coverage,
-                                "query_scope": chunk,
-                                "observed_products": len(products),
-                                "count_scope": "retrieved positive UniProtKB products; source totals count annotations",
-                            },
+                            "go.reverse.annotations": annotations,
+                            "go.reverse.coverage": {**coverage, "query_scope": chunk},
                         }
                         warnings = (
                             ()

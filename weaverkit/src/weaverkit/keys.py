@@ -85,7 +85,7 @@ OUTPUT_KEYS: dict[str, str] = {
 
     "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
     "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
-    "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
+    "go.reverse.coverage": "Bounded reverse annotation query pagination: pages retrieved, cap and why it stopped.",
     "go.term.hierarchy": "Source paths, ancestors, directional replacements and term history.",
     "pathway.reactome.evidence": "Observed Reactome curation, literature and inference assertions.",
     "pathway.reactome.reactions": "Recursive reaction-like event listing: every reaction, its count and source.",
