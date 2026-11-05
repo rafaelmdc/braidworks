@@ -51,6 +51,8 @@ class Listing(list):
             raise ValueError(f"Listing total {total} is smaller than its {n} items")
         elif complete and total != n:
             raise ValueError(f"a complete Listing of {n} items cannot have total {total}")
+        elif not complete and total == n:
+            raise ValueError(f"a partial Listing of {n} items needs a total above {n}")
         self._total = total
         self._complete = bool(complete)
 

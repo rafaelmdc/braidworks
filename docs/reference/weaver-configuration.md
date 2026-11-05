@@ -127,7 +127,7 @@ build_ncbi_weaver(*, db_path: 'str | Path | None' = None, cache_db_path: 'str | 
 ### pdbe_weaver
 
 ```python
-build_pdbe_weaver(*, base_url: 'str' = 'https://www.ebi.ac.uk/pdbe/api', client: 'httpx.AsyncClient | None' = None, limit: 'int' = 25, **_config: 'Any') -> 'BaseWeaver'
+build_pdbe_weaver(*, base_url: 'str' = 'https://www.ebi.ac.uk/pdbe/api', client: 'httpx.AsyncClient | None' = None, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### quickgo_weaver
@@ -139,13 +139,13 @@ build_quickgo_weaver(*, base_url: 'str' = 'https://www.ebi.ac.uk/QuickGO/service
 ### reactome_weaver
 
 ```python
-build_reactome_weaver(*, base_url: 'str' = 'https://reactome.org/ContentService', client: 'httpx.AsyncClient | None' = None, limit: 'int' = 30, max_concurrency: 'int' = 4, **_config: 'Any') -> 'BaseWeaver'
+build_reactome_weaver(*, base_url: 'str' = 'https://reactome.org/ContentService', client: 'httpx.AsyncClient | None' = None, max_concurrency: 'int' = 4, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### string_weaver
 
 ```python
-build_string_weaver(*, base_url: 'str' = 'https://version-12-5.string-db.org/api', client: 'httpx.AsyncClient | None' = None, limit: 'int' = 25, **_config: 'Any') -> 'BaseWeaver'
+build_string_weaver(*, base_url: 'str' = 'https://version-12-5.string-db.org/api', client: 'httpx.AsyncClient | None' = None, **_config: 'Any') -> 'BaseWeaver'
 ```
 
 ### uniprot_weaver

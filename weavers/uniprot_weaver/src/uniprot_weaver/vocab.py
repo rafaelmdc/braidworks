@@ -16,7 +16,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "uniprot"
-WEAVER_VERSION = "0.2.12"
+WEAVER_VERSION = "0.2.13"
 WEAVER_TITLE = "UniProt protein identity, exact sequence/annotation description and ID mapping"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.

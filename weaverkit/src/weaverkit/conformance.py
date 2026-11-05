@@ -245,6 +245,19 @@ async def run_golden(
     for strand in result.strands:
         problems.extend(_size_problems(where, strand))
     sizes = {s.type_id: _known_size(s) for s in result.strands}
+    # A declared .count must equal its list's size (an explicit count is not checked
+    # by the mapper's alias derivation, which only fills a missing one).
+    for list_type, count_type in sorted(cap.totals.items()):
+        if (
+            list_type in got
+            and count_type in got
+            and sizes.get(list_type) is not None
+            and got[count_type] != sizes[list_type]
+        ):
+            problems.append(
+                f"{where}: {count_type!r} = {got[count_type]!r} but {list_type!r} holds "
+                f"{sizes[list_type]} items — the count must be the list's size"
+            )
     for key, want in golden.expect.items():
         base = key.removesuffix(".total")
         if base != key and key not in cap.produces:

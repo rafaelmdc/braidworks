@@ -42,7 +42,8 @@ async def _pathways(weaver, accession):
 async def test_live_tp53_pathways():
     """Drift detector: P04637 (human TP53) participates in many Reactome pathways.
 
-    Structural truth: distinct pathways come back deduped, count matches records, every
+    Structural truth: every distinct pathway comes back (no display cap), count equals
+    the records and the names, the list knows it is complete, every
     record carries an R- stable id, and they're ordered by stable id (deterministic).
     """
     weaver = build_reactome_weaver()
@@ -50,8 +51,12 @@ async def test_live_tp53_pathways():
     skip_if_transient(result)
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
+    strands = {s.type_id: s for s in result.strands}
     records = produced["pathway.reactome.records"]
-    assert produced["pathway.reactome.count"] >= len(records) > 0
+    assert produced["pathway.reactome.count"] == len(records) > 0
+    assert len(produced["pathway.reactome.names"]) == len(records)
+    names = strands["pathway.reactome.names"]
+    assert (names.total, names.complete) == (len(records), True)
     assert all(r["st_id"].startswith("R-") for r in records)
     assert [r["st_id"] for r in records] == sorted(r["st_id"] for r in records)
     # The fan dimension: the full distinct stId set, deduped + ordered, matching count.

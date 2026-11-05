@@ -244,3 +244,11 @@ async def test_lookup_batch_is_bounded_concurrent_and_keeps_query_order():
             assert record.error and not record.found
         else:
             assert record.found and record.values["pathway.reactome.id"] == ["R-HSA-" + accession]
+
+
+async def test_unnamed_pathway_still_listed_so_count_matches_names():
+    rows = [_pw("R-HSA-100", "Alpha"), {**_pw("R-HSA-200", "Beta"), "displayName": None}]
+    v = (await _one(_backend(rows), "P04637")).values
+    # every pathway is in names (an unnamed one by its stable id), so count == len(names)
+    assert v["pathway.reactome.names"] == ["Alpha", "R-HSA-200"]
+    assert v["pathway.reactome.count"] == len(v["pathway.reactome.names"]) == 2

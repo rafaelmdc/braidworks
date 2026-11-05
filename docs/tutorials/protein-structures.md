@@ -38,10 +38,10 @@ accession and returns its structure listing. The `--only` option keeps this less
 route within those two sources, even if your environment contains other weavers.
 
 Look for a protein name, a list of PDB IDs and a total count. The APIs change, so
-this lesson does not promise specific structure IDs or counts. You may see a count
-larger than the displayed list: PDBe's display list is capped, while the count reports
-the distinct structure total. A warning about selecting one `pdb.id` describes the
-representative used for downstream lookup; it does not reduce that reported total.
+this lesson does not promise specific structure IDs or counts. The list holds every
+distinct structure PDBe returned, and the count is its size; long lists are shortened
+only on screen. A warning about selecting one `pdb.id` describes the representative
+used for downstream lookup; it does not shorten the list.
 
 If the command fails, inspect the diagnostic before interpreting the biology. Check
 that both sources are installed and reachable. A no-match or technical error does not

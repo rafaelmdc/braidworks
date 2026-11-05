@@ -37,7 +37,8 @@ async def _structures(weaver, accession):
 async def test_live_tp53_has_structures():
     """Drift detector: P04637 (human TP53) has many PDB structures, deduped + ordered.
 
-    Structural truth: distinct PDB ids come back, count >= len(ids) (ids are the top N),
+    Structural truth: every distinct PDB id comes back (TP53 has far more than the old
+    25-item display cap), count == len(ids) and the list knows it is complete,
     every record carries a 4-char pdb_id, and they're ordered best-first by coverage.
     Confirms the live PDBe JSON still maps to our leaves.
     """
@@ -47,7 +48,9 @@ async def test_live_tp53_has_structures():
     assert result.status is WeaveStatus.OK
     produced = {s.type_id: s.value for s in result.strands}
     ids, recs = produced["structure.pdb.ids"], produced["structure.pdb.records"]
-    assert produced["structure.pdb.count"] >= len(ids) > 0
+    assert produced["structure.pdb.count"] == len(ids) == len(recs) > 25
+    sized = {s.type_id: s for s in result.strands}["structure.pdb.ids"]
+    assert (sized.total, sized.complete) == (len(ids), True)
     assert all(len(r["pdb_id"]) == 4 for r in recs)
     covs = [r.get("coverage") or 0.0 for r in recs]
     assert covs == sorted(covs, reverse=True)  # best coverage first

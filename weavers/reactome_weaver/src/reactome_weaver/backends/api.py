@@ -83,7 +83,8 @@ def _extract(rows: list[dict[str, Any]]) -> dict[str, Any]:
         # The fan dimension (set_outputs): every distinct pathway stId, so a caller can
         # fan out one child per pathway; the executor's max_expansion bounds any runaway.
         "pathway.reactome.id": [r["st_id"] for r in records],
-        "pathway.reactome.names": [r["name"] for r in records if r["name"]],
+        # One name per pathway (its stable id when unnamed), so count == len(names).
+        "pathway.reactome.names": [r["name"] or r["st_id"] for r in records],
         "pathway.reactome.count": len(by_id),
         "pathway.reactome.records": records,
     }

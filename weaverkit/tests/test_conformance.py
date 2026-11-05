@@ -350,3 +350,34 @@ def test_lists_flow_into_vocab_and_drift_is_caught():
     assert manifest.capability(cap.id).lists == frozenset({first})
     assert check_manifest(manifest, spec) == []
     assert any("lists" in p for p in check_manifest(manifest, _spec()))
+
+
+async def test_golden_flags_count_that_disagrees_with_its_list():
+    import dataclasses as dc
+
+    from braidworks.core.result import WeaveResult, WeaveStatus
+    from braidworks.core.strand import Strand
+
+    spec = _spec()
+    cap = spec.capabilities[0]
+    outs = [o for g in cap.groups for o in g.outputs]
+    list_type, count_type = outs[0], outs[1]
+    spec = dc.replace(
+        spec,
+        capabilities=(dc.replace(cap, totals={list_type: count_type}), *spec.capabilities[1:]),
+        golden=(dc.replace(spec.golden[0], capability=cap.id, expect={list_type: ["a", "b"]}),),
+    )
+
+    class _Fake(ConformingFakeWeaver):
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend):
+            return WeaveResult(
+                capability_id=capability_id,
+                weaver_version=self.MANIFEST.version,
+                backend_used=backend,
+                computed_groups=frozenset({"traits.core"}),
+                status=WeaveStatus.OK,
+                strands=(Strand(list_type, ["a", "b"], total=2), Strand(count_type, 5)),
+            )
+
+    problems = await check_golden(_Fake(), spec, backend="local")
+    assert any(count_type in p and "5" in p and "2" in p for p in problems)

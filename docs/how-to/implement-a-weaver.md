@@ -105,9 +105,10 @@ for a small offline implementation. Preserve these behaviors:
   the project's fetch convention; 5xx/network failures are errors. Use
   `is_not_found_status` and preserve source-specific interpretation where needed.
   Structural faults use the documented configuration/capability/backend exceptions.
-- Order candidates deterministically with an identifier tiebreak. Deduplicate, sort
-  and cap display lists while reporting true totals. Expandable set keys retain the
-  full distinct ordered set, not the display cap. Preserve review requirements for
+- Order candidates deterministically with an identifier tiebreak. Deduplicate and sort
+  lists and return all of them, never cut for display; declare them in the spec's
+  `lists`. When retrieval itself stops early, return a `Listing` that says so
+  (`Listing(items, total=n)` or `Listing(items, total=None, complete=False)`). Preserve review requirements for
   ambiguous or low-confidence resolution.
 - Use upstream bulk endpoints in chunks rather than one request per input. For
   single-ID APIs, use bounded concurrent work. Map responses back by stable identity

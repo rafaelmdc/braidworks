@@ -100,8 +100,8 @@ async def main():
 asyncio.run(main())
 ```
 
-The displayed records are capped at five; the count represents all distinct
-structures observed in that response. Chain rows in the records retain source
+The records list every distinct structure observed in that response, and the count
+is their number. Chain rows in the records retain source
 entity/range evidence. Resolution and sequence coverage are useful ranking fields,
 not a complete structure-quality assessment. This `list_structures` request does
 not query the optional quality, assembly or ligand groups on `describe_structure`.

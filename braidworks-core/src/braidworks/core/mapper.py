@@ -72,6 +72,22 @@ def _derived_counts(
     return derived
 
 
+def _count_mismatches(strands: list[Strand], capability: Capability) -> tuple[str, ...]:
+    """Warn when a backend's own ``.count`` disagrees with its list's known size."""
+    by_type = {s.type_id: s for s in strands}
+    out = []
+    for list_type, count_type in sorted(capability.totals.items()):
+        listed, counted = by_type.get(list_type), by_type.get(count_type)
+        if listed is None or counted is None or listed.total is None:
+            continue
+        if counted.value != listed.total:
+            out.append(
+                f"{count_type} = {counted.value!r} but {list_type} holds {listed.total} "
+                "items; the count should be the list's size"
+            )
+    return tuple(out)
+
+
 def map_lookup(
     record: LookupRecord,
     *,
@@ -98,6 +114,7 @@ def map_lookup(
             if type_id in allowed and value is not None:
                 strands.append(_strand(type_id, value, capability, provenance=provenance))
         strands += _derived_counts(strands, capability, allowed, provenance=provenance)
+    mismatches = _count_mismatches(strands, capability)
 
     return WeaveResult(
         capability_id=capability.id,
@@ -111,7 +128,7 @@ def map_lookup(
         status=status,
         strands=tuple(strands),
         errors=errors,
-        warnings=record.warnings,
+        warnings=record.warnings + mismatches,
     )
 
 
@@ -183,5 +200,6 @@ def map_resolver(
         strands=tuple(strands),
         candidates=candidates,
         errors=errors,
+        warnings=_count_mismatches(strands, capability),
         requires_review=requires_review,
     )
