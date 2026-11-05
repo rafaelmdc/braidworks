@@ -198,7 +198,6 @@ class AgoraLocalBackend(BackendBase):
                                 "genome.accession": ids,
                                 "microbe.agora.genome_listing": {
                                     "source_associations": associations,
-                                    "observed_count": len(ids),
                                     "release": release,
                                     "scope": "exact crosswalk model/strain assembly associations",
                                 },
@@ -209,11 +208,10 @@ class AgoraLocalBackend(BackendBase):
                             values = {
                                 "reaction.vmh.id": ids,
                                 "microbe.agora.reaction_listing": {
-                                    "records": rows[:10],
-                                    "observed_count": len(ids),
+                                    "records": rows,
                                     "release": metadata.get("release"),
                                     "source_content_hash": metadata.get("content_hash"),
-                                    "scope": "processed source model repertoire; full ID set, display capped at ten",
+                                    "scope": "processed source model repertoire; every reaction",
                                 },
                             }
                     results.append(LookupRecord(query=query, found=True, values=values))
@@ -270,10 +268,8 @@ class AgoraLocalBackend(BackendBase):
                             {f"{dataset.CROSSWALK_RELEASE}:{r['reconstruction_id']}" for r in recs}
                         )
                         values["microbe.agora.reconstruction_id"] = ids
-                        values["microbe.agora.reconstructions"] = recs[:10]
+                        values["microbe.agora.reconstructions"] = recs
                         values["microbe.agora.coverage"] = {
-                            "observed_count": len(ids),
-                            "display_count": min(10, len(recs)),
                             "scope": "bundled crosswalk",
                             "release": dataset.CROSSWALK_RELEASE,
                         }
