@@ -34,16 +34,22 @@ blocks (per-query knobs — filters/sort/thresholds — `name`, `type` ∈
 `string|int|float|bool`, optional `enum`/`default`/`description`; surfaced as
 `--param` in the CLI and threaded to the backend's `fetch` as `params`).
 
-**`totals`** (optional, per capability) — `{ "<list type>" = "<count type>" }`
-for a list the backend caps for display while a produced count reports its true
-size, e.g. `totals = { "structure.pdb.ids" = "structure.pdb.count" }`. Both must be
-outputs of the capability, and the count must be in the list's output group (or in
-`always_computed_groups`) so it is present whenever the list is. Declare a pair only
-when the count is the full size *of that list*. It maps to `Capability.totals`;
-results then show "25 of 321" and add a `<list>.total` column. Every produced
-`*.count` must be declared here (`verify` rejects one that is not): `.count` always
-means a list's total. Name other counts for what they count, e.g.
+**`lists`** (optional, per capability) — the produced outputs that are lists, e.g.
+`lists = ["pathway.reactome.names"]`. Maps to `Capability.lists`. They read back as a
+`braidworks.Listing` (a `list` with `.total` and `.complete`), complete unless the
+backend returned a partial `Listing`; exports add a `<list>.total` column. `set_outputs`
+and `totals` keys count as lists without being repeated here.
+
+**`totals`** (optional, deprecated) — `{ "<list type>" = "<count type>" }`, e.g.
+`totals = { "structure.pdb.ids" = "structure.pdb.count" }`. Keeps an existing `.count`
+output working as an alias: core derives the count from the list's size (omitted when
+the size is unknown), so the backend no longer writes it. Both must be outputs of the
+capability, in one output group (or the count in `always_computed_groups`). Every
+produced `*.count` must be declared here (`verify` rejects one that is not). Don't add
+new ones; name other counts for what they count, e.g.
 `microbe.disease.experiment_count`.
+
+A golden example can check a list's true size with `"<list>.total" = N` in `expect`.
 
 **`[bulk]`** (optional) — `backend` (must be one of `backends`), `archive_url`,
 `filename`: triggers the generated `setup.py` + `<db>-ensure` CLI for a multi-GB

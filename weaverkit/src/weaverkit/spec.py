@@ -112,6 +112,8 @@ class CapabilitySpec:
     parameters: tuple[ParameterSpec, ...] = ()
     # Capped lists -> the produced count holding their true size (Capability.totals).
     totals: dict[str, str] = field(default_factory=dict)
+    # Produced outputs that are lists; they read back as a Listing (Capability.lists).
+    lists: tuple[str, ...] = ()
 
     @property
     def produces(self) -> tuple[str, ...]:
@@ -138,6 +140,7 @@ class CapabilitySpec:
                 consumes_any=bool(data.get("consumes_any", False)),
                 parameters=tuple(ParameterSpec.from_dict(p) for p in data.get("parameter", ())),
                 totals={str(k): str(v) for k, v in data.get("totals", {}).items()},
+                lists=tuple(str(x) for x in data.get("lists", ())),
             )
         except KeyError as exc:
             raise SpecError(f"capability missing required key: {exc}") from None
@@ -435,6 +438,12 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                     f"{where}: set_outputs lists {key!r}, which this capability does not "
                     f"produce ({sorted(produced)}) — set_outputs must be a subset of produces"
                 )
+        for key in cap.lists:
+            if key not in produced:
+                problems.append(
+                    f"{where}: lists names {key!r}, which this capability does not "
+                    f"produce ({sorted(produced)}) — lists must be a subset of produces"
+                )
 
         # totals: a capped list and the count of its true size must both be produced,
         # and the count must be computed whenever the list is (same group, or a group
@@ -466,7 +475,7 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
             if type_id.endswith(".count") and type_id not in declared_counts:
                 problems.append(
                     f"{where}: {type_id!r} is a .count but no list declares it as its total "
-                    "— add `totals = { \"<list>\" = \"" + type_id + "\" }`, or rename it to say "
+                    '— add `totals = { "<list>" = "' + type_id + '" }`, or rename it to say '
                     "what it counts (e.g. '<thing>.experiment_count')"
                 )
 
@@ -518,7 +527,9 @@ def validate_spec(spec: WeaverSpec) -> list[str]:
                     f"{sorted(consumes)}"
                 )
         for k in gold.expect:
-            if k not in produces:
+            # ``<list>.total`` checks a produced list's true size, not a separate output.
+            base = k.removesuffix(".total")
+            if k not in produces and base not in produces:
                 problems.append(
                     f"{label}: expect key {k!r} is not in capability {cap.id!r} produces "
                     f"{sorted(produces)}"

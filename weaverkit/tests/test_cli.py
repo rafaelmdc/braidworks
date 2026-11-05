@@ -314,7 +314,9 @@ def _refs_registry():
                         id="c",
                         consumes=frozenset({"protein.query"}),
                         produces=frozenset({"protein.uniprot.accession"}),
-                        output_groups=(OutputGroup(id="g", outputs=frozenset({"protein.uniprot.accession"})),),
+                        output_groups=(
+                            OutputGroup(id="g", outputs=frozenset({"protein.uniprot.accession"})),
+                        ),
                         backends=("api",),
                     ),
                 ),

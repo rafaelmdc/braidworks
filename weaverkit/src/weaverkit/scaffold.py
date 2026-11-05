@@ -183,6 +183,9 @@ def _vocab_source(spec: WeaverSpec) -> str:
         # Capped lists and the produced count that holds their true size.
         if cap.totals:
             lines.append(f"                totals={dict(sorted(cap.totals.items()))!r},")
+        # Produced outputs that are lists (read back as a Listing that knows its size).
+        if cap.lists:
+            lines.append(f"                lists={_frozenset_literal(cap.lists)},")
         # Per-query knobs (filters/sort/thresholds) the caller may pass at run time.
         if cap.parameters:
             lines.append("                parameters=(")

@@ -384,13 +384,25 @@ the canonical `AF-{acc}-F1` id with a lowest-id fallback (`_pick`). Rule: sort b
 same representative. Document any surprise (e.g. a bare cross-species symbol resolves
 to the best-annotated *ortholog*, not necessarily human).
 
-### Dedup → order → cap, but count the true total
+### Dedup → order → return it all, and say when retrieval stopped early
 
 The house shape for "list" outputs (STRING partners, QuickGO terms, PDBe structures,
 Reactome pathways): dedup to distinct entities by a stable id, sort by a deterministic
-total order, expose the **top-N** list **and** a true total `count`, plus a full
-records blob. Cap the list, but report the real total so a consumer knows it was
-truncated — never silently drop.
+total order, and return **everything you retrieved**. Never slice for display:
+presenters shorten long lists on screen. Declare the list in the spec's `lists` so it
+reads back as a `Listing`. When retrieval itself is bounded (a page cap, a request
+limit) and may have cut the list, say so with the value itself:
+
+```python
+from braidworks import Listing
+
+values["structure.pdb.ids"] = Listing(ids, total=hit_count)          # source reports N
+values["go.term"] = Listing(terms, total=None, complete=False)       # stopped early
+values["pathway.reactome.names"] = names                             # the whole list
+```
+
+Clients show "25 of 321" / "25+". Never silently drop items, and never put list
+sizes in a `coverage` blob — the `Listing` is their one home.
 
 ### Bounded pagination
 
