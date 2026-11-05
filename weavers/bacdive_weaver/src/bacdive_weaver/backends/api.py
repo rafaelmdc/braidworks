@@ -318,8 +318,6 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
                 values={
                     "microbe.bacdive.strain_id": ids,
                     "microbe.bacdive.strain_coverage": {
-                        "observed_strains": len(ids),
-                        "complete": True,
                         "input": value,
                         "source_endpoint": endpoint,
                         "scope": "exact provider identifier listing; multiplicity retained",
@@ -365,9 +363,7 @@ class BacdiveApiBackend(HTTPClientLifecycle, BackendBase):
                 values={
                     "microbe.bacdive.strain_id": ids,
                     "microbe.bacdive.strain_coverage": {
-                        "observed_strains": len(ids),
-                        "complete": True,
-                        "scope": "complete observed provider binomial listing; type and non-type strains",
+                        "scope": "observed provider binomial listing; type and non-type strains",
                     },
                 },
             )

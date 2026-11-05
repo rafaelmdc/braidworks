@@ -107,7 +107,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "ncbi.taxon.history": "Requested/current taxid, merge chain, deletion and dump history availability.",
     "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
     "microbe.bacdive.identifier_evidence": "Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions.",
-    "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
+    "microbe.bacdive.strain_coverage": "Strain listing scope: input, source endpoint and what the listing covers.",
     "gtdb.genome.representative": "Selected species representative accession with source/release provenance; not necessarily the input strain.",
     "microbe.abundance.run_listing": "Acquired GMrepo runs and exact metadata filters with retained-scope coverage.",
     "microbe.abundance.run": "One acquired GMrepo sequencing run, metadata and taxonomic profile evidence.",

@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "bacdive"
-WEAVER_VERSION = "0.1.15"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "BacDive type-strain phenotypes (scientific name -> microbe traits)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -33,7 +33,7 @@ TYPE_DESCRIPTIONS = {
     "genome.accession": "NCBI genome assembly accession (GCF_/GCA_) — the genome join key.",
     "microbe.bacdive.identifier_evidence": "Raw collection/genome reference evidence and unparsed tokens; no guessed aliases or accession versions.",
     "microbe.bacdive.strain": "One exact BacDive strain's taxonomy, source traits and observed collection/genome references.",
-    "microbe.bacdive.strain_coverage": "Observed full binomial strain listing scope and count.",
+    "microbe.bacdive.strain_coverage": "Strain listing scope: input, source endpoint and what the listing covers.",
     "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
     "microbe.trait.cell_shape": "This microbe's cell shape — rod, coccus, …",
     "microbe.trait.gram_stain": "This microbe's Gram stain — positive or negative.",
