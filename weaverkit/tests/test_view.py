@@ -57,7 +57,9 @@ def _weaver(weaver_id, cap_id, consumes, produces, backends, set_outputs=()):
 def registry():
     reg = BraidRegistry()
     reg.register(_weaver("alpha", "a1", {"organism.name"}, {"ncbi.taxon.id"}, ("local",)))
-    reg.register(_weaver("beta", "b1", {"ncbi.taxon.id"}, {"microbe.trait.x"}, ("local", "api")))
+    reg.register(
+        _weaver("beta", "b1", {"ncbi.taxon.id"}, {"microbe.trait.x"}, ("local", "api"))
+    )
     return reg
 
 
@@ -114,11 +116,8 @@ def test_network_marks_set_output_fan_edges():
     reg = BraidRegistry()
     reg.register(
         _weaver(
-            "fanw",
-            "f1",
-            {"protein.uniprot.accession"},
-            {"pathway.reactome.id"},
-            ("api",),
+            "fanw", "f1",
+            {"protein.uniprot.accession"}, {"pathway.reactome.id"}, ("api",),
             set_outputs={"pathway.reactome.id"},
         )
     )
@@ -143,9 +142,7 @@ def test_network_weaver_carries_title_and_reference():
         version="0.1.0",
         title="A demo source",
         provenance=Provenance(
-            source_url="https://x.org",
-            license="CC-BY-4.0",
-            citation="https://doi/x",
+            source_url="https://x.org", license="CC-BY-4.0", citation="https://doi/x",
             attribution="X Group",
         ),
         capabilities=(
@@ -246,10 +243,7 @@ def test_run_view_single_level_fan():
 def test_run_view_enrichment_after_fork_is_per_leaf():
     from weaverkit.view import build_run_views
 
-    comp = [
-        _ok_step("reactome.pathways", [PW]),
-        _ok_step("reactome.detail", ["pathway.reactome.names"]),
-    ]
+    comp = [_ok_step("reactome.pathways", [PW]), _ok_step("reactome.detail", ["pathway.reactome.names"])]
     result = {
         "resolved": [
             _leaf("e0#0", "e0", {ACC: "P1", PW: "R-1", "pathway.reactome.names": "Alpha"}, comp),
@@ -259,9 +253,7 @@ def test_run_view_enrichment_after_fork_is_per_leaf():
     views, _ = build_run_views(result, BraidRegistry())
     v = views[0]
     # the post-fork enrichment op is materialized per leaf (one branch each)
-    detail_ops = [
-        n for n in v["nodes"] if n["kind"] == "op" and n["capability"] == "reactome.detail"
-    ]
+    detail_ops = [n for n in v["nodes"] if n["kind"] == "op" and n["capability"] == "reactome.detail"]
     assert len(detail_ops) == 2
     assert {n["id"] for n in detail_ops} == {"run:e0#0:op:1", "run:e0#1:op:1"}
 
@@ -294,11 +286,7 @@ def test_run_view_no_fan_single_leaf():
     from weaverkit.view import build_run_views
 
     # a non-fanned run: one leaf, no parent — a linear trace, no fan edges.
-    result = {
-        "resolved": [
-            _leaf("e0", None, {ACC: "P1", PW: "R-1"}, [_ok_step("reactome.pathways", [PW])])
-        ]
-    }
+    result = {"resolved": [_leaf("e0", None, {ACC: "P1", PW: "R-1"}, [_ok_step("reactome.pathways", [PW])])]}
     views, _ = build_run_views(result, BraidRegistry())
     assert len(views) == 1 and views[0]["leaves"] == 1
     assert not any(e.get("fan") for e in views[0]["edges"])

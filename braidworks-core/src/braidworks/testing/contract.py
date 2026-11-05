@@ -73,7 +73,8 @@ class WeaverOrderContractTests:
         samples = self.sample_strand_sets()
         assert len(samples) >= 5, "provide at least 5 sample strand sets"
         fingerprints = {
-            tuple(sorted((t, _hashable(s.value)) for t, s in ss._strands.items())) for ss in samples
+            tuple(sorted((t, _hashable(s.value)) for t, s in ss._strands.items()))
+            for ss in samples
         }
         assert len(fingerprints) == len(samples), "sample inputs must be distinct"
 
@@ -101,7 +102,9 @@ class WeaverOrderContractTests:
         samples = self.sample_strand_sets()
         forward = await self._batch(weaver, samples)
         reverse = await self._batch(weaver, list(reversed(samples)))
-        assert [_signature(r) for r in reverse] == [_signature(r) for r in reversed(forward)]
+        assert [_signature(r) for r in reverse] == [
+            _signature(r) for r in reversed(forward)
+        ]
 
 
 class CacheFingerprintTests:

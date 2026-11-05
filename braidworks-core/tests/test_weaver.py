@@ -74,9 +74,7 @@ def test_missing_backend_fingerprint_is_abstract():
     class NoVersionWeaver(BaseWeaver):
         MANIFEST = manifest(resolve_name_capability())
 
-        async def execute(
-            self, capability_id, strand_set, *, requested_outputs, backend, params=None
-        ):
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
             return _ok("x")
 
     with pytest.raises(TypeError):

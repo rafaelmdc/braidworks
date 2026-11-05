@@ -39,6 +39,7 @@ def test_complete_describes_plain_count():
         ([1], {"total": 2, "complete": True}),
         ([1], {"total": None, "complete": True}),
         ([1], {"total": None}),
+        ([1, 2], {"total": 2, "complete": False}),  # partial, yet holds all of it
     ],
 )
 def test_rejects_inconsistent(items, kwargs):

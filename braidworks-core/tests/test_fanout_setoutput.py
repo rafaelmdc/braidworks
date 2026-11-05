@@ -66,11 +66,12 @@ def _one_step(output_types):
         output_types=frozenset(output_types),
         primary_backend="local",
     )
-    return Braid(steps=(inv,), from_types=frozenset({INPUT}), to_types=frozenset(output_types))
+    return Braid(
+        steps=(inv,), from_types=frozenset({INPUT}), to_types=frozenset(output_types)
+    )
 
 
 # --- TOP (default): collapse a set output to a representative -------------------
-
 
 async def test_top_collapses_set_output_in_place():
     cap = _set_cap({PATHWAY}, {PATHWAY})
@@ -87,17 +88,17 @@ async def test_set_output_same_as_consumed_key_forks_on_produced_list():
     # the produced list must win over the input scalar so it can fan (regression). The
     # target is a *different* output ("n") so the step isn't skipped as already-satisfied.
     cap = _set_cap({INPUT, "n"}, {INPUT}, consumes=(INPUT,))
-    _reg, ex = _setup(lambda ss, b, r: _ok(Strand(INPUT, ["c1", "c2", "c3"]), Strand("n", 3)), cap)
-    res = await ex.execute(
-        _one_step({INPUT, "n"}), _inputs("parent"), expand_policy=ExpandPolicy.all()
+    _reg, ex = _setup(
+        lambda ss, b, r: _ok(Strand(INPUT, ["c1", "c2", "c3"]), Strand("n", 3)), cap
     )
+    res = await ex.execute(_one_step({INPUT, "n"}), _inputs("parent"),
+                           expand_policy=ExpandPolicy.all())
     assert len(res.resolved) == 3
     assert {leaf.get(INPUT).value for leaf in res.resolved} == {"c1", "c2", "c3"}
     assert all(leaf.parent_id == "e0" for leaf in res.resolved)
 
 
 # --- ALL / TOP_K: fork per value -----------------------------------------------
-
 
 async def test_all_forks_one_child_per_value():
     cap = _set_cap({PATHWAY}, {PATHWAY})
@@ -141,15 +142,12 @@ async def test_single_value_set_output_does_not_fork():
 
 # --- cross-product of two set dimensions ---------------------------------------
 
-
 async def test_two_set_dimensions_cross_product():
     cap = _set_cap({PATHWAY, PDB}, {PATHWAY, PDB})
     _reg, ex = _setup(
         lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"]), Strand(PDB, ["1ABC", "2XYZ"])), cap
     )
-    res = await ex.execute(
-        _one_step({PATHWAY, PDB}), _inputs("P1"), expand_policy=ExpandPolicy.all()
-    )
+    res = await ex.execute(_one_step({PATHWAY, PDB}), _inputs("P1"), expand_policy=ExpandPolicy.all())
     assert len(res.resolved) == 4  # 2 × 2
     combos = sorted((leaf.get(PATHWAY).value, leaf.get(PDB).value) for leaf in res.resolved)
     assert combos == [("R-1", "1ABC"), ("R-1", "2XYZ"), ("R-2", "1ABC"), ("R-2", "2XYZ")]
@@ -172,15 +170,9 @@ async def test_mixed_policy_per_dimension():
 
 # --- forked children continue through later waves ------------------------------
 
-
 async def test_set_fork_children_continue_to_next_wave():
     reg = BraidRegistry()
-    reg.register(
-        ScriptedWeaver(
-            lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])),
-            capability=_set_cap({PATHWAY}, {PATHWAY}),
-        )
-    )
+    reg.register(ScriptedWeaver(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])), capability=_set_cap({PATHWAY}, {PATHWAY})))
 
     def detail(ss, backend, requested):
         pid = ss.get(PATHWAY).value
@@ -201,17 +193,12 @@ async def test_set_fork_children_continue_to_next_wave():
         )
     )
     step0 = CapabilityInvocation(
-        weaver_id="ncbi",
-        capability_id=CAP,
-        input_types=frozenset({INPUT}),
-        output_types=frozenset({PATHWAY}),
-        primary_backend="local",
+        weaver_id="ncbi", capability_id=CAP,
+        input_types=frozenset({INPUT}), output_types=frozenset({PATHWAY}), primary_backend="local",
     )
     step1 = CapabilityInvocation(
-        weaver_id="detail",
-        capability_id="reactome.detail",
-        input_types=frozenset({PATHWAY}),
-        output_types=frozenset({"pathway.reactome.names"}),
+        weaver_id="detail", capability_id="reactome.detail",
+        input_types=frozenset({PATHWAY}), output_types=frozenset({"pathway.reactome.names"}),
         primary_backend="local",
     )
     braid = Braid(
@@ -229,7 +216,6 @@ async def test_set_fork_children_continue_to_next_wave():
 
 # --- guardrail -----------------------------------------------------------------
 
-
 async def test_max_expansion_caps_set_fork():
     cap = _set_cap({PATHWAY}, {PATHWAY})
     _reg, ex = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, [f"R-{i}" for i in range(6)])), cap)
@@ -242,11 +228,8 @@ async def test_max_expansion_caps_set_fork():
 async def test_cross_product_is_bounded_before_cloning(monkeypatch):
     cap = _set_cap({PATHWAY, PDB}, {PATHWAY, PDB})
     _, executor = _setup(
-        lambda ss, b, r: _ok(
-            Strand(PATHWAY, [f"R-{i}" for i in range(20)]),
-            Strand(PDB, [f"P-{i}" for i in range(20)]),
-        ),
-        cap,
+        lambda ss, b, r: _ok(Strand(PATHWAY, [f"R-{i}" for i in range(20)]),
+                            Strand(PDB, [f"P-{i}" for i in range(20)])), cap,
     )
     clones = []
     original = StrandSet.clone
@@ -258,9 +241,8 @@ async def test_cross_product_is_bounded_before_cloning(monkeypatch):
     monkeypatch.setattr(StrandSet, "clone", counting_clone)
     inputs = _inputs("P1")
     inputs[0].source_row = 1
-    result = await executor.execute(
-        _one_step({PATHWAY, PDB}), inputs, expand_policy=ExpandPolicy.all(), max_expansion=10
-    )
+    result = await executor.execute(_one_step({PATHWAY, PDB}), inputs,
+                                    expand_policy=ExpandPolicy.all(), max_expansion=10)
     assert len(clones) <= 10
     assert len(result.resolved) == 10
     restored = ExecutionResult.from_json(json.loads(json.dumps(result.to_json())))
@@ -268,9 +250,8 @@ async def test_cross_product_is_bounded_before_cloning(monkeypatch):
     assert (truncation.requested, truncation.kept, truncation.omitted) == (400, 10, 390)
     assert truncation.source_row == 1 and truncation.entity_id == "e0"
     assert truncation.capability_id == CAP
-    assert all(
-        any("expansion limit" in warning for warning in leaf.warnings) for leaf in result.resolved
-    )
+    assert all(any("expansion limit" in warning for warning in leaf.warnings)
+               for leaf in result.resolved)
     assert [(leaf.get(PATHWAY).value, leaf.get(PDB).value) for leaf in result.resolved] == [
         ("R-0", f"P-{i}") for i in range(10)
     ]
@@ -279,18 +260,12 @@ async def test_cross_product_is_bounded_before_cloning(monkeypatch):
 async def test_expansion_budget_is_shared_across_input_chunks():
     cap = _set_cap({PATHWAY}, {PATHWAY})
     _, executor = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2", "R-3"])), cap)
-    result = await executor.execute(
-        _one_step({PATHWAY}),
-        _inputs("P1", "P2", "P3"),
-        expand_policy=ExpandPolicy.all(),
-        max_expansion=5,
-        chunk_size=1,
-    )
+    result = await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2", "P3"),
+                                    expand_policy=ExpandPolicy.all(), max_expansion=5, chunk_size=1)
     assert len(result.resolved) == 5
     assert {leaf.parent_id for leaf in result.resolved} == {"e0", "e1", "e2"}
     assert [(item.entity_id, item.kept, item.omitted) for item in result.truncations] == [
-        ("e1", 1, 2),
-        ("e2", 1, 2),
+        ("e1", 1, 2), ("e2", 1, 2),
     ]
 
 
@@ -299,27 +274,21 @@ async def test_invalid_expansion_budget_rejected_before_io(limit):
     cap = _set_cap({PATHWAY}, {PATHWAY})
     _registry, executor = _setup(lambda *_: pytest.fail("unexpected backend call"), cap)
     with pytest.raises(ValueError, match="max_expansion"):
-        await executor.execute(
-            _one_step({PATHWAY}),
-            _inputs("P1", "P2"),
-            expand_policy=ExpandPolicy.all(),
-            max_expansion=limit,
-        )
+        await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2"),
+                               expand_policy=ExpandPolicy.all(), max_expansion=limit)
 
 
 async def test_input_batch_larger_than_cap_preserves_roots_without_growing():
     cap = _set_cap({PATHWAY}, {PATHWAY})
     _, executor = _setup(lambda ss, b, r: _ok(Strand(PATHWAY, ["R-1", "R-2"])), cap)
-    result = await executor.execute(
-        _one_step({PATHWAY}), _inputs("P1", "P2"), expand_policy=ExpandPolicy.all(), max_expansion=1
-    )
+    result = await executor.execute(_one_step({PATHWAY}), _inputs("P1", "P2"),
+                                    expand_policy=ExpandPolicy.all(), max_expansion=1)
     assert len(result.resolved) == 2
     assert {ss.parent_id for ss in result.resolved} == {"e0", "e1"}
     assert len(result.truncations) == 2
 
 
 # --- declaration validity + serialization --------------------------------------
-
 
 def test_set_outputs_must_subset_produces():
     import pytest

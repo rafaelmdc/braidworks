@@ -10,14 +10,7 @@ from helpers import resolve_name_capability
 CAP = resolve_name_capability()
 
 
-def _key(
-    strand_set,
-    *,
-    weaver_id="ncbi",
-    weaver_version="1.0.0",
-    backend="local",
-    backend_fingerprint="ds-1",
-):
+def _key(strand_set, *, weaver_id="ncbi", weaver_version="1.0.0", backend="local", backend_fingerprint="ds-1"):
     return compute_cache_key(
         CAP,
         strand_set,
@@ -39,12 +32,8 @@ def _result(computed_groups, status=WeaveStatus.OK):
 
 
 def test_same_value_different_provenance_same_fingerprint():
-    a = StrandSet.from_strands(
-        "e1", [Strand("organism.name", "Homo sapiens", provenance=("src_a",))]
-    )
-    b = StrandSet.from_strands(
-        "e2", [Strand("organism.name", "Homo sapiens", provenance=("src_b",))]
-    )
+    a = StrandSet.from_strands("e1", [Strand("organism.name", "Homo sapiens", provenance=("src_a",))])
+    b = StrandSet.from_strands("e2", [Strand("organism.name", "Homo sapiens", provenance=("src_b",))])
     assert _key(a).input_fingerprint == _key(b).input_fingerprint
 
 

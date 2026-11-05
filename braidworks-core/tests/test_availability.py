@@ -130,13 +130,13 @@ def test_enabled_alternative_wins_without_diagnostics():
     assert Braider(reg).plan(frozenset({"a"}), frozenset({"c"})).steps[0].weaver_id == "other"
 
 
-@pytest.mark.parametrize("token", ["last", "source.last"])
+@pytest.mark.parametrize('token', ['last', 'source.last'])
 def test_disabled_explicit_traversal_keeps_backend_context(token):
     from braidworks.core.traverse import resolve_traversal
 
     weaver = catalogue()
     full = weaver.declared_manifest()
-    last = replace(full.capabilities[1], set_outputs=frozenset({"c"}))
+    last = replace(full.capabilities[1], set_outputs=frozenset({'c'}))
     weaver.declared_manifest = lambda: replace(full, capabilities=(full.capabilities[0], last))
-    with pytest.raises(NoPlanError, match="not enabled"):
+    with pytest.raises(NoPlanError, match='not enabled'):
         resolve_traversal(registry(weaver), token)

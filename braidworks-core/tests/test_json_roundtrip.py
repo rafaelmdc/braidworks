@@ -22,9 +22,7 @@ def _json_stable(obj) -> str:
 
 
 def test_strand_roundtrip():
-    s = Strand(
-        "organism.name", "Homo sapiens", confidence=0.85, provenance=("ncbi",), metadata={"k": 1}
-    )
+    s = Strand("organism.name", "Homo sapiens", confidence=0.85, provenance=("ncbi",), metadata={"k": 1})
     again = Strand.from_json(s.to_json())
     assert again == s
     assert again.provenance == ("ncbi",)
@@ -44,9 +42,7 @@ def test_strandset_roundtrip():
     ss.source_row = 7
     ss.warnings.append("w")
     ss.errors.append("err")
-    ss.completion.append(
-        StepOutcome("bacdive.traits", "local", "ok", ("microbe.trait.gram_stain",))
-    )
+    ss.completion.append(StepOutcome("bacdive.traits", "local", "ok", ("microbe.trait.gram_stain",)))
     ss.completion.append(StepOutcome("disbiome.assoc", "local", "no_match"))
     again = StrandSet.from_json(ss.to_json())
     assert again.entity_id == "e1"
@@ -73,9 +69,7 @@ def test_capability_and_manifest_roundtrip():
 
 
 def test_weaveresult_and_candidate_roundtrip():
-    cand = CandidateResult(
-        strands=(Strand("ncbi.taxon.id", 9606),), confidence=0.9, metadata={"x": "y"}
-    )
+    cand = CandidateResult(strands=(Strand("ncbi.taxon.id", 9606),), confidence=0.9, metadata={"x": "y"})
     wr = WeaveResult(
         capability_id="ncbi.resolve_name",
         weaver_version="1.0.0",
@@ -103,9 +97,7 @@ def test_braid_roundtrip():
         fallback_backends=("api",),
         fallback_on=frozenset({FallbackCondition.NO_MATCH}),
     )
-    braid = Braid(
-        steps=(inv,), from_types=frozenset({"organism.name"}), to_types=frozenset({"ncbi.taxon.id"})
-    )
+    braid = Braid(steps=(inv,), from_types=frozenset({"organism.name"}), to_types=frozenset({"ncbi.taxon.id"}))
     again = Braid.from_json(braid.to_json())
     assert again == braid
     _json_stable(braid)

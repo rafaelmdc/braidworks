@@ -12,7 +12,9 @@ from helpers import make_weaver, resolve_name_capability, simple_capability
 def test_two_weavers_both_appear_in_manifests():
     reg = BraidRegistry()
     reg.register(make_weaver(resolve_name_capability(), weaver_id="ncbi"))
-    reg.register(make_weaver(simple_capability("up.cap", {"a"}, {"b"}), weaver_id="uniprot"))
+    reg.register(
+        make_weaver(simple_capability("up.cap", {"a"}, {"b"}), weaver_id="uniprot")
+    )
     ids = {m.weaver_id for m in reg.manifests()}
     assert ids == {"ncbi", "uniprot"}
 

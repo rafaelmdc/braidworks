@@ -171,3 +171,11 @@ def test_capability_lists_round_trip_and_validate():
             backends=("api",),
             lists=frozenset({"a.nope"}),
         )
+
+
+def test_mapper_warns_when_explicit_count_disagrees_with_the_list():
+    cap = _cap(totals={"a.ids": "a.count"})
+    result = _map({"a.ids": ["p", "q"], "a.count": 3}, cap)
+    assert any("a.count" in w and "3" in w and "2" in w for w in result.warnings)
+    agreeing = _map({"a.ids": ["p", "q"], "a.count": 2}, cap)
+    assert not agreeing.warnings

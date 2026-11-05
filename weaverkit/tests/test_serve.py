@@ -52,15 +52,10 @@ def registry():
     reg = BraidRegistry()
     reg.register(
         _weaver(
-            "alpha",
-            "a1",
-            {"organism.name"},
-            {"ncbi.taxon.id"},
+            "alpha", "a1", {"organism.name"}, {"ncbi.taxon.id"},
             provenance=Provenance(
-                source_url="https://alpha.example",
-                license="CC-BY-4.0",
-                citation="https://doi.org/10.1/alpha",
-                attribution="Alpha",
+                source_url="https://alpha.example", license="CC-BY-4.0",
+                citation="https://doi.org/10.1/alpha", attribution="Alpha",
             ),
         )
     )
@@ -74,10 +69,7 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     # two-step route projected
     assert out["path"]["step_count"] == 2
     arts = out["artifacts"]
-    assert (
-        arts["cli_path"]
-        == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
-    )
+    assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
     assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
     assert "prepare_query(registry, request)" in arts["python"]
@@ -127,9 +119,7 @@ def _producer(weaver_id, cap_id, consumes, produces, value):
         def backend_fingerprint(self, backend: str) -> str:
             return f"{weaver_id}-{backend}-v1"
 
-        async def execute(
-            self, capability_id, strand_set, *, requested_outputs, backend, params=None
-        ):
+        async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
             return WeaveResult(
                 capability_id=capability_id,
                 weaver_version="0.1.0",
@@ -145,9 +135,7 @@ def _producer(weaver_id, cap_id, consumes, produces, value):
 @pytest.fixture
 def run_registry():
     reg = BraidRegistry()
-    reg.register(
-        _producer("up", "resolve", {"protein.query"}, {"protein.uniprot.accession"}, "P04637")
-    )
+    reg.register(_producer("up", "resolve", {"protein.query"}, {"protein.uniprot.accession"}, "P04637"))
     return reg
 
 
@@ -181,13 +169,8 @@ def test_static_render_omits_serve_ui():
     from weaverkit.view import build_data, render_html
 
     html = render_html(build_data())  # interactive defaults to False
-    for token in (
-        'id="builder"',
-        "buildResultHTML",
-        "exportRows",
-        "function setupBuilder",
-        'id="sheet"',
-    ):
+    for token in ('id="builder"', "buildResultHTML", "exportRows", "function setupBuilder",
+                  'id="sheet"'):
         assert token not in html, token
     # ...but the render-side light-up hook stays in the base template.
     assert "function runStatusOf" in html
@@ -197,19 +180,10 @@ def test_interactive_render_injects_serve_ui():
     from weaverkit.view import build_data, render_html
 
     html = render_html(build_data(), interactive=True)
-    for token in (
-        'id="builder"',
-        "buildResultHTML",
-        "exportRows",
-        "function setupBuilder",
-        'id="sheet"',
-        "function showResults",
-        "function showCite",  # modal pages
-        'id="b-search"',
-        "function applySearch",  # graph search
-        'id="b-recipes"',
-        "function saveRecipe",
-    ):  # save/load recipes
+    for token in ('id="builder"', "buildResultHTML", "exportRows", "function setupBuilder",
+                  'id="sheet"', "function showResults", "function showCite",  # modal pages
+                  'id="b-search"', "function applySearch",       # graph search
+                  'id="b-recipes"', "function saveRecipe"):      # save/load recipes
         assert token in html, token
     # no emoji in the served UI
     assert "\U0001f50d" not in html and "▶" not in html
@@ -228,9 +202,7 @@ def test_app_serves_page_and_plan_endpoint():
     page = client.get("/")
     assert page.status_code == 200 and "<html" in page.text.lower()
 
-    resp = client.post(
-        "/api/plan", json={"from_types": ["protein.query"], "to_types": ["protein.query"]}
-    )
+    resp = client.post("/api/plan", json={"from_types": ["protein.query"], "to_types": ["protein.query"]})
     assert resp.status_code == 200
     # protein.query -> protein.query is trivially satisfied (already available): ok, 0 steps.
     assert resp.json()["ok"] is True

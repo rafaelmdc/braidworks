@@ -417,3 +417,26 @@ def test_fan_child_is_scalar():
     assert [row["pdb.id"] for row in result.rows] == ["1ABC", "2DEF"]
     assert all(type(row["pdb.id"]) is str for row in result.rows)
     assert all(row["parent"] for row in result.rows)
+
+
+def test_partial_list_survives_resume(session):
+    result = session.get(["AMB"], have="protein.query", want="structure.pdb.ids")
+    result.review[0].choose(0)
+    resumed = result.resume()
+    pdb = resumed["AMB"][0]["structure.pdb.ids"]
+    assert isinstance(pdb, bw.Listing) and (pdb.total, pdb.complete) == (5, False)
+    assert "(2 of 5)" in repr(resumed)
+
+
+def test_partial_list_survives_the_sqlite_cache(tmp_path):
+    cache = tmp_path / "lookups.sqlite"
+    reg = _registry()
+    down = reg.get_weaver("pdbe")
+    for attempt in range(2):
+        with bw.Session(registry=reg, cache=cache) as s:
+            result = s.get(["P1"], have="protein.query", want="structure.pdb.ids")
+        pdb = result.rows[0]["structure.pdb.ids"]
+        assert isinstance(pdb, bw.Listing) and (pdb.total, pdb.complete) == (5, False)
+        if attempt == 0:
+            calls_after_first = down.batch_calls
+    assert down.batch_calls == calls_after_first  # second run read the cache

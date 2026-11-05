@@ -40,9 +40,7 @@ def resolve_name_capability(
     )
 
 
-def manifest(
-    *capabilities: Capability, weaver_id: str = "ncbi", version: str = "1.0.0"
-) -> WeaverManifest:
+def manifest(*capabilities: Capability, weaver_id: str = "ncbi", version: str = "1.0.0") -> WeaverManifest:
     return WeaverManifest(weaver_id=weaver_id, version=version, capabilities=tuple(capabilities))
 
 
@@ -147,9 +145,7 @@ class ScriptedWeaver(BaseWeaver):
     async def execute(self, capability_id, strand_set, *, requested_outputs, backend, params=None):
         return self._resolver(strand_set, backend, requested_outputs)
 
-    async def execute_batch(
-        self, capability_id, strand_sets, *, requested_outputs, backend, params=None
-    ):
+    async def execute_batch(self, capability_id, strand_sets, *, requested_outputs, backend, params=None):
         self.batch_calls += 1
         self.batch_sizes.append(len(strand_sets))
         return [self._resolver(ss, backend, requested_outputs) for ss in strand_sets]
@@ -217,7 +213,8 @@ def error_result(requested: frozenset[str], message: str, *, backend: str = "loc
 
 def name_strand_sets(*names: str) -> list[StrandSet]:
     return [
-        StrandSet.from_strands(f"e{i}", [Strand("organism.name", n)]) for i, n in enumerate(names)
+        StrandSet.from_strands(f"e{i}", [Strand("organism.name", n)])
+        for i, n in enumerate(names)
     ]
 
 

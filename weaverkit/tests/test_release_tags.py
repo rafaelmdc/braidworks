@@ -14,7 +14,9 @@ _spec.loader.exec_module(release_tags)
 def _pkg(root: Path, rel: str, name: str, version: str) -> None:
     d = root / rel
     d.mkdir(parents=True, exist_ok=True)
-    (d / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "{version}"\n')
+    (d / "pyproject.toml").write_text(
+        f'[project]\nname = "{name}"\nversion = "{version}"\n'
+    )
 
 
 def test_expected_tags_derives_name_v_version(tmp_path):
