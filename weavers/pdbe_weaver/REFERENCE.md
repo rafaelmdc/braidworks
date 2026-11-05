@@ -26,9 +26,9 @@ that optional local data are already configured.
 
 PDBe's `best_structures` returns one row per (structure, chain), so the backend dedups
 to **distinct PDB structures** (keeping the best-covering chain) and orders them
-best-first — **coverage descending, then resolution ascending, then pdb_id**. `count` is
-the true total distinct; `ids`/`records` are the top `limit` (default 25); `pdb.id` is the
-full distinct set (uncapped — the fan dimension). Ordering is deterministic for the
+best-first — **coverage descending, then resolution ascending, then pdb_id**. `ids`,
+`records` and `pdb.id` (the fan dimension) list every distinct structure; `count` is how
+many. Ordering is deterministic for the
 same observed source data; PDBe updates can change the list, coverage or ranking. An accession
 with no structures (PDBe 404, or an empty mapping) is a clean `NO_MATCH`.
 
@@ -57,13 +57,11 @@ Best-structure and summary responses are validated against their keyed source sh
 
 Expected HTTP, JSON-decoding and explicitly validated source-data failures are returned as failure values. Cancellation and unrelated programming exceptions propagate. Existing successful output keys are preserved; consumers should handle `ERROR` separately from biological absence. Unknown extra source fields are allowed.
 
-## Source identity and display policy
+## Source identity
 
-`build_pdbe_weaver(base_url=..., client=..., limit=25)` exposes the existing
-backend policy. `limit` must be a positive integer and caps the displayed lists;
-full fan-out identifiers and true totals keep their existing semantics. Fingerprints
-hash the effective endpoint (an injected client's base URL takes precedence) and
-limit, so changing either cannot reuse an incompatible cached display. Endpoint
+`build_pdbe_weaver(base_url=..., client=...)` configures the endpoint. Lists are never
+cut for display. Fingerprints hash the effective endpoint (an injected client's base
+URL takes precedence), so changing it cannot reuse another endpoint's cache. Endpoint
 credentials are not printed. This identifies configuration; an unversioned live
 service is not a frozen data snapshot.
 
@@ -86,7 +84,7 @@ from pdbe_weaver import build_pdbe_weaver
 
 
 async def main():
-    async with build_pdbe_weaver(base_url="https://www.ebi.ac.uk/pdbe/api", limit=5) as weaver:
+    async with build_pdbe_weaver(base_url="https://www.ebi.ac.uk/pdbe/api") as weaver:
         inputs = [StrandSet.from_strands("p53", [Strand("protein.uniprot.accession", "P04637")])]
         result = (
             await weaver.execute_batch(
@@ -110,8 +108,7 @@ not query the optional quality, assembly or ligand groups on `describe_structure
 
 Full chain records include observed `ranges.uniprot` and `ranges.structure`
 spans with explicit coordinate namespaces. They are not residue alignments;
-structure positions do not imply author numbering. Ranking and display/fan-out
-limits are unchanged.
+structure positions do not imply author numbering. Ranking is unchanged.
 
 Request `structure.pdb.quality` on `describe_structure` for the `quality` group:
 bulk entry-level provider validation metrics, experimental method, source and
