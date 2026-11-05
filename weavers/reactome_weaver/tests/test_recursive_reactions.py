@@ -14,7 +14,7 @@ def test_jackson_reference_reused_without_guessing():
         _contained([999])
 
 
-async def test_recursive_listing_caps_display_not_fan_and_deduplicates_inputs():
+async def test_recursive_listing_returns_every_reaction_and_deduplicates_inputs():
     calls = []
 
     def handler(request):
@@ -30,7 +30,7 @@ async def test_recursive_listing_caps_display_not_fan_and_deduplicates_inputs():
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url="https://test"
     ) as client:
-        backend = ReactomeApiBackend(client=client, limit=2)
+        backend = ReactomeApiBackend(client=client)
         rows = await backend.fetch(
             "list_reactions",
             [{"pathway.reactome.id": "R-HSA-10"}] * 2,
@@ -40,9 +40,10 @@ async def test_recursive_listing_caps_display_not_fan_and_deduplicates_inputs():
     assert len(calls) == 1
     assert len(rows[0].values["reaction.reactome.id"]) == 22
     value = rows[0].values["pathway.reactome.reactions"]
-    assert value["count"] == 22 and len(value["records"]) == 2
+    assert value["count"] == 22 and len(value["records"]) == 22
+    assert "display_limit" not in value
     value["records"].clear()
-    assert len(rows[1].values["pathway.reactome.reactions"]["records"]) == 2
+    assert len(rows[1].values["pathway.reactome.reactions"]["records"]) == 22
 
 
 async def test_reaction_description_batches_many_into_one_request_and_retains_evidence():

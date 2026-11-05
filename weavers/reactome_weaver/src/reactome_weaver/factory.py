@@ -28,7 +28,6 @@ def build_reactome_weaver(
     *,
     base_url: str = "https://reactome.org/ContentService",
     client: httpx.AsyncClient | None = None,
-    limit: int = 30,
     max_concurrency: int = 4,
     **_config: Any,
 ) -> BaseWeaver:
@@ -37,7 +36,7 @@ def build_reactome_weaver(
     return ReactomeWeaver(
         {
             "api": ReactomeApiBackend(
-                base_url=base_url, client=client, limit=limit, max_concurrency=max_concurrency
+                base_url=base_url, client=client, max_concurrency=max_concurrency
             )
         }
     )

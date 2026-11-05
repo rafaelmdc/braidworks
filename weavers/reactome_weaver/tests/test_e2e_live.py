@@ -127,7 +127,7 @@ async def test_live_recursive_reactions_and_source_evidence():
     async with httpx.AsyncClient(
         base_url="https://reactome.org/ContentService", timeout=30
     ) as client:
-        backend = ReactomeApiBackend(client=client, limit=5)
+        backend = ReactomeApiBackend(client=client)
         listing = (
             await backend.fetch(
                 "list_reactions",

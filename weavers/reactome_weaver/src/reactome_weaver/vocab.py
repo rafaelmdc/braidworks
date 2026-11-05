@@ -15,7 +15,7 @@ from braidworks.core import (
 )
 
 WEAVER_ID = "reactome"
-WEAVER_VERSION = "0.1.16"
+WEAVER_VERSION = "0.2.0"
 WEAVER_TITLE = "Reactome pathways (accession -> pathways)"
 
 # Source/license/citation for automatic references — mirrors weaver.spec.toml.
@@ -38,7 +38,7 @@ TYPE_DESCRIPTIONS = {
     "pathway.reactome.in_disease": "Whether one Reactome pathway is disease-associated.",
     "pathway.reactome.names": "The Reactome pathways this protein takes part in.",
     "pathway.reactome.participants": "Typed provider participant references with numeric IDs scoped to observed release.",
-    "pathway.reactome.reactions": "Recursive reaction-like event listing and display accounting.",
+    "pathway.reactome.reactions": "Recursive reaction-like event listing: every reaction, its count and source.",
     "pathway.reactome.records": "This protein's Reactome pathways — stable id, name, in-disease flag.",
     "pathway.reactome.species": "The species of one Reactome pathway.",
     "protein.uniprot.accession": "UniProt accession for one protein — the main protein join key.",
@@ -84,6 +84,7 @@ def build_manifest(*, backends: tuple[str, ...]) -> WeaverManifest:
                 max_batch_size=25,
                 set_outputs=frozenset({"pathway.reactome.id"}),
                 totals={"pathway.reactome.names": "pathway.reactome.count"},
+                lists=frozenset({"pathway.reactome.records"}),
             ),
             Capability(
                 id="describe_pathway",

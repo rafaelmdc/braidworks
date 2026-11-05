@@ -27,7 +27,7 @@ def _pw(st_id, name=None, in_disease=False):
     return {"stId": st_id, "displayName": name or st_id, "isInDisease": in_disease}
 
 
-def _backend(rows=None, *, status=200, calls=None, limit=30):
+def _backend(rows=None, *, status=200, calls=None):
     def handler(request: httpx.Request) -> httpx.Response:
         if calls is not None:
             calls.append(str(request.url))
@@ -40,7 +40,7 @@ def _backend(rows=None, *, status=200, calls=None, limit=30):
     client = httpx.AsyncClient(
         base_url="https://r/ContentService", transport=httpx.MockTransport(handler)
     )
-    return ReactomeApiBackend(client=client, limit=limit)
+    return ReactomeApiBackend(client=client)
 
 
 async def _one(backend, accession):
@@ -64,19 +64,13 @@ async def test_dedups_and_orders_by_st_id():
     assert v["pathway.reactome.id"] == ["R-HSA-100", "R-HSA-200"]
 
 
-async def test_id_set_is_full_while_names_are_capped():
-    rows = [_pw(f"R-HSA-{i:03d}") for i in range(5)]
-    v = (await _one(_backend(rows, limit=2), "P04637")).values
-    # names/records are the top-N display; the id fan dimension is the full set.
-    assert len(v["pathway.reactome.names"]) == 2
-    assert v["pathway.reactome.id"] == [f"R-HSA-{i:03d}" for i in range(5)]
-
-
-async def test_names_capped_but_count_is_true_total():
-    rows = [_pw(f"R-HSA-{i:03d}") for i in range(5)]
-    v = (await _one(_backend(rows, limit=2), "P04637")).values
-    assert len(v["pathway.reactome.names"]) == 2
-    assert v["pathway.reactome.count"] == 5
+async def test_every_pathway_is_listed():
+    rows = [_pw(f"R-HSA-{i:03d}") for i in range(40)]
+    v = (await _one(_backend(rows), "P04637")).values
+    # No display cap in the weaver: names, records and ids are all 40 pathways.
+    assert len(v["pathway.reactome.names"]) == len(v["pathway.reactome.records"]) == 40
+    assert v["pathway.reactome.id"] == [f"R-HSA-{i:03d}" for i in range(40)]
+    assert v["pathway.reactome.count"] == 40
 
 
 async def test_in_disease_flag_carried():

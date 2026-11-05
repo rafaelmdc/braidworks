@@ -88,7 +88,7 @@ OUTPUT_KEYS: dict[str, str] = {
     "go.reverse.coverage": "Bounded reverse annotation query pagination and observed product accounting.",
     "go.term.hierarchy": "Source paths, ancestors, directional replacements and term history.",
     "pathway.reactome.evidence": "Observed Reactome curation, literature and inference assertions.",
-    "pathway.reactome.reactions": "Recursive reaction-like event listing and display accounting.",
+    "pathway.reactome.reactions": "Recursive reaction-like event listing: every reaction, its count and source.",
     "reaction.reactome.detail": "Source reaction participants, literature, curation and inference assertions.",
     "disease.ontology.definition": "Observed MONDO definition text; absent definitions remain unknown.",
     "disease.ontology.history": "MONDO current/obsolete status with observed replacement/consider targets and source release identity.",
