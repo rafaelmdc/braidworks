@@ -601,7 +601,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "ncbi-weaver"
-version = "0.2.15"
+version = "0.2.16"
 source = { editable = "weavers/ncbi_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -782,7 +782,7 @@ wheels = [
 
 [[package]]
 name = "pdbe-weaver"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "weavers/pdbe_weaver" }
 dependencies = [
     { name = "braidworks-core" },
@@ -1064,7 +1064,7 @@ wheels = [
 
 [[package]]
 name = "reactome-weaver"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "weavers/reactome_weaver" }
 dependencies = [
     { name = "braidworks-core" },
