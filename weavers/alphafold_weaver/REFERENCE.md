@@ -85,8 +85,8 @@ selection and outputs are unchanged.
 ## Explore API-observed models
 
 `list_models` accepts `protein.uniprot.accession` and emits the full distinct,
-ordered `structure.alphafold.model_id` fan set (`entryId@vN`). Its display records
-are capped at ten; coverage counts the observed API entries only. The API does
+ordered `structure.alphafold.model_id` fan set (`entryId@vN`) and a record for every
+model; coverage states the API-only scope. The API does
 not enumerate archive-only long-protein fragments.
 
 `describe_prediction` consumes one of those version-qualified IDs and exposes the
@@ -113,8 +113,9 @@ The backend seeks over compressed model bodies and reads only headers; it extrac
 nothing and downloads nothing. It enumerates explicit `AF-<accession>-F<n>-model_v<v>`
 identities, keeps versions distinct, and groups CIF/PDB members as artifact locators.
 A canonical accession query includes observed isoform filenames; an isoform query
-matches that isoform only. Full fan IDs remain separate from the ten-record display.
-A capped scan warns; an unobserved model in an incomplete scan is an error. Completeness
+matches that isoform only. Every observed model is listed. A capped scan warns and
+returns its lists as a `Listing` of unknown size; an unobserved model in an incomplete
+scan is an error. Completeness
 refers only to supported model filenames in the supplied archives, never the global DB.
 
 `describe_prediction` returns exact entry/version identity and archive/member/offset

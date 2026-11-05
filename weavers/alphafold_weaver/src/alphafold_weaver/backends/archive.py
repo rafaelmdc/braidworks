@@ -11,7 +11,7 @@ from copy import deepcopy
 from pathlib import Path, PurePosixPath
 from threading import RLock
 
-from braidworks.core import BackendBase, BackendConfigurationError, LookupRecord
+from braidworks.core import BackendBase, BackendConfigurationError, Listing, LookupRecord
 
 _MODEL_NAME = re.compile(
     r"(AF-([A-Z0-9]+(?:-[0-9]+)?)-F([1-9][0-9]*))-model_v([1-9][0-9]*)\.(cif|pdb)\.gz"
@@ -252,16 +252,17 @@ class AlphafoldArchiveBackend(BackendBase):
                 continue
             coverage = {
                 "scope": "supplied archive model filenames only; residue ranges not acquired",
-                "observed_models": len(selected),
-                "display_limit": 10,
-                "displayed_models": min(10, len(selected)),
-                "source_complete": complete,
                 "sources": deepcopy(sources),
             }
             if capability_id == "list_models":
+                ids = [model["model_id"] for model in selected]
+                models = deepcopy(selected)
+                if not complete:  # the scan hit its cap: these are what it saw
+                    ids = Listing(ids, total=None, complete=False)
+                    models = Listing(models, total=None, complete=False)
                 values = {
-                    "structure.alphafold.model_id": [model["model_id"] for model in selected],
-                    "structure.alphafold.models": deepcopy(selected[:10]),
+                    "structure.alphafold.model_id": ids,
+                    "structure.alphafold.models": models,
                     "structure.alphafold.model_coverage": coverage,
                 }
             else:

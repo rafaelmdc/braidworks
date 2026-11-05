@@ -118,8 +118,8 @@ OUTPUT_KEYS: dict[str, str] = {
     "wikipedia.pageviews.series": "Ordered observed monthly bins; absent months are not measured zero.",
     "wikipedia.pageviews.title": "Supplied English Wikipedia article key and explicit redirect policy.",
     "structure.alphafold.confidence": "Observed PAE/pLDDT references with model version, coverage and metric semantics.",
-    "structure.alphafold.models": "Capped display of API-observed AlphaFold models; full identities are a separate fan set.",
-    "structure.alphafold.model_coverage": "Observed model/display counts and API-only enumeration scope.",
+    "structure.alphafold.models": "Every observed AlphaFold model of this protein, with its record.",
+    "structure.alphafold.model_coverage": "Model enumeration scope (API-only, or the archive sources scanned).",
     # wikidata_weaver / wikipedia_weaver leaf outputs
     "organism.vernacular_names": "Common (vernacular) names for one taxon, from Wikidata.",
     "wikidata.sitelinks": "Language/site links associated with a Wikidata taxon item.",

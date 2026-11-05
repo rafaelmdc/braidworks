@@ -35,7 +35,7 @@ async def test_listed_model_can_be_described_exactly():
         assert [r.strands[0].value for r in described] == ["AF-P04637-2-F1", "AF-P04637-F1"]
 
 
-async def test_model_fan_is_full_while_display_is_capped():
+async def test_model_fan_and_records_list_every_model():
     rows = [{"entryId": f"AF-P04637-F{i}", "latestVersion": 6} for i in range(1, 13)]
     rows.append(dict(rows[0]))
     client = httpx.AsyncClient(
@@ -55,8 +55,8 @@ async def test_model_fan_is_full_while_display_is_capped():
             )
         )[0]
         assert len(record.values["structure.alphafold.model_id"]) == 12
-        assert len(record.values["structure.alphafold.models"]) == 10
-        assert record.values["structure.alphafold.model_coverage"]["source_complete"] is None
+        assert len(record.values["structure.alphafold.models"]) == 12  # no display cap
+        assert "source_complete" not in record.values["structure.alphafold.model_coverage"]
 
 
 async def test_version_mismatch_never_silently_upgrades():

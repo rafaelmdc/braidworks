@@ -156,7 +156,7 @@ def _models(entries: list[dict[str, Any]]) -> dict[str, Any]:
         distinct[identity] = entry
     identities = sorted(distinct)
     records = []
-    for identity in identities[:10]:
+    for identity in identities:
         entry = distinct[identity]
         record = _extract(entry)["structure.alphafold.records"]
         record.update(
@@ -170,10 +170,6 @@ def _models(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "structure.alphafold.models": records,
         "structure.alphafold.model_coverage": {
             "scope": "API-returned entries; archive-only fragments excluded",
-            "observed_models": len(identities),
-            "display_limit": 10,
-            "displayed_models": len(records),
-            "source_complete": None,
         },
     }
 

@@ -10,7 +10,7 @@ db_name = "alphafold"
 weaver_id = "alphafold"
 kind = "lookup"
 title = "AlphaFold predicted structure (accession -> model + confidence)"
-version = "0.1.13"
+version = "0.2.0"
 license = "CC-BY-4.0"
 citation = "https://doi.org/10.1093/nar/gkab1061"
 attribution = "AlphaFold DB (Google DeepMind & EMBL-EBI)"
@@ -77,6 +77,7 @@ id = "list_models"
 consumes = ["protein.uniprot.accession"]
 max_batch_size = 25
 set_outputs = ["structure.alphafold.model_id"]
+lists = ["structure.alphafold.models"]
 
   [[capability.group]]
   id = "models"
