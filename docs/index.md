@@ -15,6 +15,7 @@ choose the sources your analysis needs, then scale to a batch. The
 
 | Exercise | What you will produce |
 |---|---|
+| [First analysis in Python](tutorials/first-analysis-in-python.md) | Names, GO terms and structures for two genes, as a pandas table with citations |
 | [Protein structures](tutorials/protein-structures.md) | A structure listing, related-entry inspection and batch export |
 | [Microbial functions](tutorials/microbial-functions.md) | An ecological annotation with its supporting rule trace |
 | [Disease–microbe associations](tutorials/disease-associations.md) | Observations with provider identity, sample context and publications |
@@ -22,7 +23,8 @@ choose the sources your analysis needs, then scale to a batch. The
 ## Complete a task
 
 1. [Install Braidworks](how-to/install.md): choose packages and create a local environment.
-2. [Run a query](how-to/run-queries.md): use the CLI, Python, or browser, then process a batch.
+2. [Run a query](how-to/run-queries.md): use the CLI or browser, then process a batch.
+   In a script or notebook, [work in Python](how-to/work-in-python.md).
 3. [Read the results](how-to/check-results.md): check coverage, review matches, and export your data.
 
 For interactive work, [build and run a query in the browser](how-to/use-the-browser.md).

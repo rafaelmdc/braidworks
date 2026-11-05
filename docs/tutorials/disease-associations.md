@@ -23,52 +23,47 @@ The SQLite database occupied about 45 MB in our verification; provider size can 
 Save this complete script as `inspect_disease.py` in the checkout:
 
 ```python
-import asyncio
 import json
 from pathlib import Path
 
-from braidworks import async_fetch
+import braidworks as bw
 from braidworks.core import BraidRegistry
 from disbiome_weaver import build_disbiome_weaver_configured
 
+registry = BraidRegistry()
+registry.register(
+    build_disbiome_weaver_configured(db_path="data/tutorial-disbiome.sqlite", auto_setup=True)
+)
 
-async def main():
-    async with build_disbiome_weaver_configured(
-        db_path="data/tutorial-disbiome.sqlite", auto_setup=True,
-    ) as weaver:
-        registry = BraidRegistry()
-        registry.register(weaver)
-        disease = await async_fetch(
-            "disease.disbiome.record", ids=["1"],
-            have="disease.disbiome.id", registry=registry,
-        )
-        print("Disease:", disease.get("1").get("disease.disbiome.record"))
-        associations = await async_fetch(
-            "microbe.disease.taxa", ids=["1"],
-            have="disease.disbiome.id", registry=registry,
-            params={"sample": "Faeces"},
-        )
-        print("Unresolved:", associations.unresolved)
-        print("Reviews:", associations.review_required, associations.review_queue)
-        print("Errors:", associations.errors)
-        observations = associations.get("1").get("microbe.disease.taxa")
-        if observations is not None:
-            print("Experiments:", observations["experiment_count"])
-            print("Distinct taxa:", len({r["taxid"] for r in observations["records"]}))
-            for record in observations["records"][:3]:  # every row is returned; show three
-                publication = record.get("publication") or {}
-                print(record["taxid"], record["direction"], record["method"])
-                print(publication.get("title"), publication.get("pubmed_url"))
-        Path("disease-associations.json").write_text(
-            json.dumps(associations.to_json(), indent=2), encoding="utf-8",
-        )
+with bw.Session(registry=registry) as s:
+    disease = s.get(["1"], have="disease.disbiome.id", want="disease.disbiome.record")
+    print("Disease:", disease["1"][0]["disease.disbiome.record"])
 
-
-asyncio.run(main())
+    associations = s.get(
+        ["1"], have="disease.disbiome.id", want="microbe.disease.taxa", sample="Faeces"
+    )
+    print(associations.summary())
+    row = associations["1"][0]
+    print("Status:", row["status"], "Missing:", row["missing"])
+    print("Reviews:", associations.review, "Errors:", associations.errors)
+    observations = row["microbe.disease.taxa"]
+    if observations is not None:
+        print("Experiments:", observations["experiment_count"])
+        taxa = {r["taxid"] for r in observations["records"] if r["taxid"] is not None}
+        print("Distinct taxa:", len(taxa))
+        for record in observations["records"][:3]:  # every row is returned; show three
+            publication = record.get("publication") or {}
+            print(record["taxid"], record["direction"], record["method"])
+            print(publication.get("title"), publication.get("pubmed_url"))
+    Path("disease-associations.json").write_text(
+        json.dumps(associations.to_json(), indent=2), encoding="utf-8",
+    )
+    print(associations.cite())
 ```
 
 `auto_setup=True` authorizes acquisition into the named local path. The database is
-ignored by git; keep it on local disk. Run the script:
+ignored by git; keep it on local disk. The session uses only the registry you built,
+and closes the source when the `with` block ends. Run the script:
 
 ```bash
 uv run python inspect_disease.py
@@ -84,17 +79,18 @@ with method, direction and publication title. The verified filtered lookup retur
 observations including taxid `1591` and a publication titled *Gastrointestinal microbiota
 in children with autism in Slovakia.* Counts can change with the acquired source tables.
 
-Check that unresolved, review and error lists are empty for this example. If a requested
-value is absent, the script still saves its outcome; inspect that before using the data.
+Check that the status is `resolved`, `missing` is empty, and there are no reviews or
+errors for this example. If a requested value is absent, the script still saves its
+outcome; inspect that before using the data.
 `Faeces` is an exact provider sample filter, not an inferred anatomical classification.
 
 ## Inspect the retained evidence
 
-Open `disease-associations.json`. Under `resolved`, inspect the `microbe.disease.taxa`
+Open `disease-associations.json`. Under `rows`, inspect the `microbe.disease.taxa`
 value: it retains experiment records, publication evidence, matched disease IDs,
 coverage scope and effective filters. The script prints only three records; the file
-retains the returned result. `references`, `unresolved`, `review_required`,
-`review_queue` and `errors` sit alongside the values.
+retains the returned result. `summary` and `references` sit alongside the rows, and
+`result` holds the full engine record, including any review or error.
 
 Notice that experiment count and distinct-taxon count answer different questions.
 An elevated or reduced observation is a reported association under its study's
@@ -105,8 +101,9 @@ You now have an evidence trail from provider disease identity to observed associ
 and publications. Repeating the script reuses the local database and overwrites the
 JSON file; rename the export before repeating if you need to retain it. The four source
 tables are acquired independently, so the build does not represent a frozen upstream
-snapshot. This `FetchResult` export is not a CLI run archive or resume checkpoint.
+snapshot. This `Result` export is not a CLI run archive or resume checkpoint.
 
 For other identifiers and filters, use the
-[Disbiome reference](../../weavers/disbiome_weaver/README.md). For interpretation of
+[Disbiome reference](../../weavers/disbiome_weaver/README.md); for more Python recipes,
+[Work in Python](../how-to/work-in-python.md). For interpretation of
 lookup failures and partial results, use [result interpretation](../how-to/check-results.md).

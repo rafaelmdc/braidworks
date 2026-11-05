@@ -21,7 +21,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-_UNSET: Any = object()
+
+class _Unset:
+    """The default ``total``: the number of items given."""
+
+    def __repr__(self) -> str:
+        return "len(items)"
+
+
+_UNSET: Any = _Unset()
 
 
 class Listing(list):
@@ -58,10 +66,12 @@ class Listing(list):
 
     @property
     def total(self) -> int | None:
+        """The list's true size; ``None`` when the source could not tell."""
         return self._total
 
     @property
     def complete(self) -> bool:
+        """Whether this holds every item (``len(listing) == total``)."""
         return self._complete
 
     def __getitem__(self, index):  # type: ignore[override]
@@ -69,6 +79,7 @@ class Listing(list):
         return list(value) if isinstance(index, slice) else value
 
     def copy(self) -> list:  # type: ignore[override]
+        """A plain ``list`` of the items (a copy is no longer "a prefix of N")."""
         return list(self)
 
     def __repr__(self) -> str:

@@ -6,6 +6,7 @@ For task instructions, use [the documentation index](../index.md).
 
 | Subject | Reference |
 |---|---|
+| Python API: `get`, `Session`, `Result`, `Listing` | [Python API reference](python-api.md) (generated from docstrings) |
 | CLI commands and options | `braidworks --help`, `braidworks weave --help`, and each subcommand's `--help` |
 | Installed capabilities and parameters | `braidworks weavers`; source READMEs/specs linked from [the catalogue](../how-to/choose-sources.md) |
 | Source purposes and setup requirements | [Source catalogue](../how-to/choose-sources.md) |
@@ -23,8 +24,8 @@ For task instructions, use [the documentation index](../index.md).
 | Scaffold generation, validation and writing | [Scaffold interfaces](../../weaverkit/docs/scaffold-reference.md) |
 | Backend fetch, configuration and fingerprints | [Backend reference](../../weaverkit/docs/implementing-backends.md) |
 
-For Python query construction, the [fetch interface](../../braidworks-core/src/braidworks/core/fetch.py)
-and [explicit query service](../../braidworks-core/src/braidworks/core/query.py) define
-signatures and contracts. [Python usage](../how-to/run-queries.md#query-from-python) provides executable
-examples. This landing page links current authorities; it does not duplicate their
-full signatures or claim a generated API reference exists.
+The [Python API reference](python-api.md) is generated from the public docstrings
+(`make api-docs`; `make docs-check` rejects drift). [Work in Python](../how-to/work-in-python.md)
+provides executable recipes. Lower-level engine contracts live in the
+[explicit query service](../../braidworks-core/src/braidworks/core/query.py) and
+[core contracts](core-contracts.md); `fetch` remains for existing scripts.

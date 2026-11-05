@@ -24,6 +24,33 @@ capabilities select a representative instead of emitting candidates. In particul
 UniProt gene-symbol search returns one representative: specify the organism and use
 an accession when you need an exact protein.
 
+## A row and its status
+
+A result has one row per input, in the order you gave them; duplicate inputs stay
+separate rows. A row's `status` summarizes the whole route for that input, while
+`missing` names each requested field it lacks. The two answer different questions.
+A `resolved` row produced at least one requested field. An `unresolved` row means no
+attempted route produced any, which is a statement about those lookups, not about
+biology. `review` means a match is waiting for your decision, and `error` means a
+technical failure blocked the row. A source that fails on one branch does not
+discard what another branch found: the row can be `resolved` with a field in
+`missing` and a diagnostic in `result.errors`.
+
+## What a list's size tells you
+
+Fields that hold several values (GO terms, structures, interaction partners) come
+back whole, and each list carries its size. `complete` means the source returned
+everything it has for that lookup. When a source has to stop early, for example at
+a page limit or a partner cap, the list says so. It shows `25 of 321` when the source
+reported its true total, and `25+` when it could not. A list is never silently cut
+for display. Long lists are only shortened on screen.
+
+A complete list is complete *for that source and lookup*: 131 GO terms means QuickGO
+returned 131 distinct terms for that accession under the filters used. It is not a
+claim about every annotation that exists, nor a measure of biological importance.
+Counts of other things, such as experiments behind a disease association, use their
+own names (`experiment_count`) and are not a list's size.
+
 ## Related entities and original inputs
 
 Expansion can turn one original input into several terminal children. Their count

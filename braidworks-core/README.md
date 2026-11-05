@@ -12,9 +12,12 @@ and [query usage](../docs/how-to/run-queries.md), or follow a [researcher tutori
 The CLI plans across sources with `weave`, calls one capability with `run`, and exposes
 inventory, keys, paths and references through its inspection commands.
 
-Use `fetch`/`async_fetch` for ordinary Python lookups. Applications needing configured
-registries, expansion or managed execution can use the explicit query service;
-[Python usage](../docs/how-to/run-queries.md#query-from-python) includes complete examples.
+Use `braidworks.get` (or a `braidworks.Session`) for Python lookups; see the
+[Python tutorial](../docs/tutorials/first-analysis-in-python.md), the
+[Work in Python](../docs/how-to/work-in-python.md) recipes and the
+[Python API reference](../docs/reference/python-api.md). Applications needing configured
+registries or managed execution can use the explicit query service. `fetch` and
+`async_fetch` remain for existing scripts.
 
 ## Concepts and exact contracts
 

@@ -55,7 +55,7 @@ Start with a researcher walkthrough:
 | You want to… | Start here |
 |---|---|
 | Run queries or export a batch to a spreadsheet | [CLI usage](docs/how-to/run-queries.md#query-from-the-command-line) |
-| Retrieve values in a script or notebook | [Python usage](docs/how-to/run-queries.md#query-from-python) |
+| Retrieve values in a script or notebook | [Python tutorial](docs/tutorials/first-analysis-in-python.md), then [Work in Python](docs/how-to/work-in-python.md) |
 | Build and run a query visually | [Browser usage](docs/how-to/run-queries.md#use-the-browser) |
 | Find available fields and source requirements | [Source catalogue](docs/how-to/choose-sources.md) and [key index](docs/reference/keys-index.md) |
 | Check missing data, ambiguity, and failures | [Reading results](docs/how-to/check-results.md) |
