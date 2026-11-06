@@ -24,7 +24,13 @@ require every requested field. Human diagnostics continue on stderr.
 
 ## Python results
 
-`fetch` returns a `FetchResult`: `get(id)` gives that input's values and
+`bw.get` and `Session.get` return a `Result`; its rows, methods and the `Listing`
+list type are in the [Python API reference](python-api.md). A row has `input`, `row`,
+`parent` (expanded children only), `status`, one key per requested field (`None` when
+absent) and `missing`. List fields hold a `Listing` with `.total` and `.complete`;
+flat exports add a `<field>.total` column.
+
+The older `fetch` returns a `FetchResult`: `get(id)` gives that input's values and
 `column(type_id)` gives a mapping of IDs to values for that field. `unresolved`
 includes inputs with no requested value, including paused reviews or errors;
 inspect `review_queue` and `errors` to distinguish them. `review_required` retains

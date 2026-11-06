@@ -179,6 +179,7 @@ class Session:
     # --- lifecycle -----------------------------------------------------------------
     @property
     def registry(self) -> BraidRegistry:
+        """The installed sources this session routes through (advanced)."""
         if self._closed:
             raise RuntimeError("this braidworks Session is closed")
         if self._registry is None:

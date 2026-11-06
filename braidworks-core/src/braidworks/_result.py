@@ -126,6 +126,8 @@ class Result:
     duplicates stay distinct), ``parent`` (only for expanded children), ``status``
     (``resolved`` / ``unresolved`` / ``review`` / ``error``), one key per requested
     type (``None`` when absent) and ``missing`` (requested types this row lacks).
+    A list value is a :class:`Listing`: ``len()`` is what came back, ``.total`` the
+    true size and ``.complete`` whether it is all of it.
     """
 
     def __init__(
@@ -161,6 +163,7 @@ class Result:
     # --- reading -------------------------------------------------------------------
     @property
     def columns(self) -> list[str]:
+        """Row keys in display order: input, row, parent (if expanded), status, wanted types, missing."""
         has_parent = any("parent" in row for row in self.rows)
         return [
             "input",
@@ -242,10 +245,12 @@ class Result:
 
     @property
     def errors(self) -> list[ExecutionError]:
+        """Source failures, one per failed lookup (a row may still hold other data)."""
         return list(self.raw.errors)
 
     @property
     def references(self) -> list[Reference]:
+        """The sources this result drew on, with their citations."""
         return list(self.raw.references)
 
     @property
@@ -263,6 +268,7 @@ class Result:
         return format_references(self.raw.references)
 
     def summary(self) -> str:
+        """One line of counts: inputs, resolved, unresolved, need review, errors."""
         counts = {status: 0 for status in STATUSES}
         for row in self.rows:
             counts[row["status"]] = counts.get(row["status"], 0) + 1
@@ -303,6 +309,7 @@ class Result:
         return frame.explode(explode, ignore_index=True) if explode else frame
 
     def to_json(self) -> dict[str, Any]:
+        """Summary, rows, references and the full engine result, as JSON-ready data."""
         return {
             "summary": self.summary(),
             "want": list(self.want),

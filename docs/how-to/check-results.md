@@ -39,9 +39,10 @@ See [export reference](../reference/results.md).
 
 ## Read Python results
 
-For `fetch`, inspect `unresolved`, `review_queue`, `review_required` and `errors`
-alongside `get(id)` or `column(type_id)`. Inputs with partial values can still appear
-in `resolved`; check required keys before using them. For lower-level result buckets,
+With `bw.get`, check `result.summary()`, each row's `status` and `missing`, and
+`result.review` for paused matches; list fields carry their size (`.total`,
+`.complete`). [Work in Python](work-in-python.md) has the recipes. Inputs with partial
+values are still `resolved`; check `missing` before using them. For lower-level result buckets,
 counts and serialization, see [Python result reference](../reference/results.md#python-results).
 
 ## Save a run archive
