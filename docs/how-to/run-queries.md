@@ -239,8 +239,10 @@ uv run braidworks weave --have protein.query=P04637 \
 ```
 
 `--expand all` follows every returned set member within the expansion budget;
-`--expand top:5` follows up to five in the source's ordered set. CLI default `none`
-uses the representative behavior without additional leaves. In the explicit Python
+`--expand top:5` follows up to five in the source's ordered set. With the default
+`none`, a set you ask for directly comes back whole as one row (for example every GO
+term or PDB ID); a set that only connects to a later lookup uses the source's first
+member, with a warning. In the explicit Python
 API, pass `expand_policy=ExpandPolicy.all()` or `ExpandPolicy.top_k(5)` to `execute`.
 This expands related IDs; ambiguous matches still pause under the review policy.
 

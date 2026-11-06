@@ -264,7 +264,10 @@ async def continue_query(
             braid = Braider(registry).plan_capability(
                 wid, cid, backend_policy=request.options.backend_policy
             )
-            state.active = executor.start_state(braid, state.current, **options)
+            # The fan stage's set key feeds the next stage: TOP still picks one value.
+            state.active = executor.start_state(
+                braid, state.current, **options, keep_requested_lists=False
+            )
             state.active_kind = "fan"
             checkpoint()
         elif state.phase == "targets":

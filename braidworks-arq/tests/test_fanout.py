@@ -250,11 +250,13 @@ async def test_cardinality_fanout_through_distributed_executor():
     assert sorted(leaf.entity_id for leaf in res.resolved) == ["e0#0", "e0#1", "e0#2"]
 
 
-async def test_cardinality_top_collapses_through_distributed_executor():
+async def test_requested_set_output_stays_whole_through_distributed_executor():
     reg = registry_with(_PathwaysWeaver())
     discovery.set_registry(reg)
     ex = build_distributed_executor(reg, pool=InlinePool(weave_step))
     inputs = [StrandSet.from_strands("e0", [Strand(ACCESSION, "P1")])]
     res = await ex.execute(_pathways_braid(), inputs)  # default ExpandPolicy.TOP
     assert len(res.resolved) == 1
-    assert res.resolved[0].get(PATHWAY).value == "R-P1-1"  # representative, collapsed in place
+    # the braid asks for the set key itself and nothing consumes it: it stays whole (#353)
+    value = res.resolved[0].get(PATHWAY).value
+    assert isinstance(value, list) and value[0] == "R-P1-1"

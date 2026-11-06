@@ -59,3 +59,12 @@ def test_int_vs_str_taxid_share_one_cache_fingerprint():
         cap, StrandSet.from_strands("b", [Strand("ncbi.taxon.id", "1578")]), **key_args
     )
     assert as_int.input_fingerprint == as_str.input_fingerprint
+
+
+def test_a_list_of_identifiers_is_canonicalized_element_by_element():
+    from braidworks.core.keytypes import canonicalize
+    from braidworks.core.strand import Strand
+
+    assert canonicalize("ncbi.taxon.id", ["9606", 562, " 10090 "]) == [9606, 562, 10090]
+    assert Strand("gene.ncbi.id", ["7157", "7158"]).value == [7157, 7158]
+    assert canonicalize("unregistered.private.type", ["1"]) == ["1"]

@@ -32,8 +32,9 @@ async def test_target_requests_do_not_reuse_other_target_cache(tmp_path, persist
         result = await executor.execute(
             braid, [StrandSet.from_strands("p53", [Strand(ACC, "P04637")])]
         )
+        # a requested set output comes back whole (#353), not its first member
         assert result.resolved[0].get(target).value == (
-            7157 if target == "gene.ncbi.id" else "1TUP"
+            [7157] if target == "gene.ncbi.id" else ["1TUP"]
         )
     assert calls == [("UniProtKB_AC-ID", TO_DB[target]) for target in targets]
     await backend._client.aclose()

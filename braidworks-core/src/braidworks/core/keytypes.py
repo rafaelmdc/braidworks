@@ -72,6 +72,7 @@ CANONICAL_TYPES: dict[str, type] = {
 def canonicalize(type_id: str, value: Any) -> Any:
     """Coerce ``value`` to the canonical type declared for ``type_id``.
 
+    A list of identifiers for a scalar key is canonicalized element by element.
     Conservative and total: ``None`` stays ``None``; an unregistered ``type_id`` (a
     weaver-private type) passes through unchanged; a value that cannot be coerced is
     returned as-is (it will simply not match, rather than raising). Booleans are
@@ -82,6 +83,9 @@ def canonicalize(type_id: str, value: Any) -> Any:
     target = CANONICAL_TYPES.get(type_id)
     if target is None:
         return value
+    if target in (int, str) and isinstance(value, list):
+        # A set of identifiers (a set output): the same shape as each scalar.
+        return [canonicalize(type_id, item) for item in value]
     if target is int:
         if isinstance(value, bool):
             return value

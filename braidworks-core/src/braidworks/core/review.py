@@ -134,6 +134,7 @@ def apply_review_decisions(registry, state, decisions) -> QueryExecutionState:
             expand_by_type={},
             confidence_threshold=0,
             expansion_budget=state.budget,
+            wanted=frozenset(context.get("wanted", ())),
         )
         roots = spawned if entity_key(ss) in terminal else [ss, *spawned]
         braid = Braid(
