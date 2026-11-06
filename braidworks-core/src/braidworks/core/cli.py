@@ -7,7 +7,9 @@ with type-id columns), or stdin; results print as a human table by default or as
 Progress and counts go to **stderr** so stdout stays clean, pipeable data.
 
 Subcommands
-  weave   plan a route from what you HAVE to what you WANT, across all weavers, and run it
+  get     look up what you WANT for IDs you HAVE, routing across all weavers
+          (``braidworks get P04637 --have protein.query --want protein.name``);
+          ``weave`` is an alias
   run     call ONE weaver capability directly (no routing)
   weavers list installed weavers and their capabilities
   keys    list the strand types that flow between weavers (who produces / consumes)
@@ -194,17 +196,58 @@ def _rows_from_file(path: str, in_type: str | None) -> list[dict[str, str]]:
             handle.close()
 
 
-def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
-    """Build the StrandSets to run from ``--have`` constants and/or a batch file.
+def _have_items(args: argparse.Namespace) -> tuple[dict[str, str], str | None]:
+    """Split ``--have`` into ``TYPE=VALUE`` constants and the bare TYPE of the ID arguments.
 
-    ``--have TYPE=VAL`` (repeatable) are *constants* broadcast onto every entity; a
-    ``--in-file`` (or stdin via ``-``) supplies the per-entity strands. With no file,
+    Commands without ID arguments (``run``) accept only ``TYPE=VALUE``.
+    """
+    takes_ids = hasattr(args, "ids")
+    constants: dict[str, str] = {}
+    id_types: list[str] = []
+    for item in args.have or []:
+        if takes_ids and "=" not in item and item.strip():
+            id_types.append(item.strip())
+        else:
+            key, value = _parse_kv(item)
+            constants[key] = value
+    ids = list(getattr(args, "ids", None) or [])
+    if len(id_types) > 1:
+        raise SystemExit(
+            f"error: --have names one type for the ID arguments, got {', '.join(id_types)}. "
+            "Give other inputs as --have TYPE=VALUE."
+        )
+    id_type = id_types[0] if id_types else None
+    if ids and id_type is None:
+        raise SystemExit(
+            f"error: say what {ids[0]!r} is with --have TYPE (e.g. --have protein.query). "
+            "Run `braidworks keys` for the types you can start from."
+        )
+    if id_type is not None and not ids:
+        raise SystemExit(
+            f"error: --have {id_type} types the ID arguments, but no IDs were given. "
+            f"Pass IDs (braidworks get ID… --have {id_type}) or --have {id_type}=VALUE."
+        )
+    if ids and args.in_file:
+        raise SystemExit("error: give IDs as arguments or --in-file, not both")
+    return constants, id_type
+
+
+def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
+    """Build the StrandSets to run from ID arguments, ``--have`` constants and/or a file.
+
+    ``get ID… --have TYPE`` makes one entity per ID, named by the ID. ``--have
+    TYPE=VAL`` (repeatable) are *constants* broadcast onto every entity; a ``--in-file``
+    (or stdin via ``-``) supplies the per-entity strands. With neither IDs nor a file,
     the constants alone form a single entity.
     """
-    constants = dict(_parse_kv(item) for item in (args.have or []))
+    constants, id_type = _have_items(args)
     sets: list[StrandSet] = []
 
-    if args.in_file:
+    if id_type is not None:
+        for value in args.ids:
+            merged = {**constants, id_type: value}
+            sets.append(StrandSet.from_strands(value, [Strand(t, v) for t, v in merged.items()]))
+    elif args.in_file:
         rows = _rows_from_file(args.in_file, args.in_type)
         if not rows:
             _err(f"warning: no input rows read from {args.in_file}")
@@ -215,7 +258,10 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
             sets.append(StrandSet.from_strands(ident, [Strand(t, v) for t, v in merged.items()]))
     else:
         if not constants:
-            raise SystemExit("error: nothing to run — pass --have TYPE=VALUE or --in-file PATH")
+            raise SystemExit(
+                "error: nothing to run — pass IDs with --have TYPE, "
+                "--have TYPE=VALUE or --in-file PATH"
+            )
         sets.append(StrandSet.from_strands("e1", [Strand(t, v) for t, v in constants.items()]))
     for index, ss in enumerate(sets, start=1):
         ss.source_row = index
@@ -374,7 +420,7 @@ def _persistence_from_args(args):
     return QueryPersistence(
         args.cache_db,
         args.run_db,
-        getattr(args, "run_id", None) if args.command == "weave" else None,
+        getattr(args, "run_id", None) if args.command in ("get", "weave") else None,
         CachePolicy(args.cache_positive_ttl, args.cache_negative_ttl, args.cache_max_bytes),
         args.lease_seconds,
     )
@@ -875,7 +921,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     print("Next:")
     print("  braidworks keys                              what you can start from and ask for")
     print("  braidworks path --from TYPE --to TYPE        preview a route without fetching")
-    print("  braidworks weave --have TYPE=VALUE --want TYPE")
+    print("  braidworks get ID --have TYPE --want TYPE")
     return 1 if problems else 0
 
 
@@ -893,12 +939,24 @@ def _cmd_references(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 # argument parser
 # --------------------------------------------------------------------------- #
-def _add_input_flags(p: argparse.ArgumentParser) -> None:
+def _add_input_flags(p: argparse.ArgumentParser, *, ids: bool = False) -> None:
+    if ids:
+        p.add_argument(
+            "ids",
+            nargs="*",
+            metavar="ID",
+            help="values to look up, all of the type named by a bare --have TYPE.",
+        )
     p.add_argument(
         "--have",
         action="append",
-        metavar="TYPE=VALUE",
-        help="an input strand; repeatable. Broadcast onto every --in-file row.",
+        metavar="TYPE[=VALUE]" if ids else "TYPE=VALUE",
+        help=(
+            "TYPE of the ID arguments, or a TYPE=VALUE input strand (repeatable; "
+            "broadcast onto every ID or --in-file row)."
+            if ids
+            else "an input strand; repeatable. Broadcast onto every --in-file row."
+        ),
     )
     p.add_argument(
         "--in-file",
@@ -976,9 +1034,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # weave
-    w = sub.add_parser("weave", help="plan a route from --have to --want and run it.")
-    _add_input_flags(w)
+    # get (alias: weave)
+    w = sub.add_parser(
+        "get",
+        aliases=["weave"],
+        help="look up --want for IDs (or --have TYPE=VALUE / --in-file), routing across sources.",
+        description="Look up the --want types for each input, planning a route across "
+        "the installed sources. Example: braidworks get P04637 TP53 --have protein.query "
+        "--want protein.name",
+    )
+    _add_input_flags(w, ids=True)
     w.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
     w.add_argument(
         "--for-each",
@@ -1124,7 +1189,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    # argparse cannot interleave a subcommand's positionals with its options, so IDs
+    # written after a flag (`get P1 --want x P2`) arrive as leftovers; keep those.
+    args, extra = parser.parse_known_args(argv)
+    if extra and (not hasattr(args, "ids") or any(item.startswith("-") for item in extra)):
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    if extra:
+        args.ids = [*args.ids, *extra]
     return args.func(args)
 
 
