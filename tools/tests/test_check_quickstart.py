@@ -17,7 +17,7 @@ README = """# X
 git clone https://example.test/repo
 cd repo
 uv sync --all-extras
-uv run braidworks weave --have protein.query=P04637 \\
+uv run braidworks get P04637 --have protein.query \\
     --want protein.name,structure.pdb.ids
 ```
 
@@ -34,10 +34,19 @@ class QuickstartCheckTests(unittest.TestCase):
             [
                 "uv sync --all-extras",
                 (
-                    "uv run braidworks weave --have protein.query=P04637 "
+                    "uv run braidworks get P04637 --have protein.query "
                     "--want protein.name,structure.pdb.ids"
                 ),
             ],
+        )
+
+    def test_offline_variant_turns_get_into_path(self):
+        self.assertEqual(
+            offline_variant(
+                "uv run braidworks get P04637 TP53 --have protein.query --want a.b,c.d "
+                "--param organism=9606"
+            ),
+            "uv run braidworks path --from protein.query --to a.b,c.d",
         )
 
     def test_offline_variant_turns_weave_into_path(self):
@@ -51,10 +60,10 @@ class QuickstartCheckTests(unittest.TestCase):
 
     def test_real_readme_has_a_runnable_quickstart(self):
         commands = quickstart_commands((ROOT / "README.md").read_text(encoding="utf-8"))
-        self.assertTrue(any("braidworks weave" in c for c in commands))
+        self.assertTrue(any("braidworks get" in c for c in commands))
         self.assertFalse(any("--package" in c for c in commands), "install every source")
         for command in commands:
-            offline_variant(command)  # every weave must be route-checkable
+            offline_variant(command)  # every get must be route-checkable
 
 
 if __name__ == "__main__":

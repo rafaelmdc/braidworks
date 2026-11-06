@@ -4,10 +4,11 @@ The commands come from the first ```bash block under "## Try one query" in READM
 so the check and the documentation cannot drift apart. ``git clone`` and ``cd`` lines
 are skipped (CI is already inside a checkout).
 
-    python tools/check_quickstart.py            # offline: weave → path (route only)
+    python tools/check_quickstart.py            # offline: get → path (route only)
     python tools/check_quickstart.py --live     # run every command as written
 
-Offline mode rewrites each ``braidworks weave --have T=V --want W`` into
+Offline mode rewrites each ``braidworks get ID --have T --want W`` (or the ``weave``
+alias, or ``--have T=V``) into
 ``braidworks path --from T --to W``: it proves the documented route plans with the
 documented install, without depending on third-party APIs. The live workflow runs the
 real queries.
@@ -38,13 +39,20 @@ def quickstart_commands(readme: str) -> list[str]:
     return [c for c in commands if c and not c.startswith("#") and not c.startswith(SKIP_PREFIXES)]
 
 
+QUERY_VERBS = ("get", "weave")
+
+
 def offline_variant(command: str) -> str:
-    """Turn a ``weave`` into the equivalent ``path`` preview; leave others unchanged."""
+    """Turn a ``get``/``weave`` into the equivalent ``path`` preview; leave others unchanged.
+
+    ``--have TYPE`` (typing positional IDs) and ``--have TYPE=VALUE`` both name a start type.
+    """
     argv = shlex.split(command)
-    if "weave" not in argv:
+    verb = next((word for word in argv if word in QUERY_VERBS), None)
+    if verb is None:
         return command
-    head = argv[: argv.index("weave")]
-    rest = argv[argv.index("weave") + 1 :]
+    head = argv[: argv.index(verb)]
+    rest = argv[argv.index(verb) + 1 :]
     have: list[str] = []
     want: list[str] = []
     i = 0
@@ -63,7 +71,7 @@ def offline_variant(command: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--live", action="store_true", help="run weave commands for real")
+    parser.add_argument("--live", action="store_true", help="run get commands for real")
     args = parser.parse_args(argv)
 
     commands = quickstart_commands((ROOT / "README.md").read_text(encoding="utf-8"))
