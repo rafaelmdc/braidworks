@@ -15,7 +15,7 @@ import asyncio
 import atexit
 import math
 import threading
-from collections.abc import Coroutine, Iterable, Mapping
+from collections.abc import Callable, Coroutine, Iterable, Mapping
 from os import PathLike
 from pathlib import Path
 from typing import Any, Self, TypeVar
@@ -29,11 +29,19 @@ from braidworks.core.exceptions import NoPathError
 from braidworks.core.executor import ReviewPolicy
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.persistence_options import QueryPersistence
+from braidworks.core.persistent_query import continue_run, start_run
 from braidworks.core.planner import Braider
-from braidworks.core.query import QueryOptions, QueryRequest, normalize_expansion, prepare_query
+from braidworks.core.query import (
+    PreparedQuery,
+    QueryOptions,
+    QueryRequest,
+    normalize_expansion,
+    prepare_query,
+)
 from braidworks.core.query_state import continue_query, start_query
 from braidworks.core.registry import BraidRegistry
-from braidworks.core.review import apply_review_decisions
+from braidworks.core.review import ReviewDecision, apply_review_decisions
+from braidworks.core.run_store import RunCheckpoint
 from braidworks.core.strand import Strand, StrandSet
 
 T = TypeVar("T")
@@ -267,6 +275,36 @@ class Session:
         sets = _strand_sets(rows)
         if not sets:
             raise ValueError("no input values to look up")
+        try:
+            prepared = self._prepare_sets(
+                sets,
+                want_types,
+                traversals,
+                expand=expand,
+                review=review,
+                min_confidence=min_confidence,
+                max_expansion=max_expansion,
+                parameter_items=_parameter_items(params, parameters),
+            )
+        except NoPathError as exc:
+            have_types = sorted({t for ss in sets for t in ss.available_types()})
+            lines = explain_no_route(self.registry, have_types, want_types)
+            raise NoPathError("\n".join(lines)) from exc
+        return prepared, want_types
+
+    def _prepare_sets(
+        self,
+        sets: list[StrandSet],
+        want_types: list[str],
+        traversals: list[str],
+        *,
+        expand: str | None,
+        review: str,
+        min_confidence: float,
+        max_expansion: int,
+        parameter_items: tuple[tuple[str | None, str, Any], ...],
+    ) -> PreparedQuery:
+        """Plan typed input rows into a query; the step every interface shares."""
         request = QueryRequest(
             tuple(sets),
             frozenset(want_types),
@@ -278,28 +316,58 @@ class Session:
                 min_confidence,
                 max_expansion,
             ),
-            parameter_items=_parameter_items(params, parameters),
+            parameter_items=parameter_items,
         )
-        registry = self.registry
-        try:
-            prepared = prepare_query(registry, request)
-        except NoPathError as exc:
-            have_types = sorted({t for ss in sets for t in ss.available_types()})
-            lines = explain_no_route(registry, have_types, want_types)
-            raise NoPathError("\n".join(lines)) from exc
-        return prepared, want_types
+        return prepare_query(self.registry, request)
 
-    async def _execute(self, prepared, want_types: list[str]) -> Result:
-        # Keep the engine state on the Result so paused rows can be resumed later.
-        state = start_query(prepared)
-        raw = await continue_query(self.registry, state, cache=self._persistence.cache())
-        return Result(
-            raw,
-            prepared,
-            want_types,
-            session=self,
-            state=state,
+    async def _execute(
+        self,
+        prepared: PreparedQuery,
+        want_types: list[str],
+        *,
+        persistence: QueryPersistence | None = None,
+        on_saved: Callable[[RunCheckpoint], None] | None = None,
+    ) -> Result:
+        """Run a prepared query; with a run store in ``persistence`` it is a saved run."""
+        persistence = persistence if persistence is not None else self._persistence
+        if persistence.run_db is None:
+            # Keep the engine state on the Result so paused rows can be resumed later.
+            state = start_query(prepared)
+            raw = await continue_query(self.registry, state, cache=persistence.cache())
+        else:
+            checkpoint = await start_run(
+                self.registry,
+                prepared,
+                persistence.store(),
+                run_id=persistence.run_id,
+                cache=persistence.cache(),
+                on_saved=on_saved,
+                lease_seconds=persistence.lease_seconds,
+            )
+            state = checkpoint.state
+            raw = state.result
+        return Result(raw, prepared, want_types, session=self, state=state)
+
+    async def _resume_run(
+        self,
+        run_id: str,
+        persistence: QueryPersistence,
+        *,
+        decisions: tuple[ReviewDecision, ...] = (),
+    ) -> tuple[RunCheckpoint, Result]:
+        """Continue a saved run (applying any review ``decisions``) from its store."""
+        checkpoint = await continue_run(
+            self.registry,
+            persistence.store(create=False),
+            run_id,
+            cache=persistence.cache(),
+            decisions=decisions,
+            lease_seconds=persistence.lease_seconds,
         )
+        prepared = checkpoint.definition.prepared
+        state = checkpoint.state
+        want = sorted(prepared.request.targets)
+        return checkpoint, Result(state.result, prepared, want, session=self, state=state)
 
     async def _continue(self, result: Result) -> Result:
         state = apply_review_decisions(

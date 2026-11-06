@@ -63,15 +63,8 @@ from braidworks.core.outcomes import (
     strand_record as _record,
 )
 from braidworks.core.parameters import map_parameter_items
-from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
-from braidworks.core.persistent_query import continue_run
+from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.planner import Braider
-from braidworks.core.query import (
-    QueryOptions,
-    QueryRequest,
-    normalize_expansion,
-    prepare_query,
-)
 from braidworks.core.references import (
     format_references,
     references_for,
@@ -352,26 +345,6 @@ def _map_params(
         return None
 
 
-def _input_groups(sets: list[StrandSet]) -> list[list[StrandSet]]:
-    """Batch rows together only when they actually have the same input types."""
-    grouped: dict[frozenset[str], list[StrandSet]] = {}
-    for ss in sets:
-        grouped.setdefault(ss.available_types(), []).append(ss)
-    return list(grouped.values()) or [[]]
-
-
-def _absorb_result(result: ExecutionResult, part: ExecutionResult) -> None:
-    result.resolved.extend(part.resolved)
-    result.unresolved.extend(part.unresolved)
-    result.review_queue.extend(part.review_queue)
-    result.errors.extend(part.errors)
-    result.truncations.extend(part.truncations)
-    references = {
-        reference.weaver_id: reference for reference in result.references + part.references
-    }
-    result.references = [references[key] for key in sorted(references)]
-
-
 def _archive_start(args, sets, registry, plans, caps, params):
     if not args.archive:
         return None
@@ -407,8 +380,15 @@ def _persistence_from_args(args):
     )
 
 
-async def _execute_prepared(args, registry, prepared):
-    persistence = _persistence_from_args(args)
+def _session(args, registry: BraidRegistry):
+    """The same Session the Python API uses, over the CLI's (patchable) registry."""
+    from braidworks._session import Session
+
+    # `resume` has no --policy: a saved run replays the policy it was prepared with.
+    return Session(registry=registry, backend=getattr(args, "policy", "local_first"))
+
+
+def _saved_announcer(args):
     announced = False
 
     def saved(checkpoint):
@@ -419,7 +399,7 @@ async def _execute_prepared(args, registry, prepared):
         if checkpoint.status in ("complete", "review"):
             _err(f"run status: {checkpoint.status}, revision {checkpoint.revision}")
 
-    return await execute_managed_query(registry, prepared, persistence, on_saved=saved)
+    return saved
 
 
 def _parse_decisions(values):
@@ -480,8 +460,7 @@ def _cmd_runs(args):
 def _cmd_resume(args):
     try:
         store = SQLiteRunStore(args.run_db, create=False)
-        original = store.load(args.run_id)
-        prepared = original.definition.prepared
+        prepared = store.load(args.run_id).definition.prepared
         registry = _load_registry(args.only)
         caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
         archive = _archive_start(
@@ -492,18 +471,16 @@ def _cmd_resume(args):
             caps,
             prepared.effective_params,
         )
-        checkpoint = asyncio.run(
-            continue_run(
-                registry,
-                store,
-                args.run_id,
-                cache=_persistence_from_args(args).cache(),
-                decisions=_parse_decisions(args.decision),
-                lease_seconds=args.lease_seconds,
+        with _session(args, registry) as session:
+            checkpoint, outcome = session._runner().run(
+                session._resume_run(
+                    args.run_id,
+                    _persistence_from_args(args),
+                    decisions=_parse_decisions(args.decision),
+                )
             )
-        )
-        result = checkpoint.state.result
-        want = sorted(prepared.request.targets)
+        result = outcome.raw
+        want = outcome.want
         records = _result_records(result, want)
         if not _archive_finish(args, archive, records, result.to_json()):
             return 1
@@ -529,53 +506,60 @@ def _cmd_resume(args):
 
 def _cmd_weave(args: argparse.Namespace) -> int:
     registry = _load_registry(args.only)
-    backend_policy = BackendPolicy(args.policy)
     want = _split_types(args.want)
     sets = _collect_inputs(args)
-
     # Traversal fan-out: --for-each <relationship> / --traverse <capability-id>.
-    traversal_tokens = list(args.for_each or []) + list(args.traverse or [])
-    if traversal_tokens:
-        return _weave_traversed(args, registry, want, traversal_tokens, sets)
-
-    if not want:
+    # With a traversal --want is optional — you just get the fanned entities.
+    traversals = list(args.for_each or []) + list(args.traverse or [])
+    if not traversals and not want:
         raise SystemExit("error: --want TYPE[,TYPE…] is required")
-    try:
-        prepared = prepare_query(
-            registry,
-            QueryRequest(
-                tuple(sets),
-                frozenset(want),
-                options=QueryOptions(
-                    backend_policy,
-                    normalize_expansion(args.expand),
-                    ReviewPolicy(args.review_policy),
-                    args.confidence_threshold,
-                    args.max_expansion,
-                ),
+    with _session(args, registry) as session:
+        try:
+            prepared = session._prepare_sets(
+                sets,
+                want,
+                traversals,
+                expand=args.expand,
+                review=args.review_policy,
+                min_confidence=args.confidence_threshold,
+                max_expansion=args.max_expansion,
                 parameter_items=tuple(_parse_params(args.param)),
-            ),
-        )
-    except (NoPathError, NoPlanError) as exc:
-        have = sorted({t for ss in sets for t in ss.available_types()})
-        _report_no_route(registry, have, want, exc)
-        return 1
-    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
-        _err(f"error: {exc}")
-        return 1
-    plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
-    step_caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
-    params = prepared.effective_params
-    archive = _archive_start(
-        args, sets, registry, [b.to_json() for b, _ in plans], step_caps, params
-    )
-    _err(f"running {sum(len(b.steps) for b, _ in plans)} step(s) over {len(sets)} input(s)…")
-    try:
-        result = asyncio.run(_execute_prepared(args, registry, prepared))
-    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
-        _err(f"error: {exc}")
-        return 1
+            )
+        except (NoPathError, NoPlanError) as exc:
+            if traversals:
+                _err(f"error: {exc}")
+                return 1
+            have = sorted({t for ss in sets for t in ss.available_types()})
+            _report_no_route(registry, have, want, exc)
+            return 1
+        except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
+            _err(f"error: {exc}")
+            return 1
+        try:
+            caps = {cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids}
+            if traversals:
+                plans = [{"traversals": [list(item) for item in prepared.traversals], "want": want}]
+                route = " → ".join(cid for _, cid in prepared.traversals)
+                progress = f"fanning through {route} over {len(sets)} input(s)…"
+            else:
+                plans = [braid.to_json() for braid, _ in prepared.plans]
+                steps = sum(len(braid.steps) for braid, _ in prepared.plans)
+                progress = f"running {steps} step(s) over {len(sets)} input(s)…"
+            archive = _archive_start(args, sets, registry, plans, caps, prepared.effective_params)
+            _err(progress)
+            outcome = session._runner().run(
+                session._execute(
+                    prepared,
+                    want,
+                    persistence=_persistence_from_args(args),
+                    on_saved=_saved_announcer(args),
+                )
+            )
+        except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
+            _err(f"error: {exc}")
+            return 1
 
+    result = outcome.raw
     records = _result_records(result, want)
     if not _archive_finish(args, archive, records, result.to_json()):
         return 1
@@ -598,82 +582,6 @@ def _cmd_weave(args: argparse.Namespace) -> int:
     # A *fatal* structural error (blocked an entity, not rerouted) fails the run; a
     # failure on one branch of an otherwise-resolved entity is reported but not fatal.
     # --strict also fails on unresolved/review.
-    if result.fatal_errors():
-        return 1
-    if args.strict and (result.unresolved or any(row["requires_review"] for row in records)):
-        return 1
-    return 0
-
-
-def _weave_traversed(
-    args: argparse.Namespace,
-    registry: BraidRegistry,
-    want: list[str],
-    tokens: list[str],
-    sets: list[StrandSet],
-) -> int:
-    """Run a weave that fans *through* one or more relationships (--for-each/--traverse).
-
-    Each token names a fan capability (a relationship noun, or a full capability id);
-    we run them in order, re-rooting on every produced value, then plan ``--want`` from
-    each child. ``--want`` is optional here — with none you just get the fanned entities.
-    """
-    backend_policy = BackendPolicy(args.policy)
-    try:
-        prepared = prepare_query(
-            registry,
-            QueryRequest(
-                tuple(sets),
-                frozenset(want),
-                tuple(tokens),
-                options=QueryOptions(
-                    backend_policy,
-                    normalize_expansion(args.expand, traversal=True),
-                    ReviewPolicy(args.review_policy),
-                    args.confidence_threshold,
-                    args.max_expansion,
-                ),
-                parameter_items=tuple(_parse_params(args.param)),
-            ),
-        )
-        caps_by_id = {
-            cid: registry.get_capability(wid, cid) for wid, cid in prepared.capability_ids
-        }
-        archive = _archive_start(
-            args,
-            sets,
-            registry,
-            [{"traversals": [list(item) for item in prepared.traversals], "want": want}],
-            caps_by_id,
-            prepared.effective_params,
-        )
-        _err(
-            f"fanning through {' → '.join(cid for _, cid in prepared.traversals)} over {len(sets)} input(s)…"
-        )
-        result = asyncio.run(_execute_prepared(args, registry, prepared))
-    except (ValueError, BraidworksError, OSError, sqlite3.Error) as exc:
-        _err(f"error: {exc}")
-        return 1
-
-    records = _result_records(result, want)
-    if not _archive_finish(args, archive, records, result.to_json()):
-        return 1
-
-    _emit(records, args.format, want)
-    if args.references:
-        refs = format_references(result.references)
-        if refs:
-            _err("\nSources:\n" + refs)
-    _summary(
-        {
-            "resolved": len(result.resolved),
-            "unresolved": len(result.unresolved),
-            "review": len(result.review_queue),
-            "errors": len(result.errors),
-        }
-    )
-    _report_errors(result.errors)
-    _report_truncations(result)
     if result.fatal_errors():
         return 1
     if args.strict and (result.unresolved or any(row["requires_review"] for row in records)):
