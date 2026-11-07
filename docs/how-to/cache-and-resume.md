@@ -55,7 +55,7 @@ matches still need review. `--strict` also applies when resuming.
 The explicit Python query API uses `QueryPersistence`, `execute_managed_query`, and
 `continue_run`; a complete script follows below. The `fetch` convenience API does not
 accept persistence paths. Browser controls use the same storage options, with paths
-on the server's disk inside its data directory (`weaverkit serve --data-dir`). Recipes and generated commands retain those paths; review them
+on the server's disk inside its data directory (`braidworks serve --data-dir`). Recipes and generated commands retain those paths; review them
 before sharing.
 
 ## Create a saved query from Python
