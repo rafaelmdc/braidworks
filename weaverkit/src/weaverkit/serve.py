@@ -38,14 +38,11 @@ from braidworks.core.executor import (
 )
 from braidworks.core.inputs import read_input_rows
 from braidworks.core.outcomes import execution_records
-from braidworks.core.persistence_options import QueryPersistence, execute_managed_query
-from braidworks.core.persistent_query import continue_run
+from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.query import (
     QueryOptions,
     QueryRequest,
-    execute_query,
     normalize_expansion,
-    prepare_query,
 )
 from braidworks.core.references import references_for
 from braidworks.core.review import ReviewDecision
@@ -57,7 +54,6 @@ from weaverkit.codegen import cli_artifact, path_artifact, python_artifact
 from weaverkit.streaming import sse_events
 from weaverkit.view import (
     build_data,
-    build_path,
     build_run_views,
     discover_registry,
     parse_policy,
@@ -74,6 +70,17 @@ _SERVE_EXTRA_HINT = (
 # --- request logic (FastAPI-free, unit-testable) -----------------------------
 
 
+def _session(registry, policy=BackendPolicy.LOCAL_FIRST):
+    """The same Session the Python API and CLI use, over this request's registry.
+
+    Coroutines are awaited on the caller's loop, so no private loop thread is started and
+    nothing needs closing; the registry stays the caller's.
+    """
+    from braidworks._session import Session
+
+    return Session(registry=registry, backend=BackendPolicy(policy).value)
+
+
 def _prepare_experiment(registry, have, want, traverse, batch=None, **options):
     sets = (
         batch_inputs(have, batch)
@@ -84,8 +91,7 @@ def _prepare_experiment(registry, have, want, traverse, batch=None, **options):
         raise ValueError("choose inputs and outputs or a pass-through step")
     for i, ss in enumerate(sets, 1):
         ss.source_row = i
-    return prepare_query(
-        registry,
+    return _session(registry, options.get("policy", BackendPolicy.LOCAL_FIRST))._prepare_request(
         QueryRequest(
             tuple(sets),
             frozenset(want),
@@ -98,7 +104,7 @@ def _prepare_experiment(registry, have, want, traverse, batch=None, **options):
                 options.get("confidence_threshold", 0.0),
                 options.get("max_expansion", 10_000),
             ),
-        ),
+        )
     )
 
 
@@ -337,7 +343,41 @@ def batch_inputs(have, batch):
     return sets
 
 
-async def execute_batch_response(
+def _checkpoint_events(on_event, saved=None):
+    def checkpoint(cp):
+        if saved is not None:
+            saved[:] = [cp]
+        if on_event:
+            on_event(
+                {
+                    "event": "checkpoint",
+                    "run_id": cp.run_id,
+                    "revision": cp.revision,
+                    "status": cp.status,
+                }
+            )
+
+    return checkpoint
+
+
+def _query_payload(registry, prepared, raw, want, *, run=None) -> dict:
+    """The browser's response for an executed (or resumed) prepared query."""
+    options = prepared.request.options
+    payload = _traverse_payload(registry, raw, want, [cid for _, cid in prepared.traversals])
+    if len(prepared.plans) == 1:
+        payload["path"] = render_path(registry, prepared.plans[0][0], policy=options.backend_policy)
+    payload["summary"]["inputs"] = len(prepared.request.inputs)
+    return {
+        **payload,
+        "effective_params": _prepared_effective(registry, prepared),
+        "planned_routes": [braid.to_json() for braid, _ in prepared.plans],
+        **({"run": run_status(run)} if run is not None else {}),
+        "review_policy": options.review_policy.value,
+        "confidence_threshold": options.confidence_threshold,
+    }
+
+
+async def execute_query_response(
     registry,
     have,
     want,
@@ -354,7 +394,10 @@ async def execute_batch_response(
     on_event=None,
     persistence=None,
 ):
-    """Plan every row group before I/O, then execute with one shared expansion budget."""
+    """The one run path: plan every row group before I/O, then execute through ``Session``.
+
+    Single inputs, traversals, batches, saved runs and streamed runs all come here.
+    """
     prepared = _prepare_experiment(
         registry,
         have,
@@ -369,39 +412,19 @@ async def execute_batch_response(
         review_policy=review_policy,
         confidence_threshold=confidence_threshold,
     )
-    sets = list(prepared.request.inputs)
-    saved = []
-
-    def checkpoint(cp):
-        saved[:] = [cp]
-        if on_event:
-            on_event(
-                {
-                    "event": "checkpoint",
-                    "run_id": cp.run_id,
-                    "revision": cp.revision,
-                    "status": cp.status,
-                }
-            )
-
-    result = await execute_managed_query(
-        registry, prepared, _persistence(persistence), on_event=on_event, on_saved=checkpoint
+    saved: list = []
+    outcome = await _session(registry, policy)._execute(
+        prepared,
+        list(want),
+        persistence=_persistence(persistence),
+        on_saved=_checkpoint_events(on_event, saved),
+        on_event=on_event,
     )
-    traversals = prepared.traversals
-    plans = [(braid, [sets[i] for i in indices]) for braid, indices in prepared.plans]
-    effective = _prepared_effective(registry, prepared)
-    payload = _traverse_payload(registry, result, want, [cid for _, cid in traversals])
-    if len(plans) == 1:
-        payload["path"] = render_path(registry, plans[0][0], policy=policy)
-    payload["summary"]["inputs"] = len(sets)
-    return {
-        **payload,
-        "effective_params": effective,
-        "planned_routes": [braid.to_json() for braid, _ in plans],
-        **({"run": run_status(saved[-1])} if saved else {}),
-        "review_policy": review_policy,
-        "confidence_threshold": confidence_threshold,
-    }
+    return _query_payload(registry, prepared, outcome.raw, want, run=saved[-1] if saved else None)
+
+
+# The batch endpoint's original name; every run now shares one path.
+execute_batch_response = execute_query_response
 
 
 def _persistence(value):
@@ -418,52 +441,21 @@ def _persistence(value):
 
 
 async def execute_resume_response(registry, run_id, persistence, decisions=(), *, on_event=None):
-    options = _persistence(persistence)
-    store = options.store(create=False)
-
-    def checkpoint(cp):
-        if on_event:
-            on_event(
-                {
-                    "event": "checkpoint",
-                    "run_id": cp.run_id,
-                    "revision": cp.revision,
-                    "status": cp.status,
-                }
-            )
-
-    checkpoint_value = await continue_run(
-        registry,
-        store,
+    """Continue a saved run through ``Session`` (applying any review decisions)."""
+    checkpoint, outcome = await _session(registry)._resume_run(
         run_id,
-        cache=options.cache(),
+        _persistence(persistence),
         decisions=tuple(
             decision if isinstance(decision, ReviewDecision) else ReviewDecision.from_json(decision)
             for decision in decisions
         ),
-        lease_seconds=options.lease_seconds,
-        on_saved=checkpoint,
+        on_saved=_checkpoint_events(on_event),
+        on_event=on_event,
     )
-    prepared = checkpoint_value.definition.prepared
-    payload = _traverse_payload(
-        registry,
-        checkpoint_value.state.result,
-        sorted(prepared.request.targets),
-        [cid for _, cid in prepared.traversals],
+    prepared = checkpoint.definition.prepared
+    return _query_payload(
+        registry, prepared, outcome.raw, sorted(prepared.request.targets), run=checkpoint
     )
-    if len(prepared.plans) == 1:
-        payload["path"] = render_path(
-            registry, prepared.plans[0][0], policy=prepared.request.options.backend_policy
-        )
-    payload["summary"]["inputs"] = len(prepared.request.inputs)
-    return {
-        **payload,
-        "run": run_status(checkpoint_value),
-        "effective_params": _prepared_effective(registry, prepared),
-        "planned_routes": [braid.to_json() for braid, _ in prepared.plans],
-        "review_policy": prepared.request.options.review_policy.value,
-        "confidence_threshold": prepared.request.options.confidence_threshold,
-    }
 
 
 def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
@@ -475,34 +467,11 @@ def _clean_run_inputs(have: dict, want: list) -> tuple[dict, list, str | None]:
     return have, want, None
 
 
-def _run_payload(
-    registry, result, have: dict, want: list, *, policy: BackendPolicy, braid=None
-) -> dict:
-    """Assemble the run response from an ``ExecutionResult`` (shared by sync + streaming)."""
-    rj = result.to_json()
-    runs, _dropped = build_run_views(rj, registry)
-    columns, rows = _rows(rj, want)
-    return {
-        "ok": True,
-        "path": render_path(registry, braid, policy=policy)
-        if braid is not None
-        else build_path(registry, frozenset(have), frozenset(want), policy=policy),
-        "result": rj,
-        "runs": runs,
-        "columns": columns,
-        "identity_columns": _identity_columns(registry, columns),
-        "rows": rows,
-        "want": list(want),  # the requested targets — GUI defaults the table to these
-        "errors": _error_list(rj),
-        "summary": {
-            "resolved": len(rj.get("resolved", [])),
-            "unresolved": len(rj.get("unresolved", [])),
-            "review": len(rj.get("review_queue", [])),
-            "total": result.total(),
-            "truncated_forks": len(result.truncations),
-            "errors": len(rj.get("errors", [])),
-        },
-    }
+def _run_sync(registry, have, want, traverse, **options) -> dict:
+    try:
+        return asyncio.run(execute_query_response(registry, have, want, traverse, None, **options))
+    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def run_response(
@@ -520,43 +489,28 @@ def run_response(
 ) -> dict:
     """Plan ``have -> want``, **execute** it, and return results + light-up metadata.
 
-    Returns ``{"ok": True, "path", "result", "runs", "columns", "rows", "summary"}`` —
+    Returns ``{"ok": True, "path", "result", "runs", "columns", "rows", "summary", …}`` —
     ``result`` is ``ExecutionResult.to_json()`` (carries the per-step ``completion`` the
     front-end replays as the light-up), ``runs`` the fan-out lineage views, ``rows`` the
-    flat results table. ``{"ok": False, "error"}`` when unroutable. Pure + sync (drives the
-    async executor via ``asyncio.run``), so it is unit-testable without the web dependency.
+    flat results table. ``{"ok": False, "error"}`` when unroutable. Sync (drives the one
+    async run path via ``asyncio.run``), so it is unit-testable without the web dependency.
     """
     have, want, err = _clean_run_inputs(have, want)
     if err:
         return {"ok": False, "error": err}
-    ss = StrandSet.from_strands("e1", [Strand(t, v) for t, v in have.items()])
-    ss.source_row = 1
-    try:
-        prepared = prepare_query(
-            registry,
-            QueryRequest(
-                (ss,),
-                frozenset(want),
-                params=params or {},
-                options=QueryOptions(
-                    policy,
-                    normalize_expansion(expand, k),
-                    ReviewPolicy(review_policy),
-                    confidence_threshold,
-                    max_expansion,
-                ),
-            ),
-        )
-        result = asyncio.run(execute_query(registry, prepared))
-        effective = _prepared_effective(registry, prepared)
-    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
-        return {"ok": False, "error": str(exc)}
-    return {
-        **_run_payload(registry, result, have, want, policy=policy, braid=prepared.plans[0][0]),
-        "effective_params": effective,
-        "review_policy": review_policy,
-        "confidence_threshold": confidence_threshold,
-    }
+    return _run_sync(
+        registry,
+        have,
+        want,
+        [],
+        policy=policy,
+        expand=expand,
+        k=k,
+        params=params,
+        max_expansion=max_expansion,
+        review_policy=review_policy,
+        confidence_threshold=confidence_threshold,
+    )
 
 
 def run_traversed_response(
@@ -578,33 +532,36 @@ def run_traversed_response(
     ``traverse`` is a list of fan capability tokens (relationship noun or capability id,
     e.g. ``ncbi.list_orthologs``). Each is run in order, re-rooting on every produced
     value, then ``want`` is planned from each child (``want`` may be empty — you just get
-    the fanned entities). Returns the same shape as :func:`run_response` minus ``path``
-    (a traversal is not a single Dijkstra route, so there is no one route view).
+    the fanned entities). Same shape as :func:`run_response`; ``path`` is ``None``
+    because a traversal is not a single route.
     """
     have = {str(t): v for t, v in (have or {}).items() if str(t).strip()}
     want = [str(t) for t in (want or [])]
     tokens = [str(t) for t in (traverse or []) if str(t).strip()]
     if not have or not tokens:
         return {"ok": False, "error": "pass-through needs a Have value and at least one step"}
-    try:
-        return asyncio.run(
-            execute_batch_response(
-                registry,
-                have,
-                want,
-                tokens,
-                None,
-                policy=policy,
-                expand=expand,
-                k=k,
-                params=params,
-                max_expansion=max_expansion,
-                review_policy=review_policy,
-                confidence_threshold=confidence_threshold,
-            )
-        )
-    except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
-        return {"ok": False, "error": str(exc)}
+    return _run_sync(
+        registry,
+        have,
+        want,
+        tokens,
+        policy=policy,
+        expand=expand,
+        k=k,
+        params=params,
+        max_expansion=max_expansion,
+        review_policy=review_policy,
+        confidence_threshold=confidence_threshold,
+    )
+
+
+def find_response(registry, text: str, limit: int = 10) -> dict:
+    """Fields matching plain words, best first — the same ranking as ``bw.find``."""
+    if not str(text or "").strip():
+        return {"ok": False, "error": "type a few words to search for, e.g. pdb structures"}
+    if not 1 <= int(limit) <= 100:
+        return {"ok": False, "error": "limit must be between 1 and 100"}
+    return {"ok": True, "matches": _session(registry).find(str(text), limit=int(limit)).to_json()}
 
 
 def _traverse_payload(registry, result, want: list, traverse_ids: list) -> dict:
@@ -755,6 +712,10 @@ def create_app(data_dir: str | os.PathLike | None = None):
             registry, req.from_types, req.to_types, policy=policy, traverse=req.traverse
         )
 
+    @app.get("/api/find")
+    def api_find(q: str = "", limit: int = 10):
+        return find_response(discover_registry().registry, q, limit)
+
     @app.post("/api/run")
     def api_run(req: RunRequest):
         registry = discover_registry().registry
@@ -766,7 +727,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
             try:
                 persistence = confine_persistence(req.persistence, root)
                 return asyncio.run(
-                    execute_batch_response(
+                    execute_query_response(
                         registry,
                         req.have,
                         req.want,
@@ -898,7 +859,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
     @app.post("/api/run/stream")
     def api_post_run_stream(req: RunRequest):
         async def execute(on_event):
-            return await execute_batch_response(
+            return await execute_query_response(
                 discover_registry().registry,
                 req.have,
                 req.want,
@@ -937,7 +898,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
             hm, wl, error = _clean_run_inputs(have_map, [t for t in (want or "").split(",") if t])
             if error:
                 raise ValueError(error)
-            return await execute_batch_response(
+            return await execute_query_response(
                 discover_registry().registry,
                 hm,
                 wl,

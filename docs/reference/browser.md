@@ -3,9 +3,19 @@
 HTTP contracts for applications integrating with the optional local server.
 For interactive use, see [the browser guide](../how-to/use-the-browser.md).
 
+## Field search
+
+GET `/api/find?q=WORDS&limit=N` (`limit` 1–100, default 10) returns
+`{"ok": true, "matches": [...]}`, each match as in `FieldMatches.to_json()`: `type_id`,
+`description`, `sources`, `inputs`, `consumers` and `score`. The ranking is
+`bw.find`'s, so the browser, Python and `braidworks find` agree. An empty `q` or an
+out-of-range `limit` returns `{"ok": false, "error": ...}`.
+
 ## Execution and persistence
 
-POST `/api/run` and `/api/run/stream` accept a version-1 `persistence` object
+Every run endpoint executes through the same `Session` as Python and the CLI, so a
+query plans, caches, saves and resumes identically in all three. POST `/api/run` and
+`/api/run/stream` accept a version-1 `persistence` object
 from `QueryPersistence.to_json()`. Inspect with GET `/api/runs?run_db=...` and
 `/api/run/status?run_db=...&run_id=...`. POST `/api/resume` or
 `/api/resume/stream` takes `run_id`, `persistence` and optional version-1

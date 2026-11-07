@@ -313,19 +313,24 @@ class Session:
         parameter_items: tuple[tuple[str | None, str, Any], ...],
     ) -> PreparedQuery:
         """Plan typed input rows into a query; the step every interface shares."""
-        request = QueryRequest(
-            tuple(sets),
-            frozenset(want_types),
-            traversals=tuple(traversals),
-            options=QueryOptions(
-                self._backend,
-                normalize_expansion(expand, traversal=bool(traversals)),
-                ReviewPolicy(review),
-                min_confidence,
-                max_expansion,
-            ),
-            parameter_items=parameter_items,
+        return self._prepare_request(
+            QueryRequest(
+                tuple(sets),
+                frozenset(want_types),
+                traversals=tuple(traversals),
+                options=QueryOptions(
+                    self._backend,
+                    normalize_expansion(expand, traversal=bool(traversals)),
+                    ReviewPolicy(review),
+                    min_confidence,
+                    max_expansion,
+                ),
+                parameter_items=parameter_items,
+            )
         )
+
+    def _prepare_request(self, request: QueryRequest) -> PreparedQuery:
+        """Plan an already-built request (the browser builds its own) on this session."""
         return prepare_query(self.registry, request)
 
     async def _execute(
@@ -335,13 +340,28 @@ class Session:
         *,
         persistence: QueryPersistence | None = None,
         on_saved: Callable[[RunCheckpoint], None] | None = None,
+        on_event: Callable[[dict], None] | None = None,
     ) -> Result:
-        """Run a prepared query; with a run store in ``persistence`` it is a saved run."""
+        """Run a prepared query; with a run store in ``persistence`` it is a saved run.
+
+        ``on_event`` receives progress events (``{"event": "progress", …}``) as row groups
+        finish; ``on_saved`` receives each saved-run checkpoint.
+        """
         persistence = persistence if persistence is not None else self._persistence
         if persistence.run_db is None:
+            if on_event:
+                on_event(
+                    {
+                        "event": "progress",
+                        "input_count": len(prepared.request.inputs),
+                        "completed_inputs": 0,
+                    }
+                )
             # Keep the engine state on the Result so paused rows can be resumed later.
             state = start_query(prepared)
-            raw = await continue_query(self.registry, state, cache=persistence.cache())
+            raw = await continue_query(
+                self.registry, state, cache=persistence.cache(), on_event=on_event
+            )
         else:
             checkpoint = await start_run(
                 self.registry,
@@ -349,6 +369,7 @@ class Session:
                 persistence.store(),
                 run_id=persistence.run_id,
                 cache=persistence.cache(),
+                on_event=on_event,
                 on_saved=on_saved,
                 lease_seconds=persistence.lease_seconds,
             )
@@ -362,6 +383,8 @@ class Session:
         persistence: QueryPersistence,
         *,
         decisions: tuple[ReviewDecision, ...] = (),
+        on_saved: Callable[[RunCheckpoint], None] | None = None,
+        on_event: Callable[[dict], None] | None = None,
     ) -> tuple[RunCheckpoint, Result]:
         """Continue a saved run (applying any review ``decisions``) from its store."""
         checkpoint = await continue_run(
@@ -371,6 +394,8 @@ class Session:
             cache=persistence.cache(),
             decisions=decisions,
             lease_seconds=persistence.lease_seconds,
+            on_saved=on_saved,
+            on_event=on_event,
         )
         prepared = checkpoint.definition.prepared
         state = checkpoint.state
