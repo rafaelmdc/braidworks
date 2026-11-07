@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: api-docs capability-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+.PHONY: api-docs capability-docs cli-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -71,7 +71,7 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
-	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/tests \
+	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/gen_cli_docs.py tools/tests \
 	$(WEAVER_LINT_PATHS)
 
 RUFF_VERSION := 0.16.10
@@ -104,6 +104,10 @@ capability-docs:  ## Regenerate marked source capability tables
 api-docs:  ## Regenerate docs/reference/python-api.md from the public docstrings
 	uv run python tools/gen_python_api.py
 
-docs-check:  ## Reject capability and Python API documentation drift without writing
+cli-docs:  ## Regenerate docs/reference/cli/ from `braidworks --help`
+	uv run python tools/gen_cli_docs.py
+
+docs-check:  ## Reject capability, Python API and CLI documentation drift without writing
 	uv run weaverkit capability-docs --root . --check
 	uv run python tools/gen_python_api.py --check
+	uv run python tools/gen_cli_docs.py --check

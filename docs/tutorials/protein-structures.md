@@ -28,19 +28,20 @@ It does not download biological databases. See [installation](../how-to/install.
 Begin with UniProt accession `P04637`, the human p53 entry:
 
 ```bash
-uv run braidworks weave --have protein.query=P04637 \
+uv run braidworks get P04637 --have protein.query \
     --want protein.name,structure.pdb.ids,structure.pdb.count --only uniprot,pdbe
 ```
 
-`--have` describes the input you possess; `--want` names the information to retrieve.
+The ID comes first and `--have` says what it is; `--want` names the information to
+retrieve.
 UniProt resolves the query into a protein accession and name. PDBe consumes that
 accession and returns its structure listing. The `--only` option keeps this lesson's
 route within those two sources, even if your environment contains other weavers.
 
 Look for a protein name, a list of PDB IDs and a total count. The APIs change, so
 this lesson does not promise specific structure IDs or counts. The list holds every
-distinct structure PDBe returned, and the count is its size; long lists are shortened
-only on screen. A warning about selecting one `pdb.id` describes the representative
+distinct structure PDBe returned, with its size in brackets after the field name
+(`structure.pdb.ids (321): …`), and the count repeats that size. A warning about selecting one `pdb.id` describes the representative
 used for downstream lookup; it does not shorten the list.
 
 If the command fails, inspect the diagnostic before interpreting the biology. Check
@@ -53,21 +54,21 @@ coverage and review outcomes.
 Now ask for each structure's title and experimental method:
 
 ```bash
-uv run braidworks weave --have protein.query=P04637 \
+uv run braidworks get P04637 --have protein.query \
     --want structure.pdb.title,structure.pdb.method --only uniprot,pdbe \
     --expand top:2 --format tsv
 ```
 
 PDBe first lists related `pdb.id` values, then describes two members of that ordered
 set. You should see up to two terminal rows with structure titles and methods, and
-`parent`/`source_row` fields connecting them to the original protein input. The
+`parent`/`row` fields connecting them to the original protein input. The
 source's order determines the selection; it is not a statement that these are the
 best structures for your research question.
 
 Check that the two rows have titles and methods. You have inspected a bounded
 selection, not the full inventory. A protein mapping alone does not establish
 full-length sequence coverage or biological assembly relevance. Further expansion
-controls belong in [related-entity usage](../how-to/run-queries.md#follow-related-entities).
+controls belong in [related-entity usage](../how-to/follow-related-entities.md).
 
 ## Prepare a two-protein batch
 
@@ -85,7 +86,7 @@ so both rows use the same input identity convention.
 Run the batch, saving both a spreadsheet table and an inspectable run archive:
 
 ```bash
-uv run braidworks weave --in-file proteins.csv \
+uv run braidworks get --in-file proteins.csv \
     --want protein.name,structure.pdb.ids,structure.pdb.count --only uniprot,pdbe \
     --format csv --archive protein-run.json > protein-structures.csv
 ```
@@ -95,22 +96,22 @@ archive. The shell's `>` does overwrite an existing CSV, so choose a new table f
 when keeping previous outputs. Progress goes to stderr; the table goes to the file.
 
 Open `protein-structures.csv` in a spreadsheet. This query does not expand related
-structures, so each accepted protein row has a terminal outcome row. `source_row`
-identifies its position in the input table. Keep the original CSV alongside the exports.
+structures, so each accepted protein row has one output row, labelled by its input,
+with its `status`. `row` identifies its position in the input table, and
+`structure.pdb.ids.total` the size of each list. Keep the original CSV alongside the exports.
 
 Check these columns before using the data:
 
 | Column | Check |
 |---|---|
-| `status` | Whether the row resolved, needs review, failed or found no match. |
+| `status` | Whether the row resolved, needs review (`review`), failed (`error`) or found no match (`unresolved`). |
 | `missing` | Whether any requested field is absent. A resolved row may still be partial. |
-| `requires_review` | Whether you need to inspect an uncertain observation before using it. |
-| `warnings`, `errors`, `diagnostics` | Selection limits, incomplete observations or technical failures. |
-| `structure.pdb.ids`, `structure.pdb.count` | Displayed structure IDs versus the true distinct count reported by the lookup. |
+| `structure.pdb.ids`, `structure.pdb.ids.total` | The structure IDs PDBe returned and the list's true size; a total above the IDs shown means the list is partial. |
 
-The PDB ID column uses semicolon-separated values. Structured metadata cells such
-as `missing` and diagnostics contain JSON; the `strands` cell retains typed values
-and provenance. Retain unsuccessful rows in a coverage
+The PDB ID column uses semicolon-separated values. Warnings, errors and truncations
+are reported on stderr while the command runs; the archive keeps them with each row's
+typed values and provenance. Retain unsuccessful rows in a coverage
+Retain unsuccessful rows in a coverage
 report rather than dropping them as empty data. For this small example you should
 normally obtain two resolved rows with names and structure information, but current
 source availability governs the actual outcomes.
@@ -129,5 +130,5 @@ provenance; you supply that scientific judgement.
 For a larger protein list, replace the input rows while retaining the coverage columns.
 For a complete per-structure table, follow the expansion guide and inspect budgets and
 warnings. The [PDBe README](../../weavers/pdbe_weaver/README.md) describes additional
-mapping and detail capabilities; [Python usage](../how-to/run-queries.md#query-from-python) shows
+mapping and detail capabilities; [Python usage](../how-to/work-in-python.md) shows
 how to work with results in a script or notebook.

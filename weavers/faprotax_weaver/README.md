@@ -33,7 +33,7 @@ identifier) with citation and attribution.
 ## Run a lineage-based query
 
 ```bash
-braidworks weave --have organism.name=Methylococcus --want microbe.ecology.functional_groups --policy api_first
+braidworks get --have organism.name=Methylococcus --want microbe.ecology.functional_groups --policy api_first
 ```
 
 This routes through NCBI to obtain the structured lineage (network access

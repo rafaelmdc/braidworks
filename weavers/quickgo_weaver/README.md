@@ -24,10 +24,10 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run quickgo describe_go_term --have go.term=GO:0006915
-braidworks weave --have protein.uniprot.accession=P04637 --want go.annotation.records,go.annotation.coverage --format json
-braidworks weave --have protein.query=P04637 --want go.biological_process   # routed via uniprot
+braidworks get --have protein.uniprot.accession=P04637 --want go.annotation.records,go.annotation.coverage --format json
+braidworks get --have protein.query=P04637 --want go.biological_process   # routed via uniprot
 # fan one protein out into each GO term's definition:
-braidworks weave --have protein.query=P04637 --want go.term.name --expand all
+braidworks get --have protein.query=P04637 --want go.term.name --expand all
 ```
 
 From Python:

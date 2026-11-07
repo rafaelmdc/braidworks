@@ -26,8 +26,8 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run uniprot resolve_protein --have protein.query=P04637
-braidworks weave --have protein.query=TP53 --param organism=9606 --want protein.uniprot.accession,ncbi.taxon.id
-braidworks weave --have protein.query=P04637 --want protein.name,ncbi.taxon.id
+braidworks get --have protein.query=TP53 --param organism=9606 --want protein.uniprot.accession,ncbi.taxon.id
+braidworks get --have protein.query=P04637 --want protein.name,ncbi.taxon.id
 ```
 
 From Python:

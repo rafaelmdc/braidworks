@@ -1,7 +1,7 @@
 # GUI plan — `weaverkit serve` (issue #87)
 
 > **Design history.** Status and priority statements below reflect earlier planning.
-> For current behavior, see [browser usage](../how-to/run-queries.md#use-the-browser).
+> For current behavior, see [browser usage](../how-to/use-the-browser.md).
 > This record is retained for its rationale; it is not an operating guide.
 
 ## Context

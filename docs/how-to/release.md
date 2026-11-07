@@ -48,7 +48,7 @@ wheels, with all spec golden examples; it is separate from latest-core workspace
 In the selected environment from [installation](install.md):
 
     uv run braidworks path --from protein.query --to structure.pdb.ids
-    uv run braidworks weave --have protein.query=P04637 --want protein.name,structure.pdb.ids --format json
+    uv run braidworks get --have protein.query=P04637 --want protein.name,structure.pdb.ids --format json
 
 For the browser, test typed and graph input, parameters, review pause, recipe/code
 round trips, CSV/TSV/JSON downloads, keyboard navigation and retry after failure.

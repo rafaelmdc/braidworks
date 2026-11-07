@@ -207,7 +207,7 @@ Input positions and duplicates are preserved.
 
 ```bash
 braidworks run uniprot describe_protein --have protein.uniprot.accession=P04637 --want protein.sequence,protein.length
-braidworks weave --have gene.ncbi.id=7157 --want protein.sequence --only uniprot
+braidworks get --have gene.ncbi.id=7157 --want protein.sequence --only uniprot
 ```
 
 Complete offline Python example (the fixture's annotation arrays are explicitly

@@ -54,10 +54,11 @@ Start with a researcher walkthrough:
 
 | You want to… | Start here |
 |---|---|
-| Run queries or export a batch to a spreadsheet | [CLI usage](docs/how-to/run-queries.md#query-from-the-command-line) |
+| Run a query from the shell | [Run a query](docs/how-to/run-queries.md) |
+| Export a batch to a spreadsheet | [Process a batch](docs/how-to/process-a-batch.md) |
 | Retrieve values in a script or notebook | [Python tutorial](docs/tutorials/first-analysis-in-python.md), then [Work in Python](docs/how-to/work-in-python.md) |
-| Build and run a query visually | [Browser usage](docs/how-to/run-queries.md#use-the-browser) |
-| Find available fields and source requirements | [Source catalogue](docs/how-to/choose-sources.md) and [key index](docs/reference/keys-index.md) |
+| Build and run a query visually | [Browser usage](docs/how-to/use-the-browser.md) |
+| Find available fields and source requirements | [Find a field](docs/how-to/find-a-field.md), the [source catalogue](docs/how-to/choose-sources.md) and [key index](docs/reference/keys-index.md) |
 | Check missing data, ambiguity, and failures | [Reading results](docs/how-to/check-results.md) |
 | Reuse lookups or continue a saved run | [Cache and saved runs](docs/how-to/cache-and-resume.md) |
 

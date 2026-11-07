@@ -21,7 +21,7 @@ see [sources](choose-sources.md) for acquisition and [NCBI setup](set-up-ncbi-da
 From the checkout, with UniProt and PDBe installed:
 
 ```bash
-uv run braidworks weave --have protein.query=P04637 \
+uv run braidworks get P04637 --have protein.query \
     --want protein.name,structure.pdb.ids \
     --cache-db data/lookups.sqlite --run-db data/runs.sqlite --run-id p53-structures
 uv run braidworks runs --run-db data/runs.sqlite

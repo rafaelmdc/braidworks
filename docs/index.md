@@ -23,7 +23,8 @@ choose the sources your analysis needs, then scale to a batch. The
 ## Complete a task
 
 1. [Install Braidworks](how-to/install.md): choose packages and create a local environment.
-2. [Run a query](how-to/run-queries.md): use the CLI or browser, then process a batch.
+2. [Run a query](how-to/run-queries.md) from the command line, then
+   [process a batch](how-to/process-a-batch.md).
    In a script or notebook, [work in Python](how-to/work-in-python.md).
 3. [Read the results](how-to/check-results.md): check coverage, review matches, and export your data.
 
@@ -33,8 +34,8 @@ For interactive work, [build and run a query in the browser](how-to/use-the-brow
 
 Use the [source catalogue](how-to/choose-sources.md), [key index](reference/keys-index.md),
 [core contracts](reference/core-contracts.md) and [builder configuration](reference/weaver-configuration.md)
-for exact capabilities, connections and construction rules. Command help provides
-CLI option reference; source READMEs link their specs and interpretation notes.
+for exact capabilities, connections and construction rules. The [CLI reference](reference/cli/index.md)
+lists every command and option; source READMEs link their specs and interpretation notes.
 The [reference index](reference/index.md) brings these lookup paths together,
 including [result shapes](reference/results.md) and [storage contracts](reference/persistence.md).
 
@@ -43,15 +44,15 @@ including [result shapes](reference/results.md) and [storage contracts](referenc
 | Task | Guide |
 |---|---|
 | Choose sources and prepare local data | [Source catalogue](how-to/choose-sources.md) |
-| Find input and output field names | `bw.find("pdb structures")` in Python, or the [key index](reference/keys-index.md) |
-| Follow every related structure, pathway, or other entity | [Expansion and relationships](how-to/run-queries.md#follow-related-entities) |
+| Find input and output field names | [Find a field](how-to/find-a-field.md): `braidworks find pdb structures`, `bw.find(...)` in Python, or the [key index](reference/keys-index.md) |
+| Follow every related structure, pathway, or other entity | [Expansion and relationships](how-to/follow-related-entities.md) |
 | Reuse lookups and continue saved work | [Cache and saved runs](how-to/cache-and-resume.md) |
 | Prepare the optional local NCBI taxonomy database | [NCBI database setup](how-to/set-up-ncbi-database.md) |
 | Limit requests to upstream services | [HTTP request pacing](how-to/set-request-rates.md) |
 | Inspect the source network offline | [Network view](network/braidworks-network.html), opened in a browser |
 
-Exact command options are available through `braidworks --help`,
-`braidworks weave --help`, and each subcommand's `--help`. Source-specific capabilities,
+Exact command options are in the [CLI reference](reference/cli/index.md) (also
+`braidworks --help` and each command's `--help`). Source-specific capabilities,
 parameters, and interpretation notes live in the package READMEs linked from the
 [source catalogue](how-to/choose-sources.md).
 

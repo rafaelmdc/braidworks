@@ -7,7 +7,7 @@ For task instructions, use [the documentation index](../index.md).
 | Subject | Reference |
 |---|---|
 | Python API: `get`, `Session`, `Result`, `Listing` | [Python API reference](python-api.md) (generated from docstrings) |
-| CLI commands and options | `braidworks --help`, `braidworks weave --help`, and each subcommand's `--help` |
+| CLI commands and options | [CLI reference](cli/index.md): one page per command, generated from `--help` |
 | Installed capabilities and parameters | `braidworks weavers`; source READMEs/specs linked from [the catalogue](../how-to/choose-sources.md) |
 | Source purposes and setup requirements | [Source catalogue](../how-to/choose-sources.md) |
 | Inputs, outputs and producer/consumer connections | [Generated key index](keys-index.md) |

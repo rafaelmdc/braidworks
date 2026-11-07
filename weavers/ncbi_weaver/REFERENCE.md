@@ -39,7 +39,7 @@ NCBI gene id — and from there into structures, pathways, or orthologs.
 braidworks run ncbi ncbi.list_children --have ncbi.taxon.id=216851 --param rank=species
 braidworks run ncbi ncbi.list_genomes --have ncbi.taxon.id=562 --param reference_only=true
 # organism -> each reference genome -> its assembly detail:
-braidworks weave --have organism.name="Escherichia coli" \
+braidworks get --have organism.name="Escherichia coli" \
     --want genome.assembly.level --param reference_only=true --expand all
 # gene symbol -> NCBI gene id -> its mammalian orthologs, each drillable:
 braidworks run ncbi ncbi.resolve_gene --have protein.query=TP53

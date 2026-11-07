@@ -1,7 +1,7 @@
 # Roadmap: cardinality fan-out (one → many expansion)
 
 > **Design history.** Status and priority statements below reflect earlier planning.
-> For current behavior, see [expansion usage](../how-to/run-queries.md#follow-related-entities) and [core contracts](../reference/core-contracts.md).
+> For current behavior, see [expansion usage](../how-to/follow-related-entities.md) and [core contracts](../reference/core-contracts.md).
 > This record is retained for its rationale; it is not an operating guide.
 
 **Status:** Phase 1 **shipped** (`braidworks-core` 0.2.0); Phases 2–4 designed, not

@@ -70,6 +70,7 @@ def test_plan_response_routes_and_emits_artifacts(registry):
     assert out["path"]["step_count"] == 2
     arts = out["artifacts"]
     assert arts["cli_path"] == "braidworks path --from organism.name --to protein.uniprot.accession --policy local_first"
+    assert shlex.split(arts["cli_weave"])[:2] == ["braidworks", "get"]
     assert "organism.name=<value>" in shlex.split(arts["cli_weave"])
     assert "--want protein.uniprot.accession" in arts["cli_weave"]
     assert "prepare_query(registry, request)" in arts["python"]

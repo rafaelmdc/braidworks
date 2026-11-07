@@ -14,7 +14,7 @@ git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
 uv sync --all-extras
 uv run braidworks doctor
-uv run braidworks weave --have protein.query=P04637 \
+uv run braidworks get P04637 --have protein.query \
     --want protein.name,structure.pdb.ids
 ```
 
@@ -72,7 +72,7 @@ uv pip install --python .venv/bin/python \
     /tmp/braidworks-artifacts/braidworks_core-*.whl \
     /tmp/braidworks-artifacts/uniprot_weaver-*.whl \
     /tmp/braidworks-artifacts/pdbe_weaver-*.whl
-.venv/bin/braidworks weave --have protein.query=P04637 \
+.venv/bin/braidworks get P04637 --have protein.query \
     --want protein.name,structure.pdb.ids
 ```
 
