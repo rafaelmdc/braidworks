@@ -15,28 +15,28 @@ def registry(monkeypatch):
 
 
 def _json(capsys):
-    return json.loads(capsys.readouterr().out)
+    return json.loads(capsys.readouterr().out)["rows"]
 
 
 def test_positional_ids_are_typed_by_bare_have(registry, capsys):
     argv = ["get", "P1", "P2", "--have", "input.a", "--want", "output.value", "--format", "json"]
     assert cli.main(argv) == 0
     records = _json(capsys)
-    assert [r["entity"] for r in records] == ["P1", "P2"]
-    assert [r["source_row"] for r in records] == [1, 2]
-    assert all(r["values"] == {"output.value": "a"} for r in records)
+    assert [r["input"] for r in records] == ["P1", "P2"]
+    assert [r["row"] for r in records] == [1, 2]
+    assert all(r["output.value"] == "a" and r["status"] == "resolved" for r in records)
 
 
 def test_ids_may_follow_options(registry, capsys):
     argv = ["get", "P1", "--have", "input.a", "--want", "output.value", "P2", "--format", "json"]
     assert cli.main(argv) == 0
-    assert [r["entity"] for r in _json(capsys)] == ["P1", "P2"]
+    assert [r["input"] for r in _json(capsys)] == ["P1", "P2"]
 
 
 def test_duplicate_ids_stay_distinct_rows(registry, capsys):
     argv = ["get", "P1", "P1", "--have", "input.a", "--want", "output.value", "--format", "json"]
     assert cli.main(argv) == 0
-    assert [r["source_row"] for r in _json(capsys)] == [1, 2]
+    assert [r["row"] for r in _json(capsys)] == [1, 2]
 
 
 def test_constants_broadcast_onto_every_id():
@@ -53,13 +53,13 @@ def test_constants_broadcast_onto_every_id():
 def test_type_value_form_still_works_under_both_verbs(verb, registry, capsys):
     argv = [verb, "--have", "input.a=value", "--want", "output.value", "--format", "json"]
     assert cli.main(argv) == 0
-    assert [r["entity"] for r in _json(capsys)] == ["e1"]
+    assert [r["input"] for r in _json(capsys)] == ["e1"]
 
 
 def test_weave_alias_accepts_positional_ids(registry, capsys):
     argv = ["weave", "P1", "--have", "input.a", "--want", "output.value", "--format", "json"]
     assert cli.main(argv) == 0
-    assert [r["entity"] for r in _json(capsys)] == ["P1"]
+    assert [r["input"] for r in _json(capsys)] == ["P1"]
 
 
 def test_in_file_still_works_under_get(registry, tmp_path, capsys):
@@ -67,7 +67,7 @@ def test_in_file_still_works_under_get(registry, tmp_path, capsys):
     path.write_text("P1\nP2\n")
     argv = ["get", "--in-file", str(path), "--in-type", "input.a", "--want", "output.value"]
     assert cli.main(argv + ["--format", "json"]) == 0
-    assert [r["entity"] for r in _json(capsys)] == ["P1", "P2"]
+    assert [r["input"] for r in _json(capsys)] == ["P1", "P2"]
 
 
 def test_get_saves_a_run_like_weave(registry, tmp_path, capsys):

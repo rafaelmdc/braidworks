@@ -290,7 +290,15 @@ class Session:
             have_types = sorted({t for ss in sets for t in ss.available_types()})
             lines = explain_no_route(self.registry, have_types, want_types)
             raise NoPathError("\n".join(lines)) from exc
-        return prepared, want_types
+        return prepared, want_types or self._fanned_types(prepared)
+
+    def _fanned_types(self, prepared: PreparedQuery) -> list[str]:
+        """What a traversal fans over (``pdb.id`` for structures): the columns shown when
+        ``for_each`` is given without ``want``, so each child row says which entity it is."""
+        if not prepared.traversals:
+            return []
+        weaver_id, capability_id = prepared.traversals[-1]
+        return sorted(self.registry.get_capability(weaver_id, capability_id).set_outputs)
 
     def _prepare_sets(
         self,

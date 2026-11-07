@@ -4,7 +4,6 @@ import json
 
 from braidworks._session import Session
 from braidworks.core import cli
-from braidworks.core.outcomes import execution_records
 from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.run_store import SQLiteRunStore
 from braidworks.core.strand import Strand, StrandSet
@@ -59,7 +58,7 @@ def test_saved_run_matches_in_memory_run_and_resumes_without_refetching(tmp_path
         assert registry.get_weaver("a").batch_calls == calls
 
 
-def test_cli_weave_records_are_the_sessions_records(monkeypatch, capsys):
+def test_cli_weave_json_is_the_sessions_export(monkeypatch, capsys):
     registry = _registry()
     monkeypatch.setattr(cli, "build_registry_from_entry_points", lambda only=None: registry)
     argv = ["weave", "--have", "input.a=value", "--want", "output.value", "--format", "json"]
@@ -67,4 +66,4 @@ def test_cli_weave_records_are_the_sessions_records(monkeypatch, capsys):
     printed = json.loads(capsys.readouterr().out)
     with Session(registry=_registry()) as session:
         result = session._runner().run(session._execute(_prepare(session), ["output.value"]))
-    assert printed == execution_records(result.raw, ["output.value"])
+    assert printed == json.loads(json.dumps(result.to_json()))

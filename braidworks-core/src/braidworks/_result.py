@@ -48,6 +48,71 @@ def _shown(row: dict[str, Any], type_id: str, width: int | None = None) -> str:
     return text
 
 
+# --------------------------------------------------------------------------- #
+# the row schema, shared by Result and the command line
+# --------------------------------------------------------------------------- #
+def record_row(record: dict[str, Any], want: list[str]) -> dict[str, Any]:
+    """One engine record as a row: input, row, parent?, status, wanted types, missing."""
+    row: dict[str, Any] = {"input": record["entity"], "row": record["source_row"]}
+    if "parent" in record:
+        row["parent"] = record["parent"]
+    row["status"] = record["status"]
+    for type_id in want:
+        row[type_id] = record["values"].get(type_id)
+    row["missing"] = list(record["missing"])
+    return row
+
+
+def row_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
+    """Row keys in display order: input, row, parent (if expanded), status, wanted, missing."""
+    has_parent = any("parent" in row for row in rows)
+    return ["input", "row", *(["parent"] if has_parent else []), "status", *want, "missing"]
+
+
+def _export_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
+    """``row_columns`` plus ``<type>.total`` after each sized list, for flat exports."""
+    sized = {t for t in want for row in rows if isinstance(row.get(t), Listing)}
+    out: list[str] = []
+    for column in row_columns(rows, want):
+        out.append(column)
+        if column in sized:
+            out.append(f"{column}.total")
+    return out
+
+
+def _export_row(row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
+    flat = dict(row)
+    for column in columns:
+        if column.endswith(".total") and column not in row:
+            value = row.get(column[: -len(".total")])
+            flat[column] = value.total if isinstance(value, Listing) else None
+    return flat
+
+
+def rows_csv(rows: list[dict[str, Any]], want: list[str], *, sep: str = ",") -> str:
+    """The rows as CSV (or TSV with ``sep="\\t"``), with a ``.total`` per sized list."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=sep, lineterminator="\n")
+    columns = _export_columns(rows, want)
+    writer.writerow(columns)
+    for row in rows:
+        flat = _export_row(row, columns)
+        writer.writerow([_cell(flat.get(column)) for column in columns])
+    return buffer.getvalue()
+
+
+def rows_summary(rows: list[dict[str, Any]], inputs: int) -> str:
+    """One line of counts: inputs, resolved, unresolved, need review, errors."""
+    counts = {status: 0 for status in STATUSES}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return (
+        f"{inputs} input{'s' if inputs != 1 else ''} · {counts['resolved']} resolved · "
+        f"{counts['unresolved']} unresolved · {counts['review']} need review · "
+        f"{counts['error']} error{'s' if counts['error'] != 1 else ''}"
+    )
+
+
 class ReviewItem:
     """One row paused for a human decision; record it, then call ``result.resume()``.
 
@@ -148,49 +213,13 @@ class Result:
         self._records = execution_records(raw, self.want)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
-        self.rows: list[dict[str, Any]] = [self._row(record) for record in self._records]
-
-    def _row(self, record: dict[str, Any]) -> dict[str, Any]:
-        row: dict[str, Any] = {"input": record["entity"], "row": record["source_row"]}
-        if "parent" in record:
-            row["parent"] = record["parent"]
-        row["status"] = record["status"]
-        for type_id in self.want:
-            row[type_id] = record["values"].get(type_id)
-        row["missing"] = list(record["missing"])
-        return row
+        self.rows: list[dict[str, Any]] = [record_row(r, self.want) for r in self._records]
 
     # --- reading -------------------------------------------------------------------
     @property
     def columns(self) -> list[str]:
         """Row keys in display order: input, row, parent (if expanded), status, wanted types, missing."""
-        has_parent = any("parent" in row for row in self.rows)
-        return [
-            "input",
-            "row",
-            *(["parent"] if has_parent else []),
-            "status",
-            *self.want,
-            "missing",
-        ]
-
-    def _export_columns(self) -> list[str]:
-        """``columns`` plus ``<type>.total`` after each sized list, for flat exports."""
-        sized = {t for t in self.want for row in self.rows if isinstance(row.get(t), Listing)}
-        out: list[str] = []
-        for column in self.columns:
-            out.append(column)
-            if column in sized:
-                out.append(f"{column}.total")
-        return out
-
-    def _export_row(self, row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
-        flat = dict(row)
-        for column in columns:
-            if column.endswith(".total") and column not in row:
-                value = row.get(column[: -len(".total")])
-                flat[column] = value.total if isinstance(value, Listing) else None
-        return flat
+        return row_columns(self.rows, self.want)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -269,27 +298,12 @@ class Result:
 
     def summary(self) -> str:
         """One line of counts: inputs, resolved, unresolved, need review, errors."""
-        counts = {status: 0 for status in STATUSES}
-        for row in self.rows:
-            counts[row["status"]] = counts.get(row["status"], 0) + 1
-        inputs = len(self._prepared.request.inputs)
-        return (
-            f"{inputs} input{'s' if inputs != 1 else ''} · {counts['resolved']} resolved · "
-            f"{counts['unresolved']} unresolved · {counts['review']} need review · "
-            f"{counts['error']} error{'s' if counts['error'] != 1 else ''}"
-        )
+        return rows_summary(self.rows, len(self._prepared.request.inputs))
 
     # --- exporting -----------------------------------------------------------------
     def to_csv(self, path: str | PathLike | None = None, *, sep: str = ",") -> str:
         """Write the rows as CSV (or TSV with ``sep="\\t"``); returns the text."""
-        buffer = io.StringIO()
-        writer = csv.writer(buffer, delimiter=sep, lineterminator="\n")
-        columns = self._export_columns()
-        writer.writerow(columns)
-        for row in self.rows:
-            flat = self._export_row(row, columns)
-            writer.writerow([_cell(flat.get(column)) for column in columns])
-        text = buffer.getvalue()
+        text = rows_csv(self.rows, self.want, sep=sep)
         if path is not None:
             with open(path, "w", encoding="utf-8", newline="") as handle:
                 handle.write(text)
@@ -304,8 +318,8 @@ class Result:
                 "to_pandas() needs pandas: pip install 'braidworks-core[pandas]' "
                 "(or use result.rows / result.to_csv())"
             ) from exc
-        columns = self._export_columns()
-        frame = pd.DataFrame([self._export_row(row, columns) for row in self.rows], columns=columns)
+        columns = _export_columns(self.rows, self.want)
+        frame = pd.DataFrame([_export_row(row, columns) for row in self.rows], columns=columns)
         return frame.explode(explode, ignore_index=True) if explode else frame
 
     def to_json(self) -> dict[str, Any]:
