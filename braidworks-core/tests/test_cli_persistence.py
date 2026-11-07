@@ -67,7 +67,7 @@ def test_cli_review_select_accept_reject_and_duplicate_rows(monkeypatch, tmp_pat
         )
         == 0
     )
-    assert len(json.loads(capsys.readouterr().out)) == 2
+    assert len(json.loads(capsys.readouterr().out)["rows"]) == 2
     assert cli.main(["runs", "review", "--run-db", str(runs), "--format", "json"]) == 0
     status = json.loads(capsys.readouterr().out)
     first, second = [item["strand_set"]["execution_key"] for item in status["reviews"]]
@@ -79,10 +79,10 @@ def test_cli_review_select_accept_reject_and_duplicate_rows(monkeypatch, tmp_pat
     assert (
         cli.main(flags + ["--decision", f"{first}=select:0", "--decision", f"{second}=reject"]) == 0
     )
-    rows = json.loads(capsys.readouterr().out)
+    rows = json.loads(capsys.readouterr().out)["rows"]
     assert {row["status"] for row in rows} == {"review", "unresolved"}
     assert cli.main(flags + ["--decision", f"{first}=accept"]) == 0
-    rows = json.loads(capsys.readouterr().out)
+    rows = json.loads(capsys.readouterr().out)["rows"]
     assert {row["status"] for row in rows} == {"resolved", "unresolved"}
     assert SQLiteRunStore(runs).load("review").status == "complete"
     assert registry.get_weaver("first").batch_calls == 1

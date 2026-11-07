@@ -56,6 +56,7 @@ from braidworks.core.executor import (
     ReviewPolicy,
 )
 from braidworks.core.inputs import read_input_rows
+from braidworks.core.listing import describe_size
 from braidworks.core.outcomes import (
     execution_records as _result_records,
 )
@@ -270,79 +271,62 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
 
 
 # --------------------------------------------------------------------------- #
-# output: one record per entity, rendered per --format
+# output: one row per input, the same schema as Python's ``Result``
 # --------------------------------------------------------------------------- #
-def _cell(value: Any) -> str:
-    """Flatten a value for a TSV/CSV/human cell (lists join with ``;``)."""
-    if isinstance(value, list):
-        return "; ".join(_cell(v) for v in value)
-    if isinstance(value, (dict,)):
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    return "" if value is None else str(value)
+def _human(rows: list[dict[str, Any]], want: list[str]) -> None:
+    """Rows for people: the input and its status, each value (lists with their size)."""
+    from braidworks._result import _cell
 
-
-def _emit(records: list[dict[str, Any]], fmt: str, want: list[str]) -> None:
-    if fmt == "json":
-        json.dump(records, sys.stdout, ensure_ascii=False, indent=2)
-        sys.stdout.write("\n")
-        return
-    if fmt == "jsonl":
-        for rec in records:
-            sys.stdout.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        return
-    if fmt in ("tsv", "csv"):
-        delimiter = "," if fmt == "csv" else "\t"
-        # Stable metadata columns, followed by value keys in requested order.
-        metadata = ["entity", "status", "source_row", "outcome"]
-        if any("parent" in r for r in records):
-            metadata.append("parent")
-        metadata += [
-            "missing",
-            "requires_review",
-            "warnings",
-            "errors",
-            "diagnostics",
-            "truncations",
-            "completion",
-            "candidates",
-            "strands",
-            "references",
-        ]
-        value_cols = list(want)
-        for rec in records:
-            for k in rec["values"]:
-                if k not in value_cols:
-                    value_cols.append(k)
-        cols = metadata + value_cols
-        writer = csv.writer(sys.stdout, delimiter=delimiter, lineterminator="\n")
-        writer.writerow(cols)
-        for rec in records:
-            row = [
-                json.dumps(rec.get(c, []), ensure_ascii=False)
-                if c in metadata[4:] and c != "parent"
-                else _cell(rec.get(c))
-                for c in metadata
-            ]
-            row += [_cell(rec["values"].get(c)) for c in value_cols]
-            writer.writerow(row)
-        return
-    # human (default)
-    for rec in records:
-        head = rec["entity"]
-        if "parent" in rec:
-            head += f"  (from {rec['parent']})"
-        head += "" if rec["status"] == "resolved" else f"  [{rec['status']}]"
-        print(head)
-        if not rec["values"]:
+    seen: dict[str, int] = {}
+    for row in rows:
+        if "parent" not in row:
+            seen[row["input"]] = seen.get(row["input"], 0) + 1
+    for row in rows:
+        head = row["input"]
+        if "parent" in row:
+            head += f"  (from {row['parent']})"
+        elif seen.get(row["input"], 0) > 1:
+            head += f"  (row {row['row']})"
+        print(f"{head}  [{row['status']}]")
+        shown = False
+        for type_id in want:
+            value = row.get(type_id)
+            if value is None:
+                continue
+            # "(2)", or "(25 of 312)" / "(25+)" when the source returned part of the list
+            size = describe_size(value) or (str(len(value)) if isinstance(value, list) else None)
+            label = f"{type_id} ({size})" if size is not None else type_id
+            print(f"  {label}: {_cell(value)}")
+            shown = True
+        if row["missing"]:
+            print(f"  missing: {', '.join(row['missing'])}")
+        elif not shown:
             print("  (no values)")
-        for k, v in rec["values"].items():
-            print(f"  {k}: {_cell(v)}")
         print()
 
 
-def _summary(counts: dict[str, int]) -> None:
-    parts = [f"{n} {label}" for label, n in counts.items() if n]
-    _err("→ " + (", ".join(parts) if parts else "nothing produced"))
+def _emit_rows(
+    rows: list[dict[str, Any]], want: list[str], fmt: str, document: dict[str, Any]
+) -> None:
+    """Print rows per ``--format``; ``document`` is the ``Result.to_json()``-shaped export."""
+    from braidworks._result import rows_csv
+
+    if fmt == "json":
+        json.dump(document, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    elif fmt == "jsonl":
+        for row in rows:
+            sys.stdout.write(json.dumps(row, ensure_ascii=False) + "\n")
+    elif fmt in ("tsv", "csv"):
+        sys.stdout.write(rows_csv(rows, want, sep="," if fmt == "csv" else "\t"))
+    else:
+        _human(rows, want)
+
+
+def _emit_result(outcome, fmt: str) -> None:
+    """Print a :class:`braidworks.Result` exactly as Python exports it, plus its summary."""
+    _emit_rows(outcome.rows, outcome.want, fmt, outcome.to_json())
+    _err("→ " + outcome.summary())
 
 
 def _report_truncations(result: ExecutionResult) -> None:
@@ -531,7 +515,7 @@ def _cmd_resume(args):
         records = _result_records(result, want)
         if not _archive_finish(args, archive, records, result.to_json()):
             return 1
-        _emit(records, args.format, want)
+        _emit_result(outcome, args.format)
         _err(f"run {checkpoint.run_id}: {checkpoint.status}, revision {checkpoint.revision}")
         _report_errors(result.errors)
         _report_truncations(result)
@@ -594,6 +578,7 @@ def _cmd_weave(args: argparse.Namespace) -> int:
                 progress = f"running {steps} step(s) over {len(sets)} input(s)…"
             archive = _archive_start(args, sets, registry, plans, caps, prepared.effective_params)
             _err(progress)
+            want = want or session._fanned_types(prepared)
             outcome = session._runner().run(
                 session._execute(
                     prepared,
@@ -611,19 +596,11 @@ def _cmd_weave(args: argparse.Namespace) -> int:
     if not _archive_finish(args, archive, records, result.to_json()):
         return 1
 
-    _emit(records, args.format, want)
+    _emit_result(outcome, args.format)
     if args.references:
         refs = format_references(result.references)
         if refs:
             _err("\nSources:\n" + refs)
-    _summary(
-        {
-            "resolved": len(result.resolved),
-            "unresolved": len(result.unresolved),
-            "review": len(result.review_queue),
-            "errors": len(result.errors),
-        }
-    )
     _report_errors(result.errors)
     _report_truncations(result)
     # A *fatal* structural error (blocked an entity, not rerouted) fails the run; a
@@ -753,8 +730,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         args, archive, records, {"direct_results": [item.to_json() for item in results]}
     ):
         return 1
-    _emit(records, args.format, want)
-    _summary(counts)
+    from braidworks._result import record_row, rows_summary
+
+    rows = [record_row(record, want) for record in records]
+    summary = rows_summary(rows, len(sets))
+    document = {
+        "summary": summary,
+        "want": list(want),
+        "rows": rows,
+        "references": [ref.to_json() for ref in references_for([args.weaver], registry)],
+        "result": {"direct_results": [item.to_json() for item in results]},
+    }
+    _emit_rows(rows, want, args.format, document)
+    _err("→ " + summary)
     _report_errors(diagnostics)
     if counts["errors"] or (args.strict and (counts["unresolved"] or counts["review"])):
         return 1

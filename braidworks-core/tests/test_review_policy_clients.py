@@ -47,14 +47,16 @@ def test_cli_review_default_selection_and_confidence_floor(
     result = cli.main(
         ["weave", "--have", QUERY + "=TP53", "--want", ID, "--format", "json", *options]
     )
-    row = json.loads(capsys.readouterr().out)[0]
+    data = json.loads(capsys.readouterr().out)
+    row, engine = data["rows"][0], data["result"]
+    # --strict failing on a resolved row (allow_continue) shows it still needs review
     assert result == exit_code and row["status"] == status
-    assert row["requires_review"]
-    assert "Check species before accepting the match" in row["warnings"]
+    assert "Check species before accepting the match" in json.dumps(engine)
     if status == "review":
-        assert len(row["candidates"]) == 2 and ID not in row["values"]
+        candidates = engine["review_queue"][0]["triggering_result"]["candidates"]
+        assert len(candidates) == 2 and row[ID] is None and row["missing"] == [ID]
     else:
-        assert row["values"][ID] == "P1"
+        assert row[ID] == "P1"
 
 
 def test_fetch_default_keeps_candidates_and_opt_in_keeps_review_flag():
