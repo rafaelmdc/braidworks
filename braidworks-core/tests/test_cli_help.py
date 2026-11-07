@@ -51,7 +51,7 @@ def test_get_help_ends_with_examples(capsys):
     assert "--in-file" in examples
 
 
-@pytest.mark.parametrize("command", [("run",), ("resume",), ("runs",), ("path",)])
+@pytest.mark.parametrize("command", [("run",), ("resume",), ("runs",), ("path",), ("find",)])
 def test_commands_show_examples(command, capsys):
     assert "examples:" in _help(capsys, *command)
 
@@ -73,7 +73,7 @@ def test_cache_flags_name_their_unit(capsys):
 
 
 def test_every_command_renders_help(capsys):
-    for command in ("get", "weave", "runs", "resume", "run", "weavers", "keys", "path"):
+    for command in ("get", "weave", "runs", "resume", "run", "weavers", "keys", "path", "find"):
         _help(capsys, command)
     for command in ("doctor", "references"):
         _help(capsys, command)
