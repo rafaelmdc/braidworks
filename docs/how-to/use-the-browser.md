@@ -10,17 +10,24 @@ need. Their API or local-data prerequisites still apply.
 2. Open the localhost address printed by the server. If the port is taken (often an
    earlier server still running), `serve` says so and exits without printing an
    address: stop the other one (`make serve-stop`) or pass `--port 8766`.
-3. Choose the input type and target fields, inspect the route, then enter values and run.
-4. Inspect coverage, review and error information before exporting JSON, CSV or TSV.
+3. Paste your IDs, one per line, or upload a list or table.
+4. Choose what they are (the most widely accepted input type is preselected).
+5. Search for the fields you want in plain words and tick them. Fields no route can
+   reach from your input are greyed out. Any options the route accepts, such as a
+   species filter, appear below the fields.
+6. Click **Get fields**. The table has one row per ID with its status, each value (lists
+   show their size), and the fields still missing.
 
-The route view shows execution progress and rerouting when a step fails. The offline
-`weaverkit view` export only inspects the network; use `serve` for interactive execution.
-See [result interpretation](../explanation/result-meaning.md) and [exports](check-results.md).
+The network graph and the step-by-step builder are under **Explore sources**
+(`/explore`): use them to see how sources connect, follow relationships, or set
+review, cache and expansion settings. The offline `weaverkit view` export only
+inspects the network. See [result interpretation](../explanation/result-meaning.md)
+and [exports](check-results.md).
 
 ## Process a batch
 
-Enable **Batch inputs** and paste one identifier per line, or upload CSV/TSV with field
-names as headers. Empty cells are absent inputs. Shared values, row overrides,
+Paste one identifier per line, or upload a CSV/TSV whose headers name each column's
+field (rows may then start from different fields, and step 2 is skipped). Empty cells are absent inputs. Shared values, row overrides,
 duplicate rows, query parameters and expansion budgets follow [CLI batch rules](process-a-batch.md).
 Inspect parent/source-row fields when expanding related entities.
 
