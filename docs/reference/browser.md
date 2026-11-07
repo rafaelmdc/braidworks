@@ -11,7 +11,7 @@ from `QueryPersistence.to_json()`. Inspect with GET `/api/runs?run_db=...` and
 `/api/resume/stream` takes `run_id`, `persistence` and optional version-1
 `decisions`; query-policy overrides are rejected. Missing status files are not created.
 Every `cache_db` and `run_db` path in these requests is resolved inside the server's
-data directory (`weaverkit serve --data-dir DIR`, default: the directory it was started
+data directory (`braidworks serve --data-dir DIR`, default: the directory it was started
 in). Relative paths resolve against it; a path that resolves outside it, including
 through `..` or a symlink, returns `{"ok": false}` with an explanation and no file is
 opened or created. `/api/code` only renders commands and does not open files.

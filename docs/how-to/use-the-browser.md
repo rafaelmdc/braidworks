@@ -6,8 +6,10 @@ need. Their API or local-data prerequisites still apply.
 
 ## Run a query
 
-1. From the checkout, start `uv run weaverkit serve`.
-2. Open the localhost address printed by the server.
+1. From the checkout, start `uv run braidworks serve`.
+2. Open the localhost address printed by the server. If the port is taken (often an
+   earlier server still running), `serve` says so and exits without printing an
+   address: stop the other one (`make serve-stop`) or pass `--port 8766`.
 3. Choose the input type and target fields, inspect the route, then enter values and run.
 4. Inspect coverage, review and error information before exporting JSON, CSV or TSV.
 
@@ -31,7 +33,7 @@ it does not require the browser server at execution time. See [artifact referenc
 Expand **Cache and saved runs** to set a lookup-cache and/or run-store file. Blank paths
 retain in-memory execution. Advanced controls set TTLs, payload budget and the run lease.
 Paths are on the server's disk and must stay inside its data directory: the folder
-`weaverkit serve` was started in, or the one given with `--data-dir`. Relative paths
+`braidworks serve` was started in, or the one given with `--data-dir`. Relative paths
 such as `data/runs.sqlite` resolve inside it; paths outside it are refused. Recipes and
 generated commands retain the paths, so inspect them before sharing a recipe.
 

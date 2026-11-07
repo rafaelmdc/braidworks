@@ -163,7 +163,7 @@ Install `weaverkit` with its `serve` extra as described in
 [installation](install.md#start-the-browser), then start:
 
 ```bash
-uv run weaverkit serve
+uv run braidworks serve
 ```
 
 Open the localhost address printed by the server. Choose the input and target fields,

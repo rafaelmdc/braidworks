@@ -35,7 +35,7 @@ when a compatible wheel is unavailable.
 ## Start the browser
 
 ```bash
-uv run weaverkit serve
+uv run braidworks serve
 ```
 
 Open the localhost address printed by the server. The browser accepts single inputs,
