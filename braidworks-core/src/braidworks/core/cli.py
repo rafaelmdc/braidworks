@@ -14,6 +14,7 @@ Subcommands
   weavers list installed weavers and their capabilities
   keys    list the strand types that flow between weavers (who produces / consumes)
   path    show the route from one type to another without running it
+  find    search the installed fields by meaning (``braidworks find pdb structures``)
   references  print source citations for the installed weavers
 
 The registry is discovered from installed ``braidworks.weavers`` entry points, so a
@@ -920,9 +921,46 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         return 1
     print("Next:")
     print("  braidworks keys                              what you can start from and ask for")
+    print("  braidworks find WORD…                        search fields by meaning")
     print("  braidworks path --from TYPE --to TYPE        preview a route without fetching")
     print("  braidworks get ID --have TYPE --want TYPE")
     return 1 if problems else 0
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return number
+
+
+def _cmd_find(args: argparse.Namespace) -> int:
+    """Rank installed fields against plain words — the same ranking as ``bw.find``."""
+    with _session(args, _load_registry(args.only)) as session:
+        matches = session.find(" ".join(args.words), limit=args.limit)
+    if args.format == "json":
+        json.dump(matches.to_json(), sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    elif args.format == "tsv":
+        writer = csv.writer(sys.stdout, delimiter="\t", lineterminator="\n")
+        writer.writerow(["type_id", "description", "sources", "inputs", "score"])
+        for match in matches:
+            row = match.to_json()
+            writer.writerow(
+                [
+                    row["type_id"],
+                    row["description"],
+                    ",".join(row["sources"]),
+                    ",".join(row["inputs"]),
+                    row["score"],
+                ]
+            )
+    elif matches:
+        print(repr(matches))
+    if not matches:
+        _err("no matching fields — try other words, or run `braidworks keys` for every type.")
+        return 1
+    return 0
 
 
 def _cmd_references(args: argparse.Namespace) -> int:
@@ -1280,6 +1318,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="backend policy (default: local_first).",
     )
     pa.set_defaults(func=_cmd_path)
+
+    # find
+    fd = _subparser(
+        sub,
+        "find",
+        help="search the installed fields by meaning; use a match with --want or --have.",
+        usage="braidworks find WORD… [options]",
+        examples=(
+            "braidworks find pdb structures",
+            "braidworks find pathways --format json",
+            "braidworks find organism name --limit 3",
+        ),
+    )
+    fd.add_argument("words", nargs="+", metavar="WORD", help="plain words to search for.")
+    fd.add_argument(
+        "--limit", type=_positive_int, default=10, metavar="N", help="most matches to show."
+    )
+    fd.add_argument("--format", choices=["human", "json", "tsv"], default="human")
+    _add_only_flag(fd)
+    fd.set_defaults(func=_cmd_find)
 
     # doctor
     dr = sub.add_parser("doctor", help="check the installation and suggest fixes.")

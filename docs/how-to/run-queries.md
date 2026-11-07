@@ -47,11 +47,14 @@ handle it.
 ### Find fields and preview a route
 
 ```bash
+uv run braidworks find pdb structures
 uv run braidworks weavers
 uv run braidworks keys --produces structure.pdb.ids
 uv run braidworks path --from protein.query --to structure.pdb.ids
 ```
 
+`find` searches the installed fields by meaning, best match first, with the same
+ranking as `bw.find` in Python; use a match as `--want` (or `--have`).
 `weavers` lists installed capabilities and their parameters. `keys` shows which
 sources produce or consume a field. `path` previews a route without fetching data.
 The [key index](../reference/keys-index.md) covers the repository's full catalogue.
