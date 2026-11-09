@@ -89,6 +89,21 @@ select, input[type="search"], input[type="text"], input[type="number"] { border:
 .options label { display: grid; gap: 4px; font-size: 13.5px; }
 .options .note { color: var(--muted); font-size: 12.5px; }
 .problem { color: var(--warn); font-size: 13.5px; white-space: pre-line; }
+details.adv { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 18px; background: var(--panel); }
+details.adv summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.advgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 18px; padding-top: 12px; font-size: 13.5px; }
+.advgrid label { display: grid; gap: 4px; }
+.advgrid .note, .advnote { color: var(--muted); font-size: 12.5px; }
+.advgroup { grid-column: 1 / -1; font-weight: 600; font-size: 13px; padding-top: 4px; }
+.savebox { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding-top: 28px; }
+.gallery h2 { grid-column: 1 / -1; font-size: 17px; }
+.example { position: relative; text-align: left; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 14px; display: grid; gap: 4px; cursor: pointer; }
+.example:hover { border-color: var(--accent); }
+.example b { font-weight: 600; padding-right: 22px; }
+.example span { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.example .forget { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: var(--muted); width: 22px; height: 22px; border-radius: 99px; }
+.example .forget:hover { background: var(--err-soft); color: var(--err); }
 .runbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
 .run { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 10px 18px; font-weight: 600; font-size: 15px; }
 .run:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -165,7 +180,7 @@ tr.review-row td { background: var(--warn-soft); }
 
   <div class="form">
     <section class="step" aria-labelledby="s1">
-      <div class="step-head"><span class="num">1</span><h2 id="s1">Your IDs</h2><span class="hint">One per line, or separated by spaces or commas.</span></div>
+      <div class="step-head"><span class="num">1</span><h2 id="s1">Your IDs</h2><span class="hint">One per line (commas also separate). Names may contain spaces.</span></div>
       <textarea id="ids" spellcheck="false" aria-label="Identifiers" placeholder="P04637&#10;BRCA1"></textarea>
       <div class="row">
         <span class="count" id="idcount"></span>
@@ -194,9 +209,38 @@ tr.review-row td { background: var(--warn-soft); }
       </div>
     </section>
 
+    <details class="adv" id="adv">
+      <summary>Advanced settings</summary>
+      <div class="advgrid">
+        <span class="advgroup">Sources and matching</span>
+        <label for="a-policy">Local data or web APIs
+          <select id="a-policy"><option value="local_first">Local data first, then the API</option><option value="api_first">API first, then local data</option><option value="local_only">Local data only</option><option value="api_only">API only</option></select></label>
+        <label for="a-review">Ambiguous matches
+          <select id="a-review"><option value="halt">Pause for my choice</option><option value="allow_continue">Take the best candidate (row stays flagged)</option></select></label>
+        <label for="a-conf">Minimum confidence (0–1)
+          <input type="number" id="a-conf" min="0" max="1" step="0.05" value="0"><span class="note">Lower-scoring matches pause for review. Scores are source heuristics.</span></label>
+        <span class="advgroup">Lists in later steps</span>
+        <label for="a-expand">When a step returns a list
+          <select id="a-expand"><option value="top">Use the first member</option><option value="all">Follow every member</option><option value="top_k">Follow the first few</option></select></label>
+        <label for="a-k">How many to follow<input type="number" id="a-k" min="1" value="3"></label>
+        <label for="a-max">Most rows in one run<input type="number" id="a-max" min="1" value="10000"><span class="note">Original inputs always keep their row.</span></label>
+        <span class="advgroup">Cache and saved runs</span>
+        <label for="a-cache">Lookup cache file<input type="text" id="a-cache" placeholder="off, e.g. data/lookups.sqlite"></label>
+        <label for="a-rundb">Save a resumable run in<input type="text" id="a-rundb" placeholder="off, e.g. data/runs.sqlite"></label>
+        <label for="a-runid">Run name<input type="text" id="a-runid" placeholder="generated if blank"></label>
+        <label for="a-lease">Run lease (seconds)<input type="number" id="a-lease" min="1" value="60"><span class="note">How long this server holds the run while it executes.</span></label>
+        <span class="advnote" style="grid-column: 1 / -1">Files are on the server's disk, inside the folder it was started in (or its <code>--data-dir</code>).</span>
+      </div>
+    </details>
+
     <div class="runbar">
       <span class="progress" id="progress" aria-live="polite">Paste IDs, choose their type and at least one field.</span>
-      <button class="run" id="run" type="button" disabled>Get fields</button>
+      <div class="savebox">
+        <button class="ghost" id="save" type="button">Save as example</button>
+        <input type="text" id="savename" placeholder="Name this example" aria-label="Example name" hidden>
+        <button class="ghost" id="saveok" type="button" hidden>Save</button>
+        <button class="run" id="run" type="button" disabled>Get fields</button>
+      </div>
     </div>
   </div>
 
@@ -229,11 +273,17 @@ tr.review-row td { background: var(--warn-soft); }
       </aside>
     </div>
   </section>
+
+  <section class="gallery" id="gallery" aria-labelledby="ex" hidden>
+    <h2 id="ex">Start from an example</h2>
+  </section>
 </div>
 
 <script>
 const CATALOG = __CATALOG__;
 const STARTS = __STARTS__;
+const EXAMPLES = __EXAMPLES__;
+const RECIPES_KEY = "braidworks.recipes";  // shared with the Explore builder
 
 const FIELDS = CATALOG.map(([type_id, description, sources, inputs, consumers]) => ({ type_id, description, sources, inputs, consumers }));
 const BY_ID = Object.fromEntries(FIELDS.map(f => [f.type_id, f]));
@@ -247,7 +297,10 @@ function reachable(start) {
   while (grew) { grew = false; for (const f of FIELDS) if (!seen.has(f.type_id) && f.inputs.some(i => seen.has(i))) { seen.add(f.type_id); grew = true; } }
   return seen;
 }
-function ids() { return $("#ids").value.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean); }
+// One ID per line (commas and semicolons also separate); spaces belong to the ID, since
+// names such as "Escherichia coli" contain them.
+function ids() { return $("#ids").value.split(/[\n\r,;]+/).map(s => s.trim()).filter(Boolean); }
+const shown = x => (x !== null && typeof x === "object" ? JSON.stringify(x) : String(x));
 
 function renderCount() {
   if (state.table) { $("#idcount").innerHTML = `<b>${state.table.rows}</b> table row${state.table.rows === 1 ? "" : "s"}`; return; }
@@ -300,7 +353,7 @@ async function plan() {
   if (!state.want.length || !startTypes().length) { $("#routebox").hidden = true; renderRun(); return; }
   try {
     const r = await (await fetch("/api/plan", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ from_types: startTypes(), to_types: state.want }) })).json();
+      body: JSON.stringify({ from_types: startTypes(), to_types: state.want, policy: $("#a-policy").value }) })).json();
     if (seq !== planSeq) return;
     state.routeOk = !!r.ok;
     state.paramCaps = r.ok ? (r.parameter_capabilities || []) : [];
@@ -332,9 +385,9 @@ function sizeText(s) { return s.complete ? `${s.shown}` : s.total === null ? `${
 function cell(value, size, key) {
   if (value === null || value === undefined) return `<td class="absent">—</td>`;
   if (Array.isArray(value)) {
-    const shown = value.slice(0, 3).map(x => `<code>${esc(x)}</code>`).join(""), rest = value.length - 3;
+    const first = value.slice(0, 3).map(x => `<code>${esc(shown(x))}</code>`).join(""), rest = value.length - 3;
     const count = size ? sizeText(size) : String(value.length);
-    return `<td><div class="list" data-list="${esc(key)}">${shown}${rest > 0 ? `<button type="button" class="more" data-more="${esc(key)}">+${rest} more</button>` : ""}</div><span class="size">${count} in total</span></td>`;
+    return `<td><div class="list" data-list="${esc(key)}">${first}${rest > 0 ? `<button type="button" class="more" data-more="${esc(key)}">+${rest} more</button>` : ""}</div><span class="size">${count} in total</span></td>`;
   }
   if (typeof value === "object") return `<td><code>${esc(JSON.stringify(value))}</code></td>`;
   return `<td>${esc(value)}</td>`;
@@ -419,6 +472,9 @@ function download(kind) {
 }
 function showOutcome(done) {
   state.exports = done.exports; state.token = done.review_token || null; state.decisions = {};
+  // A saved run keeps the persistence it was started with, for resuming from its store.
+  if (done.run) state.saved = { run_id: done.run.run_id, persistence: (state.saved && state.saved.run_id === done.run.run_id) ? state.saved.persistence : { ...requestBody().persistence, run_id: done.run.run_id } };
+  else state.saved = null;
   renderRoute(done);
   renderResults(done.table);
   $("#progress").textContent = done.table.summary;
@@ -427,9 +483,12 @@ async function resume() {
   state.running = true; renderRun(); renderResume();
   const progress = $("#progress"); progress.classList.remove("error"); progress.textContent = "Resuming the paused rows…";
   try {
-    if (!state.token) throw new Error("this result has no paused rows to resume");
     const decisions = Object.values(state.decisions).map(d => ({ version: 1, entity_key: d.key, action: d.action, candidate_index: d.candidate_index ?? null }));
-    const r = await (await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: state.token, decisions }) })).json();
+    // A saved run continues from its store; otherwise the server holds the paused result.
+    if (!state.saved && !state.token) throw new Error("this result has no paused rows to resume");
+    const [endpoint, payload] = state.saved ? ["/api/resume", { run_id: state.saved.run_id, persistence: state.saved.persistence, decisions }]
+      : ["/api/review", { token: state.token, decisions }];
+    const r = await (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })).json();
     if (!r.ok) throw new Error(r.error);
     showOutcome(r);
   } catch (e) { state.failed = true; progress.classList.add("error"); progress.textContent = "Resume failed: " + e.message; }
@@ -444,7 +503,12 @@ function requestBody() {
   }
   const batch = state.table ? { text: state.table.text, format: state.table.format }
     : { text: ids().join("\n"), format: "lines", input_type: state.have };
-  return { have: {}, want: state.want, batch, params };
+  const v = id => $("#" + id).value.trim(), body = { have: {}, want: state.want, batch, params,
+    policy: v("a-policy"), review_policy: v("a-review"), confidence_threshold: Number(v("a-conf") || 0),
+    expand: v("a-expand"), k: Number(v("a-k") || 3), max_expansion: Number(v("a-max") || 10000) };
+  if (v("a-cache") || v("a-rundb")) body.persistence = { version: 1, cache_db: v("a-cache") || null,
+    run_db: v("a-rundb") || null, run_id: v("a-rundb") && v("a-runid") || null, lease_seconds: Number(v("a-lease") || 60) };
+  return body;
 }
 async function run() {
   state.running = true; state.result = null; state.failed = false; renderRun();
@@ -476,6 +540,49 @@ async function run() {
   } finally { state.running = false; renderRun(); }
 }
 
+// ---- examples gallery: built-in examples the installed sources can answer, plus the
+// recipes saved here or in the Explore builder (same browser storage) ----
+function loadRecipes() { try { return JSON.parse(localStorage.getItem(RECIPES_KEY) || "{}") || {}; } catch { return {}; } }
+function storeRecipes(recipes) { try { localStorage.setItem(RECIPES_KEY, JSON.stringify(recipes)); return true; } catch { return false; } }
+function recipeToExample(name, r) {
+  if (!r || !Array.isArray(r.from) || r.from.length !== 1 || (r.traverse || []).length) return null;  // pass-through recipes stay in Explore
+  const have = r.from[0], batch = r.batch || null;
+  const text = batch && batch.text ? batch.text : (r.values || {})[have] || "";
+  return { name, have: batch && batch.input_type || have, ids: String(text), want: r.want || [], params: r.params || {},
+    advanced: { policy: r.policy, review_policy: r.review_policy, confidence_threshold: r.confidence_threshold, expand: r.expand, k: r.k, max_expansion: r.max_expansion }, saved: true };
+}
+function renderGallery() {
+  const mine = Object.entries(loadRecipes()).map(([n, r]) => recipeToExample(n, r)).filter(Boolean);
+  const cards = [...EXAMPLES.map(e => ({ ...e, saved: false })), ...mine];
+  state.examples = cards;
+  $("#gallery").hidden = !cards.length;
+  $("#gallery").innerHTML = `<h2 id="ex">Start from an example</h2>` + cards.map((e, i) =>
+    `<div class="example" role="button" tabindex="0" data-example="${i}"><b>${esc(e.name)}</b><span>${esc(e.ids.split(/[\n\r,;]+/).filter(Boolean).slice(0, 4).join(", "))} as <code>${esc(e.have)}</code> → ${e.want.map(t => `<code>${esc(t)}</code>`).join(", ")}</span>${e.saved ? `<button type="button" class="forget" data-forget="${esc(e.name)}" aria-label="Delete ${esc(e.name)}">×</button>` : ""}</div>`).join("");
+}
+function setAdvanced(a) {
+  const set = (id, v) => { if (v !== undefined && v !== null && v !== "") $("#" + id).value = v; };
+  set("a-policy", a.policy); set("a-review", a.review_policy); set("a-conf", a.confidence_threshold);
+  set("a-expand", a.expand); set("a-k", a.k); set("a-max", a.max_expansion);
+}
+function loadExample(e) {
+  state.table = null; $("#tablenote").hidden = $("#cleartable").hidden = true; $("#ids").disabled = false;
+  $("#ids").value = e.ids; state.have = e.have; state.want = e.want.slice(); state.params = JSON.parse(JSON.stringify(e.params || {}));
+  setAdvanced(e.advanced || {}); $("#q").value = ""; state.matches = [];
+  state.result = null; state.failed = false; $("#results").hidden = true;
+  renderTypes(); renderMatches(); renderCount(); plan();
+  $("#progress").textContent = `Loaded “${e.name}”. Check the fields, then run.`;
+  window.scrollTo({ top: 0 });
+}
+function saveExample(name) {
+  const recipe = { version: 2, mode: "form", from: [state.have], want: state.want.slice(), values: {}, traverse: [],
+    batch: { text: ids().join("\n"), format: "lines", input_type: state.have }, params: state.params,
+    policy: $("#a-policy").value, review_policy: $("#a-review").value, confidence_threshold: Number($("#a-conf").value || 0),
+    expand: $("#a-expand").value, k: Number($("#a-k").value || 3), max_expansion: Number($("#a-max").value || 10000) };
+  const ok = storeRecipes({ ...loadRecipes(), [name]: recipe });
+  $("#progress").textContent = ok ? `Saved “${name}” to your examples in this browser.` : "This browser does not allow saving examples.";
+  renderGallery();
+}
+
 // ---- events ----
 $("#ids").addEventListener("input", () => { renderCount(); renderRun(); });
 $("#types").addEventListener("click", e => { const b = e.target.closest("[data-type]"); if (!b) return; state.have = b.dataset.type; renderTypes(); renderMatches(); plan(); });
@@ -485,6 +592,25 @@ $("#matches").addEventListener("change", e => { const t = e.target.dataset.field
 $("#chosen").addEventListener("click", e => { const t = e.target.dataset.remove; if (!t) return; state.want = state.want.filter(x => x !== t); renderMatches(); plan(); });
 $("#options").addEventListener("input", e => { const c = e.target.dataset.cap; if (!c) return; (state.params[c] ||= {})[e.target.dataset.param] = e.target.value; });
 $("#run").addEventListener("click", run);
+$("#a-policy").addEventListener("change", plan);
+$("#save").addEventListener("click", () => { $("#savename").hidden = $("#saveok").hidden = false; $("#save").hidden = true; $("#savename").focus(); });
+function finishSave(keep = true) {
+  const name = $("#savename").value.trim();
+  if (keep && name) {
+    if (state.table) $("#progress").textContent = "Uploaded tables are not saved as examples; paste the IDs instead.";
+    else if (state.want.length && ids().length) saveExample(name);
+    else $("#progress").textContent = "Add IDs and at least one field before saving.";
+  }
+  $("#savename").value = ""; $("#savename").hidden = $("#saveok").hidden = true; $("#save").hidden = false;
+}
+$("#saveok").addEventListener("click", () => finishSave());
+$("#savename").addEventListener("keydown", e => { if (e.key === "Enter") finishSave(); if (e.key === "Escape") finishSave(false); });
+$("#gallery").addEventListener("click", e => {
+  const f = e.target.closest("[data-forget]");
+  if (f) { const all = loadRecipes(); delete all[f.dataset.forget]; storeRecipes(all); renderGallery(); return; }
+  const c = e.target.closest("[data-example]"); if (c) loadExample(state.examples[Number(c.dataset.example)]);
+});
+$("#gallery").addEventListener("keydown", e => { const c = e.target.closest("[data-example]"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); loadExample(state.examples[Number(c.dataset.example)]); } });
 $("#resume").addEventListener("click", resume);
 $("#results").addEventListener("click", e => {
   const f = e.target.closest("[data-filter]");
@@ -500,7 +626,7 @@ $("#results").addEventListener("click", e => {
   }
   const m = e.target.closest("[data-more]"); if (!m) return;
   const [i, t] = m.dataset.more.split(/:(.+)/), value = state.result.rows[Number(i)][t];
-  m.parentElement.innerHTML = value.map(x => `<code>${esc(x)}</code>`).join("");
+  m.parentElement.innerHTML = value.map(x => `<code>${esc(shown(x))}</code>`).join("");
 });
 $("#file").addEventListener("change", async e => {
   const file = e.target.files[0]; if (!file) return;
@@ -516,11 +642,71 @@ $("#file").addEventListener("change", async e => {
 });
 $("#cleartable").addEventListener("click", () => { state.table = null; $("#tablenote").hidden = $("#cleartable").hidden = true; $("#ids").disabled = false; renderCount(); renderTypes(); renderMatches(); plan(); });
 
-renderTypes(); renderMatches(); renderCount(); renderRun();
+renderTypes(); renderMatches(); renderCount(); renderRun(); renderGallery();
 </script>
 </body>
 </html>
 """
+
+
+# Runnable starting points. Each is shown only when the installed sources can answer it,
+# so a minimal install never offers an example that cannot run.
+EXAMPLES = [
+    {
+        "name": "Structures and pathways for cancer genes",
+        "have": "protein.query",
+        "ids": "P04637\nBRCA1\nEGFR",
+        "want": ["protein.name", "structure.pdb.ids", "pathway.reactome.names"],
+        "params": {"resolve_protein": {"organism": "9606"}},
+    },
+    {
+        "name": "Biological processes of human genes",
+        "have": "protein.query",
+        "ids": "TP53\nBRCA1\nMYC",
+        "want": ["protein.name", "go.biological_process"],
+        "params": {"resolve_protein": {"organism": "9606"}},
+    },
+    {
+        "name": "AlphaFold confidence for a protein",
+        "have": "protein.uniprot.accession",
+        "ids": "P04637",
+        "want": ["structure.alphafold.mean_plddt"],
+        "params": {},
+    },
+    {
+        "name": "Ecological functions of a microbe",
+        "have": "organism.name",
+        "ids": "Methylococcus",
+        "want": ["microbe.ecology.functional_groups"],
+        "params": {},
+    },
+    {
+        "name": "Taxonomy of an organism",
+        "have": "organism.name",
+        "ids": "Escherichia coli",
+        "want": ["ncbi.taxon.id", "ncbi.taxon.lineage"],
+        "params": {},
+    },
+]
+
+
+def runnable_examples(catalog) -> list[dict]:
+    """The built-in examples whose input is accepted and whose fields are reachable."""
+    out = []
+    for example in EXAMPLES:
+        have = catalog.get(example["have"])
+        if have is None or not have.consumers:
+            continue
+        reached, grew = {example["have"]}, True
+        while grew:
+            grew = False
+            for type_id, info in catalog.items():
+                if type_id not in reached and any(i in reached for i in info.inputs):
+                    reached.add(type_id)
+                    grew = True
+        if all(field in reached for field in example["want"]):
+            out.append(example)
+    return out
 
 
 def page_data(registry: BraidRegistry) -> tuple[list, list[str]]:
@@ -546,6 +732,9 @@ def _script_json(value) -> str:
 def render_lookup_page(registry: BraidRegistry) -> str:
     """The landing page with this registry's fields and start types injected."""
     rows, starts = page_data(registry)
-    return PAGE.replace("__CATALOG__", _script_json(rows)).replace(
-        "__STARTS__", _script_json(starts)
+    examples = runnable_examples(field_catalog(registry))
+    return (
+        PAGE.replace("__CATALOG__", _script_json(rows))
+        .replace("__STARTS__", _script_json(starts))
+        .replace("__EXAMPLES__", _script_json(examples))
     )

@@ -48,20 +48,30 @@ def test_injected_json_cannot_close_the_script(monkeypatch, recording_registry):
     assert "x</script>" not in page and "x<\\/script>" in page
 
 
-def test_landing_page_is_the_form_not_the_graph_or_advanced_settings(recording_registry):
+def test_landing_page_is_the_form_not_the_graph_or_open_advanced_settings(recording_registry):
     registry, _ = recording_registry
     page = render_lookup_page(registry)
     for element in ('id="ids"', 'id="types"', 'id="q"', 'id="run"', 'href="/explore"'):
         assert element in page, element
-    # settings, not the per-candidate confidence a review row shows
-    for advanced in (
-        'id="builder"',
-        "review_policy",
-        "lease",
-        "confidence_threshold",
-        "max_expansion",
+    assert 'id="builder"' not in page  # the graph builder lives at /explore
+    # Policy, review, confidence, expansion, cache and lease controls exist only inside
+    # the collapsed Advanced section (3.6), never in the default view.
+    markup = page[: page.index("<script>")]
+    adv_start = markup.index('<details class="adv" id="adv">')
+    adv_end = markup.index("</details>", adv_start)
+    assert '<details class="adv" id="adv" open' not in markup
+    for control in (
+        "a-policy",
+        "a-review",
+        "a-conf",
+        "a-expand",
+        "a-max",
+        "a-cache",
+        "a-rundb",
+        "a-lease",
     ):
-        assert advanced not in page, advanced
+        at = markup.index(f'id="{control}"')
+        assert adv_start < at < adv_end, control
 
 
 def test_app_serves_the_form_at_root_and_the_graph_at_explore(
