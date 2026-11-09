@@ -939,7 +939,8 @@ def _cmd_references(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 # argument parser
 # --------------------------------------------------------------------------- #
-def _add_input_flags(p: argparse.ArgumentParser, *, ids: bool = False) -> None:
+def _add_input_flags(p, *, ids: bool = False) -> None:
+    """Input flags on ``p`` (a parser or an argument group)."""
     if ids:
         p.add_argument(
             "ids",
@@ -971,103 +972,176 @@ def _add_input_flags(p: argparse.ArgumentParser, *, ids: bool = False) -> None:
     )
 
 
-def _add_output_flags(p: argparse.ArgumentParser, *, strict: bool = True) -> None:
+def _add_format_flag(p) -> None:
     p.add_argument(
         "--format",
         choices=["human", "json", "jsonl", "tsv", "csv"],
         default="human",
         help="output format (default: human).",
     )
+
+
+def _add_only_flag(p) -> None:
     p.add_argument(
-        "--only", metavar="WEAVERS", help="restrict to these weaver ids (comma/space separated)."
+        "--only", metavar="SOURCES", help="restrict to these source ids (comma/space separated)."
     )
-    if strict:
-        p.add_argument(
-            "--archive",
-            metavar="PATH",
-            help="save a self-contained JSON run archive (new file; no overwrite).",
-        )
-        p.add_argument(
-            "--strict",
-            action="store_true",
-            help="exit non-zero if any input is unresolved or needs review.",
-        )
 
 
-def _add_persistence_flags(parser, *, start=False):
-    parser.add_argument("--cache-db", metavar="PATH", help="opt-in local SQLite lookup cache")
-    parser.add_argument(
+def _add_strict_flag(p) -> None:
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero if any input is unresolved or needs review.",
+    )
+
+
+def _add_archive_flag(p) -> None:
+    p.add_argument(
+        "--archive",
+        metavar="PATH",
+        help="save a self-contained JSON run archive (new file; no overwrite).",
+    )
+
+
+def _add_persistence_flags(p, *, start: bool = False) -> None:
+    """Cache and saved-run flags on ``p`` (a parser or an argument group).
+
+    ``start`` adds the flags that create a saved run (``--run-db``/``--run-id``).
+    """
+    p.add_argument("--cache-db", metavar="PATH", help="opt-in local SQLite lookup cache.")
+    p.add_argument(
         "--cache-positive-ttl",
         type=float,
         default=3600,
-        help="positive/ambiguous lifetime in seconds; 0 disables admission",
+        metavar="SECONDS",
+        help="lifetime of found/ambiguous cache entries (default: 3600); 0 disables caching them.",
     )
-    parser.add_argument(
+    p.add_argument(
         "--cache-negative-ttl",
         type=float,
         default=300,
-        help="no-match lifetime in seconds; 0 disables admission",
+        metavar="SECONDS",
+        help="lifetime of no-match cache entries (default: 300); 0 disables caching them.",
     )
-    parser.add_argument(
+    p.add_argument(
         "--cache-max-bytes",
         type=int,
         default=256 * 1024 * 1024,
-        help="cache payload budget; physical SQLite size may differ",
+        metavar="BYTES",
+        help="cache payload budget (default: 256 MiB); the SQLite file size may differ.",
     )
-    parser.add_argument(
-        "--run-db", metavar="PATH", required=not start, help="opt-in local durable run store"
-    )
-    parser.add_argument(
+    if start:  # resuming commands take --run-db as a required, first-screen flag
+        p.add_argument(
+            "--run-db",
+            metavar="PATH",
+            help="opt-in local saved-run store (makes this a resumable run).",
+        )
+        p.add_argument(
+            "--run-id",
+            metavar="ID",
+            help="name for the new saved run; existing IDs are never overwritten.",
+        )
+    p.add_argument(
         "--lease-seconds",
         type=float,
         default=60,
-        help="run owner lease, renewed while executing (default: 60 seconds)",
+        metavar="SECONDS",
+        help="run owner lease, renewed while executing (default: 60).",
     )
-    if start:
-        parser.add_argument("--run-id", help="new run identity; existing IDs are never overwritten")
+
+
+def _examples(*lines: str) -> str:
+    return "examples:\n" + "\n".join(f"  {line}" for line in lines)
+
+
+def _subparser(sub, name: str, *, help: str, examples: tuple[str, ...] = (), **kwargs):
+    return sub.add_parser(
+        name,
+        help=help,
+        description=kwargs.pop("description", help[:1].upper() + help[1:]),
+        epilog=_examples(*examples) if examples else None,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        **kwargs,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="braidworks",
         description="Query and inspect the Braidworks weaver network from the shell.",
+        epilog=_examples(
+            "braidworks doctor                     check the installation",
+            "braidworks keys                       what you can start from and ask for",
+            "braidworks get P04637 --have protein.query --want protein.name",
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # get (alias: weave)
-    w = sub.add_parser(
+    w = _subparser(
+        sub,
         "get",
         aliases=["weave"],
         help="look up --want for IDs (or --have TYPE=VALUE / --in-file), routing across sources.",
         description="Look up the --want types for each input, planning a route across "
-        "the installed sources. Example: braidworks get P04637 TP53 --have protein.query "
-        "--want protein.name",
+        "the installed sources.",
+        usage="braidworks get ID… --have TYPE --want TYPE[,TYPE…] [options]",
+        examples=(
+            "braidworks get P04637 --have protein.query --want protein.name",
+            "braidworks get P04637 TP53 --have protein.query --param organism=9606 \\",
+            "    --want protein.name,structure.pdb.ids --format tsv",
+            "braidworks get --in-file ids.txt --in-type protein.query --want protein.name",
+            "braidworks get --have gene.ncbi.id=7157 --for-each orthologs --want gene.symbol",
+        ),
     )
-    _add_input_flags(w, ids=True)
-    w.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
-    w.add_argument(
+    inputs = w.add_argument_group("inputs")
+    _add_input_flags(inputs, ids=True)
+    retrieve = w.add_argument_group("what to retrieve")
+    retrieve.add_argument("--want", metavar="TYPE[,TYPE…]", help="target strand types.")
+    retrieve.add_argument(
         "--for-each",
         action="append",
         metavar="RELATIONSHIP",
         dest="for_each",
-        help="fan the weave THROUGH a relationship, then plan --want from each "
+        help="fan the lookup THROUGH a relationship, then get --want for each "
         "result (e.g. --for-each orthologs). Repeatable; implies --expand all.",
     )
-    w.add_argument(
+    retrieve.add_argument(
         "--traverse",
         action="append",
         metavar="CAPABILITY",
         help="like --for-each but names a fan capability id directly "
         "(e.g. --traverse ncbi.list_orthologs); the unambiguous form.",
     )
-    w.add_argument(
+    retrieve.add_argument(
+        "--param",
+        action="append",
+        metavar="NAME=VALUE",
+        help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
+        "step. See `braidworks weavers` for each capability's parameters.",
+    )
+    output = w.add_argument_group("output")
+    _add_format_flag(output)
+    output.add_argument(
+        "--references", action="store_true", help="print source citations for the route to stderr."
+    )
+    routing = w.add_argument_group("Advanced: sources and routing")
+    _add_only_flag(routing)
+    routing.add_argument(
+        "--policy",
+        choices=[policy.value for policy in BackendPolicy],
+        default="local_first",
+        help="backend policy (default: local_first).",
+    )
+    routing.add_argument(
         "--expand",
         default=None,
         metavar="none|all|top:K",
         help="fan out one→many set outputs (default: none, or all when "
         "--for-each/--traverse is used).",
     )
-    w.add_argument(
+    routing.add_argument(
         "--max-expansion",
         type=int,
         default=10_000,
@@ -1075,76 +1149,104 @@ def build_parser() -> argparse.ArgumentParser:
         help="run-wide leaf limit (default: 10000); preserves all input roots "
         "and reports omitted successors.",
     )
-    w.add_argument(
-        "--policy",
-        choices=[policy.value for policy in BackendPolicy],
-        default="local_first",
-        help="backend policy (default: local_first).",
-    )
-    w.add_argument(
+    review = w.add_argument_group("Advanced: review and exit status")
+    review.add_argument(
         "--review-policy",
         choices=[policy.value for policy in ReviewPolicy],
         default="halt",
         help="ambiguity/review policy (default: halt); "
         "allow_continue explicitly permits candidate selection.",
     )
-    w.add_argument(
+    review.add_argument(
         "--confidence-threshold",
         type=float,
         default=0.0,
         metavar="0..1",
         help="minimum confidence; lower results pause even with allow_continue.",
     )
-    w.add_argument(
-        "--param",
-        action="append",
-        metavar="NAME=VALUE",
-        help="a capability parameter (repeatable); CAP:NAME=VALUE targets one "
-        "step. See `braidworks weavers` for each capability's parameters.",
-    )
-    w.add_argument(
-        "--references", action="store_true", help="print source citations for the route to stderr."
-    )
-    _add_output_flags(w)
-    _add_persistence_flags(w, start=True)
+    _add_strict_flag(review)
+    saved = w.add_argument_group("Advanced: cache, saved runs and archives")
+    _add_persistence_flags(saved, start=True)
+    _add_archive_flag(saved)
     w.set_defaults(func=_cmd_weave)
 
-    runs = sub.add_parser("runs", help="list saved runs or inspect a run's status/review choices")
-    runs.add_argument("run_id", nargs="?")
-    runs.add_argument("--run-db", required=True, metavar="PATH")
+    runs = _subparser(
+        sub,
+        "runs",
+        help="list saved runs or inspect a run's status/review choices.",
+        examples=(
+            "braidworks runs --run-db runs.sqlite",
+            "braidworks runs p53 --run-db runs.sqlite --format json",
+        ),
+    )
+    runs.add_argument("run_id", nargs="?", help="show one run (default: list every run).")
+    runs.add_argument("--run-db", required=True, metavar="PATH", help="the saved-run store.")
     runs.add_argument("--format", choices=["human", "json"], default="human")
     runs.set_defaults(func=_cmd_runs)
-    resume = sub.add_parser("resume", help="continue a saved run with its original query settings")
-    resume.add_argument("run_id")
+
+    resume = _subparser(
+        sub,
+        "resume",
+        help="continue a saved run with its original query settings.",
+        usage="braidworks resume RUN_ID --run-db PATH [options]",
+        examples=(
+            "braidworks resume p53 --run-db runs.sqlite",
+            "braidworks resume p53 --run-db runs.sqlite --decision KEY=select:0",
+        ),
+    )
+    resume.add_argument("run_id", help="the saved run to continue (see `braidworks runs`).")
+    resume.add_argument("--run-db", required=True, metavar="PATH", help="the saved-run store.")
     resume.add_argument(
         "--decision",
         action="append",
         metavar="ENTITY_KEY=select:INDEX|accept|reject",
-        help="explicit saved review decision; select INDEX is zero-based; repeatable",
+        help="explicit saved review decision; select INDEX is zero-based; repeatable.",
     )
-    resume.add_argument("--references", action="store_true")
-    _add_output_flags(resume)
-    _add_persistence_flags(resume)
+    _add_format_flag(resume)
+    resume.add_argument(
+        "--references", action="store_true", help="print source citations to stderr."
+    )
+    resume_advanced = resume.add_argument_group("Advanced: sources, cache and archives")
+    _add_only_flag(resume_advanced)
+    _add_strict_flag(resume_advanced)
+    _add_persistence_flags(resume_advanced)
+    _add_archive_flag(resume_advanced)
     resume.set_defaults(func=_cmd_resume)
 
     # run
-    r = sub.add_parser("run", help="call ONE weaver capability directly (no routing).")
+    r = _subparser(
+        sub,
+        "run",
+        help="call ONE weaver capability directly (no routing).",
+        usage="braidworks run WEAVER CAPABILITY --have TYPE=VALUE [options]",
+        examples=(
+            "braidworks run uniprot resolve_protein --have protein.query=P04637",
+            "braidworks run pdbe list_structures --have protein.uniprot.accession=P04637 \\",
+            "    --format json",
+        ),
+    )
     r.add_argument("weaver", help="weaver id (see `braidworks weavers`).")
     r.add_argument("capability", help="capability id.")
+    _add_input_flags(r)
     r.add_argument(
         "--want",
         metavar="TYPE[,TYPE…]",
         help="restrict outputs (default: all the capability produces).",
     )
-    r.add_argument("--backend", help="backend name (required only if the capability has >1).")
     r.add_argument(
         "--param",
         action="append",
         metavar="NAME=VALUE",
         help="a capability parameter (repeatable).",
     )
-    _add_input_flags(r)
-    _add_output_flags(r)
+    _add_format_flag(r)
+    run_advanced = r.add_argument_group("Advanced")
+    run_advanced.add_argument(
+        "--backend", help="backend name (required only if the capability has >1)."
+    )
+    _add_only_flag(run_advanced)
+    _add_strict_flag(run_advanced)
+    _add_archive_flag(run_advanced)
     r.set_defaults(func=_cmd_run)
 
     # weavers
@@ -1162,7 +1264,12 @@ def build_parser() -> argparse.ArgumentParser:
     k.set_defaults(func=_cmd_keys)
 
     # path
-    pa = sub.add_parser("path", help="show the route between types without running it.")
+    pa = _subparser(
+        sub,
+        "path",
+        help="show the route between types without running it.",
+        examples=("braidworks path --from protein.query --to structure.pdb.ids",),
+    )
     pa.add_argument("--from", dest="frm", metavar="TYPE[,TYPE…]", required=True)
     pa.add_argument("--to", metavar="TYPE[,TYPE…]", required=True)
     pa.add_argument("--only", metavar="WEAVERS")
