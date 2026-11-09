@@ -5,7 +5,8 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-.PHONY: api-docs capability-docs cli-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
+PHONY_DOCS = docs-site docs-serve
+.PHONY: $(PHONY_DOCS) api-docs capability-docs cli-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
 WEAVER_DIRS := $(sort $(dir $(wildcard weavers/*/Makefile)))
@@ -71,7 +72,7 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
-	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/gen_cli_docs.py tools/tests \
+	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/gen_cli_docs.py tools/mkdocs tools/tests \
 	$(WEAVER_LINT_PATHS)
 
 RUFF_VERSION := 0.16.10
@@ -106,6 +107,14 @@ api-docs:  ## Regenerate docs/reference/python-api.md from the public docstrings
 
 cli-docs:  ## Regenerate docs/reference/cli/ from `braidworks --help`
 	uv run python tools/gen_cli_docs.py
+
+MKDOCS = NO_MKDOCS_2_WARNING=1 uvx --with mkdocs-material==9.8.1 mkdocs
+
+docs-site:  ## Build the documentation site into site/ (strict: broken links fail)
+	$(MKDOCS) build --strict --site-dir site
+
+docs-serve:  ## Preview the documentation site at http://127.0.0.1:8000 with live reload
+	$(MKDOCS) serve
 
 docs-check:  ## Reject capability, Python API and CLI documentation drift without writing
 	uv run weaverkit capability-docs --root . --check
