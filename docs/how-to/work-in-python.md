@@ -103,16 +103,18 @@ decision for each paused row, then resume. Only the decided rows continue; finis
 rows are kept and undecided rows stay paused.
 
 ```python
-result = bw.get(["bacilus subtilis"], have="organism.name", want="ncbi.taxon.id")
+result = bw.get(["Bacillus"], have="organism.name", want="ncbi.taxon.id")
 result.review[0]
-# bacilus subtilis (row 1) at ncbi.resolve_name: ambiguous, choose one
-#   [0] 0.81  ncbi.taxon.id='1630683', organism.scientific_name='Actinocyclus subtilis', …
-#   [1] 0.80  ncbi.taxon.id='135461', organism.scientific_name='Bacillus subtilis subsp. subtilis', …
-result.review[0].choose(1)    # or .reject(); a flagged (not ambiguous) row takes .accept()
+# Bacillus (row 1) at ncbi.resolve_name: ambiguous, choose one
+#   [0] 1.00  ncbi.taxon.id='1386', organism.scientific_name='Bacillus', ncbi.taxon.rank='genus'
+#   [1] 1.00  ncbi.taxon.id='55087', organism.scientific_name='Bacillus', ncbi.taxon.rank='genus'
+result.review[0].choose(0)    # the bacteria; 55087 is a stick-insect genus. Or .reject()
 result = result.resume()      # a new Result; the original is unchanged
 ```
 
-Candidate order and scores come from the source; check the names before choosing.
+Candidate order and scores come from the source; check the candidates before choosing.
+A row the source matched but flagged (for example a misspelling such as
+`bacilus subtilis`) has one match to confirm: `.accept()` or `.reject()` it.
 `min_confidence=0.9` pauses any match scored below that threshold.
 
 ## Read list fields and their size

@@ -17,6 +17,7 @@ choose the sources your analysis needs, then scale to a batch. The
 |---|---|
 | [First query in the browser](tutorials/first-query-in-the-browser.md) | Names, structures and pathways for two genes, with the route that answered and a CSV, without code |
 | [First analysis in Python](tutorials/first-analysis-in-python.md) | Names, GO terms and structures for two genes, as a pandas table with citations |
+| [Getting-started notebook](../notebooks/getting-started.ipynb) | Install, find fields, look up, review a match and export, in Colab or Jupyter (installs from PyPI, so it needs the first package release) |
 | [Protein structures](tutorials/protein-structures.md) | A structure listing, related-entry inspection and batch export |
 | [Microbial functions](tutorials/microbial-functions.md) | An ecological annotation with its supporting rule trace |
 | [Disease–microbe associations](tutorials/disease-associations.md) | Observations with provider identity, sample context and publications |
