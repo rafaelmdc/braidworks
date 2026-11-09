@@ -108,7 +108,7 @@ bw.demo("proteins").to_pandas()
 ## `Session`
 
 ```python
-class Session(sources: str | Iterable[str] | None = None, *, backend: str = 'local_first', cache: str | PathLike | None = None, registry: BraidRegistry | None = None)
+class Session(sources: str | Iterable[str] | None = None, *, backend: str = 'local_first', cache: str | PathLike | None = None, runs: str | PathLike | None = None, registry: BraidRegistry | None = None)
 ```
 
 Installed sources plus settings, reused across queries.
@@ -118,6 +118,7 @@ Installed sources plus settings, reused across queries.
 - `sources`: Restrict to these source ids (list or `"uniprot,pdbe"`); default all.
 - `backend`: `"local_first"` (default), `"api_first"`, `"local_only"` or `"api_only"`.
 - `cache`: Path of an opt-in SQLite lookup cache, reused across sessions.
+- `runs`: Path of an opt-in SQLite run store. Every query then becomes a saved, resumable run (name it with `get(..., run_id=...)`); paused rows and review decisions persist, and `resume` reopens a run from any later session.
 - `registry`: A prebuilt registry (advanced; skips discovery). The session closes it.
 
 #### `Session.registry` (property)
@@ -135,18 +136,45 @@ Close every source's network client; the session cannot be used afterwards.
 #### `Session.get`
 
 ```python
-def get(ids: Any, *, have: str | None = None, want: str | Iterable[str] | None = None, expand: str | None = None, for_each: str | Iterable[str] | None = None, review: str = 'halt', min_confidence: float = 0.0, max_expansion: int = 10000, params: Mapping[str, Any] | None = None, **parameters: Any) -> Result
+def get(ids: Any, *, have: str | None = None, want: str | Iterable[str] | None = None, expand: str | None = None, for_each: str | Iterable[str] | None = None, review: str = 'halt', min_confidence: float = 0.0, max_expansion: int = 10000, params: Mapping[str, Any] | None = None, run_id: str | None = None, **parameters: Any) -> Result
 ```
 
 Look up `want` for each of `ids`; see `braidworks.get`.
 
+With a run store (`Session(runs=...)`) the query is saved as a resumable run;
+`run_id` names it (a new name; existing runs are never overwritten), otherwise
+one is generated. `result.run_id` reports it.
+
 #### `Session.async_get`
 
 ```python
-async def async_get(ids: Any, *, have: str | None = None, want: str | Iterable[str] | None = None, expand: str | None = None, for_each: str | Iterable[str] | None = None, review: str = 'halt', min_confidence: float = 0.0, max_expansion: int = 10000, params: Mapping[str, Any] | None = None, **parameters: Any) -> Result
+async def async_get(ids: Any, *, have: str | None = None, want: str | Iterable[str] | None = None, expand: str | None = None, for_each: str | Iterable[str] | None = None, review: str = 'halt', min_confidence: float = 0.0, max_expansion: int = 10000, params: Mapping[str, Any] | None = None, run_id: str | None = None, **parameters: Any) -> Result
 ```
 
 Awaitable `get`, for code already running in an event loop.
+
+#### `Session.resume`
+
+```python
+def resume(run_id: str) -> Result
+```
+
+Reopen saved run `run_id` and continue any unfinished work.
+
+A finished run returns its saved result without calling any source. Record
+decisions on `result.review` and call `result.resume()` to continue paused
+rows; the decisions are saved with the run.
+
+#### `Session.runs`
+
+```python
+def runs() -> list[dict[str, Any]]
+```
+
+The saved runs in this session's run store, oldest first.
+
+Each is `{"run_id", "status", "inputs", "reviews", "created_at",
+"updated_at"}`: `reviews` counts rows waiting for a decision.
 
 #### `Session.path`
 
@@ -210,6 +238,10 @@ Rows lacking at least one requested type, whatever their status.
 
 Rows paused for a human decision, in input order (see `ReviewItem`).
 
+#### `Result.run_id` (property)
+
+The saved run this result belongs to (`Session(runs=...)`), else `None`.
+
 #### `Result.resume`
 
 ```python
@@ -219,7 +251,8 @@ def resume() -> Result
 Continue the run with the decisions recorded on `review` items.
 
 Returns a new `Result`; rows that were already finished are kept as
-they were, and this result is left unchanged. Undecided rows stay paused.
+they were, and this result is left unchanged. Undecided rows stay paused. For a
+saved run the decisions and the continued state are saved with the run.
 
 #### `Result.async_resume`
 

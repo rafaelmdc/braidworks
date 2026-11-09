@@ -16,6 +16,7 @@ import atexit
 import math
 import threading
 from collections.abc import Callable, Coroutine, Iterable, Mapping
+from dataclasses import replace
 from os import PathLike
 from pathlib import Path
 from typing import Any, Self, TypeVar
@@ -41,7 +42,7 @@ from braidworks.core.query import (
 from braidworks.core.query_state import continue_query, start_query
 from braidworks.core.registry import BraidRegistry
 from braidworks.core.review import ReviewDecision, apply_review_decisions
-from braidworks.core.run_store import RunCheckpoint
+from braidworks.core.run_store import RunCheckpoint, SQLiteRunStore, run_status
 from braidworks.core.strand import Strand, StrandSet
 
 T = TypeVar("T")
@@ -158,6 +159,9 @@ class Session:
         backend: ``"local_first"`` (default), ``"api_first"``, ``"local_only"`` or
             ``"api_only"``.
         cache: Path of an opt-in SQLite lookup cache, reused across sessions.
+        runs: Path of an opt-in SQLite run store. Every query then becomes a saved,
+            resumable run (name it with ``get(..., run_id=...)``); paused rows and review
+            decisions persist, and :meth:`resume` reopens a run from any later session.
         registry: A prebuilt registry (advanced; skips discovery). The session closes it.
     """
 
@@ -167,12 +171,14 @@ class Session:
         *,
         backend: str = "local_first",
         cache: str | PathLike | None = None,
+        runs: str | PathLike | None = None,
         registry: BraidRegistry | None = None,
     ) -> None:
         self._only = frozenset(_as_list(sources)) or None
         self._backend = BackendPolicy(backend)
         self._persistence = QueryPersistence(
-            cache_db=str(Path(cache).expanduser()) if cache is not None else None
+            cache_db=str(Path(cache).expanduser()) if cache is not None else None,
+            run_db=str(Path(runs).expanduser()) if runs is not None else None,
         )
         self._registry = registry
         self._loop: _LoopThread | None = None
@@ -368,7 +374,14 @@ class Session:
                 lease_seconds=persistence.lease_seconds,
             )
             state = checkpoint.state
-            raw = state.result
+            return Result(
+                state.result,
+                prepared,
+                want_types,
+                session=self,
+                state=state,
+                run_id=checkpoint.run_id,
+            )
         return Result(raw, prepared, want_types, session=self, state=state)
 
     async def _resume_run(
@@ -379,6 +392,7 @@ class Session:
         decisions: tuple[ReviewDecision, ...] = (),
         on_saved: Callable[[RunCheckpoint], None] | None = None,
         on_event: Callable[[dict], None] | None = None,
+        want: list[str] | None = None,
     ) -> tuple[RunCheckpoint, Result]:
         """Continue a saved run (applying any review ``decisions``) from its store."""
         checkpoint = await continue_run(
@@ -393,8 +407,10 @@ class Session:
         )
         prepared = checkpoint.definition.prepared
         state = checkpoint.state
-        want = sorted(prepared.request.targets)
-        return checkpoint, Result(state.result, prepared, want, session=self, state=state)
+        want = want if want is not None else sorted(prepared.request.targets)
+        return checkpoint, Result(
+            state.result, prepared, want, session=self, state=state, run_id=checkpoint.run_id
+        )
 
     async def _continue(self, result: Result) -> Result:
         state = apply_review_decisions(
@@ -421,9 +437,15 @@ class Session:
         min_confidence: float = 0.0,
         max_expansion: int = 10_000,
         params: Mapping[str, Any] | None = None,
+        run_id: str | None = None,
         **parameters: Any,
     ) -> Result:
-        """Look up ``want`` for each of ``ids``; see :func:`braidworks.get`."""
+        """Look up ``want`` for each of ``ids``; see :func:`braidworks.get`.
+
+        With a run store (``Session(runs=...)``) the query is saved as a resumable run;
+        ``run_id`` names it (a new name; existing runs are never overwritten), otherwise
+        one is generated. ``result.run_id`` reports it.
+        """
         prepared, want_types = self._prepare(
             ids,
             have=have,
@@ -436,7 +458,9 @@ class Session:
             params=params,
             parameters=parameters,
         )
-        return self._runner().run(self._execute(prepared, want_types))
+        return self._runner().run(
+            self._execute(prepared, want_types, persistence=self._run_persistence(run_id))
+        )
 
     async def async_get(
         self,
@@ -450,6 +474,7 @@ class Session:
         min_confidence: float = 0.0,
         max_expansion: int = 10_000,
         params: Mapping[str, Any] | None = None,
+        run_id: str | None = None,
         **parameters: Any,
     ) -> Result:
         """Awaitable :meth:`get`, for code already running in an event loop."""
@@ -465,7 +490,54 @@ class Session:
             params=params,
             parameters=parameters,
         )
-        return await self._runner().arun(self._execute(prepared, want_types))
+        return await self._runner().arun(
+            self._execute(prepared, want_types, persistence=self._run_persistence(run_id))
+        )
+
+    def _run_persistence(self, run_id: str | None) -> QueryPersistence:
+        if run_id is None:
+            return self._persistence
+        if self._persistence.run_db is None:
+            raise ValueError("run_id needs a run store: Session(runs='runs.sqlite')")
+        return replace(self._persistence, run_id=run_id)
+
+    def _require_runs(self) -> QueryPersistence:
+        if self._persistence.run_db is None:
+            raise ValueError("this session has no run store: Session(runs='runs.sqlite')")
+        return self._persistence
+
+    def resume(self, run_id: str) -> Result:
+        """Reopen saved run ``run_id`` and continue any unfinished work.
+
+        A finished run returns its saved result without calling any source. Record
+        decisions on ``result.review`` and call ``result.resume()`` to continue paused
+        rows; the decisions are saved with the run.
+        """
+        persistence = self._require_runs()
+        _, result = self._runner().run(self._resume_run(run_id, persistence))
+        return result
+
+    def runs(self) -> list[dict[str, Any]]:
+        """The saved runs in this session's run store, oldest first.
+
+        Each is ``{"run_id", "status", "inputs", "reviews", "created_at",
+        "updated_at"}``: ``reviews`` counts rows waiting for a decision.
+        """
+        store = SQLiteRunStore(self._require_runs().run_db, create=False)
+        out = []
+        for checkpoint in store.list():
+            status = run_status(checkpoint)
+            out.append(
+                {
+                    "run_id": status["run_id"],
+                    "status": status["status"],
+                    "inputs": status["inputs"],
+                    "reviews": len(status["reviews"]),
+                    "created_at": status["created_at"],
+                    "updated_at": status["updated_at"],
+                }
+            )
+        return out
 
     def path(self, have: str | Iterable[str], want: str | Iterable[str]) -> Braid:
         """The route from ``have`` to ``want``, without fetching anything."""

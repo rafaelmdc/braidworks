@@ -92,8 +92,8 @@ with bw.Session(sources="uniprot,pdbe", cache="~/.cache/braidworks/lookups.sqlit
 `sources=` limits routing to those sources; leave it out to use every installed one.
 A cache stores observations, not a frozen copy of the database: delete the file to
 force fresh lookups. Inside your own async code, use `await bw.async_get(...)` or
-`await s.async_get(...)`. For saved runs you can resume later, see
-[cache and saved runs](cache-and-resume.md).
+`await s.async_get(...)`. To save runs you can resume later, add a run store:
+`bw.Session(runs="data/runs.sqlite")`; see [saved runs from Python](cache-and-resume.md#save-and-resume-runs-from-python).
 
 ## Resolve ambiguous matches
 

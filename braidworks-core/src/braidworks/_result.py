@@ -236,8 +236,10 @@ class Result:
         *,
         session: Any = None,
         state: Any = None,
+        run_id: str | None = None,
     ) -> None:
         self.raw = raw
+        self._run_id = run_id
         self.want = list(want)
         self._prepared = prepared
         self._session = session  # the Session that ran this, for resume()
@@ -284,19 +286,36 @@ class Result:
             self._review_items = [ReviewItem(self, item) for item in items]
         return self._review_items
 
+    @property
+    def run_id(self) -> str | None:
+        """The saved run this result belongs to (``Session(runs=...)``), else ``None``."""
+        return self._run_id
+
     def resume(self) -> Result:
         """Continue the run with the decisions recorded on :attr:`review` items.
 
         Returns a new :class:`Result`; rows that were already finished are kept as
-        they were, and this result is left unchanged. Undecided rows stay paused.
+        they were, and this result is left unchanged. Undecided rows stay paused. For a
+        saved run the decisions and the continued state are saved with the run.
         """
         session = self._resume_session()
-        return session._runner().run(session._continue(self))
+        return session._runner().run(self._continuation(session))
 
     async def async_resume(self) -> Result:
         """Awaitable :meth:`resume`."""
         session = self._resume_session()
-        return await session._runner().arun(session._continue(self))
+        return await session._runner().arun(self._continuation(session))
+
+    async def _continuation(self, session: Any) -> Result:
+        if self._run_id is None:
+            return await session._continue(self)
+        _, result = await session._resume_run(
+            self._run_id,
+            session._require_runs(),
+            decisions=tuple(self._decisions.values()),
+            want=self.want,
+        )
+        return result
 
     def _resume_session(self):
         if not self._decisions:
