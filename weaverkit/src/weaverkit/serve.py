@@ -360,15 +360,54 @@ def _checkpoint_events(on_event, saved=None):
     return checkpoint
 
 
-def _query_payload(registry, prepared, raw, want, *, run=None) -> dict:
+def result_table(outcome) -> dict:
+    """``Result`` rows as the browser shows them, plus exact Python exports.
+
+    ``rows`` is ``Result.to_json()["rows"]``; ``sizes`` gives each list cell's length,
+    true ``total`` and ``complete`` flag (JSON keeps a ``Listing`` as a plain list), and
+    ``exports`` are byte-for-byte ``to_csv()`` / ``to_csv(sep="\t")`` / ``to_json()``.
+    """
+    import json
+
+    from braidworks import Listing
+
+    document = outcome.to_json()
+    sizes = [
+        {
+            key: {"shown": len(value), "total": value.total, "complete": value.complete}
+            for key, value in row.items()
+            if isinstance(value, Listing)
+        }
+        for row in outcome.rows
+    ]
+    return {
+        "table": {
+            "summary": document["summary"],
+            "want": document["want"],
+            "columns": outcome.columns,
+            "rows": json.loads(json.dumps(document["rows"], ensure_ascii=False)),
+            "sizes": sizes,
+            "references": document["references"],
+        },
+        "exports": {
+            "csv": outcome.to_csv(),
+            "tsv": outcome.to_csv(sep="\t"),
+            "json": json.dumps(document, ensure_ascii=False, indent=2),
+        },
+    }
+
+
+def _query_payload(registry, prepared, outcome, want, *, run=None) -> dict:
     """The browser's response for an executed (or resumed) prepared query."""
     options = prepared.request.options
+    raw = outcome.raw
     payload = _traverse_payload(registry, raw, want, [cid for _, cid in prepared.traversals])
     if len(prepared.plans) == 1:
         payload["path"] = render_path(registry, prepared.plans[0][0], policy=options.backend_policy)
     payload["summary"]["inputs"] = len(prepared.request.inputs)
     return {
         **payload,
+        **result_table(outcome),
         "effective_params": _prepared_effective(registry, prepared),
         "planned_routes": [braid.to_json() for braid, _ in prepared.plans],
         **({"run": run_status(run)} if run is not None else {}),
@@ -420,7 +459,7 @@ async def execute_query_response(
         on_saved=_checkpoint_events(on_event, saved),
         on_event=on_event,
     )
-    return _query_payload(registry, prepared, outcome.raw, want, run=saved[-1] if saved else None)
+    return _query_payload(registry, prepared, outcome, want, run=saved[-1] if saved else None)
 
 
 # The batch endpoint's original name; every run now shares one path.
@@ -454,7 +493,7 @@ async def execute_resume_response(registry, run_id, persistence, decisions=(), *
     )
     prepared = checkpoint.definition.prepared
     return _query_payload(
-        registry, prepared, outcome.raw, sorted(prepared.request.targets), run=checkpoint
+        registry, prepared, outcome, sorted(prepared.request.targets), run=checkpoint
     )
 
 
@@ -693,13 +732,20 @@ def create_app(data_dir: str | os.PathLike | None = None):
     root = os.path.realpath(data_dir if data_dir is not None else os.getcwd())
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
-    # The page, with the network blob injected (graph reads it; no /api/network) and the
-    # interactive builder/run/results UI slotted in (interactive=True).
-    _page = render_html(build_data(), interactive=True)
+    # "/" is the form-first lookup page; the network graph (with the builder slotted in,
+    # interactive=True) is the optional Explore view at "/explore".
+    from weaverkit._lookup_ui import render_lookup_page
+
+    _landing = render_lookup_page(discover_registry().registry)
+    _explore = render_html(build_data(), interactive=True)
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return _page
+        return _landing
+
+    @app.get("/explore", response_class=HTMLResponse)
+    def explore() -> str:
+        return _explore
 
     @app.post("/api/plan")
     def api_plan(req: PlanRequest):
