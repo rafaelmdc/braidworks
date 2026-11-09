@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import ast
 import configparser
+import json
 import os
 import re
 import subprocess
@@ -93,6 +94,7 @@ def check_core_requirement(project: Path, config: dict) -> None:
 
 def check_contents(root: Path, artifacts: Path) -> list[Path]:
     projects = [root / "braidworks-core", root / "braidworks-arq", root / "weaverkit"]
+    projects.append(root / "braidworks-meta")
     projects.extend(sorted((root / "weavers").glob("*/pyproject.toml")))
     wheels = []
     for project in projects:
@@ -223,6 +225,53 @@ def main() -> None:
         run([str(python), "-c", SMOKE], cwd=scratch, env=env)
         run([str(venv / "bin/braidworks"), "keys", "--only", "pdbe"], cwd=scratch, env=env)
         run([str(venv / "bin/weaverkit"), "--help"], cwd=scratch, env=env)
+        check_meta_install(root, args.artifacts.resolve(), args.python, scratch, env)
+
+
+META_SMOKE = """
+import importlib.metadata, importlib.util, json, sys
+expected = set(json.loads(sys.argv[1]))
+plugins = {plugin.dist.name for plugin in importlib.metadata.entry_points(group="braidworks.weavers")}
+assert plugins == expected, (sorted(plugins ^ expected))
+assert importlib.util.find_spec("fastapi") and importlib.util.find_spec("uvicorn")
+import braidworks
+assert callable(braidworks.get)
+print(json.dumps({"meta_sources": len(plugins), "browser": "OK"}))
+"""
+
+
+def check_meta_install(
+    root: Path, artifacts: Path, python: str, scratch: Path, env: dict[str, str]
+) -> None:
+    """`pip install braidworks` alone must bring core, the browser and every public source."""
+    meta = tomllib.loads((root / "braidworks-meta/pyproject.toml").read_text())["project"]
+    wheel = artifacts / f"braidworks-{meta['version']}-py3-none-any.whl"
+    sources = sorted(
+        tomllib.loads(path.read_text())["project"]["name"]
+        for path in (root / "weavers").glob("*/pyproject.toml")
+        if path.parent.name != "example_weaver"
+    )
+    venv = scratch / "meta-venv"
+    run(["uv", "venv", "--python", python, str(venv)], cwd=scratch, env=env)
+    bin_python = venv / "bin/python"
+    # Only the meta wheel is named; everything else resolves from its requirements,
+    # the workspace packages from the built artifacts and third parties from the index.
+    run(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(bin_python),
+            "--find-links",
+            str(artifacts),
+            str(wheel),
+        ],
+        cwd=scratch,
+        env=env,
+    )
+    run([str(bin_python), "-c", META_SMOKE, json.dumps(sources)], cwd=scratch, env=env)
+    run([str(venv / "bin/braidworks"), "get", "--help"], cwd=scratch, env=env)
 
 
 if __name__ == "__main__":

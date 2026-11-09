@@ -1,0 +1,69 @@
+[project]
+name = "braidworks"
+version = "0.1.0"
+description = "Braidworks with every public source and the browser: pip install braidworks."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+# Installs no code of its own: core, the toolkit with the browser server, and every
+# source package except the teaching example (example_weaver).
+dependencies = [
+    "braidworks-core>=0.34.2",
+    "weaverkit[serve]>=0.16.0",
+    "agora_weaver>=0.3.0",
+    "alphafold_weaver>=0.2.0",
+    "bacdive_weaver>=0.2.0",
+    "disbiome_weaver>=0.4.1",
+    "faprotax_weaver>=0.1.6",
+    "gmrepo_weaver>=0.3.1",
+    "gtdb_weaver>=0.2.12",
+    "mondo_weaver>=0.2.10",
+    "ncbi_weaver>=0.3.0",
+    "pdbe_weaver>=0.2.0",
+    "quickgo_weaver>=0.3.0",
+    "reactome_weaver>=0.2.0",
+    "string_weaver>=0.3.0",
+    "uniprot_weaver>=0.2.13",
+    "wikidata_weaver>=0.1.10",
+    "wikipedia_weaver>=0.1.9",
+]
+
+[project.optional-dependencies]
+pandas = ["braidworks-core[pandas]>=0.34.2"]
+
+[project.urls]
+Repository = "https://github.com/rafaelmdc/braidworks"
+Documentation = "https://github.com/rafaelmdc/braidworks/blob/main/docs/index.md"
+Issues = "https://github.com/rafaelmdc/braidworks/issues"
+
+# The same command core installs, declared here too so `uvx braidworks` finds it.
+[project.scripts]
+braidworks = "braidworks.core.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.uv.sources]
+braidworks-core = { workspace = true }
+weaverkit = { workspace = true }
+agora_weaver = { workspace = true }
+alphafold_weaver = { workspace = true }
+bacdive_weaver = { workspace = true }
+disbiome_weaver = { workspace = true }
+faprotax_weaver = { workspace = true }
+gmrepo_weaver = { workspace = true }
+gtdb_weaver = { workspace = true }
+mondo_weaver = { workspace = true }
+ncbi_weaver = { workspace = true }
+pdbe_weaver = { workspace = true }
+quickgo_weaver = { workspace = true }
+reactome_weaver = { workspace = true }
+string_weaver = { workspace = true }
+uniprot_weaver = { workspace = true }
+wikidata_weaver = { workspace = true }
+wikipedia_weaver = { workspace = true }

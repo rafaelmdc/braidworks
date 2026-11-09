@@ -2,8 +2,8 @@
 
 Core provides the domain-neutral data model, planner, executor, source discovery and
 `braidworks` query CLI. Biological adapters live in separate weaver packages and join
-through registered input/output types. Runtime dependencies are networkx for routing
-and platformdirs for local paths.
+through registered input/output types. Runtime dependencies are networkx for routing,
+platformdirs for local paths and httpx for source lifecycle checks.
 
 ## Query and inspect sources
 

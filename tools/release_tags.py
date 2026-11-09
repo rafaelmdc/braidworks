@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def _package_dirs(root: Path) -> list[str]:
     """The uv workspace members that ship as versioned packages."""
-    return ["braidworks-core", "weaverkit", "braidworks-arq", *sorted(
+    return ["braidworks-core", "weaverkit", "braidworks-arq", "braidworks-meta", *sorted(
         str(p.parent.relative_to(root)) for p in (root / "weavers").glob("*/pyproject.toml")
     )]
 
