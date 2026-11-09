@@ -113,3 +113,18 @@ def test_human_output_prints_the_reason(monkeypatch, capsys):
     )
     assert cli.main(["get", "EMPTY", "--have", "protein.query", "--want", ",".join(WANT)]) == 0
     assert "why: structure.pdb.ids: pdbe has no match" in capsys.readouterr().out
+
+
+def test_an_unreached_step_names_the_earlier_failure():
+    record = _record(
+        "resolved",
+        [
+            {"capability_id": "step_b", "status": "error"},
+            {"capability_id": "step_c", "status": "skipped"},
+        ],
+        [{"capability_id": "step_b", "category": "config", "recovered": False}],
+    )
+    reasons = missing_reasons(record, PRODUCERS)
+    assert reasons["c"] == (
+        "other was not reached because src is not set up on this machine (run `braidworks doctor`)"
+    )

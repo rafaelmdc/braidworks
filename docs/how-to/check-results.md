@@ -26,8 +26,8 @@ and [review continuation](cache-and-resume.md#resolve-a-saved-review).
 
 CLI data go to stdout; progress and diagnostics go to stderr. Ordinary queries fail
 for fatal errors. Add `--strict` to also fail for unresolved or review-required outcomes;
-still check `missing` when every requested field is required. Direct `run` returns
-nonzero for backend errors.
+still check `missing` when every requested field is required. `braidworks run`, which
+calls one capability directly, returns nonzero for backend errors.
 
 ## Choose an export
 

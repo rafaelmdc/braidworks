@@ -14,7 +14,7 @@ SHARED_KEYS: dict[str, str] = {
     "microbe.agora.reconstruction_id": "Release-qualified AGORA reconstruction ID; list_reconstructions produces and describe_reconstruction consumes it.",
     "microbe.bacdive.strain_id": "BacDive strain record integer ID; list_strains produces and describe_strain consumes it.",
     # Entry point
-    "organism.name": "The text you start from — an organism name.",
+    "organism.name": "The text you start from — an organism name, scientific or common, that NCBI resolves (use organism.scientific_name when you already have the exact scientific name).",
     # Organism layer (ncbi_weaver / gtdb_weaver)
     "ncbi.taxon.id": "NCBI Taxonomy id for one organism — the main organism join key.",
     "ncbi.taxon.species_id": "The species-rank taxid for an organism (a strain/subspecies climbs to its species) — the join key for species-level datasets.",
@@ -75,14 +75,12 @@ OUTPUT_KEYS: dict[str, str] = {
     "gtdb.genome.quality": "Observed GTDB genome-specific quality, distinct from species/tree assertions.",
     "gtdb.genome.synonyms": "Observed GTDB genome-specific synonyms, distinct from species/tree assertions.",
     "gtdb.genome.history": "Observed GTDB genome-specific history, distinct from species/tree assertions.",
-
     "structure.pdb.entities": "Observed PDBe entities detail with provider identity and availability.",
     "structure.pdb.assemblies": "Observed PDBe assemblies detail with provider identity and availability.",
     "structure.pdb.ligands": "Observed PDBe ligands detail with provider identity and availability.",
     "structure.pdb.mappings": "Observed PDBe mappings detail with provider identity and availability.",
     "structure.pdb.residues": "Observed PDBe residues detail with provider identity and availability.",
     "structure.pdb.coordinates": "Observed PDBe coordinates detail with provider identity and availability.",
-
     "disease.ontology.external_mappings": "Release-matched typed SSSOM records and source provenance.",
     "go.reverse.annotations": "Observed exact-term reverse annotations, including negative evidence.",
     "go.reverse.coverage": "Bounded reverse annotation query pagination: pages retrieved, cap and why it stopped.",

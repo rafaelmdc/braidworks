@@ -55,3 +55,15 @@ def test_doctor_has_no_setup_line_when_everything_is_ready(capsys, monkeypatch, 
     monkeypatch.setattr(cli, "discover_registry", _doctor_report())
     _run("doctor")
     assert "To set up local data" not in capsys.readouterr().out
+
+
+def test_a_source_left_out_by_only_is_not_called_uninstalled(monkeypatch):
+    from braidworks.core import diagnose
+
+    providers = [type("W", (), {"weaver_id": "uniprot", "consumes": {"q"}, "produces": set()})]
+    monkeypatch.setattr(diagnose, "_installed_plugins", lambda: {"uniprot"})
+    lines = diagnose._explain_type("q", role="input", known=set(), missing=providers)
+    assert "left out of this query" in lines[1] and "--only" in lines[1]
+    monkeypatch.setattr(diagnose, "_installed_plugins", set)
+    lines = diagnose._explain_type("q", role="input", known=set(), missing=providers)
+    assert lines[1].endswith("handles it but is not installed.")

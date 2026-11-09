@@ -87,7 +87,12 @@ def _prepare_experiment(registry, have, want, traverse, batch=None, **options):
     sets = (
         batch_inputs(have, batch)
         if batch is not None
-        else [StrandSet.from_strands("e1", [Strand(key, value) for key, value in have.items()])]
+        else [
+            StrandSet.from_strands(
+                row_label(have) if have else "e1",
+                [Strand(key, value) for key, value in have.items()],
+            )
+        ]
     )
     if not sets[0].available_types() or (not want and not traverse):
         raise ValueError("choose inputs and outputs or a pass-through step")

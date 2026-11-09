@@ -22,7 +22,8 @@ command line and Python script).
 
 POST `/api/run` runs a query and returns the result envelope below; POST
 `/api/run/stream` takes the same body and streams Server-Sent Events, each a
-`data: {json}` line: `{"event": "wave", ...}` progress while steps run, then one
+`data: {json}` line: `{"event": "progress", "input_count": N, "completed_inputs": M}` and
+`{"event": "wave", ...}` while steps run, then one
 `{"event": "done", ...}` carrying the same envelope, or `{"event": "error", "error": ...}`.
 
 | Body field | Meaning | Default |
@@ -34,7 +35,7 @@ POST `/api/run` runs a query and returns the result envelope below; POST
 | `policy` | `local_first`, `api_first`, `local_only` or `api_only` | `local_first` |
 | `review_policy` | `halt` (pause ambiguous matches) or `allow_continue` (take the best candidate, keep the flag) | `halt` |
 | `confidence_threshold` | Pause matches scored below this (0–1) | `0.0` |
-| `expand`, `k` | When a later step needs one member of a list: `top`, `top_k` (with `k`) or `all` | `top`, `3` |
+| `expand`, `k` | When a later step needs one member of a list: `top`, `top_k` (with `k`) or `all`; the CLI's `--expand none\|top:K\|all` | `top`, `3` |
 | `traverse` | Pass-through capabilities to follow for every result | `[]` |
 | `max_expansion` | Most rows in one run | `10000` |
 | `persistence` | Optional version-1 `QueryPersistence.to_json()` object (see below) | none |
@@ -55,7 +56,9 @@ shows. A refused request returns `{"ok": false, "error": ...}`.
 
 ## Results and review
 
-Run and resume responses carry `table` (`summary`, `want`, `columns`, `rows` as in
+Read results from `table` and `exports`; the other top-level keys of a run response
+(`rows`, `columns`, `summary`, `result` and so on) are the older engine-shaped payload,
+kept for existing integrations. Run and resume responses carry `table` (`summary`, `want`, `columns`, `rows` as in
 `Result.to_json()`, `sizes` giving each list's `shown`, `total` and `complete`,
 `references`, and `review`: each paused row's `key`, `input`, `row`, `step`, `ambiguous`,
 `candidates` and `warnings`) and `exports` (`csv`, `tsv`, `json`: exactly

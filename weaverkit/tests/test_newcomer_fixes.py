@@ -22,3 +22,11 @@ def test_entry_fields_keep_their_own_description():
     assert role == "entry"
     assert description == SHARED_KEYS["protein.query"]  # what field search shows
     assert "organism" not in description
+
+
+def test_a_single_have_input_is_labelled_by_its_value(monkeypatch, recording_registry, tmp_path):
+    registry, _ = recording_registry
+    client = client_for(monkeypatch, registry, data_dir=tmp_path)
+    payload = client.post("/api/run", json={"have": {QUERY: "TP53"}, "want": [SYMBOL]}).json()
+    assert payload["ok"], payload
+    assert payload["table"]["rows"][0]["input"] == "TP53"

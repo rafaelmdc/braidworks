@@ -335,6 +335,7 @@ def _emit_rows(
 def _emit_result(outcome, fmt: str) -> None:
     """Print a :class:`braidworks.Result` exactly as Python exports it, plus its summary."""
     _emit_rows(outcome.rows, outcome.want, fmt, outcome.to_json())
+    sys.stdout.flush()  # the table first, then its summary, even when both go to one file
     _err("→ " + outcome.summary())
 
 

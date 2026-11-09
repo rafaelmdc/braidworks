@@ -38,11 +38,18 @@ ensure_disbiome_db(auto=True)
 database. GMrepo and MONDO provide equivalent helpers, documented in their package
 READMEs. Acquire only the sources you need.
 
-The database goes to the default cache location, where ordinary discovery finds it.
+The database goes to the default cache location, where ordinary discovery finds it:
+the per-user cache folder (`~/.cache/braidworks/` on Linux), or the folder named by the
+`BRAIDWORKS_DATA_DIR` environment variable. Lookup caches and saved runs are separate
+files you name yourself; see [cache and saved runs](cache-and-resume.md).
 If you choose a custom path, pass the same path to the source's configured builder in
 Python; see [builder configuration](../reference/weaver-configuration.md).
 
-For the optional local NCBI taxonomy, follow [NCBI database setup](set-up-ncbi-database.md).
+Some sources answer through a web API and also offer optional local data; `doctor`
+shows them as partly ready. That includes NCBI, GTDB, Wikipedia and AlphaFold, and each
+source's README (`weavers/<source>_weaver/README.md`, linked from the
+[catalogue](../reference/sources.md)) says what its local data adds. For the optional
+local NCBI taxonomy, follow [NCBI database setup](set-up-ncbi-database.md).
 Read the GTDB and AGORA READMEs before acquiring their larger reference data: AGORA's
 reaction outputs need a separate build that can download a multi-GB archive, and its
 archive dependency may need a C compiler.
