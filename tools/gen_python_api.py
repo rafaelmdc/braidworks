@@ -116,7 +116,11 @@ def _params(obj, *, drop_self: bool) -> tuple[str, str]:
         if param.annotation is not param.empty:
             text += f": {_annotation(param.annotation)}"
         if param.default is not param.empty:
-            text += f" = {param.default!r}" if param.annotation is not param.empty else f"={param.default!r}"
+            text += (
+                f" = {param.default!r}"
+                if param.annotation is not param.empty
+                else f"={param.default!r}"
+            )
         parts.append(text)
     ret = "" if sig.return_annotation is sig.empty else f" -> {_annotation(sig.return_annotation)}"
     return ", ".join(parts), ret
@@ -168,7 +172,7 @@ def build() -> str:
 
     parts = [HEADER]
     parts.append("## Functions\n")
-    for name in ("get", "async_get", "find", "path", "sources"):
+    for name in ("get", "async_get", "find", "path", "sources", "demo"):
         obj = getattr(bw, name)
         parts.append(
             f"### `bw.{name}`\n\n```python\n{_signature(name, obj)}\n```\n\n"

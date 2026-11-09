@@ -51,6 +51,7 @@ including [result shapes](reference/results.md) and [storage contracts](referenc
 | Reuse lookups and continue saved work | [Cache and saved runs](how-to/cache-and-resume.md) |
 | Prepare the optional local NCBI taxonomy database | [NCBI database setup](how-to/set-up-ncbi-database.md) |
 | Limit requests to upstream services | [HTTP request pacing](how-to/set-request-rates.md) |
+| Show Braidworks without a network connection | [Offline demo](how-to/run-the-offline-demo.md): `braidworks demo` |
 | Inspect the source network offline | [Network view](network/braidworks-network.html), opened in a browser |
 
 Exact command options are in the [CLI reference](reference/cli/index.md) (also

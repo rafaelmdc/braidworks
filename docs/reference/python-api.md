@@ -85,6 +85,25 @@ def sources() -> list[dict[str, Any]]
 
 Each installed source with its version and readiness.
 
+### `bw.demo`
+
+```python
+def demo(name: str = 'proteins') -> Result
+```
+
+Run one canned example offline, on samples bundled with the sources.
+
+Nothing is fetched from the network, so it works without a connection; the values
+are small fixed samples, not current database records. Demos: `"proteins"`
+(TP53 across six sources, plus a deliberate miss), `"microbe"` and `"taxon"`.
+Needs the toolkit and sources (`pip install braidworks`).
+
+**Example:**
+
+```python
+bw.demo("proteins").to_pandas()
+```
+
 ## `Session`
 
 ```python

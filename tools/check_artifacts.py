@@ -272,6 +272,24 @@ def check_meta_install(
     )
     run([str(bin_python), "-c", META_SMOKE, json.dumps(sources)], cwd=scratch, env=env)
     run([str(venv / "bin/braidworks"), "get", "--help"], cwd=scratch, env=env)
+    run([str(bin_python), "-c", OFFLINE_DEMO], cwd=scratch, env=env)
+
+
+OFFLINE_DEMO = """
+import contextlib, io, socket
+def refuse(*args, **kwargs):
+    raise OSError("network disabled for the offline demo check")
+socket.socket.connect = socket.create_connection = socket.getaddrinfo = refuse
+from braidworks.core import cli
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    assert cli.main(["demo"]) == 0
+text = out.getvalue()
+for demo in ("proteins", "microbe", "taxon"):
+    assert f"braidworks demo {demo}" in text, demo
+assert "Cellular tumor antigen p53" in text and "NOTAGENE  [unresolved]" in text
+print("Offline demo with networking disabled: OK")
+"""
 
 
 if __name__ == "__main__":

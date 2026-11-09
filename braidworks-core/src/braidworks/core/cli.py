@@ -16,6 +16,7 @@ Subcommands
   path    show the route from one type to another without running it
   find    search the installed fields by meaning (``braidworks find pdb structures``)
   serve   open the browser interface (needs ``weaverkit[serve]``)
+  demo    example queries offline, on bundled sample data
   references  print source citations for the installed weavers
 
 The registry is discovered from installed ``braidworks.weavers`` entry points, so a
@@ -958,6 +959,68 @@ SERVE_INSTALL_HINT = (
 )
 
 
+DEMO_INSTALL_HINT = (
+    "braidworks demo needs the toolkit and the sources' bundled samples. Install them with: "
+    "pip install braidworks  (or, from the checkout: " + INSTALL_ALL + ")"
+)
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """Canned queries on the sources' bundled samples, with no network (offline pitch)."""
+    try:
+        from weaverkit import demo
+    except ImportError:
+        _err(DEMO_INSTALL_HINT)
+        return 1
+    if args.list:
+        for item in demo.DEMOS:
+            print(f"{item.name:10} {item.title}\n{'':10} {item.point}")
+        return 0
+    if args.name:
+        try:
+            demo.find_demo(args.name)
+        except ValueError as exc:
+            _err(str(exc))
+            return 1
+    if args.serve:
+        try:
+            from weaverkit.serve import serve
+        except ImportError:
+            _err(SERVE_INSTALL_HINT)
+            return 1
+        registry = demo.demo_registry()
+        chosen = [demo.find_demo(args.name)] if args.name else demo.runnable(registry)
+        try:
+            serve(
+                port=args.port,
+                open_browser=not args.no_open,
+                registry=registry,
+                examples=[item.example() for item in chosen],
+                notice=demo.NOTICE,
+            )
+        except RuntimeError as exc:  # missing [serve] extra, or the port is taken
+            _err(str(exc))
+            return 1
+        except KeyboardInterrupt:  # pragma: no cover
+            print()
+        return 0
+    if args.format != "human" and not args.name:
+        _err(f"--format {args.format} prints one table: name a demo (see --list)")
+        return 1
+    _err(demo.NOTICE)
+    outcomes = demo.run(args.name)
+    if not outcomes:
+        _err("no demo can run: the sources it needs are not installed")
+        return 1
+    for item, result in outcomes:
+        if args.format == "human":
+            print(f"== {item.title}  (braidworks demo {item.name})")
+            print(f"   {item.point}\n")
+        _emit_result(result, args.format)
+        sys.stdout.flush()  # keep each table next to its summary line
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     """Start the browser interface; ``weaverkit`` provides it, so import it lazily."""
     try:
@@ -1363,6 +1426,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sv.add_argument("--no-open", action="store_true", help="do not open a browser.")
     sv.set_defaults(func=_cmd_serve)
+
+    # demo
+    dm = _subparser(
+        sub,
+        "demo",
+        help="run example queries offline, on samples bundled with the sources.",
+        examples=(
+            "braidworks demo",
+            "braidworks demo proteins --format csv",
+            "braidworks demo --serve",
+        ),
+    )
+    dm.add_argument("name", nargs="?", help="one demo to run (default: all; see --list).")
+    dm.add_argument("--list", action="store_true", help="list the demos and exit.")
+    dm.add_argument(
+        "--format",
+        choices=["human", "csv", "tsv", "json", "jsonl"],
+        default="human",
+        help="output format, as for `get` (default: human).",
+    )
+    dm.add_argument(
+        "--serve", action="store_true", help="open the browser on the same sample data."
+    )
+    dm.add_argument("--port", type=int, default=8765, help="port for --serve (default: 8765).")
+    dm.add_argument("--no-open", action="store_true", help="with --serve, do not open a browser.")
+    dm.set_defaults(func=_cmd_demo)
 
     # doctor
     dr = sub.add_parser("doctor", help="check the installation and suggest fixes.")
