@@ -24,9 +24,11 @@ import asyncio
 import errno
 import io
 import os
+import secrets
 import socket
 import sqlite3
 import sys
+from collections import OrderedDict
 from dataclasses import replace
 
 from braidworks.core.braid import BackendPolicy
@@ -360,6 +362,36 @@ def _checkpoint_events(on_event, saved=None):
     return checkpoint
 
 
+# Results with rows paused for review, kept so the page can resume them with the
+# reviewer's choices (Python's ``result.resume()``). Bounded: the oldest is dropped.
+_PAUSED: OrderedDict[str, object] = OrderedDict()
+PAUSED_LIMIT = 32
+
+
+def _hold(outcome) -> str:
+    token = secrets.token_urlsafe(16)
+    _PAUSED[token] = outcome
+    while len(_PAUSED) > PAUSED_LIMIT:
+        _PAUSED.popitem(last=False)
+    return token
+
+
+def _review_items(outcome) -> list[dict]:
+    """Each paused row with what a reviewer needs: input, step, candidates, decision key."""
+    return [
+        {
+            "key": item._key,
+            "input": item.input,
+            "row": item.row,
+            "step": item.step,
+            "ambiguous": item.ambiguous,
+            "candidates": item.candidates,
+            "warnings": item.warnings,
+        }
+        for item in outcome.review
+    ]
+
+
 def result_table(outcome) -> dict:
     """``Result`` rows as the browser shows them, plus exact Python exports.
 
@@ -388,6 +420,7 @@ def result_table(outcome) -> dict:
             "rows": json.loads(json.dumps(document["rows"], ensure_ascii=False)),
             "sizes": sizes,
             "references": document["references"],
+            "review": json.loads(json.dumps(_review_items(outcome), ensure_ascii=False)),
         },
         "exports": {
             "csv": outcome.to_csv(),
@@ -459,7 +492,45 @@ async def execute_query_response(
         on_saved=_checkpoint_events(on_event, saved),
         on_event=on_event,
     )
-    return _query_payload(registry, prepared, outcome, want, run=saved[-1] if saved else None)
+    payload = _query_payload(registry, prepared, outcome, want, run=saved[-1] if saved else None)
+    if outcome.review and not saved:  # a saved run resumes from its store instead
+        payload["review_token"] = _hold(outcome)
+    return payload
+
+
+async def execute_review_response(token: str, decisions) -> dict:
+    """Record review choices on a held result and continue its paused rows.
+
+    ``decisions`` use the saved-run format (``ReviewDecision.to_json()``); rows without a
+    decision stay paused, and the response carries a fresh ``review_token`` for them.
+    """
+    outcome = _PAUSED.pop(token, None)
+    if outcome is None:
+        raise ValueError("this review is no longer held by the server; run the query again")
+    items = {item._key: item for item in outcome.review}
+    try:
+        for data in decisions or ():
+            decision = ReviewDecision.from_json(data)
+            item = items.get(decision.entity_key)
+            if item is None:
+                raise ValueError(f"no paused row has key {decision.entity_key!r}")
+            if decision.action == "select":
+                item.choose(decision.candidate_index)
+            elif decision.action == "accept":
+                item.accept()
+            else:
+                item.reject()
+        if not outcome._decisions:
+            raise ValueError("choose, accept or reject at least one paused row")
+    except ValueError:
+        _PAUSED[token] = outcome  # a bad request keeps the review available
+        raise
+    session = outcome._session
+    resumed = await session._continue(outcome)
+    payload = _query_payload(session.registry, resumed._prepared, resumed, resumed.want)
+    if resumed.review:
+        payload["review_token"] = _hold(resumed)
+    return payload
 
 
 # The batch endpoint's original name; every run now shares one path.
@@ -873,6 +944,18 @@ def create_app(data_dir: str | os.PathLike | None = None):
                 ),
             }
         except (ValueError, OSError, sqlite3.Error, KeyError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    class ReviewRequest(BaseModel):
+        model_config = {"extra": "forbid"}
+        token: str
+        decisions: list[dict] = Field(default_factory=list)
+
+    @app.post("/api/review")
+    def api_review(req: ReviewRequest):
+        try:
+            return asyncio.run(execute_review_response(req.token, req.decisions))
+        except (ValueError, BraidworksError, OSError, sqlite3.Error, KeyError) as exc:
             return {"ok": False, "error": str(exc)}
 
     @app.post("/api/resume")

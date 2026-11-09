@@ -53,7 +53,14 @@ def test_landing_page_is_the_form_not_the_graph_or_advanced_settings(recording_r
     page = render_lookup_page(registry)
     for element in ('id="ids"', 'id="types"', 'id="q"', 'id="run"', 'href="/explore"'):
         assert element in page, element
-    for advanced in ('id="builder"', "review_policy", "lease", "confidence", "max_expansion"):
+    # settings, not the per-candidate confidence a review row shows
+    for advanced in (
+        'id="builder"',
+        "review_policy",
+        "lease",
+        "confidence_threshold",
+        "max_expansion",
+    ):
         assert advanced not in page, advanced
 
 

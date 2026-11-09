@@ -11,6 +11,19 @@ GET `/api/find?q=WORDS&limit=N` (`limit` 1–100, default 10) returns
 `bw.find`'s, so the browser, Python and `braidworks find` agree. An empty `q` or an
 out-of-range `limit` returns `{"ok": false, "error": ...}`.
 
+## Results and review
+
+Run and resume responses carry `table` (`summary`, `want`, `columns`, `rows` as in
+`Result.to_json()`, `sizes` giving each list's `shown`, `total` and `complete`,
+`references`, and `review`: each paused row's `key`, `input`, `row`, `step`, `ambiguous`,
+`candidates` and `warnings`) and `exports` (`csv`, `tsv`, `json`: exactly
+`to_csv()`, `to_csv(sep="\t")`, `to_json()`). A run with paused rows and no run store
+also returns `review_token`. POST `/api/review` with `token` and version-1 `decisions`
+(the `/api/resume` format, `entity_key` = the item's `key`) continues the decided rows
+through `Session` and returns the same envelope, with a new `review_token` while rows
+remain paused. Tokens are single-use, held in memory (the most recent 32), and refused
+with `{"ok": false}` once gone; an invalid decision is refused and keeps the review.
+
 ## Execution and persistence
 
 Every run endpoint executes through the same `Session` as Python and the CLI, so a

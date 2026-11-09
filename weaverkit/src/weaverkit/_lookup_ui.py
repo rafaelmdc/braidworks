@@ -114,6 +114,29 @@ td.input { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
 .size { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .more { border: 0; background: none; color: var(--accent); font-size: 12px; padding: 0; }
 .missing, .absent { color: var(--muted); font-size: 12.5px; }
+.counts, .downloads { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pill { border: 1px solid transparent; border-radius: 99px; padding: 3px 11px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--none-soft); color: var(--none); }
+.pill[aria-pressed="true"] { border-color: currentColor; }
+.pill.s-resolved { background: var(--ok-soft); color: var(--ok); }
+.pill.s-review { background: var(--warn-soft); color: var(--warn); }
+.pill.s-error { background: var(--err-soft); color: var(--err); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.layout.single { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.card h3 { font-size: 15px; }
+.cite { font-size: 12.5px; display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.cite:first-of-type { border-top: 0; padding-top: 0; }
+.cite a { color: var(--accent); word-break: break-all; }
+.lic { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+tr.review-row td { background: var(--warn-soft); }
+.review { display: grid; gap: 6px; }
+.cand { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.cand .conf { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.choose { border: 1px solid var(--warn); background: var(--panel); color: var(--warn); border-radius: 6px; padding: 2px 10px; font-size: 12.5px; }
+.choose[aria-pressed="true"] { background: var(--warn); color: var(--panel); }
+.resumebar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--warn-soft); border-radius: 8px; font-size: 13.5px; }
 </style>
 </head>
 <body>
@@ -166,8 +189,28 @@ td.input { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
   </div>
 
   <section class="results" id="results" hidden aria-live="polite">
-    <div class="rhead"><h2>Results</h2><span class="summary" id="summary"></span></div>
-    <div class="tablebox"><table id="table"></table></div>
+    <div class="rhead">
+      <h2>Results</h2>
+      <div class="counts" id="counts"></div>
+      <div class="downloads" aria-label="Download">
+        <button class="ghost" type="button" data-export="csv">CSV</button>
+        <button class="ghost" type="button" data-export="tsv">TSV</button>
+        <button class="ghost" type="button" data-export="json">JSON</button>
+      </div>
+    </div>
+    <div class="resumebar" id="resumebar" hidden>
+      <span id="resumetext"></span>
+      <button class="run" id="resume" type="button">Resume</button>
+    </div>
+    <div class="layout">
+      <div class="tablebox"><table id="table"></table></div>
+      <aside class="side">
+        <section class="card" id="citecard" hidden>
+          <h3>Sources to cite</h3>
+          <div id="cites"></div>
+        </section>
+      </aside>
+    </div>
   </section>
 </div>
 
@@ -179,7 +222,7 @@ const FIELDS = CATALOG.map(([type_id, description, sources, inputs, consumers]) 
 const BY_ID = Object.fromEntries(FIELDS.map(f => [f.type_id, f]));
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const state = { have: STARTS[0] || "", want: [], table: null, params: {}, paramCaps: [], routeOk: false, matches: [], running: false };
+const state = { have: STARTS[0] || "", want: [], table: null, params: {}, paramCaps: [], routeOk: false, matches: [], running: false, filter: null, decisions: {}, token: null, exports: null };
 
 // A field is reachable when some capability producing it starts from something reachable.
 function reachable(start) {
@@ -279,14 +322,69 @@ function cell(value, size, key) {
   if (typeof value === "object") return `<td><code>${esc(JSON.stringify(value))}</code></td>`;
   return `<td>${esc(value)}</td>`;
 }
+const STATUS_LABELS = { resolved: "resolved", review: "need review", unresolved: "unresolved", error: "errors" };
+function reviewFor(table, row) { return (table.review || []).find(item => item.input === row.input && item.row === row.row); }
+function reviewCells(item, span) {
+  const chosen = state.decisions[item.key];
+  const pressed = (action, index) => chosen && chosen.action === action && (index === undefined || chosen.candidate_index === index);
+  const cands = item.candidates.map(c => `<div class="cand"><button type="button" class="choose" aria-pressed="${pressed("select", c.index)}" data-key="${esc(item.key)}" data-action="select" data-index="${c.index}">Choose</button>${Object.entries(c.values).map(([t, v]) => `<code>${esc(t)}</code> ${esc(Array.isArray(v) ? v.join("; ") : v)}`).join(" · ")} <span class="conf">confidence ${Number(c.confidence).toFixed(2)}</span></div>`).join("");
+  const accept = item.ambiguous ? "" : `<button type="button" class="choose" aria-pressed="${pressed("accept")}" data-key="${esc(item.key)}" data-action="accept">Accept</button>`;
+  const why = item.ambiguous ? `${esc(item.step)} found ${item.candidates.length} possible matches. Choose one, or reject the row.` : `${esc(item.step)} flagged this match for a check. Accept it, or reject the row.`;
+  const notes = item.warnings.length ? `<span class="hint">${item.warnings.map(esc).join(" · ")}</span>` : "";
+  return `<td colspan="${span}"><div class="review"><span>${why}</span>${notes}${cands}<div class="cand">${accept}<button type="button" class="choose" aria-pressed="${pressed("reject")}" data-key="${esc(item.key)}" data-action="reject">Reject</button></div></div></td>`;
+}
 function renderResults(table) {
   state.result = table;
   $("#results").hidden = false;
-  $("#summary").textContent = table.summary;
+  const counts = { resolved: 0, review: 0, unresolved: 0, error: 0 };
+  table.rows.forEach(row => { counts[row.status] = (counts[row.status] || 0) + 1; });
+  $("#counts").innerHTML = `<span class="pill">${table.rows.length} rows</span>` + Object.entries(STATUS_LABELS).map(([status, label]) =>
+    `<button type="button" class="pill s-${status}" aria-pressed="${state.filter === status}" data-filter="${status}">${counts[status] || 0} ${label}</button>`).join("");
   const parent = table.columns.includes("parent");
   const head = `<thead><tr><th>Input</th>${parent ? "<th>From</th>" : ""}<th>Status</th>${table.want.map(t => `<th><code>${esc(t)}</code></th>`).join("")}<th>Missing</th></tr></thead>`;
-  const body = table.rows.map((row, i) => `<tr><td class="input">${esc(row.input)}</td>${parent ? `<td class="mono">${esc(row.parent || "")}</td>` : ""}<td><span class="status s-${esc(row.status)}">${esc(row.status)}</span></td>${table.want.map(t => cell(row[t], (table.sizes[i] || {})[t], i + ":" + t)).join("")}<td class="missing">${esc((row.missing || []).join(", "))}</td></tr>`).join("");
+  const body = table.rows.map((row, i) => {
+    if (state.filter && row.status !== state.filter) return "";
+    const lead = `<td class="input">${esc(row.input)}</td>${parent ? `<td class="mono">${esc(row.parent || "")}</td>` : ""}<td><span class="status s-${esc(row.status)}">${esc(row.status)}</span></td>`;
+    const item = row.status === "review" ? reviewFor(table, row) : null;
+    if (item) return `<tr class="review-row">${lead}${reviewCells(item, table.want.length + 1)}</tr>`;
+    return `<tr>${lead}${table.want.map(t => cell(row[t], (table.sizes[i] || {})[t], i + ":" + t)).join("")}<td class="missing">${esc((row.missing || []).join(", "))}</td></tr>`;
+  }).join("");
   $("#table").innerHTML = head + `<tbody>${body}</tbody>`;
+  const refs = table.references || [];
+  $("#citecard").hidden = !refs.length;
+  $("#results .layout").classList.toggle("single", !refs.length);
+  $("#cites").innerHTML = refs.map(r => `<div class="cite"><b>${esc(r.attribution || r.weaver_id)}</b>${r.license ? `<span class="lic">${esc(r.license)}</span>` : ""}${r.citation ? (/^https?:/.test(r.citation) ? `<a href="${esc(r.citation)}" target="_blank" rel="noopener">${esc(r.citation)}</a>` : `<span>${esc(r.citation)}</span>`) : ""}${r.source_url ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(r.source_url)}</a>` : ""}</div>`).join("");
+  renderResume();
+}
+function renderResume() {
+  const paused = (state.result && state.result.review || []).length, decided = Object.keys(state.decisions).length;
+  $("#resumebar").hidden = !paused;
+  $("#resumetext").textContent = decided ? `${decided} of ${paused} paused row${paused === 1 ? "" : "s"} decided. Resume to finish ${decided === 1 ? "it" : "them"}; undecided rows stay paused.` : `${paused} row${paused === 1 ? "" : "s"} paused for your choice.`;
+  $("#resume").disabled = !decided || state.running;
+}
+function download(kind) {
+  const text = state.exports && state.exports[kind]; if (!text) return;
+  const type = { csv: "text/csv", tsv: "text/tab-separated-values", json: "application/json" }[kind];
+  const url = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `braidworks-results.${kind}` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function showOutcome(done) {
+  state.exports = done.exports; state.token = done.review_token || null; state.decisions = {};
+  renderResults(done.table);
+  $("#progress").textContent = done.table.summary;
+}
+async function resume() {
+  state.running = true; renderRun(); renderResume();
+  const progress = $("#progress"); progress.classList.remove("error"); progress.textContent = "Resuming the paused rows…";
+  try {
+    if (!state.token) throw new Error("this result has no paused rows to resume");
+    const decisions = Object.values(state.decisions).map(d => ({ version: 1, entity_key: d.key, action: d.action, candidate_index: d.candidate_index ?? null }));
+    const r = await (await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: state.token, decisions }) })).json();
+    if (!r.ok) throw new Error(r.error);
+    showOutcome(r);
+  } catch (e) { state.failed = true; progress.classList.add("error"); progress.textContent = "Resume failed: " + e.message; }
+  finally { state.running = false; renderRun(); renderResume(); }
 }
 
 function requestBody() {
@@ -322,8 +420,8 @@ async function run() {
       if (chunk.done && !done) throw new Error("the run ended without a result");
     }
     if (!done.ok) throw new Error(done.error || "the run failed");
-    renderResults(done.table);
-    progress.textContent = done.table.summary;
+    state.filter = null;
+    showOutcome(done);
   } catch (e) {
     state.failed = true; progress.classList.add("error"); progress.textContent = "Run failed: " + e.message;
   } finally { state.running = false; renderRun(); }
@@ -338,7 +436,19 @@ $("#matches").addEventListener("change", e => { const t = e.target.dataset.field
 $("#chosen").addEventListener("click", e => { const t = e.target.dataset.remove; if (!t) return; state.want = state.want.filter(x => x !== t); renderMatches(); plan(); });
 $("#options").addEventListener("input", e => { const c = e.target.dataset.cap; if (!c) return; (state.params[c] ||= {})[e.target.dataset.param] = e.target.value; });
 $("#run").addEventListener("click", run);
-$("#table").addEventListener("click", e => {
+$("#resume").addEventListener("click", resume);
+$("#results").addEventListener("click", e => {
+  const f = e.target.closest("[data-filter]");
+  if (f) { state.filter = state.filter === f.dataset.filter ? null : f.dataset.filter; renderResults(state.result); return; }
+  const x = e.target.closest("[data-export]"); if (x) { download(x.dataset.export); return; }
+  const d = e.target.closest("[data-action]");
+  if (d) {
+    const decision = { key: d.dataset.key, action: d.dataset.action, candidate_index: d.dataset.index !== undefined ? Number(d.dataset.index) : null };
+    const same = state.decisions[decision.key];
+    if (same && same.action === decision.action && same.candidate_index === decision.candidate_index) delete state.decisions[decision.key];
+    else state.decisions[decision.key] = decision;
+    renderResults(state.result); return;
+  }
   const m = e.target.closest("[data-more]"); if (!m) return;
   const [i, t] = m.dataset.more.split(/:(.+)/), value = state.result.rows[Number(i)][t];
   m.parentElement.innerHTML = value.map(x => `<code>${esc(x)}</code>`).join("");

@@ -18,6 +18,19 @@ need. Their API or local-data prerequisites still apply.
 6. Click **Get fields**. The table has one row per ID with its status, each value (lists
    show their size), and the fields still missing.
 
+## Review, filter and download the results
+
+- Click a status count (for example **need review**) to show only those rows; click it
+  again to show all.
+- A row paused for review lists its candidates. **Choose** one, **Accept** a flagged
+  match, or **Reject** the row, then click **Resume**. Only the decided rows continue;
+  undecided rows stay paused. Paused results are kept while the server runs (the most
+  recent 32); after a restart, run the query again.
+- **CSV**, **TSV** and **JSON** download exactly what `result.to_csv()` /
+  `to_csv(sep="\t")` / `result.to_json()` give in Python for the same query.
+- **Sources to cite** lists every source the results drew on, with its licence and
+  citation.
+
 The network graph and the step-by-step builder are under **Explore sources**
 (`/explore`): use them to see how sources connect, follow relationships, or set
 review, cache and expansion settings. The offline `weaverkit view` export only
