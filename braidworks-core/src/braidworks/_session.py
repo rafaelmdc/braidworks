@@ -27,7 +27,7 @@ from braidworks.core.diagnose import explain_no_route, installed_types, source_s
 from braidworks.core.discovery import build_registry_from_entry_points
 from braidworks.core.exceptions import NoPathError
 from braidworks.core.executor import ReviewPolicy
-from braidworks.core.inputs import read_input_rows
+from braidworks.core.inputs import read_input_rows, row_label
 from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.persistent_query import continue_run, start_run
 from braidworks.core.planner import Braider
@@ -93,18 +93,12 @@ def _input_rows(ids: Any, have: str | None) -> tuple[list[dict[str, str]], bool]
     return [{have: str(item).strip()} for item in items if not _is_blank(item)], False
 
 
-def _label(row: Mapping[str, str]) -> str:
-    if len(row) == 1:
-        return next(iter(row.values()))
-    return "; ".join(f"{type_id}={value}" for type_id, value in row.items())
-
-
 def _strand_sets(rows: list[dict[str, str]]) -> list[StrandSet]:
     sets = []
     for index, row in enumerate(rows, start=1):
         if not row:
             continue
-        ss = StrandSet.from_strands(_label(row), [Strand(t, v) for t, v in row.items()])
+        ss = StrandSet.from_strands(row_label(row), [Strand(t, v) for t, v in row.items()])
         ss.source_row = index
         sets.append(ss)
     return sets
@@ -628,7 +622,8 @@ def demo(name: str = "proteins") -> Result:
     Nothing is fetched from the network, so it works without a connection; the values
     are small fixed samples, not current database records. Demos: ``"proteins"``
     (TP53 across six sources, plus a deliberate miss), ``"microbe"`` and ``"taxon"``.
-    Needs the toolkit and sources (``pip install braidworks``).
+    Needs the toolkit and sources: a checkout's ``uv sync --all-extras`` installs
+    them, as will ``pip install braidworks`` once the packages are on PyPI.
 
     Example::
 

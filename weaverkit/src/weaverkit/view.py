@@ -62,7 +62,7 @@ def discover_registry(*, only: frozenset[str] | None = None) -> Discovery:
 def _classify(key: str) -> tuple[str, str]:
     """Return ``(role, description)`` for a type key from the weaverkit registries."""
     if key in ENTRY_KEYS:
-        return "entry", ENTRY_DESCRIPTION
+        return "entry", SHARED_KEYS.get(key) or OUTPUT_KEYS.get(key) or ENTRY_DESCRIPTION
     if key in SHARED_KEYS:
         return "shared", SHARED_KEYS[key]
     if key in OUTPUT_KEYS:

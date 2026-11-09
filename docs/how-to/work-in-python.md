@@ -29,7 +29,7 @@ result = bw.get(
     organism="9606",
 )
 print(result.summary())   # 2 inputs · 2 resolved · 0 unresolved · 0 need review · 0 errors
-result.to_pandas()        # one row per input; needs: pip install 'braidworks-core[pandas]'
+result.to_pandas()        # one row per input; needs pandas (installed by uv sync --all-extras)
 ```
 
 Rows are labelled by the value you supplied and keep their order; duplicate inputs stay
@@ -152,8 +152,9 @@ result.to_csv("results.csv")                     # or sep="\t" for TSV
 ```
 
 Exports add a `<field>.total` column after each list field, holding its true size
-(empty when unknown or when the row has no value). `to_pandas` needs the pandas
-extra: `uv sync --all-extras`, or `pip install 'braidworks-core[pandas]'`.
+(empty when unknown or when the row has no value). `to_pandas` needs pandas: a checkout's
+`uv sync --all-extras` installs it, and so will `pip install 'braidworks[pandas]'` once
+the packages are on PyPI.
 
 ## Cite the sources
 

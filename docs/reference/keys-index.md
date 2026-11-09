@@ -10,11 +10,11 @@ Supplied by the user at the start of a braid.
 
 | Key | Description | Produced by | Consumed by |
 | --- | --- | --- | --- |
-| `disease.meddra.id` | The text you start from — an organism name or a gene/protein query. | `disbiome:disbiome.list_diseases` | `disbiome:disbiome.list_taxa`, `mondo:mondo.lookup_by_meddra` |
-| `disease.mesh.id` | The text you start from — an organism name or a gene/protein query. | `gmrepo:gmrepo.list_phenotypes` | `gmrepo:gmrepo.sample_profiles`, `gmrepo:gmrepo.list_runs`, `mondo:mondo.lookup_by_mesh` |
-| `disease.name` | The text you start from — an organism name or a gene/protein query. | — | `mondo:mondo.lookup_by_name` |
-| `organism.name` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_name` |
-| `protein.query` | The text you start from — an organism name or a gene/protein query. | — | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
+| `disease.meddra.id` | A MedDRA id for a disease (e.g. 10009888) — an entry point for disease-ontology lookups; produced by MedDRA-coded microbe–disease datasets (Disbiome). | `disbiome:disbiome.list_diseases` | `disbiome:disbiome.list_taxa`, `mondo:mondo.lookup_by_meddra` |
+| `disease.mesh.id` | A MeSH descriptor id for a disease (e.g. D003093) — an entry point for disease-ontology lookups; produced by MeSH-coded microbe–disease datasets. | `gmrepo:gmrepo.list_phenotypes` | `gmrepo:gmrepo.sample_profiles`, `gmrepo:gmrepo.list_runs`, `mondo:mondo.lookup_by_mesh` |
+| `disease.name` | A disease name (e.g. 'ulcerative colitis') — a free-text entry point that resolves to a disease ontology term via label/synonym matching. | — | `mondo:mondo.lookup_by_name` |
+| `organism.name` | The text you start from — an organism name, scientific or common, that NCBI resolves (use organism.scientific_name when you already have the exact scientific name). | — | `ncbi:ncbi.resolve_name` |
+| `protein.query` | The text you start from — a gene symbol, protein name, or accession. | — | `ncbi:ncbi.resolve_gene`, `uniprot:resolve_protein` |
 
 ## Shared join keys
 

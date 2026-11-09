@@ -43,18 +43,26 @@ uv run braidworks get --in-file inputs.csv \
     --want structure.pdb.ids --format csv > structures.csv
 ```
 
-Empty cells are absent inputs. Rows are grouped by the input fields they have and
+Empty cells are absent inputs. Each result row is labelled by its input row's
+values: `P04637` for a row with one value, `protein.query=P04637; protein.uniprot.accession=…`
+for a row with several. Rows are grouped by the input fields they have and
 planned before execution starts. Read stdin with `--in-file -` (for example from
 another command in a pipeline).
 
-## Add a value to every row
+## Apply the same setting or value to every row
 
-`--have TYPE=VALUE` applies one value to every ID or row; a row's own value wins:
+A source option, such as the species for gene symbols, applies to every row. Set it
+with `--param`:
 
 ```bash
-uv run braidworks get --in-file genes.txt --in-type protein.query \
-    --have ncbi.taxon.id=9606 --want protein.name --format csv
+uv run braidworks get --in-file examples/genes.txt --in-type protein.query \
+    --param organism=9606 --want protein.name --format csv
 ```
+
+`--have TYPE=VALUE` is different: it adds an input field with that value to every ID
+or row (a row's own value wins). It matters only when a step starts from that field,
+and it never sets a source option: `--have ncbi.taxon.id=9606` does **not** restrict
+gene symbols to human, `--param organism=9606` does.
 
 ## Choose the export
 

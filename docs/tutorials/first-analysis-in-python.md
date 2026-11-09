@@ -23,7 +23,9 @@ uv run --with jupyter jupyter notebook
 ```
 
 Open a new notebook. Every code block below is one cell. (Without Jupyter,
-`uv run python` gives you a prompt that works the same way.)
+`uv run python` gives you a prompt that works the same way, except that a table is
+printed only when you pass it to `print()`, and pandas may hide middle columns behind
+`...` in a narrow terminal.)
 
 ## Find the fields you want
 

@@ -11,10 +11,11 @@ without bundled samples are left out, and demos they would serve are skipped.
 ## Run every demo query
 
 ```bash
-braidworks demo
+uv run braidworks demo
 ```
 
-From a checkout, prefix commands with `uv run`. The command first states that the
+Commands run from the checkout with `uv run` (drop it once Braidworks is installed
+with pip). The command first states that the
 answers are sample data, then prints each query's table and summary line:
 
 | Demo | Input | What it shows |
@@ -28,8 +29,8 @@ answers are sample data, then prints each query's table and summary line:
 ## Run one demo, or export it
 
 ```bash
-braidworks demo proteins
-braidworks demo proteins --format csv > demo.csv
+uv run braidworks demo proteins
+uv run braidworks demo proteins --format csv > demo.csv
 ```
 
 `--format` takes the same values as `braidworks get`. CSV, TSV and JSON print a single
@@ -38,7 +39,7 @@ table, so they need a demo name.
 ## Show the browser on the sample data
 
 ```bash
-braidworks demo --serve
+uv run braidworks demo --serve
 ```
 
 This opens the [browser interface](use-the-browser.md) on the same samples. A banner on

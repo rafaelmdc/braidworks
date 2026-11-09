@@ -145,6 +145,16 @@ def _not_installed(registry: BraidRegistry, start: Path | None) -> list[Workspac
     return [w for w in workspace_weavers(start) if w.weaver_id not in installed]
 
 
+def _installed_plugins() -> set[str]:
+    """Source ids installed in this environment, whether or not this query uses them."""
+    from importlib.metadata import entry_points
+
+    try:
+        return {entry.name for entry in entry_points(group="braidworks.weavers")}
+    except Exception:  # noqa: BLE001 - a broken metadata read only loses the hint
+        return set()
+
+
 def _explain_type(
     type_name: str,
     *,
@@ -159,8 +169,16 @@ def _explain_type(
         lines = [f"No installed source provides `{type_name}`."]
         providers = [w for w in missing if type_name in w.produces]
     if providers:
-        names = ", ".join(w.weaver_id for w in providers)
-        lines.append(f"  The {names} source handles it but is not installed.")
+        installed = _installed_plugins()
+        excluded = [w.weaver_id for w in providers if w.weaver_id in installed]
+        absent = [w.weaver_id for w in providers if w.weaver_id not in installed]
+        if excluded:
+            lines.append(
+                f"  The {', '.join(excluded)} source handles it but is left out of this query "
+                "(check --only, or the sources you chose)."
+            )
+        if absent:
+            lines.append(f"  The {', '.join(absent)} source handles it but is not installed.")
         return lines
     suggestions = suggest_types(type_name, known)
     if suggestions:

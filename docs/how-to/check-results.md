@@ -10,9 +10,10 @@ Before using an export, check each original input's terminal rows:
 
 1. Inspect each row's `status`; errors are explained on stderr. A technical failure is
    not a negative biological observation.
-2. Inspect `missing` for requested fields. A resolved row can still be partial;
-   `why_missing` says why each field is absent (the source failed or is not set up,
-   found no match, or was not reached).
+2. Inspect `missing` for requested fields. A resolved row can still be partial. When a
+   resolved or error row lacks a field, a `why_missing` column appears and says why
+   (the source failed or is not set up, found no match, or was not reached); unresolved
+   and review rows are explained by their status instead.
 3. Inspect `review` rows and their candidates (`braidworks runs RUN_ID` for a saved
    run, or the `result` field of `--format json`). Resolve uncertain matches before
    treating them as accepted identity.
@@ -25,8 +26,8 @@ and [review continuation](cache-and-resume.md#resolve-a-saved-review).
 
 CLI data go to stdout; progress and diagnostics go to stderr. Ordinary queries fail
 for fatal errors. Add `--strict` to also fail for unresolved or review-required outcomes;
-still check `missing` when every requested field is required. Direct `run` returns
-nonzero for backend errors.
+still check `missing` when every requested field is required. `braidworks run`, which
+calls one capability directly, returns nonzero for backend errors.
 
 ## Choose an export
 
@@ -59,8 +60,10 @@ uv run braidworks get P04637 --have protein.uniprot.accession --want structure.p
   --only pdbe --format csv --archive run.json > structures.csv
 ```
 
-Choose a new archive filename: an existing archive is never overwritten. Shell
-redirection does overwrite an existing CSV. Archives retain terminal executions,
+Choose a new archive filename: an existing archive is never overwritten, and the
+command refuses before calling any source. Shell redirection does overwrite an
+existing CSV, and the shell creates it before Braidworks starts, so a refused run
+leaves an empty CSV behind. Archives retain terminal executions,
 including unsuccessful rows, but a planning failure or interruption before a terminal
 result does not create one. Failure to write an archive returns a nonzero status.
 

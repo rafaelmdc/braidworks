@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from itertools import chain
+from typing import Any
 
 
 def read_input_rows(
@@ -37,3 +38,14 @@ def read_input_rows(
         if row:
             rows.append(row)
     return rows
+
+
+def row_label(row: Mapping[str, Any]) -> str:
+    """How a result row names an input row: its value, or ``type=value; …`` for several.
+
+    Every interface labels table rows this way, so the same table gives the same row
+    labels in Python, on the command line and in the browser.
+    """
+    if len(row) == 1:
+        return str(next(iter(row.values())))
+    return "; ".join(f"{type_id}={value}" for type_id, value in row.items())

@@ -28,8 +28,9 @@ browser. Leave the terminal running; press Ctrl-C there when you finish the less
 
 ## Paste your IDs
 
-The page opens on **Look up what you need for a list of IDs**. In **1 Your IDs**,
-paste three lines:
+The page opens on **Look up what you need for a list of IDs**. In **1 Your IDs**
+(the grey `P04637` / `BRCA1` is only a placeholder; the count reads **0 IDs**), paste
+three lines:
 
 ```text
 TP53

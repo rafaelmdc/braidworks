@@ -96,7 +96,8 @@ Run one canned example offline, on samples bundled with the sources.
 Nothing is fetched from the network, so it works without a connection; the values
 are small fixed samples, not current database records. Demos: `"proteins"`
 (TP53 across six sources, plus a deliberate miss), `"microbe"` and `"taxon"`.
-Needs the toolkit and sources (`pip install braidworks`).
+Needs the toolkit and sources: a checkout's `uv sync --all-extras` installs
+them, as will `pip install braidworks` once the packages are on PyPI.
 
 **Example:**
 
@@ -263,10 +264,13 @@ One line of counts: inputs, resolved, unresolved, need review, errors.
 #### `Result.to_csv`
 
 ```python
-def to_csv(path: str | PathLike | None = None, *, sep: str = ',') -> str
+def to_csv(path: str | PathLike | None = None, *, sep: str = ',') -> str | None
 ```
 
-Write the rows as CSV (or TSV with `sep="\t"`); returns the text.
+The rows as CSV (or TSV with `sep="\t"`).
+
+Returns the text, or with `path` writes it there and returns `None` (as
+pandas does, so a notebook cell that saves a file prints nothing).
 
 #### `Result.to_pandas`
 

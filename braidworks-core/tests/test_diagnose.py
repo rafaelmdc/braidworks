@@ -78,7 +78,12 @@ def test_workspace_weavers_empty_outside_a_checkout(tmp_path):
     assert workspace_weavers(tmp_path) == []
 
 
-def test_missing_input_names_the_uninstalled_source(tmp_path):
+def test_missing_input_names_the_uninstalled_source(tmp_path, monkeypatch):
+    from braidworks.core import diagnose
+
+    # uniprot is absent from this environment, not merely left out of the query
+    # (CI installs every source, so say so explicitly).
+    monkeypatch.setattr(diagnose, "_installed_plugins", set)
     lines = explain_no_route(
         _registry(), have={"protein.query"}, want={"structure.pdb.ids"}, start=_workspace(tmp_path)
     )

@@ -46,7 +46,12 @@ is not an inventory of every matching protein or isoform.
 
 ## Choose your interface
 
-Start with a researcher walkthrough:
+New to Braidworks? Start with one of the two first lessons (about ten minutes each):
+
+- [Your first query in the browser](docs/tutorials/first-query-in-the-browser.md), no code needed.
+- [Your first analysis in Python](docs/tutorials/first-analysis-in-python.md), in a notebook or script.
+
+Then try a researcher walkthrough:
 
 - [Find experimental structures for a protein list](docs/tutorials/protein-structures.md): connect sources, inspect structures and export a batch.
 - [Trace a microbial functional annotation](docs/tutorials/microbial-functions.md): follow a taxonomy-based affiliation back to its rule evidence.

@@ -110,13 +110,27 @@ def missing_reasons(
         for error in record["diagnostics"]
         if error.get("capability_id") and not error.get("recovered")
     }
+    sources = {cap: source for pairs in producers.values() for source, cap in pairs}
     reasons: dict[str, str] = {}
     for field in record["missing"]:
         for source, capability in producers.get(field, ()):
             step = steps.get(capability)
-            if step is not None:
-                reasons[field] = _step_reason(source, step["status"], failures.get(capability))
-                break
+            if step is None:
+                continue
+            reason = _step_reason(source, step["status"], failures.get(capability))
+            upstream = next(
+                (cap for cap, step in steps.items() if cap != capability and cap in failures),
+                None,
+            )
+            if step["status"] == "skipped" and upstream is not None:
+                # Not reached because an earlier step failed: name that failure, not
+                # just the gap it left.
+                cause = _step_reason(
+                    sources.get(upstream, upstream.split(".")[0]), "error", failures[upstream]
+                )
+                reason = f"{source} was not reached because {cause}"
+            reasons[field] = reason
+            break
     return reasons
 
 
