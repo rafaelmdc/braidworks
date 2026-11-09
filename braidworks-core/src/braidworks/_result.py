@@ -18,7 +18,7 @@ from typing import Any
 from braidworks.core.braid import Braid
 from braidworks.core.executor import ExecutionError, ExecutionResult, ReviewQueueItem
 from braidworks.core.listing import Listing, describe_size
-from braidworks.core.outcomes import execution_records
+from braidworks.core.outcomes import execution_records, missing_reasons, route_producers
 from braidworks.core.query import PreparedQuery
 from braidworks.core.references import Reference, format_references
 from braidworks.core.result import WeaveStatus
@@ -51,8 +51,16 @@ def _shown(row: dict[str, Any], type_id: str, width: int | None = None) -> str:
 # --------------------------------------------------------------------------- #
 # the row schema, shared by Result and the command line
 # --------------------------------------------------------------------------- #
-def record_row(record: dict[str, Any], want: list[str]) -> dict[str, Any]:
-    """One engine record as a row: input, row, parent?, status, wanted types, missing."""
+def record_row(
+    record: dict[str, Any],
+    want: list[str],
+    producers: dict[str, list[tuple[str, str]]] | None = None,
+) -> dict[str, Any]:
+    """One engine record as a row: input, row, parent?, status, wanted types, missing.
+
+    With the route's ``producers``, a resolved or error row that lacks a field also
+    gets ``why_missing`` (``{field: reason}``).
+    """
     row: dict[str, Any] = {"input": record["entity"], "row": record["source_row"]}
     if "parent" in record:
         row["parent"] = record["parent"]
@@ -60,13 +68,25 @@ def record_row(record: dict[str, Any], want: list[str]) -> dict[str, Any]:
     for type_id in want:
         row[type_id] = record["values"].get(type_id)
     row["missing"] = list(record["missing"])
+    reasons = missing_reasons(record, producers or {})
+    if reasons:
+        row["why_missing"] = reasons
     return row
 
 
 def row_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
     """Row keys in display order: input, row, parent (if expanded), status, wanted, missing."""
     has_parent = any("parent" in row for row in rows)
-    return ["input", "row", *(["parent"] if has_parent else []), "status", *want, "missing"]
+    has_reasons = any("why_missing" in row for row in rows)
+    return [
+        "input",
+        "row",
+        *(["parent"] if has_parent else []),
+        "status",
+        *want,
+        "missing",
+        *(["why_missing"] if has_reasons else []),
+    ]
 
 
 def _export_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
@@ -80,8 +100,18 @@ def _export_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
     return out
 
 
+def reasons_text(reasons: dict[str, str] | None) -> str:
+    """``why_missing`` as one cell: fields sharing a reason are grouped, ``; ``-separated."""
+    grouped: dict[str, list[str]] = {}
+    for field, reason in (reasons or {}).items():
+        grouped.setdefault(reason, []).append(field)
+    return "; ".join(f"{', '.join(fields)}: {reason}" for reason, fields in grouped.items())
+
+
 def _export_row(row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
     flat = dict(row)
+    if "why_missing" in columns:
+        flat["why_missing"] = reasons_text(row.get("why_missing")) or None
     for column in columns:
         if column.endswith(".total") and column not in row:
             value = row.get(column[: -len(".total")])
@@ -190,7 +220,10 @@ class Result:
     Row keys: ``input`` (the supplied value), ``row`` (1-based input position, so
     duplicates stay distinct), ``parent`` (only for expanded children), ``status``
     (``resolved`` / ``unresolved`` / ``review`` / ``error``), one key per requested
-    type (``None`` when absent) and ``missing`` (requested types this row lacks).
+    type (``None`` when absent) and ``missing`` (requested types this row lacks). A
+    resolved or error row that lacks a field also has ``why_missing``, ``{field:
+    reason}``: the source failed (for example, is not set up), found no match, was
+    not reached, or returned no value.
     A list value is a :class:`Listing`: ``len()`` is what came back, ``.total`` the
     true size and ``.complete`` whether it is all of it.
     """
@@ -213,7 +246,10 @@ class Result:
         self._records = execution_records(raw, self.want)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
-        self.rows: list[dict[str, Any]] = [record_row(r, self.want) for r in self._records]
+        producers = route_producers(braid for braid, _ in prepared.plans)
+        self.rows: list[dict[str, Any]] = [
+            record_row(r, self.want, producers) for r in self._records
+        ]
 
     # --- reading -------------------------------------------------------------------
     @property

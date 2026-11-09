@@ -277,7 +277,7 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
 # --------------------------------------------------------------------------- #
 def _human(rows: list[dict[str, Any]], want: list[str]) -> None:
     """Rows for people: the input and its status, each value (lists with their size)."""
-    from braidworks._result import _cell
+    from braidworks._result import _cell, reasons_text
 
     seen: dict[str, int] = {}
     for row in rows:
@@ -302,6 +302,8 @@ def _human(rows: list[dict[str, Any]], want: list[str]) -> None:
             shown = True
         if row["missing"]:
             print(f"  missing: {', '.join(row['missing'])}")
+            if row.get("why_missing"):
+                print(f"    why: {reasons_text(row['why_missing'])}")
         elif not shown:
             print("  (no values)")
         print()
@@ -734,7 +736,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 1
     from braidworks._result import record_row, rows_summary
 
-    rows = [record_row(record, want) for record in records]
+    producers = {field: [(args.weaver, cap.id)] for field in cap.produces}
+    rows = [record_row(record, want, producers) for record in records]
     summary = rows_summary(rows, len(sets))
     document = {
         "summary": summary,

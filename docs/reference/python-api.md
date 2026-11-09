@@ -182,7 +182,10 @@ Rows, coverage and provenance for one query.
 Row keys: `input` (the supplied value), `row` (1-based input position, so
 duplicates stay distinct), `parent` (only for expanded children), `status`
 (`resolved` / `unresolved` / `review` / `error`), one key per requested
-type (`None` when absent) and `missing` (requested types this row lacks).
+type (`None` when absent) and `missing` (requested types this row lacks). A
+resolved or error row that lacks a field also has `why_missing`, `{field:
+reason}`: the source failed (for example, is not set up), found no match, was
+not reached, or returned no value.
 A list value is a `Listing`: `len()` is what came back, `.total` the
 true size and `.complete` whether it is all of it.
 
