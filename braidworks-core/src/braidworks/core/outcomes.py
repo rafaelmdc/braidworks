@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from braidworks.core.errors import ErrorCategory, explain_error
 from braidworks.core.executor import ExecutionResult
 from braidworks.core.listing import Listing
 from braidworks.core.strand import StrandSet
@@ -84,6 +85,64 @@ def execution_records(result: ExecutionResult, want: list[str]) -> list[dict[str
             record["errors"] = list(dict.fromkeys([*record["errors"], *wr.errors]))
         records.append(record)
     return number_records(records)
+
+
+# Statuses whose rows can still lack a requested field for a reason the status does not
+# already give (an unresolved or paused row is missing everything for the obvious reason).
+_EXPLAINED_STATUSES = frozenset({"resolved", "error"})
+
+
+def missing_reasons(
+    record: dict[str, Any], producers: dict[str, list[tuple[str, str]]]
+) -> dict[str, str]:
+    """Why each requested field is absent from a resolved or error record.
+
+    ``producers`` maps a field to the ``(source, capability)`` steps of the route that
+    produce it. The reason comes from what that step did for this entity: it failed
+    (with the error's plain-English explanation), found no match, was not reached
+    because an earlier step returned nothing, or ran without returning the field.
+    """
+    if record["status"] not in _EXPLAINED_STATUSES or not record["missing"]:
+        return {}
+    steps = {step["capability_id"]: step for step in record["completion"]}
+    failures = {
+        error["capability_id"]: error
+        for error in record["diagnostics"]
+        if error.get("capability_id") and not error.get("recovered")
+    }
+    reasons: dict[str, str] = {}
+    for field in record["missing"]:
+        for source, capability in producers.get(field, ()):
+            step = steps.get(capability)
+            if step is not None:
+                reasons[field] = _step_reason(source, step["status"], failures.get(capability))
+                break
+    return reasons
+
+
+def _step_reason(source: str, status: str, failure: dict[str, Any] | None) -> str:
+    if status == "error" or failure is not None:
+        category = ErrorCategory(failure["category"]) if failure else ErrorCategory.UNKNOWN
+        if category is ErrorCategory.CONFIG:
+            return f"{source} is not set up on this machine (run `braidworks doctor`)"
+        return explain_error(category, source=source)
+    if status == "no_match":
+        return f"{source} has no match"
+    if status == "skipped":
+        return f"{source} was not reached: an earlier step returned nothing to start from"
+    return f"{source} returned no value"
+
+
+def route_producers(braids) -> dict[str, list[tuple[str, str]]]:
+    """``{field: [(source, capability), ...]}`` for every step of the given routes."""
+    producers: dict[str, list[tuple[str, str]]] = {}
+    for braid in braids:
+        for step in braid.steps:
+            for field in sorted(step.output_types):
+                pair = (step.weaver_id, step.capability_id)
+                if pair not in producers.setdefault(field, []):
+                    producers[field].append(pair)
+    return producers
 
 
 def number_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

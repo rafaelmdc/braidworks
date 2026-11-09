@@ -67,6 +67,7 @@ def test_csv_and_tsv_are_python_to_csv(fmt, sep, capsys):
         "structure.pdb.ids",
         "structure.pdb.ids.total",
         "missing",
+        "why_missing",  # NONAME resolved without a name
     ]
 
 
@@ -89,7 +90,10 @@ def test_human_rows_are_labelled_by_input_with_status_and_totals(capsys):
         "P1  (row 1)  [resolved]\n  protein.name: Name of P1\n  structure.pdb.ids (2): 1abc; 2def",
         "PART  [resolved]\n  protein.name: Name of PART\n  structure.pdb.ids (2 of 5): 1abc; 2def",
         "MISS  [unresolved]\n  missing: protein.name, structure.pdb.ids",
-        "NONAME  [resolved]\n  structure.pdb.ids (2): 1abc; 2def\n  missing: protein.name",
+        (
+            "NONAME  [resolved]\n  structure.pdb.ids (2): 1abc; 2def\n  missing: protein.name"
+            "\n    why: protein.name: uniprot returned no value"
+        ),
         "P1  (row 5)  [resolved]\n  protein.name: Name of P1\n  structure.pdb.ids (2): 1abc; 2def",
     ]
 

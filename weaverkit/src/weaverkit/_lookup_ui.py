@@ -130,6 +130,7 @@ td.input { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
 .size { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .more { border: 0; background: none; color: var(--accent); font-size: 12px; padding: 0; }
 .missing, .absent { color: var(--muted); font-size: 12.5px; }
+.why { margin-top: 4px; color: var(--warn); font-size: 12px; }
 .counts, .downloads { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pill { border: 1px solid transparent; border-radius: 99px; padding: 3px 11px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--none-soft); color: var(--none); }
 .pill[aria-pressed="true"] { border-color: currentColor; }
@@ -286,6 +287,14 @@ tr.review-row td { background: var(--warn-soft); }
 const CATALOG = __CATALOG__;
 const STARTS = __STARTS__;
 const EXAMPLES = __EXAMPLES__;
+// Why each missing field is absent (a failed, empty or unreached step), grouped by reason.
+function whyMissing(reasons) {
+  if (!reasons) return "";
+  const grouped = {};
+  for (const [field, reason] of Object.entries(reasons)) (grouped[reason] = grouped[reason] || []).push(field);
+  return Object.entries(grouped).map(([reason, fields]) =>
+    `<div class="why">${esc(fields.join(", "))}: ${esc(reason)}</div>`).join("");
+}
 const RECIPES_KEY = "braidworks.recipes";  // shared with the Explore builder
 
 const FIELDS = CATALOG.map(([type_id, description, sources, inputs, consumers]) => ({ type_id, description, sources, inputs, consumers }));
@@ -420,7 +429,7 @@ function renderResults(table) {
     const lead = `<td class="input">${esc(row.input)}</td>${parent ? `<td class="mono">${esc(row.parent || "")}</td>` : ""}<td><span class="status s-${esc(row.status)}">${esc(row.status)}</span></td>`;
     const item = row.status === "review" ? reviewFor(table, row) : null;
     if (item) return `<tr class="review-row">${lead}${reviewCells(item, table.want.length + 1)}</tr>`;
-    return `<tr>${lead}${table.want.map(t => cell(row[t], (table.sizes[i] || {})[t], i + ":" + t)).join("")}<td class="missing">${esc((row.missing || []).join(", "))}</td></tr>`;
+    return `<tr>${lead}${table.want.map(t => cell(row[t], (table.sizes[i] || {})[t], i + ":" + t)).join("")}<td class="missing">${esc((row.missing || []).join(", "))}${whyMissing(row.why_missing)}</td></tr>`;
   }).join("");
   $("#table").innerHTML = head + `<tbody>${body}</tbody>`;
   const refs = table.references || [];
