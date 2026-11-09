@@ -8,8 +8,8 @@ For task instructions, use [the documentation index](../index.md).
 |---|---|
 | Python API: `get`, `Session`, `Result`, `Listing` | [Python API reference](python-api.md) (generated from docstrings) |
 | CLI commands and options | [CLI reference](cli/index.md): one page per command, generated from `--help` |
-| Installed capabilities and parameters | `braidworks weavers`; source READMEs/specs linked from [the catalogue](../how-to/choose-sources.md) |
-| Source purposes and setup requirements | [Source catalogue](../how-to/choose-sources.md) |
+| Installed capabilities and parameters | `braidworks weavers`; source READMEs/specs linked from [the catalogue](sources.md) |
+| Source purposes and setup requirements | [Source catalogue](sources.md) |
 | Inputs, outputs and producer/consumer connections | [Generated key index](keys-index.md) |
 | Exceptions, failure values and diagnostic categories | [Failure contract](failures.md) |
 | Machine exports, Python result objects and run archives | [Result reference](results.md) |
@@ -26,6 +26,5 @@ For task instructions, use [the documentation index](../index.md).
 
 The [Python API reference](python-api.md) is generated from the public docstrings
 (`make api-docs`; `make docs-check` rejects drift). [Work in Python](../how-to/work-in-python.md)
-provides executable recipes. Lower-level engine contracts live in the
-[explicit query service](../../braidworks-core/src/braidworks/core/query.py) and
+provides executable recipes. Lower-level engine contracts are in
 [core contracts](core-contracts.md); `fetch` remains for existing scripts.

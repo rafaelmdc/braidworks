@@ -29,7 +29,7 @@ ones need a local database or credentials before they can answer. Run it wheneve
 query reports "no route".
 
 Installing a local-data source does not acquire its database; see the
-[source catalogue](choose-sources.md). AGORA's archive dependency may require a C compiler
+[source catalogue](../reference/sources.md). AGORA's archive dependency may require a C compiler
 when a compatible wheel is unavailable.
 
 ## Start the browser

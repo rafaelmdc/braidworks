@@ -19,7 +19,7 @@ input to another.
 You choose the data you need; Braidworks handles the connections. Available routes
 depend on your installed weavers and configured backends. Public APIs need network
 access; some sources require a separately prepared local database. See the
-[source catalogue](docs/how-to/choose-sources.md) to choose sources for your work.
+[source catalogue](docs/reference/sources.md) to choose sources for your work.
 
 ## Try one query
 
@@ -58,7 +58,7 @@ Start with a researcher walkthrough:
 | Export a batch to a spreadsheet | [Process a batch](docs/how-to/process-a-batch.md) |
 | Retrieve values in a script or notebook | [Python tutorial](docs/tutorials/first-analysis-in-python.md), then [Work in Python](docs/how-to/work-in-python.md) |
 | Build and run a query visually | [Browser tutorial](docs/tutorials/first-query-in-the-browser.md), then [Use the browser](docs/how-to/use-the-browser.md) |
-| Find available fields and source requirements | [Find a field](docs/how-to/find-a-field.md), the [source catalogue](docs/how-to/choose-sources.md) and [key index](docs/reference/keys-index.md) |
+| Find available fields and source requirements | [Find a field](docs/how-to/find-a-field.md), the [source catalogue](docs/reference/sources.md) and [key index](docs/reference/keys-index.md) |
 | Check missing data, ambiguity, and failures | [Reading results](docs/how-to/check-results.md) |
 | Reuse lookups or continue a saved run | [Cache and saved runs](docs/how-to/cache-and-resume.md) |
 

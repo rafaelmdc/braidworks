@@ -1,45 +1,32 @@
-# Choose data sources
+# Choose and set up data sources
 
-Install the weavers for the fields you need, then prepare any required local data.
-A weaver's presence in the catalogue means its capabilities are declared; it does
-not mean every input will match or that an unconfigured backend is ready to run.
+Install the sources your fields need, prepare any that read local data, and check
+that each one is ready. The [source catalogue](../reference/sources.md) lists every
+source with what it is for and what it needs.
 
-Public API backends need network access. Local backends use bundled data or a
-separately acquired database/archive. Fixture builders contain tiny test datasets
-and are not research reference data.
+## Check what is installed and ready
 
-## Source catalogue
+```bash
+braidworks doctor
+```
 
-This checkout contains 17 weaver packages. Each linked README gives the source's
-query entry points and scientific scope, with exact capability tables and coverage
-contracts in its linked source reference. `braidworks weavers` lists only
-the packages installed in your environment; the [key index](../reference/keys-index.md) shows
-connections across the repository.
+From a checkout, prefix commands with `uv run`. `doctor` lists each installed source as
+ready, partly ready (for example, ready through its web API but not its local data) or
+needing setup, and names sources in the repository that are not installed. A query
+whose field comes from a source that is not set up still returns the row; its
+`why_missing` column says "*source* is not set up on this machine".
 
-| Weaver | Use it for | Setup |
-|---|---|---|
-| [UniProt](../../weavers/uniprot_weaver/README.md) | Protein identity, sequence/annotations, identifier mapping | Keyless API. Pin organism for gene symbols; representative search is not all-match resolution. |
-| [PDBe](../../weavers/pdbe_weaver/README.md) | Experimental structures, entities/assemblies/ligands, SIFTS mapping, coordinate links | Keyless API; residue mapping downloads bounded per-entry SIFTS data on request. |
-| [AlphaFold](../../weavers/alphafold_weaver/README.md) | Predicted model metadata and archive inventories | Keyless API; optional header-only indexing of supplied uncompressed outer TAR archives. Predictions are not experimental structures. |
-| [QuickGO](../../weavers/quickgo_weaver/README.md) | GO annotations/evidence, term details/hierarchy, reverse gene-product queries | Keyless API. Pagination budgets can limit coverage; inspect completeness warnings. |
-| [Reactome](../../weavers/reactome_weaver/README.md) | Pathways, contained reactions, and provider evidence | Keyless API. Evidence records are source observations, not synthesized confidence scores. |
-| [STRING](../../weavers/string_weaver/README.md) | Functional association networks | Keyless API. Species, score, and display limits are parameters; associations need not be physical interactions. |
-| [NCBI](../../weavers/ncbi_weaver/README.md) | Taxonomy, genes, genomes, and related-entity queries | Keyless Datasets API by default; optional local taxonomy database. Backend capability coverage differs. |
-| [BacDive](../../weavers/bacdive_weaver/README.md) | Strain phenotypes and culture-collection/genome cross-references | Keyless API. Taxid lookup describes a type-strain representative, not every isolate. |
-| [Disbiome](../../weavers/disbiome_weaver/README.md) | Microbe–disease associations and reverse disease queries | Prepared local SQLite database required. Provider disease IDs and MedDRA codes have distinct identity rules. |
-| [FAPROTAX](../../weavers/faprotax_weaver/README.md) | Taxonomy-based ecological functional groups | Bundled text, offline. Input is a lineage; inferred functions are not measured traits. |
-| [GMrepo](../../weavers/gmrepo_weaver/README.md) | Microbial abundance, phenotype associations, runs/cohorts | Prepared local SQLite database. Sample profiles must be included for profile outputs; cohort filters describe retained data coverage. |
-| [GTDB](../../weavers/gtdb_weaver/README.md) | Taxon placement and genome-card quality/history | Keyless API for supported name/genome queries; taxid crosswalk and tree placement need separate local data. |
-| [MONDO](../../weavers/mondo_weaver/README.md) | Disease names, identifiers, ontology details, typed mappings | Prepared local SQLite database. Typed mappings require explicitly supplied release-matched SSSOM data. |
-| [Wikidata](../../weavers/wikidata_weaver/README.md) | Taxon names and entity identifiers | Keyless SPARQL endpoint. Homonyms can pause for review; `expected_rank` refines disambiguation. |
-| [Wikipedia](../../weavers/wikipedia_weaver/README.md) | Pageview-based attention signals | Keyless API uses trailing 12 whole months; optional local dumps cover one specified month. Windows are not interchangeable. |
-| [AGORA](../../weavers/agora_weaver/README.md) | Metabolic reconstructions, reaction membership, and genome crosswalks | Bundled crosswalk; reaction outputs require a separate SBML/database build, potentially multi-GB. |
-| [Example](../../weavers/example_weaver/README.md) | Learn how an adapter works | Bundled teaching CSV, offline. Register explicitly in Python; deliberately not auto-discovered. |
+## Install the sources you need
 
-## Prepare local-only sources
+[Install everything](install.md#install-everything) unless you need a small
+environment; [install only some sources](install.md#install-only-some-sources)
+explains how to name them. Not sure which source provides a field? [Find a field](find-a-field.md).
 
-Install the selected package before running its setup function. For example, after
-installing `disbiome_weaver`, save this as a script and run it in your environment:
+## Set up a source that needs local data
+
+Disbiome, GMrepo and MONDO read a prepared local database. Each package has a setup
+helper that builds it from the provider's published files. For Disbiome, save this
+as a script and run it in your environment:
 
 ```python
 from disbiome_weaver.setup import ensure_disbiome_db
@@ -47,26 +34,27 @@ from disbiome_weaver.setup import ensure_disbiome_db
 ensure_disbiome_db(auto=True)
 ```
 
-`auto=True` authorizes network acquisition. Omit it when checking for an already
-prepared database. GMrepo and MONDO provide equivalent helpers documented in their
-package READMEs; acquire only the sources you need.
+`auto=True` authorizes the download; omit it to check for an already prepared
+database. GMrepo and MONDO provide equivalent helpers, documented in their package
+READMEs. Acquire only the sources you need.
 
-Default discovery reads the default cache location. If you choose a custom database
-path, pass it to the Python configured builder too. See
-[builder configuration](../reference/weaver-configuration.md).
+The database goes to the default cache location, where ordinary discovery finds it.
+If you choose a custom path, pass the same path to the source's configured builder in
+Python; see [builder configuration](../reference/weaver-configuration.md).
 
-For optional NCBI local setup, follow [database setup](set-up-ncbi-database.md). Read the GTDB
-and AGORA package READMEs before acquiring larger reference data. AGORA's bundled
-reconstruction crosswalk works offline; reaction outputs require a separate SBML/database
-build that can acquire a multi-GB archive. Its archive dependency may need a compiler.
+For the optional local NCBI taxonomy, follow [NCBI database setup](set-up-ncbi-database.md).
+Read the GTDB and AGORA READMEs before acquiring their larger reference data: AGORA's
+reaction outputs need a separate build that can download a multi-GB archive, and its
+archive dependency may need a C compiler.
 
-## Versions and attribution
+## Check the setup worked
 
-Packages version independently and declare a minimum core version. The workspace
-resolves compatible local packages; check package metadata rather than relying on a
-version number in this guide. Older workflows may need the
-[ambiguity-policy migration](migrate-to-core-0.12.md).
+Run `braidworks doctor` again: the source should now show as ready. Then run one
+query that uses it and check that `why_missing` is empty.
 
-`braidworks references` lists source references from installed weavers; query results
-retain references for executed sources. MIT covers the software. Biological data keep
-their providers' licenses, citation requirements, and terms.
+## Cite the sources you used
+
+`braidworks references` prints the citation for every installed source, and each
+result keeps the references of the sources it drew on (`result.cite()` in Python, the
+**Sources to cite** panel in the browser). Data keep their providers' licences and
+terms; see [versions and attribution](../reference/sources.md#versions-and-attribution).
