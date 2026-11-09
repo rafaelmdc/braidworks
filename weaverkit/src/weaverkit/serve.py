@@ -38,7 +38,7 @@ from braidworks.core.executor import (
     ExpandPolicy,
     ReviewPolicy,
 )
-from braidworks.core.inputs import read_input_rows
+from braidworks.core.inputs import read_input_rows, row_label
 from braidworks.core.outcomes import execution_records
 from braidworks.core.persistence_options import QueryPersistence
 from braidworks.core.query import (
@@ -337,7 +337,7 @@ def batch_inputs(have, batch):
     sets = []
     for i, row in enumerate(rows, 1):
         ss = StrandSet.from_strands(
-            row[input_type] if input_type else f"e{i}",
+            row_label(row),
             [Strand(key, value) for key, value in {**have, **row}.items()],
         )
         ss.source_row = i

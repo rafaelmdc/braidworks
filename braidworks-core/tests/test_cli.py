@@ -370,7 +370,10 @@ def test_table_stdin_is_read_once(monkeypatch, capsys, traverse):
     assert _run("weave", "--in-file", "-", "--format", "json", *extra) == 0
     records = _rows(capsys.readouterr().out)
     assert len(records) == (4 if traverse else 2)
-    assert {r.get("parent", r["input"]) for r in records} == {"e1", "e2"}
+    assert {r.get("parent", r["input"]) for r in records} == {
+        "P1",
+        "P2",
+    }  # labelled by each row's value
 
 
 def test_table_columns_are_available_with_broadcast_constants(tmp_path, capsys):
@@ -402,7 +405,7 @@ def test_sparse_table_plans_from_each_rows_actual_inputs(tmp_path, capsys, trave
     assert _run("weave", "--in-file", str(f), "--format", "json", *extra) == 0
     records = _rows(capsys.readouterr().out)
     assert len(records) == (4 if traverse else 2)
-    assert {r.get("parent", r["input"]) for r in records} == {"e1", "e2"}
+    assert {r.get("parent", r["input"]) for r in records} == {"P1", "ACC_P2"}
 
 
 @pytest.mark.parametrize("command", ["run", "weave"])
@@ -1038,23 +1041,14 @@ def test_archive_records_unresolved_inputs_without_losing_them(tmp_path, capsys)
     assert data["execution"]["unresolved"]
 
 
-def test_archive_refuses_overwrite_and_cleans_temporary_files(tmp_path, capsys):
+def test_archive_refuses_overwrite_before_running(tmp_path, capsys):
     archive = tmp_path / "existing.json"
     archive.write_text("keep me")
-    assert (
-        _run(
-            "weave",
-            "--have",
-            "protein.query=P1",
-            "--want",
-            "protein.name",
-            "--archive",
-            str(archive),
-        )
-        == 1
-    )
+    argv = ["weave", "--have", "protein.query=P1", "--want", "protein.name"]
+    with pytest.raises(SystemExit, match="already exists; archives are never overwritten"):
+        _run(*argv, "--archive", str(archive))
+    assert "running" not in capsys.readouterr().err  # refused before any source call
     assert archive.read_text() == "keep me"
-    assert "could not write run archive" in capsys.readouterr().err
     assert list(tmp_path.iterdir()) == [archive]
 
 

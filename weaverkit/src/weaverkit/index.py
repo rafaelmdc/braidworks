@@ -199,7 +199,8 @@ def _key_role(key: str) -> str:
 
 def _key_description(key: str, role: str) -> str:
     if role == "entry":
-        return ENTRY_DESCRIPTION
+        # The key's own description when it has one (as field search shows it).
+        return SHARED_KEYS.get(key) or OUTPUT_KEYS.get(key) or ENTRY_DESCRIPTION
     if role == "shared":
         return SHARED_KEYS[key]
     if role == "leaf":

@@ -30,6 +30,7 @@ import asyncio
 import csv
 import io
 import json
+import os
 import sqlite3
 import sys
 from collections.abc import Sequence
@@ -57,7 +58,7 @@ from braidworks.core.executor import (
     ExpandPolicy,
     ReviewPolicy,
 )
-from braidworks.core.inputs import read_input_rows
+from braidworks.core.inputs import read_input_rows, row_label
 from braidworks.core.listing import describe_size
 from braidworks.core.outcomes import (
     execution_records as _result_records,
@@ -176,7 +177,10 @@ def _report_no_route(
 def _open_input(path: str) -> io.TextIOBase:
     if path == "-":
         return sys.stdin
-    return open(path, newline="")
+    try:
+        return open(path, newline="")
+    except OSError as exc:
+        raise SystemExit(f"error: cannot read --in-file {path}: {exc.strerror or exc}") from exc
 
 
 def _rows_from_file(path: str, in_type: str | None) -> list[dict[str, str]]:
@@ -255,11 +259,12 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
         rows = _rows_from_file(args.in_file, args.in_type)
         if not rows:
             _err(f"warning: no input rows read from {args.in_file}")
-        for i, row in enumerate(rows, start=1):
+        for row in rows:
             merged = {**constants, **row}
-            # A one-value-per-line batch reads better regrouped by the value itself.
-            ident = row[args.in_type] if args.in_type else f"e{i}"
-            sets.append(StrandSet.from_strands(ident, [Strand(t, v) for t, v in merged.items()]))
+            # Labelled by the row's own values, as Python and the browser label it.
+            sets.append(
+                StrandSet.from_strands(row_label(row), [Strand(t, v) for t, v in merged.items()])
+            )
     else:
         if not constants:
             raise SystemExit(
@@ -380,9 +385,16 @@ def _map_params(
         return None
 
 
+def _archive_exists_message(path: str) -> str:
+    return f"error: run archive {path} already exists; archives are never overwritten, so choose a new file name"
+
+
 def _archive_start(args, sets, registry, plans, caps, params):
     if not args.archive:
         return None
+    if os.path.lexists(args.archive):
+        # Refuse before any source is called, not after the run.
+        raise SystemExit(_archive_exists_message(args.archive))
     return begin_archive(
         sets,
         registry,
@@ -399,6 +411,9 @@ def _archive_finish(args, archive, records, execution):
         return True
     try:
         write_archive(args.archive, archive, records=records, execution=execution)
+    except FileExistsError:
+        _err(_archive_exists_message(args.archive))
+        return False
     except (OSError, ValueError, TypeError) as exc:
         _err(f"error: could not write run archive: {exc}")
         return False
@@ -859,6 +874,12 @@ def _cmd_path(args: argparse.Namespace) -> int:
     return 0
 
 
+SETUP_GUIDE = (
+    "https://github.com/rafaelmdc/braidworks/blob/main/docs/how-to/choose-sources.md"
+    "#set-up-a-source-that-needs-local-data"
+)
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Check the installation and say, in plain words, what to do next."""
     import platform
@@ -879,8 +900,10 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     width = max(
         [len(m.weaver_id) for m in manifests] + [len(f.name) for f in report.failures] + [1]
     )
+    needs_setup = False
     for manifest in manifests:
         enabled, not_set_up = backend_readiness(registry, manifest.weaver_id)
+        needs_setup = needs_setup or bool(not_set_up)
         label = f"  {{mark}} {manifest.weaver_id:<{width}}  v{manifest.version:<8} "
         if not not_set_up:
             print(label.format(mark="✓") + f"ready ({', '.join(enabled)})")
@@ -895,6 +918,8 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                 label.format(mark="○")
                 + f"needs setup: {', '.join(not_set_up)} (see the source's README)"
             )
+    if needs_setup:
+        print(f"  To set up local data: {SETUP_GUIDE}")
     for failure in report.failures:
         print(
             f"  ✗ {failure.name:<{width}}  failed to {failure.stage}: "
@@ -963,8 +988,8 @@ SERVE_INSTALL_HINT = (
 
 
 DEMO_INSTALL_HINT = (
-    "braidworks demo needs the toolkit and the sources' bundled samples. Install them with: "
-    "pip install braidworks  (or, from the checkout: " + INSTALL_ALL + ")"
+    "braidworks demo needs the toolkit and the sources' bundled samples. From the "
+    "checkout install them with: " + INSTALL_ALL + "  (or: pip install braidworks)"
 )
 
 

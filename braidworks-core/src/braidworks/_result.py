@@ -41,8 +41,8 @@ def _shown(row: dict[str, Any], type_id: str, width: int | None = None) -> str:
     """A cell for people: the value, plus "(25 of 321)" / "(25+)" for a partial list."""
     value = row.get(type_id)
     text = _cell(value)
-    if width is not None:
-        text = text[:width]
+    if width is not None and len(text) > width:
+        text = text[: width - 1] + "…"
     if isinstance(value, Listing) and not value.complete:
         text += f" ({describe_size(value)})"
     return text
@@ -337,13 +337,18 @@ class Result:
         return rows_summary(self.rows, len(self._prepared.request.inputs))
 
     # --- exporting -----------------------------------------------------------------
-    def to_csv(self, path: str | PathLike | None = None, *, sep: str = ",") -> str:
-        """Write the rows as CSV (or TSV with ``sep="\\t"``); returns the text."""
+    def to_csv(self, path: str | PathLike | None = None, *, sep: str = ",") -> str | None:
+        """The rows as CSV (or TSV with ``sep="\\t"``).
+
+        Returns the text, or with ``path`` writes it there and returns ``None`` (as
+        pandas does, so a notebook cell that saves a file prints nothing).
+        """
         text = rows_csv(self.rows, self.want, sep=sep)
-        if path is not None:
-            with open(path, "w", encoding="utf-8", newline="") as handle:
-                handle.write(text)
-        return text
+        if path is None:
+            return text
+        with open(path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        return None
 
     def to_pandas(self, *, explode: str | None = None):
         """A pandas DataFrame of the rows; ``explode`` gives one row per list member."""

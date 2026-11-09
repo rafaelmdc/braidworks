@@ -9,7 +9,7 @@ requires-python = ">=3.12"
 # Installs no code of its own: core, the toolkit with the browser server, and every
 # source package except the teaching example (example_weaver).
 dependencies = [
-    "braidworks-core>=0.35.0",
+    "braidworks-core>=0.36.0",
     "weaverkit[serve]>=0.17.0",
     "agora_weaver>=0.3.0",
     "alphafold_weaver>=0.2.0",
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pandas = ["braidworks-core[pandas]>=0.35.0"]
+pandas = ["braidworks-core[pandas]>=0.36.0"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"
