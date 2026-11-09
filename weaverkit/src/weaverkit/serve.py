@@ -786,11 +786,30 @@ def confine_persistence(value, root: str):
 # --- FastAPI adapter (optional; lazy import) ---------------------------------
 
 
-def create_app(data_dir: str | os.PathLike | None = None):
+def _notice_html(notice: str) -> str:
+    import html
+
+    return (
+        '<div role="status" style="position:fixed;bottom:0;left:0;right:0;z-index:50;'
+        "font:600 13px system-ui,sans-serif;padding:8px 12px;background:#8a5a00;"
+        f'color:#fff;text-align:center">{html.escape(notice)}</div>'
+    )
+
+
+def create_app(
+    data_dir: str | os.PathLike | None = None,
+    *,
+    registry=None,
+    examples: list[dict] | None = None,
+    notice: str | None = None,
+):
     """Build the FastAPI app. Raises a clear error if the ``[serve]`` extra is missing.
 
     ``data_dir`` (default: the current directory) bounds every cache/run file path the
-    browser supplies; see :func:`confine_path`.
+    browser supplies; see :func:`confine_path`. ``registry`` fixes the sources (the
+    offline demo passes its fixture registry); by default they are discovered per
+    request. ``examples`` replaces the built-in example cards and ``notice`` shows a
+    banner on every page.
     """
     import json as _json
 
@@ -836,18 +855,23 @@ def create_app(data_dir: str | os.PathLike | None = None):
         decisions: list[dict] = Field(default_factory=list)
 
     root = os.path.realpath(data_dir if data_dir is not None else os.getcwd())
+
+    def _registry():
+        return registry if registry is not None else discover_registry().registry
+
     app = FastAPI(title="weaverkit serve", docs_url=None, redoc_url=None)
 
     # "/" is the form-first lookup page; the network graph (with the builder slotted in,
     # interactive=True) is the optional Explore view at "/explore".
     from weaverkit._lookup_ui import render_lookup_page
 
-    _landing = render_lookup_page(discover_registry().registry)
-    _explore = render_html(build_data(), interactive=True).replace(
+    _landing = render_lookup_page(_registry(), examples=examples, notice=notice)
+    _explore = render_html(build_data(registry=registry), interactive=True).replace(
         "<body>",
         '<body><a href="/" style="position:fixed;top:8px;right:12px;z-index:50;'
         "font:600 13px system-ui,sans-serif;padding:6px 12px;border-radius:6px;"
-        'background:#0b6870;color:#fff;text-decoration:none">\u2190 Look up</a>',
+        'background:#0b6870;color:#fff;text-decoration:none">\u2190 Look up</a>'
+        + (_notice_html(notice) if notice else ""),
         1,
     )
 
@@ -861,7 +885,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
 
     @app.post("/api/plan")
     def api_plan(req: PlanRequest):
-        registry = discover_registry().registry
+        registry = _registry()
         try:
             policy = parse_policy(req.policy)
         except ValueError as exc:
@@ -872,11 +896,11 @@ def create_app(data_dir: str | os.PathLike | None = None):
 
     @app.get("/api/find")
     def api_find(q: str = "", limit: int = 10):
-        return find_response(discover_registry().registry, q, limit)
+        return find_response(_registry(), q, limit)
 
     @app.post("/api/run")
     def api_run(req: RunRequest):
-        registry = discover_registry().registry
+        registry = _registry()
         try:
             policy = parse_policy(req.policy)
         except ValueError as exc:
@@ -938,7 +962,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
         if req.batch is not None:
             return batch_code_response(
-                discover_registry().registry,
+                _registry(),
                 req.have,
                 req.want,
                 req.traverse,
@@ -953,7 +977,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
                 persistence=req.persistence,
             )
         return code_response(
-            discover_registry().registry,
+            _registry(),
             req.have,
             req.want,
             req.traverse,
@@ -1004,7 +1028,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
         try:
             return asyncio.run(
                 execute_resume_response(
-                    discover_registry().registry,
+                    _registry(),
                     req.run_id,
                     confine_persistence(req.persistence, root),
                     req.decisions,
@@ -1017,7 +1041,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
     def api_resume_stream(req: ResumeRequest):
         async def execute(on_event):
             return await execute_resume_response(
-                discover_registry().registry,
+                _registry(),
                 req.run_id,
                 confine_persistence(req.persistence, root),
                 req.decisions,
@@ -1030,7 +1054,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
     def api_post_run_stream(req: RunRequest):
         async def execute(on_event):
             return await execute_query_response(
-                discover_registry().registry,
+                _registry(),
                 req.have,
                 req.want,
                 req.traverse,
@@ -1069,7 +1093,7 @@ def create_app(data_dir: str | os.PathLike | None = None):
             if error:
                 raise ValueError(error)
             return await execute_query_response(
-                discover_registry().registry,
+                _registry(),
                 hm,
                 wl,
                 [],
@@ -1138,11 +1162,15 @@ def serve(
     port: int = 8765,
     open_browser: bool = True,
     data_dir: str | os.PathLike | None = None,
+    registry=None,
+    examples: list[dict] | None = None,
+    notice: str | None = None,
 ) -> None:
     """Run the GUI server on localhost. Requires the ``[serve]`` extra.
 
     ``data_dir`` (default: the current directory) is the only place browser-supplied
-    cache and run files may live.
+    cache and run files may live. ``registry``, ``examples`` and ``notice`` are as for
+    :func:`create_app`.
     """
     try:
         import uvicorn
@@ -1153,7 +1181,7 @@ def serve(
     warning = exposure_warning(host, root)
     if warning:
         print(warning, file=sys.stderr)
-    app = create_app(data_dir=root)
+    app = create_app(data_dir=root, registry=registry, examples=examples, notice=notice)
     # Bind first: a busy port must fail here, before a URL is printed or a browser opens.
     sock = bind_port(host, port)
     bound = sock.getsockname()[1]
@@ -1163,6 +1191,8 @@ def serve(
         import webbrowser
 
         threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+    if notice:
+        print(notice, flush=True)
     print(f"braidworks serve — open {url}  (Ctrl-C to stop)", flush=True)
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=bound, log_level="warning"))
     server.run(sockets=[sock])

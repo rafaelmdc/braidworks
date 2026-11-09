@@ -16,17 +16,19 @@ Exact options for every `braidworks` command, rendered from its `--help`. For st
 | [`path`](path.md) | show the route between types without running it. |
 | [`find`](find.md) | search the installed fields by meaning; use a match with --want or --have. |
 | [`serve`](serve.md) | open the browser interface to build and run queries. |
+| [`demo`](demo.md) | run example queries offline, on samples bundled with the sources. |
 | [`doctor`](doctor.md) | check the installation and suggest fixes. |
 | [`references`](references.md) | print source citations for installed weavers. |
 
 ```text
 usage: braidworks [-h]
-                  {get,weave,runs,resume,run,weavers,keys,path,find,serve,doctor,references} ...
+                  {get,weave,runs,resume,run,weavers,keys,path,find,serve,demo,doctor,references}
+                  ...
 
 Query and inspect the Braidworks weaver network from the shell.
 
 positional arguments:
-  {get,weave,runs,resume,run,weavers,keys,path,find,serve,doctor,references}
+  {get,weave,runs,resume,run,weavers,keys,path,find,serve,demo,doctor,references}
     get (weave)         look up --want for IDs (or --have TYPE=VALUE / --in-file), routing across
                         sources.
     runs                list saved runs or inspect a run's status/review choices.
@@ -37,6 +39,7 @@ positional arguments:
     path                show the route between types without running it.
     find                search the installed fields by meaning; use a match with --want or --have.
     serve               open the browser interface to build and run queries.
+    demo                run example queries offline, on samples bundled with the sources.
     doctor              check the installation and suggest fixes.
     references          print source citations for installed weavers.
 

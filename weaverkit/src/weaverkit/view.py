@@ -497,14 +497,21 @@ def build_data(
     to_types: frozenset[str] | None = None,
     policy: BackendPolicy = BackendPolicy.LOCAL_FIRST,
     run: dict | None = None,
+    registry: BraidRegistry | None = None,
 ) -> dict:
-    """Discover weavers and assemble the full view payload (network + optional path)."""
-    discovery = discover_registry()
-    registry = discovery.registry
+    """Discover weavers and assemble the full view payload (network + optional path).
+
+    A given ``registry`` is used as is, with no discovery problems to report.
+    """
+    if registry is None:
+        discovery = discover_registry()
+        registry, problems = discovery.registry, discovery.problems
+    else:
+        problems = []
     data: dict = {
         "meta": {
             "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "problems": discovery.problems,
+            "problems": problems,
         },
         "network": build_network(registry),
         "paths": [],

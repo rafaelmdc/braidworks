@@ -8,6 +8,7 @@ search, route planning and runs use ``/api/find``, ``/api/plan`` and ``/api/run/
 
 from __future__ import annotations
 
+import html
 import json
 
 from braidworks.core.catalog import field_catalog
@@ -163,6 +164,7 @@ tr.review-row td { background: var(--warn-soft); }
 .cand .conf { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .choose { border: 1px solid var(--warn); background: var(--panel); color: var(--warn); border-radius: 6px; padding: 2px 10px; font-size: 12.5px; }
 .choose[aria-pressed="true"] { background: var(--warn); color: var(--panel); }
+.notice { margin: 0 0 14px; padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); font-size: 14px; font-weight: 600; }
 .resumebar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--warn-soft); border-radius: 8px; font-size: 13.5px; }
 </style>
 </head>
@@ -173,6 +175,7 @@ tr.review-row td { background: var(--warn-soft); }
     <nav class="nav"><a href="/" aria-current="page">Look up</a><a href="/explore">Explore sources</a></nav>
   </header>
 
+  __NOTICE__
   <div class="intro">
     <h1>Look up what you need for a list of IDs</h1>
     <p>Paste identifiers, say what they are, and pick the fields you want. Braidworks finds a route across the installed sources and returns one row per ID.</p>
@@ -690,10 +693,10 @@ EXAMPLES = [
 ]
 
 
-def runnable_examples(catalog) -> list[dict]:
-    """The built-in examples whose input is accepted and whose fields are reachable."""
+def runnable_examples(catalog, examples: list[dict] | None = None) -> list[dict]:
+    """The examples (built-in by default) whose input is accepted and fields reachable."""
     out = []
-    for example in EXAMPLES:
+    for example in EXAMPLES if examples is None else examples:
         have = catalog.get(example["have"])
         if have is None or not have.consumers:
             continue
@@ -729,12 +732,20 @@ def _script_json(value) -> str:
     return json.dumps(value, ensure_ascii=False).replace("</", "<\\/")
 
 
-def render_lookup_page(registry: BraidRegistry) -> str:
-    """The landing page with this registry's fields and start types injected."""
+def render_lookup_page(
+    registry: BraidRegistry, *, examples: list[dict] | None = None, notice: str | None = None
+) -> str:
+    """The landing page with this registry's fields and start types injected.
+
+    ``examples`` replaces the built-in example cards (still filtered by reachability);
+    ``notice`` is shown as a banner above the form.
+    """
     rows, starts = page_data(registry)
-    examples = runnable_examples(field_catalog(registry))
+    examples = runnable_examples(field_catalog(registry), examples)
+    banner = f'<p class="notice" role="status">{html.escape(notice)}</p>' if notice else ""
     return (
-        PAGE.replace("__CATALOG__", _script_json(rows))
+        PAGE.replace("__NOTICE__", banner)
+        .replace("__CATALOG__", _script_json(rows))
         .replace("__STARTS__", _script_json(starts))
         .replace("__EXAMPLES__", _script_json(examples))
     )

@@ -622,6 +622,28 @@ def sources() -> list[dict[str, Any]]:
     return _default_session().sources()
 
 
+def demo(name: str = "proteins") -> Result:
+    """Run one canned example offline, on samples bundled with the sources.
+
+    Nothing is fetched from the network, so it works without a connection; the values
+    are small fixed samples, not current database records. Demos: ``"proteins"``
+    (TP53 across six sources, plus a deliberate miss), ``"microbe"`` and ``"taxon"``.
+    Needs the toolkit and sources (``pip install braidworks``).
+
+    Example::
+
+        bw.demo("proteins").to_pandas()
+    """
+    try:
+        from weaverkit import demo as demos
+    except ImportError as exc:
+        raise ImportError(
+            "braidworks.demo needs the toolkit and sources: pip install braidworks"
+        ) from exc
+    [(_, result)] = demos.run(name)
+    return result
+
+
 def find(text: str, *, limit: int = 10) -> FieldMatches:
     """Fields whose name or description matches ``text``, best first.
 
