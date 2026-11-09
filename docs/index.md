@@ -36,7 +36,7 @@ routes it shows, read [how routes are planned](explanation/how-routes-are-planne
 
 ## Look up sources and interfaces
 
-Use the [source catalogue](how-to/choose-sources.md), [key index](reference/keys-index.md),
+Use the [source catalogue](reference/sources.md), [key index](reference/keys-index.md),
 [core contracts](reference/core-contracts.md) and [builder configuration](reference/weaver-configuration.md)
 for exact capabilities, connections and construction rules. The [CLI reference](reference/cli/index.md)
 lists every command and option; source READMEs link their specs and interpretation notes.
@@ -47,7 +47,7 @@ including [result shapes](reference/results.md) and [storage contracts](referenc
 
 | Task | Guide |
 |---|---|
-| Choose sources and prepare local data | [Source catalogue](how-to/choose-sources.md) |
+| Choose sources and prepare local data | [Choose and set up sources](how-to/choose-sources.md); the [source catalogue](reference/sources.md) lists each one |
 | Find input and output field names | [Find a field](how-to/find-a-field.md): `braidworks find pdb structures`, `bw.find(...)` in Python, or the [key index](reference/keys-index.md) |
 | Follow every related structure, pathway, or other entity | [Expansion and relationships](how-to/follow-related-entities.md) |
 | Reuse lookups and continue saved work | [Cache and saved runs](how-to/cache-and-resume.md) |
@@ -59,12 +59,13 @@ including [result shapes](reference/results.md) and [storage contracts](referenc
 Exact command options are in the [CLI reference](reference/cli/index.md) (also
 `braidworks --help` and each command's `--help`). Source-specific capabilities,
 parameters, and interpretation notes live in the package READMEs linked from the
-[source catalogue](how-to/choose-sources.md).
+[source catalogue](reference/sources.md).
 
 ## Understand or extend Braidworks
 
 For the overall model, start with [how Braidworks fits together](explanation/architecture.md).
-For scientific interpretation, read [what a lookup result establishes](explanation/result-meaning.md).
+For scientific interpretation, read [what a lookup result establishes](explanation/result-meaning.md);
+for web APIs, local databases and sample data, [where the data comes from](explanation/where-data-comes-from.md).
 The links below support understanding the framework and contributing to it.
 
 | Task | Documentation |
@@ -81,7 +82,7 @@ The links below support understanding the framework and contributing to it.
 ## Upgrade notes and project history
 
 For documentation contributors, the [Diátaxis map](internal/audits/documentation-diataxis.md)
-records current page roles, gaps and proposed edits; [writing conventions](reference/documentation-style.md)
+records current page roles, gaps and proposed edits; [writing conventions](how-to/write-documentation.md)
 explain how to preserve useful detail during a rewrite.
 
 For older workflows, see [core 0.12 ambiguity changes](how-to/migrate-to-core-0.12.md) and

@@ -135,5 +135,5 @@ git-ignored (`*.sqlite`, `taxdump.tar.gz`, `/data/`). See
 ## Documentation changes
 
 Write guides around the reader's task and keep current instructions separate from
-design history. See the [documentation conventions](docs/reference/documentation-style.md)
+design history. See the [documentation conventions](docs/how-to/write-documentation.md)
 for examples, source claims, links, and verification.

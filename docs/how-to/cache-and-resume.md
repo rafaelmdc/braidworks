@@ -14,7 +14,7 @@ in-memory lookup cache. Install the required sources before running these comman
 
 The files are independent. An archive cannot be passed to `resume`, and a cache hit
 does not record query progress. Provider databases are a fourth kind of storage;
-see [sources](choose-sources.md) for acquisition and [NCBI setup](set-up-ncbi-database.md) for taxonomy.
+see [choose and set up sources](choose-sources.md) for acquisition and [NCBI setup](set-up-ncbi-database.md) for taxonomy.
 
 ## Start and inspect a saved query
 
@@ -60,7 +60,9 @@ before sharing.
 
 ## Create a saved query from Python
 
-With PDBe installed, save this complete script and run it in your environment.
+`bw.get` and `Session` accept a lookup cache (`Session(cache=...)`) but not yet a run
+store, so a saved run from Python uses the engine-level query service. With PDBe
+installed, save this complete script and run it in your environment.
 Choose a new `run_id` for each new query; the script closes its weaver when finished.
 
 ```python
@@ -93,8 +95,8 @@ async def main():
 asyncio.run(main())
 ```
 
-For saved reviews, call `continue_run` with explicit `ReviewDecision` values;
-see [the continuation service](../../braidworks-core/src/braidworks/core/persistent_query.py).
+For saved reviews, call `continue_run` with explicit `ReviewDecision` values, or resume
+the run from the command line as above.
 The managed service renews the lease and retains the last completed checkpoint on
 cancellation. An interrupted source read can repeat. See [storage reference](../reference/persistence.md)
 for ownership, compatibility and retention limits.

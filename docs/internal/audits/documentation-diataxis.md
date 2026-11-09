@@ -52,7 +52,7 @@ URLs for now: an intended home identifies a reader need, not a mandatory folder.
 | [Implementation guide](../../how-to/implement-a-weaver.md) | Scaffold workflow, custom-plumbing manual and stale instructions | Contributor how-to. Repair scaffold-first path; distinguish handwritten NCBI guidance from shared runtime. |
 | [Releasing](../../how-to/release.md) | Artifact checks and publication constraints | Maintainer how-to. Preserve verification, independent versions and automated tagging. |
 | [0.12 migration](../../how-to/migrate-to-core-0.12.md), [0.13 migration](../../how-to/migrate-to-core-0.13.md) | Version-specific upgrade steps | Version-scoped how-to. Preserve affected interfaces and before/after behavior. |
-| [Writing conventions](../../reference/documentation-style.md) | Contributor writing guidance | How-to/checklist. Add purpose classification and detail-preservation checks. |
+| [Writing conventions](../../how-to/write-documentation.md) | Contributor writing guidance | How-to/checklist. Add purpose classification and detail-preservation checks. |
 | [Core README](../../../braidworks-core/README.md) | Concepts/discovery/API fragment, appended storage instructions | Package entry point. Link canonical storage guides; storage instructions currently follow the license. |
 | [Toolkit README](../../../weaverkit/README.md) | Scaffolding, spec reference, rationale, browser tasks/endpoints, Python API | Package entry point. Route browser users and adapter authors separately; link task/reference/explanation material. |
 | [Backend implementation](../../../weaverkit/docs/implementing-backends.md) | Backend contract and guidance | Contributor reference/how-to. Preserve status, batch, fingerprint and golden/live verification rules. |

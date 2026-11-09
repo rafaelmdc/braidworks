@@ -105,13 +105,12 @@ Check these columns before using the data:
 | Column | Check |
 |---|---|
 | `status` | Whether the row resolved, needs review (`review`), failed (`error`) or found no match (`unresolved`). |
-| `missing` | Whether any requested field is absent. A resolved row may still be partial. |
+| `missing`, `why_missing` | Whether any requested field is absent, and why. A resolved row may still be partial. `why_missing` appears only when a row has a gap. |
 | `structure.pdb.ids`, `structure.pdb.ids.total` | The structure IDs PDBe returned and the list's true size; a total above the IDs shown means the list is partial. |
 
 The PDB ID column uses semicolon-separated values. Warnings, errors and truncations
 are reported on stderr while the command runs; the archive keeps them with each row's
 typed values and provenance. Retain unsuccessful rows in a coverage
-Retain unsuccessful rows in a coverage
 report rather than dropping them as empty data. For this small example you should
 normally obtain two resolved rows with names and structure information, but current
 source availability governs the actual outcomes.

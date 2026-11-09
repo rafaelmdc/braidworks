@@ -10,7 +10,9 @@ Before using an export, check each original input's terminal rows:
 
 1. Inspect each row's `status`; errors are explained on stderr. A technical failure is
    not a negative biological observation.
-2. Inspect `missing` for requested fields. A resolved row can still be partial.
+2. Inspect `missing` for requested fields. A resolved row can still be partial;
+   `why_missing` says why each field is absent (the source failed or is not set up,
+   found no match, or was not reached).
 3. Inspect `review` rows and their candidates (`braidworks runs RUN_ID` for a saved
    run, or the `result` field of `--format json`). Resolve uncertain matches before
    treating them as accepted identity.
