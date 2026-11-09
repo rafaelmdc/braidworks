@@ -42,6 +42,13 @@ index; see issue #306.)
 | `docs/explanation/` | Explanation | the concept: `architecture.md` |
 | `docs/internal/` | Project records | plans, audits, roadmaps; not user instructions |
 
+The [documentation site](https://rafaelmdc.github.io/braidworks/) publishes these four
+folders with the types as its top-level navigation. Add every new page to `nav` in
+`mkdocs.yml`; a test fails while a public page is missing from it. `make docs-site`
+builds the site strictly (a broken link or anchor fails) and `make docs-serve` previews
+it. Links may point anywhere in the repository: the site rewrites links that leave
+the published folders to the same file on GitHub.
+
 A page that mixes types moves to its main type and gets split when it is next
 rewritten. When you move a page, update every link to it in the same change (no stubs
 at old paths); `make links-check` finds any you missed. Generated files (`reference/keys-index.md`,

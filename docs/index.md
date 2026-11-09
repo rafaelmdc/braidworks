@@ -6,10 +6,10 @@ choose the sources your analysis needs, then scale to a batch. The
 
 | You want to… | Go to |
 |---|---|
-| Learn by working through a full example | [Tutorials](tutorials/) |
-| Get a specific task done | [How-to guides](how-to/) |
+| Learn by working through a full example | [Tutorials](tutorials/index.md) |
+| Get a specific task done | [How-to guides](how-to/index.md) |
 | Look up exact options, fields and contracts | [Reference](reference/index.md) |
-| Understand how and why it works | [Explanation](explanation/) |
+| Understand how and why it works | [Explanation](explanation/index.md) |
 
 ## Learn through a tutorial
 

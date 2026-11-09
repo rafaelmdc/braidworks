@@ -1,0 +1,124 @@
+site_name: Braidworks
+site_description: Look up fields for your identifiers across biological databases.
+site_url: https://rafaelmdc.github.io/braidworks/
+repo_url: https://github.com/rafaelmdc/braidworks
+repo_name: rafaelmdc/braidworks
+edit_uri: edit/main/docs/
+docs_dir: docs
+strict: true
+
+exclude_docs: |
+  internal/
+  superpowers/
+  diagrams/
+
+hooks:
+  - tools/mkdocs/github_links.py
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle: {icon: material/weather-night, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle: {icon: material/weather-sunny, name: Light mode}
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+
+# The four Diátaxis types are the top-level navigation.
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/index.md
+      - tutorials/first-query-in-the-browser.md
+      - tutorials/first-analysis-in-python.md
+      - tutorials/protein-structures.md
+      - tutorials/microbial-functions.md
+      - tutorials/disease-associations.md
+  - How-to guides:
+      - how-to/index.md
+      - Get started:
+          - how-to/install.md
+          - how-to/run-queries.md
+          - how-to/process-a-batch.md
+          - how-to/work-in-python.md
+          - how-to/use-the-browser.md
+      - Work with results:
+          - how-to/find-a-field.md
+          - how-to/follow-related-entities.md
+          - how-to/check-results.md
+          - how-to/cache-and-resume.md
+      - Sources and setup:
+          - how-to/choose-sources.md
+          - how-to/set-up-ncbi-database.md
+          - how-to/set-request-rates.md
+          - how-to/run-the-offline-demo.md
+      - Contribute and release:
+          - how-to/implement-a-weaver.md
+          - how-to/write-documentation.md
+          - how-to/release.md
+          - how-to/migrate-to-core-0.12.md
+          - how-to/migrate-to-core-0.13.md
+  - Reference:
+      - reference/index.md
+      - reference/python-api.md
+      - Command line:
+          - reference/cli/index.md
+          - reference/cli/get.md
+          - reference/cli/find.md
+          - reference/cli/run.md
+          - reference/cli/serve.md
+          - reference/cli/demo.md
+          - reference/cli/doctor.md
+          - reference/cli/keys.md
+          - reference/cli/path.md
+          - reference/cli/weavers.md
+          - reference/cli/references.md
+          - reference/cli/runs.md
+          - reference/cli/resume.md
+      - reference/sources.md
+      - reference/keys-index.md
+      - reference/results.md
+      - reference/browser.md
+      - reference/failures.md
+      - reference/persistence.md
+      - reference/local-data.md
+      - reference/request-pacing.md
+      - reference/discovery.md
+      - reference/weaver-configuration.md
+      - reference/core-contracts.md
+      - reference/repo-structure.md
+  - Explanation:
+      - explanation/index.md
+      - explanation/architecture.md
+      - explanation/how-routes-are-planned.md
+      - explanation/result-meaning.md
+      - explanation/where-data-comes-from.md

@@ -49,7 +49,7 @@ def _page(name: str, aliases: list[str], summary: str, help_text: str) -> str:
     return (
         f"# braidworks {name}\n\n{NOTICE}\n\n"
         f"{summary[:1].upper() + summary[1:]}{also} "
-        "For the task this serves, see the [how-to guides](../../how-to/).\n\n"
+        "For the task this serves, see the [how-to guides](../../how-to/index.md).\n\n"
         f"```text\n{help_text.rstrip()}\n```\n"
     )
 
@@ -64,7 +64,7 @@ def _index(parser: argparse.ArgumentParser, commands) -> str:
     return (
         f"# Command-line reference\n\n{NOTICE}\n\n"
         "Exact options for every `braidworks` command, rendered from its `--help`. "
-        "For step-by-step tasks see the [how-to guides](../../how-to/); export fields are "
+        "For step-by-step tasks see the [how-to guides](../../how-to/index.md); export fields are "
         "in [result exports](../results.md#command-line-exports).\n\n"
         f"| Command | What it does |\n|---|---|\n{rows}\n\n"
         f"```text\n{parser.format_help().rstrip()}\n```\n"
