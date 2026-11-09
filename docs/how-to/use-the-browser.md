@@ -10,7 +10,9 @@ need. Their API or local-data prerequisites still apply.
 2. Open the localhost address printed by the server. If the port is taken (often an
    earlier server still running), `serve` says so and exits without printing an
    address: stop the other one (`make serve-stop`) or pass `--port 8766`.
-3. Paste your IDs, one per line, or upload a list or table.
+3. Paste your IDs, one per line (commas also separate; names may contain spaces), or
+   upload a list or table. To start from a ready-made query, click one of the examples
+   under **Start from an example**.
 4. Choose what they are (the most widely accepted input type is preselected).
 5. Search for the fields you want in plain words and tick them. Fields no route can
    reach from your input are greyed out. Any options the route accepts, such as a
@@ -40,6 +42,22 @@ review, cache and expansion settings. The offline `weaverkit view` export only
 inspects the network. See [result interpretation](../explanation/result-meaning.md)
 and [exports](check-results.md).
 
+## Change advanced settings
+
+**Advanced settings** under the form is collapsed by default. Open it to choose local
+data or web APIs, take the best candidate instead of pausing for ambiguous matches, set a
+minimum confidence, follow every member (or the first few) of lists in later steps, cap
+the rows in one run, keep a lookup cache, or save a resumable run. A saved run's paused
+rows resume from its store when you click **Resume**.
+
+## Save and reuse examples
+
+Click **Save as example**, name it, and it joins **Start from an example** in this
+browser. Saved examples keep the IDs, fields, options and advanced settings, and are
+shared with recipes saved in the **Explore sources** builder (recipes that pass through
+relationships open there instead). Built-in examples appear only when the installed
+sources can answer them. Delete your own with ×.
+
 ## Process a batch
 
 Paste one identifier per line, or upload a CSV/TSV whose headers name each column's
@@ -53,7 +71,9 @@ it does not require the browser server at execution time. See [artifact referenc
 
 ## Cache lookups and continue saved work
 
-Expand **Cache and saved runs** to set a lookup-cache and/or run-store file. Blank paths
+On the landing page, set **Lookup cache file** or **Save a resumable run in** under
+**Advanced settings**. In the **Explore sources** builder, expand **Cache and saved runs**
+to set a lookup-cache and/or run-store file. Blank paths
 retain in-memory execution. Advanced controls set TTLs, payload budget and the run lease.
 Paths are on the server's disk and must stay inside its data directory: the folder
 `braidworks serve` was started in, or the one given with `--data-dir`. Relative paths
