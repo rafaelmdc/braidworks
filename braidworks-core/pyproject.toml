@@ -1,12 +1,12 @@
 [project]
 name = "braidworks-core"
-version = "0.34.1"
+version = "0.34.2"
 description = "Core abstractions for Braidworks: strands, weavers, registry, braider, executor."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["networkx>=3.0", "platformdirs>=4.0"]
+dependencies = ["httpx>=0.27", "networkx>=3.0", "platformdirs>=4.0"]
 
 [project.urls]
 Repository = "https://github.com/rafaelmdc/braidworks"

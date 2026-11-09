@@ -11,7 +11,10 @@ from pathlib import Path
 def stage_release(
     root: Path, package: str, artifacts: Path, destination: Path, *, ref: str | None = None
 ) -> list[Path]:
-    projects = [root / name for name in ("braidworks-core", "weaverkit", "braidworks-arq")]
+    projects = [
+        root / name
+        for name in ("braidworks-core", "weaverkit", "braidworks-arq", "braidworks-meta")
+    ]
     projects.extend(sorted((root / "weavers").glob("*/pyproject.toml")))
     for path in projects:
         config_path = path if path.is_file() else path / "pyproject.toml"

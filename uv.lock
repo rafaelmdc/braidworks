@@ -15,6 +15,7 @@ members = [
     "agora-weaver",
     "alphafold-weaver",
     "bacdive-weaver",
+    "braidworks",
     "braidworks-arq",
     "braidworks-core",
     "disbiome-weaver",
@@ -157,6 +158,60 @@ requires-dist = [
 provides-extras = ["test"]
 
 [[package]]
+name = "braidworks"
+version = "0.1.0"
+source = { editable = "braidworks-meta" }
+dependencies = [
+    { name = "agora-weaver" },
+    { name = "alphafold-weaver" },
+    { name = "bacdive-weaver" },
+    { name = "braidworks-core" },
+    { name = "disbiome-weaver" },
+    { name = "faprotax-weaver" },
+    { name = "gmrepo-weaver" },
+    { name = "gtdb-weaver" },
+    { name = "mondo-weaver" },
+    { name = "ncbi-weaver" },
+    { name = "pdbe-weaver" },
+    { name = "quickgo-weaver" },
+    { name = "reactome-weaver" },
+    { name = "string-weaver" },
+    { name = "uniprot-weaver" },
+    { name = "weaverkit", extra = ["serve"] },
+    { name = "wikidata-weaver" },
+    { name = "wikipedia-weaver" },
+]
+
+[package.optional-dependencies]
+pandas = [
+    { name = "braidworks-core", extra = ["pandas"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agora-weaver", editable = "weavers/agora_weaver" },
+    { name = "alphafold-weaver", editable = "weavers/alphafold_weaver" },
+    { name = "bacdive-weaver", editable = "weavers/bacdive_weaver" },
+    { name = "braidworks-core", editable = "braidworks-core" },
+    { name = "braidworks-core", extras = ["pandas"], marker = "extra == 'pandas'", editable = "braidworks-core" },
+    { name = "disbiome-weaver", editable = "weavers/disbiome_weaver" },
+    { name = "faprotax-weaver", editable = "weavers/faprotax_weaver" },
+    { name = "gmrepo-weaver", editable = "weavers/gmrepo_weaver" },
+    { name = "gtdb-weaver", editable = "weavers/gtdb_weaver" },
+    { name = "mondo-weaver", editable = "weavers/mondo_weaver" },
+    { name = "ncbi-weaver", editable = "weavers/ncbi_weaver" },
+    { name = "pdbe-weaver", editable = "weavers/pdbe_weaver" },
+    { name = "quickgo-weaver", editable = "weavers/quickgo_weaver" },
+    { name = "reactome-weaver", editable = "weavers/reactome_weaver" },
+    { name = "string-weaver", editable = "weavers/string_weaver" },
+    { name = "uniprot-weaver", editable = "weavers/uniprot_weaver" },
+    { name = "weaverkit", extras = ["serve"], editable = "weaverkit" },
+    { name = "wikidata-weaver", editable = "weavers/wikidata_weaver" },
+    { name = "wikipedia-weaver", editable = "weavers/wikipedia_weaver" },
+]
+provides-extras = ["pandas"]
+
+[[package]]
 name = "braidworks-arq"
 version = "0.2.1"
 source = { editable = "braidworks-arq" }
@@ -188,9 +243,10 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.34.1"
+version = "0.34.2"
 source = { editable = "braidworks-core" }
 dependencies = [
+    { name = "httpx" },
     { name = "networkx" },
     { name = "platformdirs" },
 ]
@@ -208,6 +264,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0" },

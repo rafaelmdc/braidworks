@@ -31,11 +31,14 @@ Choose an empty output directory so stale artifacts cannot stand in for current 
     uv build --all-packages --out-dir /tmp/braidworks-release-artifacts
     python tools/check_artifacts.py /tmp/braidworks-release-artifacts --python 3.12
 
-The checker validates all 20 wheel/sdist pairs: names, versions, licenses, source
+The checker validates all 21 wheel/sdist pairs: names, versions, licenses, source
 modules, bundled resources, entry points, core dependency metadata and project URLs.
 It installs the actual wheels into a temporary environment outside the checkout,
 removes PYTHONPATH, checks module locations, executes the bundled example fixture,
-checks source discovery and creates the browser app with the serve extra.
+checks source discovery and creates the browser app with the serve extra. It then
+installs only the `braidworks` meta-package wheel into a second environment, letting
+its requirements pull in core, `weaverkit[serve]` and every public source from the
+artifact directory, and checks that each source is discovered.
 
 The artifact CI job repeats that rehearsal. A local pass does not prove a hosted CI
 run or an external API's availability. Save command output and the tested Python/core
@@ -110,7 +113,10 @@ Before enabling publication, the account owner needs to:
 Publish core first. For a dependent package, the publishing preparation installs its
 selected wheel against the package index without workspace overrides. An unpublished
 core floor therefore blocks that package before upload. Next publish the toolkit and
-chosen weavers; arq remains optional and experimental. Do not skip existing versions
+the weavers; arq remains optional and experimental. Publish the `braidworks`
+meta-package (directory `braidworks-meta`) last: it requires core, `weaverkit[serve]`
+and every public source at its floor, so it installs only once all of them are on the
+index. It is what `pip install braidworks` and `uvx braidworks` install. Do not skip existing versions
 or replace releases silently: an already published version requires a version bump.
 
 Trusted publishing setup and permissions follow the official

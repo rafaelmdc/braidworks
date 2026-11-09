@@ -11,6 +11,7 @@ on:
           - braidworks-core
           - weaverkit
           - braidworks-arq
+          - braidworks
           - agora_weaver
           - alphafold_weaver
           - bacdive_weaver

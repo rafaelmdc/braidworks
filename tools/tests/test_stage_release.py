@@ -16,8 +16,13 @@ class ReleaseSelectionTests(unittest.TestCase):
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
-        for name in ("braidworks-core", "weaverkit", "braidworks-arq"):
-            project = self.root / name
+        for directory, name in (
+            ("braidworks-core", "braidworks-core"),
+            ("weaverkit", "weaverkit"),
+            ("braidworks-arq", "braidworks-arq"),
+            ("braidworks-meta", "braidworks"),
+        ):
+            project = self.root / directory
             project.mkdir()
             (project / "pyproject.toml").write_text(f'[project]\nname="{name}"\nversion="1.2.3"\n')
         self.artifacts = self.root / "artifacts"
@@ -26,6 +31,8 @@ class ReleaseSelectionTests(unittest.TestCase):
             "braidworks_core-1.2.3-py3-none-any.whl",
             "braidworks_core-1.2.3.tar.gz",
             "weaverkit-1.2.3-py3-none-any.whl",
+            "braidworks-1.2.3-py3-none-any.whl",
+            "braidworks-1.2.3.tar.gz",
         ):
             (self.artifacts / name).write_text(name)
         self.destination = self.root / "staged"
@@ -42,6 +49,19 @@ class ReleaseSelectionTests(unittest.TestCase):
         self.assertEqual(set(files), set(self.destination.iterdir()))
         for path in files:
             self.assertEqual(path.read_text(), path.name)
+
+    def test_meta_package_is_staged_by_its_package_name(self):
+        files = stage_release(
+            self.root,
+            "braidworks",
+            self.artifacts,
+            self.destination,
+            ref="refs/tags/braidworks-v1.2.3",
+        )
+        self.assertEqual(
+            sorted(path.name for path in files),
+            ["braidworks-1.2.3-py3-none-any.whl", "braidworks-1.2.3.tar.gz"],
+        )
 
     def test_branch_wrong_package_and_wrong_version_refs_are_rejected(self):
         for ref in (

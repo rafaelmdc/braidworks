@@ -63,8 +63,22 @@ Build all workspace distributions:
 uv build --all-packages --out-dir /tmp/braidworks-artifacts
 ```
 
-Then, in a separate directory, install core and the selected weaver wheels together.
-The glob patterns select the independently versioned wheel filenames produced above:
+Then, in a separate directory, install everything from the `braidworks` meta-package
+wheel. It contains no code: its requirements pull in core, the browser and every public
+source from the same directory, and third-party libraries from PyPI:
+
+```bash
+uv venv .venv --python 3.12
+uv pip install --python .venv/bin/python \
+    --find-links /tmp/braidworks-artifacts braidworks
+.venv/bin/braidworks get P04637 --have protein.query \
+    --want protein.name,structure.pdb.ids
+```
+
+`uvx --find-links /tmp/braidworks-artifacts braidworks get …` runs the same command
+without creating an environment. To install fewer sources, name core and the
+selected weaver wheels together instead. The glob patterns select the independently
+versioned wheel filenames produced above:
 
 ```bash
 uv venv .venv --python 3.12

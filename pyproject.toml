@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["braidworks-core", "weaverkit", "braidworks-arq", "weavers/*"]
+members = ["braidworks-core", "weaverkit", "braidworks-arq", "braidworks-meta", "weavers/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
