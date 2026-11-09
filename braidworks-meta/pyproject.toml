@@ -1,6 +1,6 @@
 [project]
 name = "braidworks"
-version = "0.1.0"
+version = "0.1.1"
 description = "Braidworks with every public source and the browser: pip install braidworks."
 readme = "README.md"
 license = "MIT"
