@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 # source package except the teaching example (example_weaver).
 dependencies = [
     "braidworks-core>=0.38.0",
-    "weaverkit[serve]>=0.17.3",
+    "weaverkit[serve]>=0.17.4",
     "agora_weaver>=0.3.0",
     "alphafold_weaver>=0.2.0",
     "bacdive_weaver>=0.2.0",

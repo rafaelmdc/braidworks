@@ -90,9 +90,15 @@ See [storage operations](persistence.md) for leases, retention and schema limits
 
 ## Generated artifacts and discovery
 
-Generated single and batch Python examples use the public core query service
-(`braidworks-core>=0.20.0`). They print `ExecutionResult.to_json()` and need neither
-weaverkit nor FastAPI at execution time; batch inputs retain order and source rows.
+The generated Python is the `bw.Session(...).get(...)` code the
+[Python tutorial](../tutorials/first-analysis-in-python.md) teaches: typed IDs become a
+list with `have=`, a table's rows become dictionaries naming their fields, and only
+settings that differ from the defaults are written (backend, pass-through steps,
+per-step `params`, expansion, review policy, confidence, expansion limit, lookup cache
+and run store). The script prints the summary and writes `braidworks-results.csv`,
+byte-for-byte the browser's CSV download for the same query. It needs neither
+weaverkit nor FastAPI to run. Cache lifetimes and leases keep their defaults; the
+command-line artifact carries them when set.
 The browser keeps its own table/summary response envelope. Generated CLI commands
 quote literal input values and preserve effective parameters and query policies.
 
