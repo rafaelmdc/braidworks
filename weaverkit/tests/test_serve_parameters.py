@@ -228,8 +228,8 @@ def test_generated_cli_and_python_reproduce_selected_experiment(
     command = shlex.split(document["artifacts"]["cli_weave"])
     monkeypatch.setattr(cli, "build_registry_from_entry_points", lambda only=None: registry)
     assert cli.main(command[1:] + ["--format", "json"]) == 0
-    cli_rows = json.loads(capsys.readouterr().out)
-    assert len(cli_rows) == 1 and cli_rows[0]["values"][SYMBOL] == "child"
+    cli_rows = json.loads(capsys.readouterr().out)["rows"]
+    assert len(cli_rows) == 1 and cli_rows[0][SYMBOL] == "child"
     assert weaver.calls[0] == ("resolve", {"organism": 9606})
     weaver.calls.clear()
     monkeypatch.setattr(braidworks.core, "build_registry_from_entry_points", lambda: registry)

@@ -4,23 +4,27 @@ Exact output contracts for the CLI and Python APIs. For choosing and saving an e
 see [the export guide](../how-to/check-results.md). For coverage and interpretation, see
 [result meaning](../explanation/result-meaning.md).
 
-## Machine records
+## Command-line exports
 
-Machine exports (`json`, `jsonl`, `csv`, `tsv`) include one record per terminal
-entity or fan-out leaf, including fatal `error` outcomes. `source_row` is the
-one-based ordinal of an accepted input row (comments and blank lines are skipped);
-it survives fan-out even when input labels repeat. `outcome` is unique within the
-output, and `entity`/`parent` retain their human-readable labels. Records are ordered
-by source row, keeping sibling order. Neither identifier is a persistent database ID.
+`braidworks get` (and its `weave` alias), `resume` and `run` print the same rows as
+Python's `Result` (see [Python results](#python-results)), one per terminal input or
+fan-out leaf, including `error`, `review` and `unresolved` outcomes. Rows are in input
+order; `row` is the one-based position of the accepted input row (comments and blank
+lines are skipped), so duplicate inputs and fan-out children of one input stay
+distinguishable. A traversal without `--want` shows the key it fanned over (e.g.
+`pdb.id`) as its column.
 
-Every record carries `status`, `missing` requested types, `requires_review`, warnings,
-errors, structured diagnostics, completion steps and review candidates. `strands`
-contains the exported values with confidence, provenance and metadata. `references`
-is the run's bibliography, including reroute sources; it is not per-row attribution.
-CSV/TSV carry these structured fields as JSON cells, with requested value columns
-alongside them. Their headers now include outcome metadata; consumers should select
-columns by name. Partial enrichment still counts as resolved; inspect `missing` to
-require every requested field. Human diagnostics continue on stderr.
+| `--format` | Output |
+|---|---|
+| `human` (default) | Each row's input and `[status]`, one line per value with list sizes (`(2)`, `(25 of 312)`, `(25+)`), and `missing` types |
+| `csv` / `tsv` | Exactly `Result.to_csv()`: `input`, `row`, `parent` (fan-out only), `status`, one column per requested field, a `<field>.total` after each sized list, `missing` |
+| `json` | Exactly `Result.to_json()`: `summary`, `want`, `rows`, `references`, and `result`, the full engine result with strands, provenance, completion, candidates, diagnostics and truncations |
+| `jsonl` | One row per line |
+
+`run` (one capability, no routing) prints the same shape; its `result` holds the
+capability's original results under `direct_results`. The summary line
+(`5 inputs · 4 resolved · …`) and diagnostics go to stderr. Partial enrichment still
+counts as `resolved`; inspect `missing` to require every requested field.
 
 ## Python results
 
@@ -57,7 +61,9 @@ exception before a terminal result does not produce an archive. Failure to write
 archive returns a nonzero status.
 
 The schema identifier is `braidworks.run-archive.v1`. Read it with any JSON reader;
-`records` matches the JSON stdout records, and routed `execution` can be loaded through
+`records` holds the detailed per-entity records behind the printed rows (values,
+strands with confidence and provenance, completion, warnings, diagnostics and review
+candidates), and routed `execution` can be loaded through
 `ExecutionResult.from_json`. Direct runs retain each original `WeaveResult` under
 `execution.direct_results`. Source manifests include discovered sources; only execution
 completion and result references identify those actually used.
@@ -70,7 +76,7 @@ mutable source can produce different results.
 
 ## Spreadsheet value cells
 
-Requested value columns render lists as semicolon-separated values and dictionaries
-as JSON; structured outcome metadata use JSON cells. Use the `strands` JSON cell or
-JSON/JSONL output to retain nested typed values without parsing display delimiters.
-The [CLI renderer](../../braidworks-core/src/braidworks/core/cli.py) defines these rules.
+Value columns render lists as semicolon-separated values and dictionaries as compact
+JSON; `<field>.total` gives a list's true size. Use `--format json` (its `result`
+field) or a run archive to keep nested typed values, confidence and provenance.
+The [Python result](../../braidworks-core/src/braidworks/_result.py) defines these rules.

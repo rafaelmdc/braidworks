@@ -8,15 +8,17 @@ uncertain observations. For the reason these distinctions matter, read
 
 Before using an export, check each original input's terminal rows:
 
-1. Inspect `status`, `errors` and diagnostics. A technical failure is not a negative
-   biological observation.
+1. Inspect each row's `status`; errors are explained on stderr. A technical failure is
+   not a negative biological observation.
 2. Inspect `missing` for requested fields. A resolved row can still be partial.
-3. Inspect `requires_review` and candidates. Resolve uncertain matches before treating
-   them as accepted identity.
-4. Inspect warnings and truncations, especially after expansion. Use `source_row` and
-   parent relationships to regroup children with the original inputs.
+3. Inspect `review` rows and their candidates (`braidworks runs RUN_ID` for a saved
+   run, or the `result` field of `--format json`). Resolve uncertain matches before
+   treating them as accepted identity.
+4. Inspect warnings and truncations, especially after expansion; truncations are
+   reported on stderr. Use `row` and `parent` to regroup children with the original
+   inputs, and `<field>.total` to see when a list is partial.
 
-Retain unsuccessful rows in your coverage report. See [exact record fields](../reference/results.md#machine-records)
+Retain unsuccessful rows in your coverage report. See [exact row fields](../reference/results.md#command-line-exports)
 and [review continuation](cache-and-resume.md#resolve-a-saved-review).
 
 CLI data go to stdout; progress and diagnostics go to stderr. Ordinary queries fail
@@ -32,10 +34,11 @@ nonzero for backend errors.
 | Structured analysis | `--format json` |
 | Line-by-line processing | `--format jsonl` |
 
-All machine formats retain terminal outcomes, including errors and review rows.
-Select spreadsheet columns by name. Requested list values use display delimiters;
-structured metadata use JSON cells. Use JSON/JSONL or `strands` for nested typed values.
-See [export reference](../reference/results.md).
+Every format prints the same rows as Python's `Result`, labelled by your input,
+including errors and review rows; CSV/TSV/JSON are byte-for-byte what `to_csv()` /
+`to_json()` give in Python. List values use `; ` delimiters with a `<field>.total`
+column. For confidence, provenance and candidates use `--format json` (its `result`
+field) or `--archive`. See [export reference](../reference/results.md#command-line-exports).
 
 ## Read Python results
 
@@ -50,7 +53,7 @@ counts and serialization, see [Python result reference](../reference/results.md#
 With PDBe installed, save a CSV and a separate observation archive:
 
 ```bash
-uv run braidworks weave --have protein.uniprot.accession=P04637 --want structure.pdb.ids \
+uv run braidworks get P04637 --have protein.uniprot.accession --want structure.pdb.ids \
   --only pdbe --format csv --archive run.json > structures.csv
 ```
 

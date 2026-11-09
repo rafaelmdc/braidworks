@@ -117,6 +117,15 @@ def _run(*argv):
     return cli.main(list(argv))
 
 
+def _rows(output: str, fmt: str = "json") -> list[dict]:
+    """A query's exported rows (the ``Result`` row schema), from any --format."""
+    if fmt == "json":
+        return json.loads(output)["rows"]
+    if fmt == "jsonl":
+        return [json.loads(line) for line in output.splitlines() if line]
+    return list(csv.DictReader(io.StringIO(output), delimiter="\t" if fmt == "tsv" else ","))
+
+
 # --- weave -------------------------------------------------------------------------
 
 
@@ -138,14 +147,18 @@ def test_weave_chains_two_weavers(capsys):
 def test_weave_json_format(capsys):
     _run("weave", "--have", "protein.query=P1", "--want", "protein.name", "--format", "json")
     data = json.loads(capsys.readouterr().out)
-    assert data[0]["entity"] == "e1"
-    assert data[0]["values"]["protein.name"] == "Name of P1"
+    assert data["want"] == ["protein.name"]
+    assert data["summary"].startswith("1 input · 1 resolved")
+    assert data["rows"] == [
+        {"input": "e1", "row": 1, "status": "resolved", "protein.name": "Name of P1", "missing": []}
+    ]
 
 
 def test_weave_tsv_format(capsys):
     _run("weave", "--have", "protein.query=P1", "--want", "protein.name", "--format", "tsv")
-    rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out), delimiter="\t"))
-    assert rows[0]["entity"] == "e1"
+    rows = _rows(capsys.readouterr().out, "tsv")
+    assert list(rows[0]) == ["input", "row", "status", "protein.name", "missing"]
+    assert rows[0]["input"] == "e1"
     assert rows[0]["status"] == "resolved"
     assert rows[0]["protein.name"] == "Name of P1"
 
@@ -191,12 +204,8 @@ def test_exports_include_every_terminal_outcome(tmp_path, monkeypatch, capsys, f
         )
         == 1
     )
-    output = capsys.readouterr().out
-    rows = (
-        json.loads(output)
-        if fmt == "json"
-        else list(csv.DictReader(io.StringIO(output), delimiter="\t" if fmt == "tsv" else ","))
-    )
+    captured = capsys.readouterr()
+    rows = _rows(captured.out, fmt)
     assert [row["status"] for row in rows] == [
         "resolved",
         "unresolved",
@@ -204,10 +213,12 @@ def test_exports_include_every_terminal_outcome(tmp_path, monkeypatch, capsys, f
         "error",
         "resolved",
     ]
-    assert [int(row["source_row"]) for row in rows] == [1, 2, 3, 4, 5]
-    assert len({row["outcome"] for row in rows}) == 5
-    assert "503" in str(rows[3]["diagnostics"])
-    assert all("completion" in row and "missing" in row for row in rows)
+    assert [int(row["row"]) for row in rows] == [1, 2, 3, 4, 5]
+    assert [row["input"] for row in rows] == ["OK", "MISS", "REVIEW", "FAIL", "OK"]
+    assert all("missing" in row for row in rows)
+    assert "503" in captured.err  # the failure is reported, whatever the format
+    if fmt == "json":  # and the full engine detail travels with the JSON export
+        assert "503" in json.dumps(json.loads(captured.out)["result"])
 
 
 def test_duplicate_inputs_retain_unique_source_rows_through_traversal(tmp_path, capsys):
@@ -227,11 +238,13 @@ def test_duplicate_inputs_retain_unique_source_rows_through_traversal(tmp_path, 
         )
         == 0
     )
-    rows = json.loads(capsys.readouterr().out)
+    data = json.loads(capsys.readouterr().out)
+    rows = data["rows"]
     assert len(rows) == 4
-    assert [row["source_row"] for row in rows] == [1, 1, 2, 2]
-    assert len({row["outcome"] for row in rows}) == 4
-    assert all(row["references"][0]["weaver_id"] == "pdbe" for row in rows)
+    assert [row["row"] for row in rows] == [1, 1, 2, 2]
+    assert all(row["parent"] == "P1" for row in rows)
+    assert len({(row["row"], row["input"]) for row in rows}) == 4
+    assert "pdbe" in {reference["weaver_id"] for reference in data["references"]}
 
 
 def test_export_partial_branch_errors_do_not_duplicate_terminal_rows():
@@ -289,18 +302,14 @@ def test_cli_exports_and_reports_expansion_truncation(tmp_path, capsys, fmt):
         == 0
     )
     captured = capsys.readouterr()
-    rows = (
-        json.loads(captured.out)
-        if fmt == "json"
-        else list(csv.DictReader(io.StringIO(captured.out), delimiter="\t"))
-    )
+    rows = _rows(captured.out, fmt)
     assert len(rows) == 3
-    assert [int(row["source_row"]) for row in rows] == [1, 1, 2]
-    truncations = rows[-1]["truncations"]
-    if fmt == "tsv":
-        truncations = json.loads(truncations)
-    assert truncations[0]["omitted"] == 1
+    assert [int(row["row"]) for row in rows] == [1, 1, 2]
+    if fmt == "json":
+        truncations = json.loads(captured.out)["result"]["truncations"]
+        assert truncations[0]["omitted"] == 1
     assert "expansion limit 3" in captured.err
+    assert "omitted 1" in captured.err
 
 
 def test_sparse_route_groups_share_expansion_budget(tmp_path, capsys):
@@ -322,10 +331,10 @@ def test_sparse_route_groups_share_expansion_budget(tmp_path, capsys):
         )
         == 0
     )
-    rows = json.loads(capsys.readouterr().out)
-    assert len(rows) == 3
-    assert [row["source_row"] for row in rows] == [1, 1, 2]
-    assert rows[-1]["truncations"][0]["kept"] == 1
+    data = json.loads(capsys.readouterr().out)
+    assert len(data["rows"]) == 3
+    assert [row["row"] for row in data["rows"]] == [1, 1, 2]
+    assert data["result"]["truncations"][0]["kept"] == 1
 
 
 def test_weave_batch_one_per_line(tmp_path, capsys):
@@ -342,8 +351,8 @@ def test_weave_batch_one_per_line(tmp_path, capsys):
         "--format",
         "jsonl",
     )
-    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
-    assert [r["entity"] for r in lines] == ["P1", "P2"]  # entity id = the value
+    lines = _rows(capsys.readouterr().out, "jsonl")
+    assert [r["input"] for r in lines] == ["P1", "P2"]  # labelled by the value
 
 
 def test_weave_batch_tsv_table(tmp_path, capsys):
@@ -359,9 +368,9 @@ def test_table_stdin_is_read_once(monkeypatch, capsys, traverse):
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO("protein.query\nP1\nP2\n"))
     extra = ["--for-each", "structures"] if traverse else ["--want", "protein.name"]
     assert _run("weave", "--in-file", "-", "--format", "json", *extra) == 0
-    records = json.loads(capsys.readouterr().out)
+    records = _rows(capsys.readouterr().out)
     assert len(records) == (4 if traverse else 2)
-    assert {r.get("parent", r["entity"]) for r in records} == {"e1", "e2"}
+    assert {r.get("parent", r["input"]) for r in records} == {"e1", "e2"}
 
 
 def test_table_columns_are_available_with_broadcast_constants(tmp_path, capsys):
@@ -381,8 +390,8 @@ def test_table_columns_are_available_with_broadcast_constants(tmp_path, capsys):
         )
         == 0
     )
-    records = json.loads(capsys.readouterr().out)
-    assert [r["values"]["protein.name"] for r in records] == ["Name of P1", "Name of P2"]
+    records = _rows(capsys.readouterr().out)
+    assert [r["protein.name"] for r in records] == ["Name of P1", "Name of P2"]
 
 
 @pytest.mark.parametrize("traverse", [False, True])
@@ -391,9 +400,9 @@ def test_sparse_table_plans_from_each_rows_actual_inputs(tmp_path, capsys, trave
     f.write_text("protein.query\tprotein.uniprot.accession\nP1\t\n\tACC_P2\n")
     extra = ["--for-each", "structures"] if traverse else ["--want", "structure.pdb.ids"]
     assert _run("weave", "--in-file", str(f), "--format", "json", *extra) == 0
-    records = json.loads(capsys.readouterr().out)
+    records = _rows(capsys.readouterr().out)
     assert len(records) == (4 if traverse else 2)
-    assert {r.get("parent", r["entity"]) for r in records} == {"e1", "e2"}
+    assert {r.get("parent", r["input"]) for r in records} == {"e1", "e2"}
 
 
 @pytest.mark.parametrize("command", ["run", "weave"])
@@ -453,7 +462,7 @@ def test_traversal_parameters_reach_resolver_prelude(monkeypatch, capsys, parame
         == 0
     )
     assert seen == [{"organism": 9606}]
-    assert len(json.loads(capsys.readouterr().out)) == 2
+    assert len(_rows(capsys.readouterr().out)) == 2
 
 
 def test_all_parameter_values_are_validated_before_upstream_io(monkeypatch, capsys):
@@ -485,7 +494,7 @@ def test_sparse_rows_still_batch_matching_input_types(tmp_path, monkeypatch, cap
         _run("weave", "--in-file", str(path), "--want", "structure.pdb.ids", "--format", "json")
         == 0
     )
-    assert len(json.loads(capsys.readouterr().out)) == 3
+    assert len(_rows(capsys.readouterr().out)) == 3
     assert registry.get_weaver("uniprot").batch_sizes == [2]
     assert registry.get_weaver("pdbe").batch_sizes == [2, 1]
 
@@ -495,7 +504,7 @@ def test_csv_table_stdin_detects_header_delimiter(monkeypatch, capsys):
         cli.sys, "stdin", io.StringIO("protein.query,ncbi.taxon.id\nP1,9606\nP2,9606\n")
     )
     assert _run("weave", "--in-file", "-", "--want", "protein.name", "--format", "json") == 0
-    assert len(json.loads(capsys.readouterr().out)) == 2
+    assert len(_rows(capsys.readouterr().out)) == 2
 
 
 @pytest.mark.parametrize("delimiter", [",", "\t"])
@@ -517,7 +526,7 @@ def test_cli_subprocess_reads_nonseekable_table_stdin(delimiter, traverse):
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
-    assert len(json.loads(completed.stdout)) == (4 if traverse else 2)
+    assert len(_rows(completed.stdout)) == (4 if traverse else 2)
 
 
 def test_weave_fanout_expands_children(capsys):
@@ -614,13 +623,16 @@ def test_run_preserves_failure_and_review_status(monkeypatch, capsys, status, ex
     )
     captured = capsys.readouterr()
     assert code == int(strict or status is WeaveStatus.ERROR)
-    record = json.loads(captured.out)[0]
+    data = json.loads(captured.out)
+    record = data["rows"][0]
+    assert record["input"] == "e1"
     assert record["status"] == expected
+    direct = data["result"]["direct_results"][0]
     if status is WeaveStatus.ERROR:
         assert "503" in captured.err
-        assert record["errors"] == ["503 Service Unavailable"]
+        assert direct["errors"] == ["503 Service Unavailable"]
     if status is WeaveStatus.AMBIGUOUS:
-        assert record["candidates"][0]["strands"][0]["value"] == "candidate"
+        assert direct["candidates"][0]["strands"][0]["value"] == "candidate"
 
 
 def test_run_rejects_undeclared_backend(capsys):
@@ -818,11 +830,12 @@ def test_for_each_fans_through_relationship(capsys):
     )
     out = capsys.readouterr()
     assert code == 0
-    records = json.loads(out.out)
+    records = _rows(out.out)
     # one child per fanned pdb.id, each re-rooted (parent = original entity), all regroup
     assert len(records) == 2
     assert {r["parent"] for r in records} == {"e1"}
-    assert sorted(r["values"]["pdb.id"] for r in records) == ["ACC_X-1", "ACC_X-2"]
+    # with no --want, each child shows the key it was fanned over
+    assert sorted(r["pdb.id"] for r in records) == ["ACC_X-1", "ACC_X-2"]
 
 
 def test_traverse_accepts_capability_id(capsys):
@@ -836,7 +849,7 @@ def test_traverse_accepts_capability_id(capsys):
         "json",
     )
     assert code == 0
-    assert len(json.loads(capsys.readouterr().out)) == 2
+    assert len(_rows(capsys.readouterr().out)) == 2
 
 
 def test_for_each_unknown_relationship_errors(capsys):
@@ -897,7 +910,7 @@ def test_traversal_exit_status_depends_on_blocking_errors(monkeypatch, capsys, p
     assert code == int(not partial_success)
     assert "503" in captured.err
     if partial_success:
-        assert len(json.loads(captured.out)) == 2
+        assert len(_rows(captured.out)) == 2
 
 
 # --- structural errors are reported, not silent -------------------------------------
@@ -989,7 +1002,10 @@ def test_run_archive_preserves_inputs_defaults_and_outcomes(tmp_path, capsys, co
     data = json.loads(archive.read_text())
     printed = json.loads(capsys.readouterr().out)
     assert data["schema"] == "braidworks.run-archive.v1"
-    assert data["records"] == printed
+    # The archive keeps the detailed per-entity records behind the printed rows.
+    assert [r["entity"] for r in data["records"]] == [row["input"] for row in printed["rows"]]
+    assert [r["status"] for r in data["records"]] == [row["status"] for row in printed["rows"]]
+    assert all("strands" in r and "completion" in r for r in data["records"])
     assert data["effective_params"]["list_structures"] == {"level": "all"}
     assert data["planned_routes"]
     assert data["sources"][0]["backend_fingerprints"]["api"]["value"]
