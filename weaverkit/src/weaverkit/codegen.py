@@ -7,29 +7,75 @@ from braidworks.core.query import PreparedQuery
 
 
 def python_artifact(prepared: PreparedQuery, *, persistence=None) -> str:
-    """Use the core service; generated scripts need no toolkit or web dependencies."""
-    configuration = persistence.to_json() if persistence is not None else None
-    imports = (
-        "QueryPersistence, execute_managed_query" if configuration is not None else "execute_query"
+    """The query as the ``bw.Session(...).get(...)`` code the Python tutorials teach.
+
+    The script needs only braidworks and the sources; it prints the summary and writes
+    the same CSV the browser downloads. Cache lifetimes and leases keep their defaults
+    (the command-line artifact carries them when set).
+    """
+    request = prepared.request
+    options = request.options
+    rows = [{t: ss.get(t).value for t in sorted(ss.available_types())} for ss in request.inputs]
+    types = {key for row in rows for key in row}
+    session_args = []
+    if options.backend_policy.value != "local_first":
+        session_args.append(f"backend={options.backend_policy.value!r}")
+    if persistence is not None and persistence.cache_db:
+        session_args.append(f"cache={persistence.cache_db!r}")
+    if persistence is not None and persistence.run_db:
+        session_args.append(f"runs={persistence.run_db!r}")
+
+    get_args = []
+    if len(types) == 1 and all(len(row) == 1 for row in rows):
+        (have,) = types
+        get_args.append(repr([row[have] for row in rows]))
+        get_args.append(f"have={have!r}")
+    else:  # rows that start from different fields name their own types
+        get_args.append(repr(rows))
+    if request.targets:
+        get_args.append(f"want={sorted(request.targets)!r}")
+    if request.traversals:
+        get_args.append(f"for_each={list(request.traversals)!r}")
+    params: dict[str, dict] = {}
+    for cap, values in (request.params or {}).items():
+        params.setdefault(cap, {}).update(values)
+    loose = {}
+    for cap, name, value in request.parameter_items:
+        if cap is None:
+            loose[name] = value
+        else:
+            params.setdefault(cap, {})[name] = value
+    if params:
+        get_args.append(f"params={params!r}")
+    expansion = options.expand_policy
+    expand = (
+        "all"
+        if expansion.mode is ExpandMode.ALL
+        else f"top:{expansion.k}"
+        if expansion.mode is ExpandMode.TOP_K
+        else None
     )
-    execute = (
-        f"    options = QueryPersistence.from_json({configuration!r})\n"
-        "    result = await execute_managed_query(registry, prepared, options,\n"
-        "        on_saved=lambda cp: print('saved run: ' + cp.run_id, file=sys.stderr) if cp.revision == 0 else None)\n"
-        if configuration is not None
-        else "    result = await execute_query(registry, prepared)\n"
-    )
+    if expand is not None and not (request.traversals and expand == "all"):
+        get_args.append(f"expand={expand!r}")
+    if options.review_policy.value != "halt":
+        get_args.append(f"review={options.review_policy.value!r}")
+    if options.confidence_threshold:
+        get_args.append(f"min_confidence={options.confidence_threshold!r}")
+    if options.max_expansion != 10_000:
+        get_args.append(f"max_expansion={options.max_expansion!r}")
+    if persistence is not None and persistence.run_id:
+        get_args.append(f"run_id={persistence.run_id!r}")
+    get_args.extend(f"{name}={value!r}" for name, value in loose.items())
+
+    body = "".join(f"        {arg},\n" for arg in get_args)
     return (
-        "import asyncio\nimport json\nimport sys\n"
-        f"from braidworks.core import (QueryRequest, prepare_query, {imports},\n"
-        "    build_registry_from_entry_points)\n\n"
-        "async def main():\n"
-        "    registry = build_registry_from_entry_points()\n"
-        f"    request = QueryRequest.from_json({prepared.request.to_json()!r})\n"
-        "    prepared = prepare_query(registry, request)\n"
-        + execute
-        + "    print(json.dumps(result.to_json(), ensure_ascii=False))\n\n"
-        "asyncio.run(main())\n"
+        "import braidworks as bw\n\n"
+        f"with bw.Session({', '.join(session_args)}) as s:\n"
+        "    result = s.get(\n"
+        f"{body}"
+        "    )\n\n"
+        "print(result.summary())\n"
+        'result.to_csv("braidworks-results.csv")  # the table the browser downloads\n'
     )
 
 

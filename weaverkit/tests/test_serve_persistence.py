@@ -1,5 +1,6 @@
 """Browser endpoint contracts share operational options and durable execution."""
 
+import csv
 import json
 import runpy
 import shlex
@@ -52,7 +53,7 @@ def test_browser_cache_run_status_and_resume(monkeypatch, recording_registry, tm
 def test_generated_code_preserves_paths_policy_and_creates_runs(
     monkeypatch, recording_registry, tmp_path, capsys
 ):
-    import braidworks.core
+    import braidworks._session
     from braidworks.core import CachePolicy
 
     registry, weaver = recording_registry
@@ -70,11 +71,14 @@ def test_generated_code_preserves_paths_policy_and_creates_runs(
     tokens = shlex.split(document["artifacts"]["cli_weave"])
     assert tokens[tokens.index("--cache-db") + 1] == options.cache_db
     assert tokens[tokens.index("--cache-positive-ttl") + 1] == "60"
-    monkeypatch.setattr(braidworks.core, "build_registry_from_entry_points", lambda: registry)
+    monkeypatch.setattr(
+        braidworks._session, "build_registry_from_entry_points", lambda only=None: registry
+    )
+    monkeypatch.chdir(tmp_path)
     script = tmp_path / "generated.py"
     script.write_text(document["artifacts"]["python"])
     runpy.run_path(str(script))
-    assert len(json.loads(capsys.readouterr().out)["resolved"]) == 1
+    assert len(list(csv.DictReader((tmp_path / "braidworks-results.csv").open()))) == 1
     store = SQLiteRunStore(options.run_db, create=False)
     assert store.load("python-example").status == "complete"
     tokens[tokens.index("--run-id") + 1] = "cli-example"

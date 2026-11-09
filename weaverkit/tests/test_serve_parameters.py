@@ -1,5 +1,6 @@
 """Species refinements must survive every browser request path, before backend I/O."""
 
+import csv
 import json
 import runpy
 import shlex
@@ -209,7 +210,7 @@ def test_browser_rejects_wrong_scope_before_io(monkeypatch, recording_registry, 
 def test_generated_cli_and_python_reproduce_selected_experiment(
     monkeypatch, recording_registry, capsys, tmp_path
 ):
-    import braidworks.core
+    import braidworks._session
     from braidworks.core import BackendPolicy, cli
 
     registry, weaver = recording_registry
@@ -232,13 +233,18 @@ def test_generated_cli_and_python_reproduce_selected_experiment(
     assert len(cli_rows) == 1 and cli_rows[0][SYMBOL] == "child"
     assert weaver.calls[0] == ("resolve", {"organism": 9606})
     weaver.calls.clear()
-    monkeypatch.setattr(braidworks.core, "build_registry_from_entry_points", lambda: registry)
+    code = document["artifacts"]["python"]
+    for argument in ("backend='local_only'", "for_each=['list_children']", "max_expansion=1"):
+        assert argument in code, argument
+    monkeypatch.setattr(
+        braidworks._session, "build_registry_from_entry_points", lambda only=None: registry
+    )
+    monkeypatch.chdir(tmp_path)
     script = tmp_path / "generated_experiment.py"
-    script.write_text(document["artifacts"]["python"])
+    script.write_text(code)
     runpy.run_path(str(script))
-    python_result = json.loads(capsys.readouterr().out)
-    assert len(python_result["resolved"]) == 1
-    assert python_result["truncations"][0]["omitted"] == 1
+    rows = list(csv.DictReader((tmp_path / "braidworks-results.csv").open()))
+    assert len(rows) == 1 and rows[0][SYMBOL] == "child"  # the expansion limit held
     assert weaver.calls[0] == ("resolve", {"organism": 9606})
 
 
@@ -395,5 +401,5 @@ def test_generated_code_preserves_review_policy_and_confidence(recording_registr
     assert document["ok"]
     assert "--review-policy allow_continue" in document["artifacts"]["cli_weave"]
     assert "--confidence-threshold 0.8" in document["artifacts"]["cli_weave"]
-    assert "'review_policy': 'allow_continue'" in document["artifacts"]["python"]
-    assert "'confidence_threshold': 0.8" in document["artifacts"]["python"]
+    assert "review='allow_continue'" in document["artifacts"]["python"]
+    assert "min_confidence=0.8" in document["artifacts"]["python"]

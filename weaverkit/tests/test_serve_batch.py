@@ -1,5 +1,6 @@
 """Browser batches preserve the CLI's row and execution contracts."""
 
+import csv
 import json
 import runpy
 
@@ -98,15 +99,17 @@ def test_batch_generated_python_reproduces_all_rows(
         params={"resolve": {"organism": "9606"}},
     )
     assert document["ok"]
-    import braidworks.core
+    import braidworks._session
 
-    monkeypatch.setattr(braidworks.core, "build_registry_from_entry_points", lambda: registry)
+    monkeypatch.setattr(
+        braidworks._session, "build_registry_from_entry_points", lambda only=None: registry
+    )
+    monkeypatch.chdir(tmp_path)
     script = tmp_path / "generated-batch.py"
     script.write_text(document["artifacts"]["python"])
     runpy.run_path(str(script))
-    payload = json.loads(capsys.readouterr().out)
-    assert len(payload["resolved"]) == 2
-    assert [row["source_row"] for row in payload["resolved"]] == [1, 2]
+    rows = list(csv.DictReader((tmp_path / "braidworks-results.csv").open()))
+    assert [(row["input"], row["row"]) for row in rows] == [("TP53", "1"), ("BRCA1", "2")]
     assert "weaverkit.serve" not in document["artifacts"]["python"]
     assert "--in-file -" in document["artifacts"]["cli_weave"]
 
