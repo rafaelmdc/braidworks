@@ -8,16 +8,18 @@ uncertain observations. For the reason these distinctions matter, read
 
 Before using an export, check each original input's terminal rows:
 
-1. Inspect each row's `status`; errors are explained on stderr. A technical failure is
+1. Inspect each row's `matched` column, if present, to confirm what a name or symbol
+   was matched to (the right species, the right accession).
+2. Inspect each row's `status`; errors are explained on stderr. A technical failure is
    not a negative biological observation.
-2. Inspect `missing` for requested fields. A resolved row can still be partial. When a
+3. Inspect `missing` for requested fields. A resolved row can still be partial. When a
    resolved or error row lacks a field, a `why_missing` column appears and says why
    (the source failed or is not set up, found no match, or was not reached); unresolved
    and review rows are explained by their status instead.
-3. Inspect `review` rows and their candidates (`braidworks runs RUN_ID` for a saved
+4. Inspect `review` rows and their candidates (`braidworks runs RUN_ID` for a saved
    run, or the `result` field of `--format json`). Resolve uncertain matches before
    treating them as accepted identity.
-4. Inspect warnings and truncations, especially after expansion; truncations are
+5. Inspect warnings and truncations, especially after expansion; truncations are
    reported on stderr. Use `row` and `parent` to regroup children with the original
    inputs, and `<field>.total` to see when a list is partial.
 

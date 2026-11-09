@@ -18,7 +18,12 @@ from typing import Any
 from braidworks.core.braid import Braid
 from braidworks.core.executor import ExecutionError, ExecutionResult, ReviewQueueItem
 from braidworks.core.listing import Listing, describe_size
-from braidworks.core.outcomes import execution_records, missing_reasons, route_producers
+from braidworks.core.outcomes import (
+    execution_records,
+    missing_reasons,
+    route_identity,
+    route_producers,
+)
 from braidworks.core.query import PreparedQuery
 from braidworks.core.references import Reference, format_references
 from braidworks.core.result import WeaveStatus
@@ -65,6 +70,8 @@ def record_row(
     if "parent" in record:
         row["parent"] = record["parent"]
     row["status"] = record["status"]
+    if record.get("matched"):
+        row["matched"] = dict(record["matched"])
     for type_id in want:
         row[type_id] = record["values"].get(type_id)
     row["missing"] = list(record["missing"])
@@ -78,11 +85,13 @@ def row_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
     """Row keys in display order: input, row, parent (if expanded), status, wanted, missing."""
     has_parent = any("parent" in row for row in rows)
     has_reasons = any("why_missing" in row for row in rows)
+    has_matched = any("matched" in row for row in rows)
     return [
         "input",
         "row",
         *(["parent"] if has_parent else []),
         "status",
+        *(["matched"] if has_matched else []),
         *want,
         "missing",
         *(["why_missing"] if has_reasons else []),
@@ -100,6 +109,11 @@ def _export_columns(rows: list[dict[str, Any]], want: list[str]) -> list[str]:
     return out
 
 
+def matched_text(matched: dict[str, Any] | None) -> str:
+    """``matched`` as one cell: ``field=value`` pairs, ``; ``-separated."""
+    return "; ".join(f"{field}={_cell(value)}" for field, value in (matched or {}).items())
+
+
 def reasons_text(reasons: dict[str, str] | None) -> str:
     """``why_missing`` as one cell: fields sharing a reason are grouped, ``; ``-separated."""
     grouped: dict[str, list[str]] = {}
@@ -112,6 +126,8 @@ def _export_row(row: dict[str, Any], columns: list[str]) -> dict[str, Any]:
     flat = dict(row)
     if "why_missing" in columns:
         flat["why_missing"] = reasons_text(row.get("why_missing")) or None
+    if "matched" in columns:
+        flat["matched"] = matched_text(row.get("matched")) or None
     for column in columns:
         if column.endswith(".total") and column not in row:
             value = row.get(column[: -len(".total")])
@@ -223,7 +239,9 @@ class Result:
     type (``None`` when absent) and ``missing`` (requested types this row lacks). A
     resolved or error row that lacks a field also has ``why_missing``, ``{field:
     reason}``: the source failed (for example, is not set up), found no match, was
-    not reached, or returned no value.
+    not reached, or returned no value. ``matched`` (``{field: value}``) shows what a
+    resolved or error row's input was matched to, when its source declares identifying
+    fields it always returns (UniProt: accession, gene, organism).
     A list value is a :class:`Listing`: ``len()`` is what came back, ``.total`` the
     true size and ``.complete`` whether it is all of it.
     """
@@ -245,7 +263,9 @@ class Result:
         self._session = session  # the Session that ran this, for resume()
         self._state = state  # the engine state that resume() continues from
         self._decisions: dict[str, ReviewDecision] = {}
-        self._records = execution_records(raw, self.want)
+        registry = getattr(session, "_registry", None)
+        identity = route_identity(prepared, registry) if registry is not None else ()
+        self._records = execution_records(raw, self.want, identity)
         # Input order; stable, so expanded children keep the engine's order within a row.
         self._records.sort(key=lambda record: record["source_row"] or 0)
         producers = route_producers(braid for braid, _ in prepared.plans)

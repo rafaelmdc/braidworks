@@ -243,7 +243,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "braidworks-core"
-version = "0.37.0"
+version = "0.38.0"
 source = { editable = "braidworks-core" }
 dependencies = [
     { name = "httpx" },
@@ -1281,7 +1281,7 @@ wheels = [
 
 [[package]]
 name = "weaverkit"
-version = "0.17.2"
+version = "0.17.3"
 source = { editable = "weaverkit" }
 dependencies = [
     { name = "braidworks-core" },
