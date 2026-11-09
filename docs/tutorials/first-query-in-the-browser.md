@@ -79,7 +79,9 @@ button, then a summary:
 3 inputs · 2 resolved · 1 unresolved · 0 need review · 0 errors
 ```
 
-The results table has one row per ID, labelled by what you pasted:
+The results table has one row per ID, labelled by what you pasted. Under each ID, in
+grey, is what it was matched to: for TP53, `accession: P04637 · gene: TP53 · organism:
+Homo sapiens · reviewed: reviewed`. That is how you know the symbol meant the human gene.
 
 - **TP53** is `resolved`: Cellular tumor antigen p53, its PDB structures and its
   Reactome pathways. Each list shows its first members and its size, such as "321 in
@@ -116,10 +118,12 @@ citation. Use these when you publish the data.
 Click **CSV**. The browser saves `braidworks-results.csv`. Its header is:
 
 ```text
-input,row,status,protein.name,structure.pdb.ids,structure.pdb.ids.total,pathway.reactome.names,pathway.reactome.names.total,missing
+input,row,status,matched,protein.name,structure.pdb.ids,structure.pdb.ids.total,pathway.reactome.names,pathway.reactome.names.total,missing
 ```
 
-Lists are separated by `; `, and each `.total` column holds the list's true size. The
+`matched` records what each ID was matched to (its UniProt accession, gene, species
+and review status), so a reader of the file can check that TP53 really meant the human
+gene. Lists are separated by `; `, and each `.total` column holds the list's true size. The
 file is exactly what Python's `result.to_csv()` and `braidworks get --format csv` give
 for the same query, so you can switch between the browser, a notebook and the command
 line without the table changing.

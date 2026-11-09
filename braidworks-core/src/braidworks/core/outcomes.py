@@ -13,12 +13,17 @@ from braidworks.core.executor import ExecutionResult
 from braidworks.core.listing import Listing
 from braidworks.core.strand import StrandSet
 
+# Statuses whose rows carry an outcome worth explaining: what they matched and why a
+# field is missing (an unresolved or paused row is explained by its status).
+_EXPLAINED_STATUSES = frozenset({"resolved", "error"})
+
 
 def strand_record(
     entity_id: str,
     status: str,
     ss: StrandSet,
     want: list[str],
+    identity: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     # If --want is empty (e.g. `run` with no filter), show everything produced.
     types = want or sorted(ss.available_types())
@@ -46,12 +51,20 @@ def strand_record(
             if isinstance(v, Listing)
         },
     }
+    # What the input was matched to: the identifying values its first step always
+    # returns (an accession, a species), shown so a name-based match can be checked.
+    if status in _EXPLAINED_STATUSES:
+        rec["matched"] = {
+            t: ss.get(t).as_value() for t in identity if t not in want and ss.get(t) is not None
+        }
     if ss.parent_id is not None:
         rec["parent"] = ss.parent_id
     return rec
 
 
-def execution_records(result: ExecutionResult, want: list[str]) -> list[dict[str, Any]]:
+def execution_records(
+    result: ExecutionResult, want: list[str], identity: tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
     """One record per terminal object; attach branch diagnostics without duplicating rows."""
     terminal: dict[int, tuple[StrandSet, str, Any]] = {}
     for ss in result.resolved:
@@ -66,7 +79,7 @@ def execution_records(result: ExecutionResult, want: list[str]) -> list[dict[str
         terminal[id(error.strand_set)] = (error.strand_set, "error", None)
     records = []
     for ss, status, wr in terminal.values():
-        record = strand_record(ss.entity_id, status, ss, want)
+        record = strand_record(ss.entity_id, status, ss, want, identity)
         record["diagnostics"] = [
             {key: value for key, value in error.to_json().items() if key != "strand_set"}
             for error in result.errors
@@ -85,11 +98,6 @@ def execution_records(result: ExecutionResult, want: list[str]) -> list[dict[str
             record["errors"] = list(dict.fromkeys([*record["errors"], *wr.errors]))
         records.append(record)
     return number_records(records)
-
-
-# Statuses whose rows can still lack a requested field for a reason the status does not
-# already give (an unresolved or paused row is missing everything for the obvious reason).
-_EXPLAINED_STATUSES = frozenset({"resolved", "error"})
 
 
 def missing_reasons(
@@ -145,6 +153,33 @@ def _step_reason(source: str, status: str, failure: dict[str, Any] | None) -> st
     if status == "skipped":
         return f"{source} was not reached: an earlier step returned nothing to start from"
     return f"{source} returned no value"
+
+
+def route_identity(prepared, registry) -> tuple[str, ...]:
+    """Fields that identify what each input matched, declared by the sources.
+
+    For every route step that starts from a row's own input, the outputs of the step's
+    always-computed groups (UniProt's ``identity`` group: accession, gene, organism),
+    which every call returns whatever was requested.
+    """
+    fields: set[str] = set()
+    for braid, indices in prepared.plans:
+        if not indices:
+            continue
+        given = prepared.request.inputs[indices[0]].available_types()
+        for step in braid.steps:
+            if not step.input_types <= given:
+                continue
+            try:
+                capability = registry.get_capability(step.weaver_id, step.capability_id)
+            except KeyError:  # a step the registry no longer declares adds nothing
+                continue
+            for group in capability.output_groups:
+                if group.id in capability.always_computed_groups:
+                    fields |= group.outputs
+    # Identifiers other sources join on (an accession) first, then descriptive fields.
+    joins = {t for m in registry.manifests() for c in m.capabilities for t in c.consumes}
+    return tuple(sorted(fields, key=lambda t: (t not in joins, t)))
 
 
 def route_producers(braids) -> dict[str, list[tuple[str, str]]]:

@@ -282,7 +282,7 @@ def _collect_inputs(args: argparse.Namespace) -> list[StrandSet]:
 # --------------------------------------------------------------------------- #
 def _human(rows: list[dict[str, Any]], want: list[str]) -> None:
     """Rows for people: the input and its status, each value (lists with their size)."""
-    from braidworks._result import _cell, reasons_text
+    from braidworks._result import _cell, matched_text, reasons_text
 
     seen: dict[str, int] = {}
     for row in rows:
@@ -295,6 +295,8 @@ def _human(rows: list[dict[str, Any]], want: list[str]) -> None:
         elif seen.get(row["input"], 0) > 1:
             head += f"  (row {row['row']})"
         print(f"{head}  [{row['status']}]")
+        if row.get("matched"):
+            print(f"  matched: {matched_text(row['matched'])}")
         shown = False
         for type_id in want:
             value = row.get(type_id)

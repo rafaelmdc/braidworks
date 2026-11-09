@@ -25,7 +25,10 @@ distinguishable. A traversal without `--want` shows the key it fanned over (e.g.
 capability's original results under `direct_results`. The summary line
 (`5 inputs · 4 resolved · …`) and diagnostics go to stderr. Partial enrichment still
 counts as `resolved`; inspect `missing` to require every requested field. A
-`why_missing` column follows `missing` when a resolved or error row lacks a field, giving
+`matched` column follows `status` when a resolved or error row's first step returns
+identifying values its source always computes (UniProt: accession, gene, organism,
+review status): what the input was matched to, as `field=value; …`, leaving out fields
+you requested. A `why_missing` column follows `missing` when a resolved or error row lacks a field, giving
 the reason per field, grouped: `structure.pdb.ids: pdbe has no match`, or
 `microbe.disease.count: disbiome is not set up on this machine (run braidworks doctor)`.
 
@@ -34,7 +37,8 @@ the reason per field, grouped: `structure.pdb.ids: pdbe has no match`, or
 `bw.get` and `Session.get` return a `Result`; its rows, methods and the `Listing`
 list type are in the [Python API reference](python-api.md). A row has `input`, `row`,
 `parent` (expanded children only), `status`, one key per requested field (`None` when
-absent), `missing`, and `why_missing` (`{field: reason}`) on resolved or error rows that
+absent), `missing`, `matched` (`{field: value}`, what the input matched) on resolved or
+error rows whose source declares identifying fields, and `why_missing` (`{field: reason}`) on resolved or error rows that
 lack a field. List fields hold a `Listing` with `.total` and `.complete`;
 flat exports add a `<field>.total` column.
 

@@ -130,6 +130,7 @@ td.input { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
 .size { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .more { border: 0; background: none; color: var(--accent); font-size: 12px; padding: 0; }
 .missing, .absent { color: var(--muted); font-size: 12.5px; }
+.matched { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .why { margin-top: 4px; color: var(--warn); font-size: 12px; }
 .counts, .downloads { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pill { border: 1px solid transparent; border-radius: 99px; padding: 3px 11px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--none-soft); color: var(--none); }
@@ -426,7 +427,8 @@ function renderResults(table) {
   const head = `<thead><tr><th>Input</th>${parent ? "<th>From</th>" : ""}<th>Status</th>${table.want.map(t => `<th><code>${esc(t)}</code></th>`).join("")}<th>Missing</th></tr></thead>`;
   const body = table.rows.map((row, i) => {
     if (state.filter && row.status !== state.filter) return "";
-    const lead = `<td class="input">${esc(row.input)}</td>${parent ? `<td class="mono">${esc(row.parent || "")}</td>` : ""}<td><span class="status s-${esc(row.status)}">${esc(row.status)}</span></td>`;
+    const matched = row.matched ? `<div class="matched" title="What this input was matched to">${esc(Object.entries(row.matched).map(([k, v]) => `${k.split(".").pop()}: ${Array.isArray(v) ? v.join("; ") : v}`).join(" · "))}</div>` : "";
+    const lead = `<td class="input">${esc(row.input)}${matched}</td>${parent ? `<td class="mono">${esc(row.parent || "")}</td>` : ""}<td><span class="status s-${esc(row.status)}">${esc(row.status)}</span></td>`;
     const item = row.status === "review" ? reviewFor(table, row) : null;
     if (item) return `<tr class="review-row">${lead}${reviewCells(item, table.want.length + 1)}</tr>`;
     return `<tr>${lead}${table.want.map(t => cell(row[t], (table.sizes[i] || {})[t], i + ":" + t)).join("")}<td class="missing">${esc((row.missing || []).join(", "))}${whyMissing(row.why_missing)}</td></tr>`;

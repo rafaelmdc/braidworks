@@ -20,10 +20,12 @@ retrieve. Here UniProt resolves the query and PDBe lists related experimental
 structures; both must be installed and network-accessible. Not sure of a field name?
 [Find a field](find-a-field.md).
 
-The output labels each row by your input, with its status and the size of each list:
+The output labels each row by your input, with its status, what the input matched and
+the size of each list:
 
 ```text
 P04637  [resolved]
+  matched: protein.uniprot.accession=P04637; protein.gene=TP53; protein.organism=Homo sapiens; protein.reviewed=reviewed
   protein.name: Cellular tumor antigen p53
   structure.pdb.ids (321): 9r2q; 9u4d; 9r2m; …
 ```
@@ -36,7 +38,8 @@ uv run braidworks get TP53 --have protein.query --param organism=9606 \
 ```
 
 `9606` is the human NCBI taxid. Symbol search returns a representative entry; an
-accession is more specific. Check the source's selection rules when interpreting
+accession is more specific. Check the `matched` line: without `organism`, `BRCA1`
+matches `Rattus norvegicus` (accession O54952), and only `matched` shows it. Check the source's selection rules when interpreting
 name-based queries. To look up many IDs, [process a batch](process-a-batch.md); to get
 details for every structure or ortholog, [follow related entities](follow-related-entities.md).
 
