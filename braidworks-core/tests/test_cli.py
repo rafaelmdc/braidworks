@@ -1084,7 +1084,7 @@ def test_doctor_lists_sources_and_next_steps(capsys, monkeypatch, tmp_path):
     out = capsys.readouterr().out
     assert "2 source(s) installed" in out
     assert "✓ pdbe" in out and "✓ uniprot" in out
-    assert "braidworks weave" in out
+    assert "braidworks get" in out
 
 
 def test_doctor_fails_on_a_broken_plugin(capsys, monkeypatch, tmp_path):

@@ -31,7 +31,7 @@ git clone https://github.com/rafaelmdc/braidworks
 cd braidworks
 uv sync --all-extras
 uv run braidworks doctor
-uv run braidworks weave --have protein.query=P04637 \
+uv run braidworks get P04637 --have protein.query \
     --want protein.name,structure.pdb.ids
 ```
 
@@ -40,8 +40,8 @@ UniProt accession, `P04637`. It uses live APIs, so the returned structure invent
 can change. The install creates a local `.venv`; it does not download biological
 databases. `braidworks doctor` checks the installation and tells you what to fix.
 
-For gene symbols, constrain the species, for example `--have protein.query=TP53
---param organism=9606` for human. UniProt search returns one representative, which
+For gene symbols, constrain the species, for example `braidworks get TP53
+--have protein.query --param organism=9606 …` for human. UniProt search returns one representative, which
 is not an inventory of every matching protein or isoform.
 
 ## Choose your interface
