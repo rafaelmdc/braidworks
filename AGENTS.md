@@ -197,6 +197,13 @@ description = "Assembly completeness filter"
   `<package>-v<version>` for any package whose current version isn't tagged yet. So:
   bump the version in your PR, merge, and the tag appears on its own. Locally,
   `make tags-check` lists missing tags; `make tags` creates them.
+- **Changelogs and GitHub releases are generated; never edit them by hand.** On each
+  merge to `main`, CI regenerates every package's `CHANGELOG.md` and the root
+  `CHANGELOG.md` from git history (`tools/changelog.py`), commits them, then tags, then
+  creates a GitHub release per new tag with that version's section as notes. Each merged
+  PR that touched a package becomes one entry, **using the PR title**, so write PR
+  titles as changelog lines ("Show what each input was matched to"). Entries collect
+  under *Unreleased* until the package's version is bumped. `make changelog` previews.
 
 ## Boundaries (do not cross these)
 

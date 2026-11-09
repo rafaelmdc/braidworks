@@ -104,5 +104,23 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+      # Changelogs first, so each new tag (and the files published from it) carries its
+      # own version's section. A push with this token does not start another CI run.
+      - name: Update the changelogs
+        run: |
+          python tools/changelog.py write
+          if [ -n "$(git status --porcelain -- CHANGELOG.md '*CHANGELOG.md')" ]; then
+            git add -A -- CHANGELOG.md '*CHANGELOG.md'
+            git commit -m "chore(changelog): update [skip ci]"
+            if ! git push origin HEAD:main; then
+              # main moved on: tag this merge as is; the next merge writes the changelog.
+              echo "::warning::main moved; changelog update left to the next merge"
+              git reset --hard HEAD~1
+            fi
+          fi
       - name: Create missing release tags
         run: python tools/release_tags.py create
+      - name: Create GitHub releases for new versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/changelog.py release
