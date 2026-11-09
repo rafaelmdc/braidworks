@@ -15,6 +15,7 @@ choose the sources your analysis needs, then scale to a batch. The
 
 | Exercise | What you will produce |
 |---|---|
+| [First query in the browser](tutorials/first-query-in-the-browser.md) | Names, structures and pathways for two genes, with the route that answered and a CSV, without code |
 | [First analysis in Python](tutorials/first-analysis-in-python.md) | Names, GO terms and structures for two genes, as a pandas table with citations |
 | [Protein structures](tutorials/protein-structures.md) | A structure listing, related-entry inspection and batch export |
 | [Microbial functions](tutorials/microbial-functions.md) | An ecological annotation with its supporting rule trace |
@@ -28,7 +29,8 @@ choose the sources your analysis needs, then scale to a batch. The
    In a script or notebook, [work in Python](how-to/work-in-python.md).
 3. [Read the results](how-to/check-results.md): check coverage, review matches, and export your data.
 
-For interactive work, [build and run a query in the browser](how-to/use-the-browser.md).
+For interactive work, [use the browser](how-to/use-the-browser.md); to understand the
+routes it shows, read [how routes are planned](explanation/how-routes-are-planned.md).
 
 ## Look up sources and interfaces
 
