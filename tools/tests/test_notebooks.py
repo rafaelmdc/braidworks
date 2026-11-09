@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "notebooks/getting-started.ipynb"
+CASE_STUDIES = sorted((ROOT / "notebooks/case-studies").glob("*.ipynb"))
 
 
 def _code(cell: dict) -> str:
@@ -55,6 +56,43 @@ class GettingStartedNotebookTests(unittest.TestCase):
         text = "\n".join(_code(cell) for cell in self.code)
         for step in (r"bw\.find\(", r"bw\.get\(", r"\.choose\(", r"\.resume\(\)", r"\.to_csv\("):
             self.assertRegex(text, re.compile(step))
+
+
+class CaseStudyNotebookTests(unittest.TestCase):
+    def test_three_case_studies_ship(self):
+        self.assertEqual(len(CASE_STUDIES), 3)
+
+    def test_each_is_clean_compiles_and_records_its_environment(self):
+        import braidworks as bw
+
+        for path in CASE_STUDIES:
+            with self.subTest(notebook=path.name):
+                notebook = json.loads(path.read_text())
+                code = [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+                self.assertTrue(_code(code[0]).startswith('%pip install -q "braidworks[pandas]"'))
+                self.assertIn(
+                    f"notebooks/case-studies/{path.name}", "".join(notebook["cells"][0]["source"])
+                )
+                text = ""
+                for cell in code[1:]:
+                    self.assertEqual(cell["outputs"], [])
+                    tree = ast.parse(_code(cell))
+                    text += _code(cell)
+                    for node in ast.walk(tree):
+                        if (
+                            isinstance(node, ast.Attribute)
+                            and isinstance(node.value, ast.Name)
+                            and node.value.id == "bw"
+                        ):
+                            self.assertIn(node.attr, bw.__all__)
+                for step in (
+                    "record_environment(",
+                    'timed("cold"',
+                    'timed("warm"',
+                    "savefig(",
+                    ".cite()",
+                ):
+                    self.assertIn(step, text)
 
 
 if __name__ == "__main__":
