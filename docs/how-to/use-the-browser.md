@@ -21,7 +21,7 @@ See [result interpretation](../explanation/result-meaning.md) and [exports](chec
 
 Enable **Batch inputs** and paste one identifier per line, or upload CSV/TSV with field
 names as headers. Empty cells are absent inputs. Shared values, row overrides,
-duplicate rows, query parameters and expansion budgets follow [CLI batch rules](run-queries.md#process-a-batch).
+duplicate rows, query parameters and expansion budgets follow [CLI batch rules](process-a-batch.md).
 Inspect parent/source-row fields when expanding related entities.
 
 Save a recipe or copy a generated command/script to reuse the query settings. Generated

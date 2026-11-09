@@ -30,7 +30,7 @@ items, English Wikipedia titles, sitelink counts and vernacular names.
 Names shared across taxonomic codes can have several candidates. Routed execution
 pauses on ambiguity by default. If the expected rank is known, refine the query:
 
-    braidworks weave --have organism.scientific_name="Ursus arctos" --want wikidata.qid --param expected_rank=species
+    braidworks get --have organism.scientific_name="Ursus arctos" --want wikidata.qid --param expected_rank=species
 
 From Python, build_wikidata_weaver() needs no configuration. Offline fixture and
 golden tests are implemented; live use depends on the public SPARQL endpoint.

@@ -24,6 +24,7 @@ make new-weaver  SPEC=path/to/weaver.spec.toml DEST=weavers/<db>_weaver
 make verify-weaver SPEC=path/to/weaver.spec.toml PACKAGE=<db>_weaver
 make index                # rebuild docs/reference/weavers-index.tsv (machine) + docs/reference/keys-index.md (human)
 make view                 # regenerate the offline HTML network view -> docs/network/braidworks-network.html
+make cli-docs             # regenerate docs/reference/cli/ from `braidworks --help` (CI checks it)
 make serve                # interactive GUI to build/run braids in the browser (needs the [serve] extra)
 
 uv run weaverkit references          # print the source citations for all discovered weavers

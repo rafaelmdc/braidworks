@@ -21,14 +21,14 @@ local taxonomy database. Network access to NCBI is required.
 Run this from the checkout:
 
 ```bash
-uv run braidworks weave --have organism.name=Methylococcus \
+uv run braidworks get Methylococcus --have organism.name \
     --want microbe.ecology.functional_groups --only ncbi,faprotax --policy api_first
 ```
 
 Look for a resolved row containing `methanotrophy` and `methylotrophy` among its
 functional groups. The verified example also returned `chemoheterotrophy` and
 `hydrocarbon_degradation`. Source updates may change observations; inspect diagnostics
-if your row is unresolved or requires review.
+if your row is `[unresolved]` or `[review]`.
 
 Notice that the query starts with an organism name. NCBI supplies its lineage, and
 FAPROTAX matches that lineage locally. These annotations are taxonomic affiliations,
@@ -39,7 +39,7 @@ not measurements of a particular strain's metabolism.
 Repeat the lookup, adding the evidence field and JSON output:
 
 ```bash
-uv run braidworks weave --have organism.name=Methylococcus \
+uv run braidworks get Methylococcus --have organism.name \
     --want microbe.ecology.functional_groups,microbe.ecology.evidence \
     --only ncbi,faprotax --policy api_first --format json > methylococcus.json
 ```
@@ -51,11 +51,11 @@ an earlier result. Save the script below as `inspect_ecology.py`:
 import json
 from pathlib import Path
 
-rows = json.loads(Path("methylococcus.json").read_text())
-row = rows[0]
+data = json.loads(Path("methylococcus.json").read_text())
+row = data["rows"][0]
 print("Outcome:", row["status"], "Missing:", row["missing"])
-print("Review:", row["requires_review"], "Errors:", row["errors"])
-evidence = row["values"].get("microbe.ecology.evidence")
+print("Review:", row["status"] == "review", "Errors:", data["result"]["errors"])
+evidence = row.get("microbe.ecology.evidence")
 if evidence is not None:
     print("Source:", evidence["source"])
     print("Meaning:", evidence["interpretation"])
@@ -80,7 +80,7 @@ only a function label. Keep the JSON with your analysis. A rule's literature sup
 the clade affiliation; it does not demonstrate the function in every queried isolate.
 An empty annotation would likewise not prove functional absence.
 
-For your own organism table, continue with [batch usage](../how-to/run-queries.md#process-a-batch).
+For your own organism table, continue with [batch usage](../how-to/process-a-batch.md).
 The [FAPROTAX reference](../../weavers/faprotax_weaver/README.md) describes membership
 rules and evidence scope; [result interpretation](../how-to/check-results.md) covers partial and
 uncertain observations.

@@ -38,7 +38,7 @@ def cli_artifact(
 ) -> str:
     request = prepared.request
     options = request.options
-    tokens = ["braidworks", "weave"]
+    tokens = ["braidworks", "get"]
     if batch is not None:
         tokens += ["--in-file", "-"]
         if batch.get("format", "lines") == "lines":

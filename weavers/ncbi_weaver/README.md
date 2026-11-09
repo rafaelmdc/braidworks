@@ -52,7 +52,7 @@ ncbi-weaver ensure                 # prompt, then download + build the SQLite in
 ncbi-weaver ensure --yes           # non-interactive (CI/servers)
 
 braidworks run ncbi ncbi.resolve_name --have organism.name="Homo sapiens"
-braidworks weave --have organism.name="Escherichia coli" --want ncbi.taxon.id,ncbi.taxon.lineage
+braidworks get --have organism.name="Escherichia coli" --want ncbi.taxon.id,ncbi.taxon.lineage
 ```
 
 > `ncbi_weaver` is the hand-written "bring your own plumbing" reference — unlike scaffolded

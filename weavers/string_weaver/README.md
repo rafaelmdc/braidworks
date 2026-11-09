@@ -24,7 +24,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run string list_interactions --have protein.uniprot.accession=P04637
-braidworks weave --have protein.query=P04637 --want protein.interaction.partners   # routed via uniprot
+braidworks get --have protein.query=P04637 --want protein.interaction.partners   # routed via uniprot
 ```
 
 From Python:

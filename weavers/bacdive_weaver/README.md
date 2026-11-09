@@ -27,7 +27,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run bacdive describe_traits --have organism.scientific_name="Escherichia coli"
-braidworks weave --have organism.name="Escherichia coli" --want microbe.trait.gram_stain   # routed via taxon
+braidworks get --have organism.name="Escherichia coli" --want microbe.trait.gram_stain   # routed via taxon
 ```
 
 From Python:

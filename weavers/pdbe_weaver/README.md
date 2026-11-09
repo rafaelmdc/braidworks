@@ -24,9 +24,9 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run pdbe describe_structure --have pdb.id=1tup
-braidworks weave --have protein.query=P04637 --want structure.pdb.ids   # routed via uniprot
+braidworks get --have protein.query=P04637 --want structure.pdb.ids   # routed via uniprot
 # fan one protein out into each structure's detail:
-braidworks weave --have protein.query=P04637 --want structure.pdb.title --expand all
+braidworks get --have protein.query=P04637 --want structure.pdb.title --expand all
 ```
 
 From Python:

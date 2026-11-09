@@ -26,9 +26,9 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run reactome describe_pathway --have pathway.reactome.id=R-HSA-69488
-braidworks weave --have protein.query=P04637 --want pathway.reactome.names   # routed via uniprot
+braidworks get --have protein.query=P04637 --want pathway.reactome.names   # routed via uniprot
 # fan one protein out into each pathway's detail:
-braidworks weave --have protein.query=P04637 --want pathway.reactome.display_name --expand all
+braidworks get --have protein.query=P04637 --want pathway.reactome.display_name --expand all
 ```
 
 From Python:

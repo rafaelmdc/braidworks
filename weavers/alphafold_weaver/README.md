@@ -25,7 +25,7 @@ Once installed it is auto-discovered by the `braidworks` CLI:
 
 ```bash
 braidworks run alphafold describe_model --have protein.uniprot.accession=P04637
-braidworks weave --have protein.query=P04637 --want structure.alphafold.mean_plddt   # routed via uniprot
+braidworks get --have protein.query=P04637 --want structure.alphafold.mean_plddt   # routed via uniprot
 ```
 
 From Python:
