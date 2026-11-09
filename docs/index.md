@@ -81,6 +81,9 @@ The links below support understanding the framework and contributing to it.
 
 ## Upgrade notes and project history
 
+What changed in each version: the [changelog](../CHANGELOG.md), with one per package
+in each package folder, and the [GitHub releases](https://github.com/rafaelmdc/braidworks/releases).
+
 For documentation contributors, the [Diátaxis map](internal/audits/documentation-diataxis.md)
 records current page roles, gaps and proposed edits; [writing conventions](how-to/write-documentation.md)
 explain how to preserve useful detail during a rewrite.

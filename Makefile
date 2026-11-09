@@ -5,7 +5,7 @@
 # Weavers are auto-discovered from weavers/* (matching the `members = ["weavers/*"]`
 # workspace glob), so a newly scaffolded weaver is tested and linted with no edit here.
 
-PHONY_DOCS = docs-site docs-serve
+PHONY_DOCS = docs-site docs-serve changelog
 .PHONY: $(PHONY_DOCS) api-docs capability-docs cli-docs docs-check links-check quickstart-check help sync test test-tools test-core test-kit test-weavers new-weaver verify-weaver index view serve serve-stop lint fmt clean tags tags-check
 
 # Every weaver package directory (each has its own Makefile + src/ + tests/).
@@ -72,7 +72,7 @@ serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override
 WEAVER_LINT_PATHS := $(foreach d,$(WEAVER_DIRS),$(d)src $(d)tests)
 LINT_PATHS = braidworks-core/src braidworks-core/tests weaverkit/src weaverkit/tests \
 	braidworks-arq/src braidworks-arq/tests \
-	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/gen_cli_docs.py tools/mkdocs tools/tests \
+	tools/check_artifacts.py tools/check_links.py tools/check_quickstart.py tools/stage_release.py tools/benchmark_weaver_work.py tools/gen_python_api.py tools/gen_cli_docs.py tools/changelog.py tools/mkdocs tools/tests \
 	$(WEAVER_LINT_PATHS)
 
 RUFF_VERSION := 0.16.10
@@ -95,6 +95,9 @@ quickstart-check:  ## Run the README quickstart offline (LIVE=1 runs the real qu
 
 tags-check:  ## List release tags missing for current package versions (nonzero if any)
 	@python tools/release_tags.py missing
+
+changelog:  ## Regenerate every package's CHANGELOG.md and the root one (CI does this on merge)
+	python tools/changelog.py write
 
 tags:  ## Create + push any missing <name>-v<version> release tags (CI does this on merge)
 	python tools/release_tags.py create
