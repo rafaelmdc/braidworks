@@ -55,15 +55,15 @@ view:  ## Render the weaver-network view -> $(VIEW_OUT) (VIEW_OUT=.. to override
 		$(foreach k,$(or $(FROM),$(VIEW_FROM)),--from $(k)) \
 		$(foreach k,$(or $(TO),$(VIEW_TO)),--to $(k))
 
-serve:  ## Run the interactive GUI (weaverkit serve; needs the [serve] extra: fastapi+uvicorn)
-	uv run --with fastapi --with uvicorn weaverkit serve $(if $(PORT),--port $(PORT))
+serve:  ## Run the interactive GUI (braidworks serve; needs the [serve] extra: fastapi+uvicorn)
+	uv run --with fastapi --with uvicorn braidworks serve $(if $(PORT),--port $(PORT))
 
 serve-stop:  ## Stop a running `make serve` (frees the port; PORT=.. to override 8765)
 	@port=$(or $(PORT),8765); \
 	pid=$$(lsof -ti tcp:$$port 2>/dev/null || true); \
 	if [ -n "$$pid" ]; then kill $$pid 2>/dev/null; echo "stopped serve on port $$port (pid $$pid)"; \
 	elif command -v fuser >/dev/null 2>&1 && fuser -k $$port/tcp >/dev/null 2>&1; then echo "stopped serve on port $$port"; \
-	elif pkill -f "weaverkit serve" 2>/dev/null; then echo "stopped weaverkit serve"; \
+	elif pkill -f "(braidworks|weaverkit) serve" 2>/dev/null; then echo "stopped serve"; \
 	else echo "nothing to stop on port $$port"; fi
 
 # Lint every package and its tests. Weaver src/tests are derived from WEAVER_DIRS,

@@ -15,6 +15,7 @@ Subcommands
   keys    list the strand types that flow between weavers (who produces / consumes)
   path    show the route from one type to another without running it
   find    search the installed fields by meaning (``braidworks find pdb structures``)
+  serve   open the browser interface (needs ``weaverkit[serve]``)
   references  print source citations for the installed weavers
 
 The registry is discovered from installed ``braidworks.weavers`` entry points, so a
@@ -951,6 +952,22 @@ def _cmd_find(args: argparse.Namespace) -> int:
     return 0
 
 
+SERVE_INSTALL_HINT = (
+    "braidworks serve needs the browser interface. From the checkout install it with: "
+    f"{INSTALL_ALL}  (or: pip install 'weaverkit[serve]')"
+)
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    """Start the browser interface; ``weaverkit`` provides it, so import it lazily."""
+    try:
+        from weaverkit.cli import cmd_serve
+    except ImportError:
+        _err(SERVE_INSTALL_HINT)
+        return 1
+    return cmd_serve(args)
+
+
 def _cmd_references(args: argparse.Namespace) -> int:
     registry = _load_registry(args.only)
     refs = references_for([m.weaver_id for m in registry.manifests()], registry)
@@ -1326,6 +1343,26 @@ def build_parser() -> argparse.ArgumentParser:
     fd.add_argument("--format", choices=["human", "json", "tsv"], default="human")
     _add_only_flag(fd)
     fd.set_defaults(func=_cmd_find)
+
+    # serve
+    sv = _subparser(
+        sub,
+        "serve",
+        help="open the browser interface to build and run queries.",
+        examples=(
+            "braidworks serve",
+            "braidworks serve --port 8800 --no-open",
+        ),
+    )
+    sv.add_argument("--port", type=int, default=8765, help="port (default: 8765).")
+    sv.add_argument("--host", default="127.0.0.1", help="bind host (default: localhost).")
+    sv.add_argument(
+        "--data-dir",
+        metavar="DIR",
+        help="folder that browser-chosen cache/run files must live in (default: current dir).",
+    )
+    sv.add_argument("--no-open", action="store_true", help="do not open a browser.")
+    sv.set_defaults(func=_cmd_serve)
 
     # doctor
     dr = sub.add_parser("doctor", help="check the installation and suggest fixes.")

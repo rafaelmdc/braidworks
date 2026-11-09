@@ -7,7 +7,8 @@ visual tools.
 
 ## Run queries in the browser
 
-Install the `serve` extra with your selected sources, then run `weaverkit serve`.
+Install the `serve` extra with your selected sources, then run `braidworks serve`
+(`weaverkit serve` is the same command).
 Follow [the browser guide](../docs/how-to/use-the-browser.md) to build a route, process a batch,
 export results or continue saved work. The optional server uses FastAPI and uvicorn;
 the base toolkit depends on core and its networkx/platformdirs dependencies.

@@ -21,8 +21,10 @@ import them lazily and fail with a clear install hint if missing.
 """
 
 import asyncio
+import errno
 import io
 import os
+import socket
 import sqlite3
 import sys
 from dataclasses import replace
@@ -971,6 +973,34 @@ def exposure_warning(host: str, data_dir: str) -> str | None:
     )
 
 
+class PortInUseError(RuntimeError):
+    """The requested port is taken; raised before any URL is announced."""
+
+
+def bind_port(host: str, port: int) -> socket.socket:
+    """Bind and listen on ``host:port`` now, so a busy port fails before anything prints.
+
+    The bound socket is handed to uvicorn, so nothing can take the port in between.
+    """
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    if os.name != "nt":  # on Windows SO_REUSEADDR would let us share a busy port
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+        sock.listen(2048)
+    except OSError as exc:
+        sock.close()
+        if exc.errno in (errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", None)):
+            raise PortInUseError(
+                f"port {port} is already in use on {host}: another server (perhaps an "
+                f"earlier `braidworks serve`) is running there. Stop it (`make serve-stop`) "
+                f"or choose another port, e.g. --port {port + 1}."
+            ) from exc
+        raise PortInUseError(f"cannot listen on {host}:{port}: {exc.strerror or exc}") from exc
+    return sock
+
+
 def serve(
     *,
     host: str = "127.0.0.1",
@@ -993,11 +1023,15 @@ def serve(
     if warning:
         print(warning, file=sys.stderr)
     app = create_app(data_dir=root)
-    url = f"http://{host}:{port}"
+    # Bind first: a busy port must fail here, before a URL is printed or a browser opens.
+    sock = bind_port(host, port)
+    bound = sock.getsockname()[1]
+    url = f"http://[{host}]:{bound}" if ":" in host else f"http://{host}:{bound}"
     if open_browser:
         import threading
         import webbrowser
 
         threading.Timer(0.7, lambda: webbrowser.open(url)).start()
-    print(f"weaverkit serve — open {url}  (Ctrl-C to stop)")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    print(f"braidworks serve — open {url}  (Ctrl-C to stop)", flush=True)
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=bound, log_level="warning"))
+    server.run(sockets=[sock])
