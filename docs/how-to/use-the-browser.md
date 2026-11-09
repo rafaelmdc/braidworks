@@ -28,6 +28,9 @@ need. Their API or local-data prerequisites still apply.
   recent 32); after a restart, run the query again.
 - **CSV**, **TSV** and **JSON** download exactly what `result.to_csv()` /
   `to_csv(sep="\t")` / `result.to_json()` give in Python for the same query.
+- **How this was answered** shows the route that ran, step by step: each source and
+  capability, what it took and gave, the backend used, how many rows it found, did not
+  match, skipped (no input) or failed, and the options it ran with.
 - **Sources to cite** lists every source the results drew on, with its licence and
   citation.
 
