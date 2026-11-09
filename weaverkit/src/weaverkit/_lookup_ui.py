@@ -126,6 +126,18 @@ td.input { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
 .side { display: grid; gap: 14px; min-width: 0; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
 .card h3 { font-size: 15px; }
+.route { display: grid; }
+.hop { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 10px; font-size: 13px; }
+.hop .rail { display: flex; flex-direction: column; align-items: center; }
+.hop .dot { width: 10px; height: 10px; border-radius: 99px; background: var(--accent); margin-top: 5px; flex: none; }
+.hop .stem { width: 2px; background: var(--line); flex: 1; min-height: 14px; }
+.hop .what { padding-bottom: 12px; display: grid; gap: 2px; min-width: 0; }
+.hop .src { font-weight: 600; }
+.hop .io { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.hop .tally { color: var(--muted); font-size: 12.5px; }
+.hop .tally .bad { color: var(--err); }
+.routelink { color: var(--accent); font-size: 13px; text-decoration: none; }
+.routelink:hover { text-decoration: underline; }
 .cite { font-size: 12.5px; display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
 .cite:first-of-type { border-top: 0; padding-top: 0; }
 .cite a { color: var(--accent); word-break: break-all; }
@@ -205,6 +217,11 @@ tr.review-row td { background: var(--warn-soft); }
     <div class="layout">
       <div class="tablebox"><table id="table"></table></div>
       <aside class="side">
+        <section class="card" id="routecard" hidden>
+          <h3>How this was answered</h3>
+          <div class="route" id="route"></div>
+          <a class="routelink" href="/explore">See these sources on the network →</a>
+        </section>
         <section class="card" id="citecard" hidden>
           <h3>Sources to cite</h3>
           <div id="cites"></div>
@@ -352,9 +369,40 @@ function renderResults(table) {
   $("#table").innerHTML = head + `<tbody>${body}</tbody>`;
   const refs = table.references || [];
   $("#citecard").hidden = !refs.length;
-  $("#results .layout").classList.toggle("single", !refs.length);
+  $("#results .layout").classList.toggle("single", !refs.length && $("#routecard").hidden);
   $("#cites").innerHTML = refs.map(r => `<div class="cite"><b>${esc(r.attribution || r.weaver_id)}</b>${r.license ? `<span class="lic">${esc(r.license)}</span>` : ""}${r.citation ? (/^https?:/.test(r.citation) ? `<a href="${esc(r.citation)}" target="_blank" rel="noopener">${esc(r.citation)}</a>` : `<span>${esc(r.citation)}</span>`) : ""}${r.source_url ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(r.source_url)}</a>` : ""}</div>`).join("");
   renderResume();
+}
+// The steps that ran, in order, with what each did across the final rows.
+function tally(counts) {
+  if (!counts) return "did not run for these rows";
+  const parts = [], st = counts.statuses || {};
+  if (st.ok) parts.push(`${st.ok} found`);
+  if (st.no_match) parts.push(`${st.no_match} no match`);
+  if (st.skipped) parts.push(`${st.skipped} skipped (no input)`);
+  if (counts.errors) parts.push(`<span class="bad">${counts.errors} failed</span>`);
+  if (counts.recovered) parts.push(`${counts.recovered} rerouted after a failure`);
+  const via = Object.keys(counts.backends || {});
+  return (via.length ? `via ${via.map(esc).join(", ")} · ` : "") + (parts.join(" · ") || "no rows reached this step");
+}
+function hop(source, capability, io, counts, params, last) {
+  const opts = Object.entries(params || {}).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join(", ");
+  return `<div class="hop"><div class="rail"><span class="dot"></span>${last ? "" : `<span class="stem"></span>`}</div><div class="what"><span><span class="src">${esc(source)}</span> <code>${esc(capability)}</code></span>${io ? `<span class="io">${io}</span>` : ""}<span class="tally">${tally(counts)}</span>${opts ? `<span class="tally">options: ${opts}</span>` : ""}</div></div>`;
+}
+function renderRoute(done) {
+  const outcomes = done.step_outcomes || {}, params = done.effective_params || {};
+  const routes = done.planned_routes || [], blocks = [];
+  routes.forEach((route, n) => {
+    const head = routes.length > 1 ? `<span class="hint">Rows starting from ${esc(route.from_types.join(", "))}</span>` : "";
+    blocks.push(head + route.steps.map((step, i) => hop(step.weaver_id, step.capability_id,
+      `${step.input_types.map(esc).join(", ")} → ${step.output_types.map(esc).join(", ")}`,
+      outcomes[step.capability_id], params[step.capability_id], i === route.steps.length - 1)).join(""));
+  });
+  if (!routes.length && (done.traverse || []).length) {
+    blocks.push(done.traverse.map((cid, i) => hop("for each", cid, "", outcomes[cid], params[cid], i === done.traverse.length - 1)).join(""));
+  }
+  $("#routecard").hidden = !blocks.length;
+  $("#route").innerHTML = blocks.join("");
 }
 function renderResume() {
   const paused = (state.result && state.result.review || []).length, decided = Object.keys(state.decisions).length;
@@ -371,6 +419,7 @@ function download(kind) {
 }
 function showOutcome(done) {
   state.exports = done.exports; state.token = done.review_token || null; state.decisions = {};
+  renderRoute(done);
   renderResults(done.table);
   $("#progress").textContent = done.table.summary;
 }

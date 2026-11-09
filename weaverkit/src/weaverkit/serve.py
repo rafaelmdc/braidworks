@@ -430,6 +430,40 @@ def result_table(outcome) -> dict:
     }
 
 
+def step_outcomes(raw) -> dict[str, dict]:
+    """What each capability did across the final rows: statuses, backends and errors.
+
+    Counts come from each terminal row's completion records (``ok`` / ``no_match`` /
+    ``skipped``) and from the errors list (``recovered`` when the run rerouted around it).
+    """
+    out: dict[str, dict] = {}
+
+    def entry(capability_id):
+        return out.setdefault(
+            capability_id, {"statuses": {}, "backends": {}, "errors": 0, "recovered": 0}
+        )
+
+    from braidworks.core.strand import entity_key
+
+    terminal = [
+        *raw.resolved,
+        *(ss for ss, _ in raw.unresolved),
+        *(item.strand_set for item in raw.review_queue),
+        *(error.strand_set for error in raw.errors if not error.recovered),
+    ]
+    rows = list({entity_key(ss): ss for ss in terminal}.values())  # one per final row
+    for ss in rows:
+        for step in ss.completion:
+            counts = entry(step.capability_id)
+            counts["statuses"][step.status] = counts["statuses"].get(step.status, 0) + 1
+            if step.backend:
+                counts["backends"][step.backend] = counts["backends"].get(step.backend, 0) + 1
+    for error in raw.errors:
+        if error.capability_id:
+            entry(error.capability_id)["recovered" if error.recovered else "errors"] += 1
+    return out
+
+
 def _query_payload(registry, prepared, outcome, want, *, run=None) -> dict:
     """The browser's response for an executed (or resumed) prepared query."""
     options = prepared.request.options
@@ -443,6 +477,7 @@ def _query_payload(registry, prepared, outcome, want, *, run=None) -> dict:
         **result_table(outcome),
         "effective_params": _prepared_effective(registry, prepared),
         "planned_routes": [braid.to_json() for braid, _ in prepared.plans],
+        "step_outcomes": step_outcomes(raw),
         **({"run": run_status(run)} if run is not None else {}),
         "review_policy": options.review_policy.value,
         "confidence_threshold": options.confidence_threshold,
@@ -808,7 +843,13 @@ def create_app(data_dir: str | os.PathLike | None = None):
     from weaverkit._lookup_ui import render_lookup_page
 
     _landing = render_lookup_page(discover_registry().registry)
-    _explore = render_html(build_data(), interactive=True)
+    _explore = render_html(build_data(), interactive=True).replace(
+        "<body>",
+        '<body><a href="/" style="position:fixed;top:8px;right:12px;z-index:50;'
+        "font:600 13px system-ui,sans-serif;padding:6px 12px;border-radius:6px;"
+        'background:#0b6870;color:#fff;text-decoration:none">\u2190 Look up</a>',
+        1,
+    )
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
