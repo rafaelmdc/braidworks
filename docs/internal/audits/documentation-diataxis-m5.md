@@ -70,8 +70,7 @@ re-run live where a finding depended on current source behaviour.
 
 ## Follow-ups outside documentation
 
-- A public Python API for saved runs (`Session(run_db=...)` or similar) would let
-  `cache-and-resume` drop its engine-level script. This is feature work, so it was not
-  done in this audit.
+- A public Python API for saved runs would let `cache-and-resume` drop its engine-level
+  script. Done afterwards: `Session(runs=...)`, `Session.resume` and `Session.runs`.
 - After the first PyPI release, the tutorials' clone-and-sync setup becomes
   `pip install braidworks` (issue #335, 4.D).

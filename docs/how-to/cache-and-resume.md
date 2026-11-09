@@ -50,56 +50,39 @@ that needs review; `KEY=reject` leaves that row unresolved. Repeat `--decision` 
 independent items. A decision applies only to that observation; later ambiguous
 matches still need review. `--strict` also applies when resuming.
 
-## Use from Python or the browser
+## Save and resume runs from Python
 
-The explicit Python query API uses `QueryPersistence`, `execute_managed_query`, and
-`continue_run`; a complete script follows below. The `fetch` convenience API does not
-accept persistence paths. Browser controls use the same storage options, with paths
-on the server's disk inside its data directory (`braidworks serve --data-dir`). Recipes and generated commands retain those paths; review them
-before sharing.
-
-## Create a saved query from Python
-
-`bw.get` and `Session` accept a lookup cache (`Session(cache=...)`) but not yet a run
-store, so a saved run from Python uses the engine-level query service. With PDBe
-installed, save this complete script and run it in your environment.
-Choose a new `run_id` for each new query; the script closes its weaver when finished.
+Give a `Session` a run store; every query it runs is then a saved run. Name the run
+with `run_id` (a new name: existing runs are never overwritten):
 
 ```python
-import asyncio
+import braidworks as bw
 
-from braidworks.core import (
-    BraidRegistry, QueryPersistence, QueryRequest, Strand, StrandSet,
-    execute_managed_query, prepare_query,
-)
-from pdbe_weaver import build_pdbe_weaver
-
-async def main():
-    async with build_pdbe_weaver() as weaver:
-        registry = BraidRegistry()
-        registry.register(weaver)
-        request = QueryRequest(
-            inputs=(StrandSet.from_strands(
-                "p53", [Strand("protein.uniprot.accession", "P04637")],
-            ),),
-            targets=frozenset({"structure.pdb.ids"}),
-        )
-        prepared = prepare_query(registry, request)
-        options = QueryPersistence(
-            cache_db="data/lookups.sqlite", run_db="data/runs.sqlite",
-            run_id="p53-python",
-        )
-        result = await execute_managed_query(registry, prepared, persistence=options)
-        print(result.to_json())
-
-asyncio.run(main())
+with bw.Session(cache="data/lookups.sqlite", runs="data/runs.sqlite") as s:
+    result = s.get(["Bacillus", "Escherichia coli"], have="organism.name",
+                   want="ncbi.taxon.id", run_id="genera")
+    print(result.run_id, result.summary())
+    print(s.runs())   # every saved run: id, status, inputs, rows awaiting review
 ```
 
-For saved reviews, call `continue_run` with explicit `ReviewDecision` values, or resume
-the run from the command line as above.
-The managed service renews the lease and retains the last completed checkpoint on
-cancellation. An interrupted source read can repeat. See [storage reference](../reference/persistence.md)
-for ownership, compatibility and retention limits.
+Paused rows stay in the store. Later, in the same or another session, reopen the run,
+record decisions and continue; the decisions are saved with the run:
+
+```python
+with bw.Session(runs="data/runs.sqlite") as s:
+    result = s.resume("genera")
+    result.review[0]              # read the candidates first
+    result.review[0].choose(0)    # 1386, the bacteria; or .accept() / .reject()
+    result = result.resume()
+```
+
+`Session.resume` on a finished run returns its saved result without calling any
+source. The same store works with `braidworks runs` and `braidworks resume`, so you can
+start a run in Python and finish it on the command line, or the reverse.
+
+Browser controls use the same storage options, with paths on the server's disk inside
+its data directory (`braidworks serve --data-dir`). Recipes and generated commands
+retain those paths; review them before sharing.
 
 ## Storage and API reference
 
